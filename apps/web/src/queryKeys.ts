@@ -1,0 +1,52 @@
+export const queryKeys = {
+  jobs: {
+    all: () => ['jobs'] as const,
+    detail: (id: string) => ['jobs', id] as const,
+  },
+  profile: {
+    root: () => ['profile'] as const,
+    suggestedSkills: () => ['profile', 'suggestedSkills'] as const,
+  },
+  resumes: {
+    all: () => ['resumes'] as const,
+    active: () => ['resumes', 'active'] as const,
+  },
+  match: {
+    forJob: (jobId: string) => ['match', jobId] as const,
+  },
+  applications: {
+    all: () => ['applications'] as const,
+    detail: (id: string) => ['applications', id] as const,
+  },
+  market: {
+    insights: () => ['market', 'insights'] as const,
+  },
+  alerts: {
+    all: () => ['alerts'] as const,
+  },
+  dashboard: {
+    stats: () => ['dashboard', 'stats'] as const,
+  },
+  contacts: {
+    all: () => ['contacts'] as const,
+  },
+  activities: {
+    forApp: (appId: string) => ['activities', appId] as const,
+  },
+  tasks: {
+    forApp: (appId: string) => ['tasks', appId] as const,
+    due: () => ['tasks', 'due'] as const,
+  },
+  coverLetters: {
+    all: (jobId?: string) => (jobId ? ['coverLetters', jobId] : ['coverLetters']) as readonly string[],
+  },
+  interviewQA: {
+    all: (jobId?: string) => (jobId ? ['interviewQA', jobId] : ['interviewQA']) as readonly string[],
+  },
+  offers: {
+    all: () => ['offers'] as const,
+  },
+  search: {
+    results: (q: string) => ['search', q] as const,
+  },
+};

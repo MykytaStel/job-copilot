@@ -1,0 +1,15 @@
+{
+  "name": "job-copilot-ua-starter",
+  "private": true,
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "dev": "concurrently -n api,web -c auto \"pnpm --dir apps/api-legacy dev\" \"pnpm --dir apps/web dev\"",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2"
+  }
+}

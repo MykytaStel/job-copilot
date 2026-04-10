@@ -1,0 +1,307 @@
+// ─── Job Posting ─────────────────────────────────────────────────────────────
+
+export type JobSource = 'manual' | 'url' | 'rss';
+
+export interface JobPostingInput {
+  source: JobSource;
+  url?: string;
+  rawText?: string;
+  title?: string;
+  company?: string;
+}
+
+export interface JobPosting {
+  id: string;
+  source: JobSource;
+  url?: string;
+  title: string;
+  company: string;
+  description: string;
+  notes: string;
+  createdAt: string;
+}
+
+// ─── Candidate Profile ────────────────────────────────────────────────────────
+
+export interface CandidateProfile {
+  id: string;
+  name: string;
+  email: string;
+  location?: string;
+  summary?: string;
+  skills: string[];
+  updatedAt: string;
+}
+
+export interface CandidateProfileInput {
+  name: string;
+  email: string;
+  location?: string;
+  summary?: string;
+  skills: string[];
+}
+
+// ─── Resume versions ──────────────────────────────────────────────────────────
+
+export interface ResumeVersion {
+  id: string;
+  version: number;
+  filename: string;
+  rawText: string;
+  isActive: boolean;
+  uploadedAt: string;
+}
+
+export interface ResumeUploadInput {
+  filename: string;
+  rawText: string;
+}
+
+/** @deprecated use ResumeVersion */
+export type Resume = ResumeVersion;
+
+// ─── Match / Fit Score ────────────────────────────────────────────────────────
+
+export interface MatchResult {
+  id: string;
+  jobId: string;
+  resumeId: string;
+  /** 0–100 overall fit percentage */
+  score: number;
+  matchedSkills: string[];
+  missingSkills: string[];
+  notes: string;
+  createdAt: string;
+}
+
+// ─── Application ──────────────────────────────────────────────────────────────
+
+export type ApplicationStatus =
+  | 'saved'
+  | 'applied'
+  | 'interview'
+  | 'offer'
+  | 'rejected';
+
+export interface ApplicationNote {
+  id: string;
+  applicationId: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface Application {
+  id: string;
+  jobId: string;
+  /** Which resume version was sent with this application */
+  resumeId?: string;
+  status: ApplicationStatus;
+  appliedAt?: string;
+  dueDate?: string;
+  updatedAt: string;
+}
+
+export interface ApplicationDetail extends Application {
+  job: JobPosting;
+  resume?: ResumeVersion;
+  notes: ApplicationNote[];
+  contacts: ApplicationContact[];
+  activities: Activity[];
+  tasks: Task[];
+}
+
+export interface ApplicationInput {
+  jobId: string;
+  status: ApplicationStatus;
+  appliedAt?: string;
+}
+
+// ─── Dashboard stats ──────────────────────────────────────────────────────────
+
+export interface DashboardStats {
+  total: number;
+  byStatus: Record<ApplicationStatus, number>;
+  topMissingSkills: Array<{ skill: string; count: number }>;
+  avgScore: number | null;
+  tasksDueSoon: number;
+}
+
+// ─── Contacts / People ────────────────────────────────────────────────────────
+
+export type ContactRelationship = 'recruiter' | 'hiring_manager' | 'interviewer' | 'other';
+
+export interface Contact {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  linkedinUrl?: string;
+  company?: string;
+  role?: string;
+  createdAt: string;
+}
+
+export interface ContactInput {
+  name: string;
+  email?: string;
+  phone?: string;
+  linkedinUrl?: string;
+  company?: string;
+  role?: string;
+}
+
+export interface ApplicationContact {
+  id: string;
+  applicationId: string;
+  contact: Contact;
+  relationship: ContactRelationship;
+}
+
+// ─── Activity log ─────────────────────────────────────────────────────────────
+
+export type ActivityType = 'email' | 'call' | 'interview' | 'follow_up' | 'note' | 'other';
+
+export interface Activity {
+  id: string;
+  applicationId: string;
+  type: ActivityType;
+  description: string;
+  happenedAt: string;
+  createdAt: string;
+}
+
+export interface ActivityInput {
+  type: ActivityType;
+  description: string;
+  happenedAt: string;
+}
+
+// ─── Tasks / Follow-ups ───────────────────────────────────────────────────────
+
+export interface Task {
+  id: string;
+  applicationId: string;
+  title: string;
+  remindAt?: string;
+  done: boolean;
+  createdAt: string;
+}
+
+export interface TaskInput {
+  title: string;
+  remindAt?: string;
+}
+
+// ─── Job Alerts ───────────────────────────────────────────────────────────────
+
+export interface JobAlert {
+  id: string;
+  /** Keywords to match against job title + description (OR logic) */
+  keywords: string[];
+  telegramChatId: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface JobAlertInput {
+  keywords: string[];
+  telegramChatId: string;
+}
+
+// ─── Cover Letter ─────────────────────────────────────────────────────────────
+
+export type CoverLetterTone = 'formal' | 'casual' | 'enthusiastic';
+
+export interface CoverLetter {
+  id: string;
+  jobId: string;
+  content: string;
+  tone: CoverLetterTone;
+  createdAt: string;
+}
+
+export interface CoverLetterInput {
+  jobId: string;
+  tone: CoverLetterTone;
+  /** If provided, saves this content directly (no AI call) */
+  content?: string;
+}
+
+// ─── Interview Q&A ────────────────────────────────────────────────────────────
+
+export type InterviewCategory = 'behavioral' | 'technical' | 'situational' | 'company';
+
+export interface InterviewQA {
+  id: string;
+  jobId: string;
+  question: string;
+  answer: string;
+  category: InterviewCategory;
+  createdAt: string;
+}
+
+export interface InterviewQAInput {
+  jobId: string;
+  question: string;
+  answer?: string;
+  category: InterviewCategory;
+}
+
+// ─── Offer ────────────────────────────────────────────────────────────────────
+
+export interface Offer {
+  id: string;
+  jobId: string;
+  salary?: number;
+  currency: string;
+  equity?: string;
+  benefits: string[];
+  deadline?: string;
+  notes: string;
+  createdAt: string;
+}
+
+export interface OfferInput {
+  jobId: string;
+  salary?: number;
+  currency?: string;
+  equity?: string;
+  benefits?: string[];
+  deadline?: string;
+  notes?: string;
+}
+
+// ─── Bulk Import ──────────────────────────────────────────────────────────────
+
+export interface ImportResult {
+  url: string;
+  status: 'imported' | 'duplicate' | 'error';
+  job?: JobPosting;
+  error?: string;
+}
+
+export interface ImportBatchResponse {
+  results: ImportResult[];
+}
+
+// ─── Backup ───────────────────────────────────────────────────────────────────
+
+export interface BackupMeta {
+  version: string;
+  exportedAt: string;
+}
+
+// ─── Search ───────────────────────────────────────────────────────────────────
+
+export interface SearchResults {
+  jobs: JobPosting[];
+  contacts: Contact[];
+}
+
+// ─── Health ───────────────────────────────────────────────────────────────────
+
+export interface HealthResponse {
+  status: 'ok';
+  service: string;
+  timestamp: string;
+}
