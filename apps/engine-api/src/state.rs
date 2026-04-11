@@ -1,9 +1,11 @@
 use crate::db::Database;
 use crate::db::repositories::{
-    ApplicationsRepository, JobsRepository, MatchResultsRepository, ProfilesRepository,
-    ResumesRepository,
+    ActivitiesRepository, ApplicationsRepository, JobsRepository, MatchResultsRepository,
+    ProfilesRepository, ResumesRepository, TasksRepository,
 };
+use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
+use crate::services::followup::FollowUpService;
 use crate::services::jobs::JobsService;
 use crate::services::matching::MatchService;
 use crate::services::profile::service::ProfileAnalysisService;
@@ -20,11 +22,13 @@ pub struct AppState {
     pub profiles_service: ProfilesService,
     pub jobs_service: JobsService,
     pub applications_service: ApplicationsService,
+    pub activities_service: ActivitiesService,
     pub resumes_service: ResumesService,
     pub match_service: MatchService,
     pub profile_analysis_service: ProfileAnalysisService,
     pub ranking_service: RankingService,
     pub search_profile_service: SearchProfileService,
+    pub followup_service: FollowUpService,
 }
 
 impl AppState {
@@ -32,6 +36,8 @@ impl AppState {
         let profiles_repository = ProfilesRepository::new(database.clone());
         let jobs_repository = JobsRepository::new(database.clone());
         let applications_repository = ApplicationsRepository::new(database.clone());
+        let activities_repository = ActivitiesRepository::new(database.clone());
+        let tasks_repository = TasksRepository::new(database.clone());
         let resumes_repository = ResumesRepository::new(database.clone());
         let match_results_repository = MatchResultsRepository::new(database.clone());
         let profile_analysis_service = ProfileAnalysisService::new();
@@ -43,6 +49,7 @@ impl AppState {
             profiles_service: ProfilesService::new(profiles_repository),
             jobs_service: JobsService::new(jobs_repository),
             applications_service: ApplicationsService::new(applications_repository),
+            activities_service: ActivitiesService::new(activities_repository),
             resumes_service: ResumesService::new(resumes_repository),
             match_service: MatchService::new(
                 match_results_repository,
@@ -51,6 +58,7 @@ impl AppState {
             profile_analysis_service,
             ranking_service: RankingService::new(),
             search_profile_service: SearchProfileService::new(),
+            followup_service: FollowUpService::new(tasks_repository),
         }
     }
 
@@ -58,6 +66,7 @@ impl AppState {
     pub fn without_database() -> Self {
         Self::new(Database::disabled())
     }
+
 
     #[cfg(test)]
     pub fn for_services(
@@ -75,6 +84,9 @@ impl AppState {
             profiles_service,
             jobs_service,
             applications_service,
+            activities_service: ActivitiesService::for_tests(
+                crate::services::activities::ActivitiesServiceStub::default(),
+            ),
             resumes_service,
             match_service: MatchService::new(
                 MatchResultsRepository::new(Database::disabled()),
@@ -83,6 +95,7 @@ impl AppState {
             profile_analysis_service,
             ranking_service: RankingService::new(),
             search_profile_service: SearchProfileService::new(),
+            followup_service: FollowUpService::new(TasksRepository::new(Database::disabled())),
         }
     }
 }

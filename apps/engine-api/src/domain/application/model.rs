@@ -37,6 +37,22 @@ pub struct UpdateApplication {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateActivity {
+    pub application_id: String,
+    pub activity_type: String,
+    pub description: String,
+    pub happened_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateTask {
+    pub application_id: String,
+    pub title: String,
+    /// Days from now when the reminder should fire (stored as `NOW() + N days` in DB).
+    pub remind_in_days: i32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ApplicationNote {
     pub id: String,
     pub application_id: String,

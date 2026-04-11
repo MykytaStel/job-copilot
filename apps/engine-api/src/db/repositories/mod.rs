@@ -1,17 +1,21 @@
+mod activities;
 mod applications;
 mod jobs;
 mod match_results;
 mod profiles;
 mod resumes;
+mod tasks;
 
 use std::error::Error;
 use std::fmt;
 
+pub use activities::ActivitiesRepository;
 pub use applications::ApplicationsRepository;
 pub use jobs::JobsRepository;
 pub use match_results::MatchResultsRepository;
 pub use profiles::ProfilesRepository;
 pub use resumes::ResumesRepository;
+pub use tasks::TasksRepository;
 
 #[derive(Debug)]
 pub enum RepositoryError {

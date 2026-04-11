@@ -1,4 +1,6 @@
+pub mod activities;
 pub mod applications;
+pub mod followup;
 pub mod jobs;
 pub mod matching;
 pub mod profile;

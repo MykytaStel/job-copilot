@@ -6,7 +6,7 @@ use crate::api::dto::resumes::ResumeVersionResponse;
 use crate::api::error::ApiError;
 use crate::domain::application::model::{
     Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, Contact,
-    CreateApplication, Task, UpdateApplication,
+    CreateActivity, CreateApplication, Task, UpdateApplication,
 };
 
 #[derive(Default, Deserialize)]
@@ -20,6 +20,13 @@ pub struct CreateApplicationRequest {
 pub struct UpdateApplicationRequest {
     pub status: Option<String>,
     pub due_date: Option<Option<String>>,
+}
+
+#[derive(Deserialize)]
+pub struct CreateActivityRequest {
+    pub activity_type: String,
+    pub description: String,
+    pub happened_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -227,6 +234,36 @@ impl From<ApplicationDetail> for ApplicationDetailResponse {
                 .collect(),
             tasks: detail.tasks.into_iter().map(TaskResponse::from).collect(),
         }
+    }
+}
+
+impl CreateActivityRequest {
+    pub fn validate(self, application_id: &str) -> Result<CreateActivity, ApiError> {
+        let activity_type = validate_required("activity_type", self.activity_type)?;
+        let description = validate_required("description", self.description)?;
+        let happened_at = validate_required("happened_at", self.happened_at)?;
+
+        if !matches!(
+            activity_type.as_str(),
+            "interview" | "call" | "email" | "offer" | "rejection" | "other"
+        ) {
+            return Err(ApiError::bad_request_with_details(
+                "invalid_activity_type",
+                "Unsupported activity type",
+                json!({
+                    "field": "activity_type",
+                    "allowed_values": ["interview", "call", "email", "offer", "rejection", "other"],
+                    "received": activity_type,
+                }),
+            ));
+        }
+
+        Ok(CreateActivity {
+            application_id: application_id.to_string(),
+            activity_type,
+            description,
+            happened_at,
+        })
     }
 }
 

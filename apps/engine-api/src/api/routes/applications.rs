@@ -2,8 +2,8 @@ use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 
 use crate::api::dto::applications::{
-    ApplicationDetailResponse, ApplicationResponse, CreateApplicationRequest,
-    RecentApplicationsResponse, UpdateApplicationRequest,
+    ActivityResponse, ApplicationDetailResponse, ApplicationResponse, CreateActivityRequest,
+    CreateApplicationRequest, RecentApplicationsResponse, UpdateApplicationRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
 use crate::state::AppState;
@@ -107,9 +107,12 @@ pub async fn patch_application(
     Path(application_id): Path<String>,
     ApiJson(payload): ApiJson<UpdateApplicationRequest>,
 ) -> Result<axum::Json<ApplicationResponse>, ApiError> {
+    let update = payload.validate()?;
+    let new_status = update.status.clone();
+
     let Some(application) = state
         .applications_service
-        .update(&application_id, payload.validate()?)
+        .update(&application_id, update)
         .await
         .map_err(|error| ApiError::from_repository(error, "applications_query_failed"))?
     else {
@@ -119,7 +122,54 @@ pub async fn patch_application(
         ));
     };
 
+    // Fire-and-forget: create a follow-up reminder task if status changed.
+    if let Some(ref status) = new_status {
+        state
+            .followup_service
+            .on_status_change(&application_id, status)
+            .await;
+    }
+
     Ok(axum::Json(ApplicationResponse::from(application)))
+}
+
+pub async fn create_activity(
+    State(state): State<AppState>,
+    Path(application_id): Path<String>,
+    ApiJson(payload): ApiJson<CreateActivityRequest>,
+) -> Result<(axum::http::StatusCode, axum::Json<ActivityResponse>), ApiError> {
+    // Verify the application exists first.
+    let Some(_) = state
+        .applications_service
+        .get_by_id(&application_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "activities_query_failed"))?
+    else {
+        return Err(ApiError::not_found(
+            "application_not_found",
+            format!("Application '{application_id}' was not found"),
+        ));
+    };
+
+    let is_interview = payload.activity_type == "interview";
+    let activity = state
+        .activities_service
+        .create(payload.validate(&application_id)?)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "activities_query_failed"))?;
+
+    // Fire-and-forget: create a thank-you note reminder after an interview activity.
+    if is_interview {
+        state
+            .followup_service
+            .on_interview_activity(&application_id)
+            .await;
+    }
+
+    Ok((
+        axum::http::StatusCode::CREATED,
+        axum::Json(ActivityResponse::from(activity)),
+    ))
 }
 
 #[cfg(test)]
