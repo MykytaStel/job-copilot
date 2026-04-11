@@ -48,13 +48,144 @@ export interface MarketInsights {
   salaryMentions: string[];
 }
 
-const API_URL = 'http://localhost:3001';
+type EngineApiError = {
+  code?: string;
+  message?: string;
+  details?: unknown;
+};
+
+type EngineHealthResponse = {
+  status: string;
+  database: {
+    status: string;
+    configured: boolean;
+    migrations_enabled_on_startup: boolean;
+  };
+};
+
+type EngineRecentJobsResponse = {
+  jobs: EngineJob[];
+};
+
+type EngineRecentApplicationsResponse = {
+  applications: EngineApplication[];
+};
+
+type EngineResume = {
+  id: string;
+  version: number;
+  filename: string;
+  raw_text: string;
+  is_active: boolean;
+  uploaded_at: string;
+};
+
+type EngineMatchResult = {
+  id: string;
+  job_id: string;
+  resume_id: string;
+  score: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  notes: string;
+  created_at: string;
+};
+
+type EngineJob = {
+  id: string;
+  title: string;
+  company_name: string;
+  description_text: string;
+  posted_at: string | null;
+  last_seen_at: string;
+};
+
+type EngineApplication = {
+  id: string;
+  job_id: string;
+  resume_id: string | null;
+  status: ApplicationStatus;
+  applied_at: string | null;
+  due_date: string | null;
+  updated_at: string;
+};
+
+type EngineApplicationDetail = EngineApplication & {
+  job: EngineJob;
+  resume: EngineResume | null;
+  notes: Array<{
+    id: string;
+    application_id: string;
+    content: string;
+    created_at: string;
+  }>;
+  contacts: Array<{
+    id: string;
+    application_id: string;
+    relationship: string;
+    contact: {
+      id: string;
+      name: string;
+      email?: string | null;
+      phone?: string | null;
+      linkedin_url?: string | null;
+      company?: string | null;
+      role?: string | null;
+      created_at: string;
+    };
+  }>;
+  activities: Array<{
+    id: string;
+    application_id: string;
+    activity_type: string;
+    description: string;
+    happened_at: string;
+    created_at: string;
+  }>;
+  tasks: Array<{
+    id: string;
+    application_id: string;
+    title: string;
+    remind_at?: string | null;
+    done: boolean;
+    created_at: string;
+  }>;
+};
+
+type EngineProfile = {
+  id: string;
+  name: string;
+  email: string;
+  location?: string | null;
+  raw_text: string;
+  analysis?: {
+    summary: string;
+    primary_role: string;
+    seniority: string;
+    skills: string[];
+    keywords: string[];
+  } | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type EngineAnalyzeProfile = {
+  summary: string;
+  primary_role: string;
+  seniority: string;
+  skills: string[];
+  keywords: string[];
+};
+
+const API_URL =
+  import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
+const PROFILE_ID_KEY = 'engine_api_profile_id';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, init);
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+    const body = (await res.json().catch(() => ({}))) as EngineApiError;
+    throw new Error(body.message ?? body.code ?? `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -68,150 +199,431 @@ function json(method: string, body: unknown): RequestInit {
   };
 }
 
-// ─── Health ───────────────────────────────────────────────────────────────────
-export const getHealth = () => request<HealthResponse>('/health');
+function unsupported(feature: string): never {
+  throw new Error(`${feature} is not supported by engine-api yet`);
+}
 
-// ─── Jobs ─────────────────────────────────────────────────────────────────────
-export const getJobs = () => request<JobPosting[]>('/jobs');
-export const getJob = (id: string) => request<JobPosting>(`/jobs/${id}`);
-export const createJob = (payload: JobPostingInput) =>
-  request<JobPosting>('/jobs/intake', json('POST', payload));
-export const fetchJobUrl = (url: string) =>
-  request<{ title: string; company: string; description: string }>('/jobs/fetch-url', json('POST', { url }));
+function unsupportedPromise<T>(feature: string): Promise<T> {
+  return Promise.reject(
+    new Error(`${feature} is not supported by engine-api yet`),
+  );
+}
 
-// ─── Profile ──────────────────────────────────────────────────────────────────
-export const getProfile = () => request<CandidateProfile>('/profile');
-export const saveProfile = (payload: CandidateProfileInput) =>
-  request<CandidateProfile>('/profile', json('POST', payload));
+function readStoredProfileId() {
+  return window.localStorage.getItem(PROFILE_ID_KEY);
+}
 
-// ─── Resumes (versioned) ──────────────────────────────────────────────────────
-export const getResumes = () => request<ResumeVersion[]>('/resumes');
-export const getActiveResume = () => request<ResumeVersion>('/resumes/active');
-export const uploadResume = (payload: ResumeUploadInput) =>
-  request<ResumeVersion>('/resume/upload', json('POST', payload));
-export const uploadResumeFile = (file: File) => {
-  const form = new FormData();
-  form.append('file', file);
-  return request<ResumeVersion>('/resume/upload-file', { method: 'POST', body: form });
-};
-export const activateResume = (id: string) =>
-  request<ResumeVersion>(`/resumes/${id}/activate`, json('POST', {}));
+function writeStoredProfileId(profileId: string) {
+  window.localStorage.setItem(PROFILE_ID_KEY, profileId);
+}
 
-// ─── Match ────────────────────────────────────────────────────────────────────
-export const runMatch = (jobId: string) =>
-  request<MatchResult>(`/jobs/${jobId}/match`, json('POST', {}));
-export const getMatch = (jobId: string) => request<MatchResult>(`/jobs/${jobId}/match`);
+function mapJob(job: EngineJob): JobPosting {
+  return {
+    id: job.id,
+    source: 'manual',
+    title: job.title,
+    company: job.company_name,
+    description: job.description_text,
+    notes: '',
+    createdAt: job.posted_at ?? job.last_seen_at,
+  };
+}
 
-// ─── Applications ─────────────────────────────────────────────────────────────
-export const getApplications = () => request<Application[]>('/applications');
-export const getApplicationDetail = (id: string) =>
-  request<ApplicationDetail>(`/applications/${id}`);
-export const createApplication = (payload: ApplicationInput) =>
-  request<Application>('/applications', json('POST', payload));
-export const patchApplication = (id: string, status: ApplicationStatus) =>
-  request<Application>(`/applications/${id}`, json('PATCH', { status }));
-export const setDueDate = (id: string, dueDate: string | null) =>
-  request<Application>(`/applications/${id}`, json('PATCH', { dueDate }));
-export const addNote = (applicationId: string, content: string) =>
-  request<ApplicationNote>(`/applications/${applicationId}/notes`, json('POST', { content }));
+function mapApplication(application: EngineApplication): Application {
+  return {
+    id: application.id,
+    jobId: application.job_id,
+    resumeId: application.resume_id ?? undefined,
+    status: application.status,
+    appliedAt: application.applied_at ?? undefined,
+    dueDate: application.due_date ?? undefined,
+    updatedAt: application.updated_at,
+  };
+}
 
-// ─── Job note ─────────────────────────────────────────────────────────────────
-export const updateJobNote = (id: string, note: string) =>
-  request<JobPosting>(`/jobs/${id}/note`, json('PATCH', { note }));
+function mapProfile(profile: EngineProfile): CandidateProfile {
+  return {
+    id: profile.id,
+    name: profile.name,
+    email: profile.email,
+    location: profile.location ?? undefined,
+    summary: profile.analysis?.summary,
+    skills: profile.analysis?.skills ?? [],
+    updatedAt: profile.updated_at,
+  };
+}
 
-// ─── Delete ───────────────────────────────────────────────────────────────────
-export const deleteJob = (id: string) =>
-  request<void>(`/jobs/${id}`, { method: 'DELETE' });
-export const deleteApplication = (id: string) =>
-  request<void>(`/applications/${id}`, { method: 'DELETE' });
+function mapResume(resume: EngineResume): ResumeVersion {
+  return {
+    id: resume.id,
+    version: resume.version,
+    filename: resume.filename,
+    rawText: resume.raw_text,
+    isActive: resume.is_active,
+    uploadedAt: resume.uploaded_at,
+  };
+}
 
-// ─── Market Pulse ─────────────────────────────────────────────────────────────
-export const getMarketInsights = () => request<MarketInsights>('/market/insights');
+function mapMatchResult(result: EngineMatchResult): MatchResult {
+  return {
+    id: result.id,
+    jobId: result.job_id,
+    resumeId: result.resume_id,
+    score: result.score,
+    matchedSkills: result.matched_skills,
+    missingSkills: result.missing_skills,
+    notes: result.notes,
+    createdAt: result.created_at,
+  };
+}
 
-// ─── Alerts ───────────────────────────────────────────────────────────────────
-export const getAlerts = () => request<JobAlert[]>('/alerts');
-export const createAlert = (payload: JobAlertInput) =>
-  request<JobAlert>('/alerts', json('POST', payload));
-export const toggleAlert = (id: string, active: boolean) =>
-  request<JobAlert>(`/alerts/${id}`, json('PATCH', { active }));
-export const deleteAlert = (id: string) =>
-  request<void>(`/alerts/${id}`, { method: 'DELETE' });
+function mapApplicationDetail(detail: EngineApplicationDetail): ApplicationDetail {
+  return {
+    ...mapApplication(detail),
+    job: mapJob(detail.job),
+    resume: detail.resume ? mapResume(detail.resume) : undefined,
+    notes: detail.notes.map((note) => ({
+      id: note.id,
+      applicationId: note.application_id,
+      content: note.content,
+      createdAt: note.created_at,
+    })),
+    contacts: detail.contacts.map((contact) => ({
+      id: contact.id,
+      applicationId: contact.application_id,
+      relationship: contact.relationship as ApplicationContact['relationship'],
+      contact: {
+        id: contact.contact.id,
+        name: contact.contact.name,
+        email: contact.contact.email ?? undefined,
+        phone: contact.contact.phone ?? undefined,
+        linkedinUrl: contact.contact.linkedin_url ?? undefined,
+        company: contact.contact.company ?? undefined,
+        role: contact.contact.role ?? undefined,
+        createdAt: contact.contact.created_at,
+      },
+    })),
+    activities: detail.activities.map((activity) => ({
+      id: activity.id,
+      applicationId: activity.application_id,
+      type: activity.activity_type as Activity['type'],
+      description: activity.description,
+      happenedAt: activity.happened_at,
+      createdAt: activity.created_at,
+    })),
+    tasks: detail.tasks.map((task) => ({
+      id: task.id,
+      applicationId: task.application_id,
+      title: task.title,
+      remindAt: task.remind_at ?? undefined,
+      done: task.done,
+      createdAt: task.created_at,
+    })),
+  };
+}
 
-// ─── Profile suggested skills ─────────────────────────────────────────────────
-export const getSuggestedSkills = () => request<string[]>('/profile/suggested-skills');
+export async function getStoredProfileRawText(): Promise<string> {
+  const profileId = readStoredProfileId();
+  if (!profileId) return '';
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
-export const getDashboardStats = () => request<DashboardStats>('/dashboard/stats');
+  const profile = await request<EngineProfile>(`/api/v1/profiles/${profileId}`);
+  return profile.raw_text;
+}
 
-// ─── Search ───────────────────────────────────────────────────────────────────
-export const search = (q: string) =>
-  request<SearchResults>(`/search?q=${encodeURIComponent(q)}`);
+export async function analyzeStoredProfile(): Promise<EngineAnalyzeProfile> {
+  const profileId = readStoredProfileId();
+  if (!profileId) {
+    throw new Error('Create a profile first');
+  }
 
-// ─── Contacts ─────────────────────────────────────────────────────────────────
-export const getContacts = () => request<Contact[]>('/contacts');
-export const createContact = (payload: ContactInput) =>
-  request<Contact>('/contacts', json('POST', payload));
-export const updateContact = (id: string, payload: Partial<ContactInput>) =>
-  request<Contact>(`/contacts/${id}`, json('PATCH', payload));
-export const deleteContact = (id: string) =>
-  request<void>(`/contacts/${id}`, { method: 'DELETE' });
-export const linkContact = (applicationId: string, contactId: string, relationship: string) =>
-  request<ApplicationContact>(`/applications/${applicationId}/contacts`, json('POST', { contactId, relationship }));
-export const unlinkContact = (applicationId: string, linkId: string) =>
-  request<void>(`/applications/${applicationId}/contacts/${linkId}`, { method: 'DELETE' });
+  return request<EngineAnalyzeProfile>(
+    `/api/v1/profiles/${profileId}/analyze`,
+    json('POST', {}),
+  );
+}
 
-// ─── Activities ───────────────────────────────────────────────────────────────
-export const getActivities = (applicationId: string) =>
-  request<Activity[]>(`/applications/${applicationId}/activities`);
-export const createActivity = (applicationId: string, payload: ActivityInput) =>
-  request<Activity>(`/applications/${applicationId}/activities`, json('POST', payload));
-export const deleteActivity = (id: string) =>
-  request<void>(`/activities/${id}`, { method: 'DELETE' });
+// Supported engine-api endpoints
+export async function getHealth(): Promise<HealthResponse> {
+  const health = await request<EngineHealthResponse>('/health');
 
-// ─── Tasks ────────────────────────────────────────────────────────────────────
-export const getTasks = (applicationId: string) =>
-  request<Task[]>(`/applications/${applicationId}/tasks`);
-export const getDueTasks = () => request<Task[]>('/tasks/due');
-export const createTask = (applicationId: string, payload: TaskInput) =>
-  request<Task>(`/applications/${applicationId}/tasks`, json('POST', payload));
-export const patchTask = (id: string, patch: { title?: string; remindAt?: string | null; done?: boolean }) =>
-  request<Task>(`/tasks/${id}`, json('PATCH', patch));
-export const deleteTask = (id: string) =>
-  request<void>(`/tasks/${id}`, { method: 'DELETE' });
+  return {
+    status: 'ok',
+    service: `engine-api:${health.database.status}`,
+    timestamp: new Date().toISOString(),
+  };
+}
 
-// ─── Cover Letters ────────────────────────────────────────────────────────────
-export const getCoverLetters = (jobId?: string) =>
-  request<CoverLetter[]>(`/cover-letters${jobId ? `?jobId=${jobId}` : ''}`);
-export const createCoverLetter = (payload: CoverLetterInput) =>
-  request<CoverLetter>('/cover-letters', json('POST', payload));
-export const updateCoverLetter = (id: string, content: string) =>
-  request<CoverLetter>(`/cover-letters/${id}`, json('PATCH', { content }));
-export const deleteCoverLetter = (id: string) =>
-  request<void>(`/cover-letters/${id}`, { method: 'DELETE' });
+export async function getJobs(): Promise<JobPosting[]> {
+  const response = await request<EngineRecentJobsResponse>('/api/v1/jobs/recent');
+  return response.jobs.map(mapJob);
+}
 
-// ─── Interview Q&A ────────────────────────────────────────────────────────────
-export const getInterviewQA = (jobId?: string) =>
-  request<InterviewQA[]>(`/interview-qa${jobId ? `?jobId=${jobId}` : ''}`);
-export const createInterviewQA = (payload: InterviewQAInput) =>
-  request<InterviewQA>('/interview-qa', json('POST', payload));
-export const updateInterviewQA = (id: string, patch: { question?: string; answer?: string }) =>
-  request<InterviewQA>(`/interview-qa/${id}`, json('PATCH', patch));
-export const deleteInterviewQA = (id: string) =>
-  request<void>(`/interview-qa/${id}`, { method: 'DELETE' });
+export async function getJob(id: string): Promise<JobPosting> {
+  const job = await request<EngineJob>(`/api/v1/jobs/${id}`);
+  return mapJob(job);
+}
 
-// ─── Offers ───────────────────────────────────────────────────────────────────
-export const getOffers = () => request<Offer[]>('/offers');
-export const createOffer = (payload: OfferInput) =>
-  request<Offer>('/offers', json('POST', payload));
-export const deleteOffer = (id: string) =>
-  request<void>(`/offers/${id}`, { method: 'DELETE' });
+export async function getApplications(): Promise<Application[]> {
+  const response = await request<EngineRecentApplicationsResponse>(
+    '/api/v1/applications/recent',
+  );
+  return response.applications.map(mapApplication);
+}
 
-// ─── Batch Import ─────────────────────────────────────────────────────────────
-export const importBatch = (urls: string[]) =>
-  request<ImportBatchResponse>('/import/batch', json('POST', { urls }));
+export async function getProfile(): Promise<CandidateProfile | undefined> {
+  const profileId = readStoredProfileId();
+  if (!profileId) return undefined;
 
-// ─── Backup / Restore ─────────────────────────────────────────────────────────
-export const downloadBackup = () =>
-  request<Record<string, unknown> & BackupMeta>('/backup');
-export const restoreBackup = (data: unknown) =>
-  request<{ restored: boolean; exportedAt: string }>('/restore', json('POST', data));
+  const profile = await request<EngineProfile>(`/api/v1/profiles/${profileId}`);
+  return mapProfile(profile);
+}
+
+export async function saveProfile(
+  payload: CandidateProfileInput & { rawText: string },
+): Promise<CandidateProfile> {
+  const profileId = readStoredProfileId();
+
+  const body = {
+    name: payload.name,
+    email: payload.email,
+    location: payload.location,
+    raw_text: payload.rawText,
+  };
+
+  const profile = profileId
+    ? await request<EngineProfile>(
+        `/api/v1/profiles/${profileId}`,
+        json('PATCH', body),
+      )
+    : await request<EngineProfile>('/api/v1/profiles', json('POST', body));
+
+  writeStoredProfileId(profile.id);
+
+  const analyzed = await request<EngineAnalyzeProfile>(
+    `/api/v1/profiles/${profile.id}/analyze`,
+    json('POST', {}),
+  );
+
+  return {
+    id: profile.id,
+    name: profile.name,
+    email: profile.email,
+    location: profile.location ?? undefined,
+    summary: analyzed.summary,
+    skills: analyzed.skills,
+    updatedAt: profile.updated_at,
+  };
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const applications = await getApplications();
+
+  const byStatus: DashboardStats['byStatus'] = {
+    saved: 0,
+    applied: 0,
+    interview: 0,
+    offer: 0,
+    rejected: 0,
+  };
+
+  for (const application of applications) {
+    byStatus[application.status] += 1;
+  }
+
+  return {
+    total: applications.length,
+    byStatus,
+    topMissingSkills: [],
+    avgScore: null,
+    tasksDueSoon: 0,
+  };
+}
+
+// Unsupported legacy endpoints kept only to avoid breaking compile-time imports.
+export const createJob = (_payload: JobPostingInput): Promise<JobPosting> =>
+  unsupportedPromise('Job creation');
+export const fetchJobUrl = (
+  _url: string,
+): Promise<{ title: string; company: string; description: string }> =>
+  unsupportedPromise('Job fetch by URL');
+export async function getResumes(): Promise<ResumeVersion[]> {
+  const resumes = await request<EngineResume[]>('/api/v1/resumes');
+  return resumes.map(mapResume);
+}
+
+export async function getActiveResume(): Promise<ResumeVersion> {
+  const resume = await request<EngineResume>('/api/v1/resumes/active');
+  return mapResume(resume);
+}
+
+export async function uploadResume(
+  payload: ResumeUploadInput,
+): Promise<ResumeVersion> {
+  const resume = await request<EngineResume>(
+    '/api/v1/resume/upload',
+    json('POST', {
+      filename: payload.filename,
+      raw_text: payload.rawText,
+    }),
+  );
+  return mapResume(resume);
+}
+
+export const uploadResumeFile = (_file: File): Promise<ResumeVersion> =>
+  unsupportedPromise('Resume upload');
+export async function activateResume(id: string): Promise<ResumeVersion> {
+  const resume = await request<EngineResume>(
+    `/api/v1/resumes/${id}/activate`,
+    json('POST', {}),
+  );
+  return mapResume(resume);
+}
+
+export async function runMatch(jobId: string): Promise<MatchResult> {
+  const result = await request<EngineMatchResult>(
+    `/api/v1/jobs/${jobId}/match`,
+    json('POST', {}),
+  );
+  return mapMatchResult(result);
+}
+
+export async function getMatch(jobId: string): Promise<MatchResult> {
+  const result = await request<EngineMatchResult>(`/api/v1/jobs/${jobId}/match`);
+  return mapMatchResult(result);
+}
+
+export async function getApplicationDetail(id: string): Promise<ApplicationDetail> {
+  const detail = await request<EngineApplicationDetail>(`/api/v1/applications/${id}`);
+  return mapApplicationDetail(detail);
+}
+
+export async function createApplication(
+  payload: ApplicationInput,
+): Promise<Application> {
+  const application = await request<EngineApplication>(
+    '/api/v1/applications',
+    json('POST', {
+      job_id: payload.jobId,
+      status: payload.status,
+      applied_at: payload.appliedAt,
+    }),
+  );
+  return mapApplication(application);
+}
+
+export async function patchApplication(
+  id: string,
+  status: ApplicationStatus,
+): Promise<Application> {
+  const application = await request<EngineApplication>(
+    `/api/v1/applications/${id}`,
+    json('PATCH', { status }),
+  );
+  return mapApplication(application);
+}
+
+export async function setDueDate(
+  id: string,
+  dueDate: string | null,
+): Promise<Application> {
+  const application = await request<EngineApplication>(
+    `/api/v1/applications/${id}`,
+    json('PATCH', { due_date: dueDate }),
+  );
+  return mapApplication(application);
+}
+export const addNote = (_applicationId: string, _content: string): Promise<ApplicationNote> =>
+  unsupported('Application notes');
+export const updateJobNote = (_id: string, _note: string): Promise<JobPosting> =>
+  unsupported('Job notes');
+export const deleteJob = (_id: string): Promise<void> => unsupported('Job deletion');
+export const deleteApplication = (_id: string): Promise<void> =>
+  unsupported('Application deletion');
+export const getMarketInsights = (): Promise<MarketInsights> =>
+  unsupported('Market insights');
+export const getAlerts = (): Promise<JobAlert[]> => unsupported('Alerts');
+export const createAlert = (_payload: JobAlertInput): Promise<JobAlert> =>
+  unsupported('Alerts');
+export const toggleAlert = (_id: string, _active: boolean): Promise<JobAlert> =>
+  unsupported('Alerts');
+export const deleteAlert = (_id: string): Promise<void> => unsupported('Alerts');
+export const getSuggestedSkills = (): Promise<string[]> => unsupported('Suggested skills');
+export async function search(q: string): Promise<SearchResults> {
+  const result = await request<{
+    jobs: EngineJob[];
+    contacts: Array<{ id: string; name: string; role?: string | null; email?: string | null }>;
+  }>(`/api/v1/search?q=${encodeURIComponent(q)}`);
+
+  return {
+    jobs: result.jobs.map(mapJob),
+    contacts: result.contacts.map((contact) => ({
+      id: contact.id,
+      name: contact.name,
+      role: contact.role ?? undefined,
+      email: contact.email ?? undefined,
+      createdAt: '',
+    })),
+  };
+}
+export const getContacts = (): Promise<Contact[]> => unsupported('Contacts');
+export const createContact = (_payload: ContactInput): Promise<Contact> =>
+  unsupported('Contacts');
+export const updateContact = (
+  _id: string,
+  _payload: Partial<ContactInput>,
+): Promise<Contact> => unsupported('Contacts');
+export const deleteContact = (_id: string): Promise<void> => unsupported('Contacts');
+export const linkContact = (
+  _applicationId: string,
+  _contactId: string,
+  _relationship: string,
+): Promise<ApplicationContact> => unsupported('Application contacts');
+export const unlinkContact = (
+  _applicationId: string,
+  _linkId: string,
+): Promise<void> => unsupported('Application contacts');
+export const getActivities = (_applicationId: string): Promise<Activity[]> =>
+  unsupported('Activities');
+export const createActivity = (
+  _applicationId: string,
+  _payload: ActivityInput,
+): Promise<Activity> => unsupported('Activities');
+export const deleteActivity = (_id: string): Promise<void> =>
+  unsupported('Activities');
+export const getTasks = (_applicationId: string): Promise<Task[]> => unsupported('Tasks');
+export const getDueTasks = (): Promise<Task[]> => unsupported('Tasks');
+export const createTask = (_applicationId: string, _payload: TaskInput): Promise<Task> =>
+  unsupported('Tasks');
+export const patchTask = (
+  _id: string,
+  _patch: { title?: string; remindAt?: string | null; done?: boolean },
+): Promise<Task> => unsupported('Tasks');
+export const deleteTask = (_id: string): Promise<void> => unsupported('Tasks');
+export const getCoverLetters = (_jobId?: string): Promise<CoverLetter[]> =>
+  unsupported('Cover letters');
+export const createCoverLetter = (_payload: CoverLetterInput): Promise<CoverLetter> =>
+  unsupported('Cover letters');
+export const updateCoverLetter = (_id: string, _content: string): Promise<CoverLetter> =>
+  unsupported('Cover letters');
+export const deleteCoverLetter = (_id: string): Promise<void> =>
+  unsupported('Cover letters');
+export const getInterviewQA = (_jobId?: string): Promise<InterviewQA[]> =>
+  unsupported('Interview Q&A');
+export const createInterviewQA = (_payload: InterviewQAInput): Promise<InterviewQA> =>
+  unsupported('Interview Q&A');
+export const updateInterviewQA = (
+  _id: string,
+  _patch: { question?: string; answer?: string },
+): Promise<InterviewQA> => unsupported('Interview Q&A');
+export const deleteInterviewQA = (_id: string): Promise<void> =>
+  unsupported('Interview Q&A');
+export const getOffers = (): Promise<Offer[]> => unsupported('Offers');
+export const createOffer = (_payload: OfferInput): Promise<Offer> => unsupported('Offers');
+export const deleteOffer = (_id: string): Promise<void> => unsupported('Offers');
+export const importBatch = (_urls: string[]): Promise<ImportBatchResponse> =>
+  unsupported('Batch import');
+export const downloadBackup = (): Promise<Record<string, unknown> & BackupMeta> =>
+  unsupported('Backup');
+export const restoreBackup = (
+  _data: unknown,
+): Promise<{ restored: boolean; exportedAt: string }> => unsupported('Backup');

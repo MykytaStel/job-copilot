@@ -11,8 +11,7 @@ Job search platform with:
 
 ## Current architecture
 - web = React app
-- api-legacy = old Fastify/TypeScript backend
-- engine-api = new Rust backend
+- engine-api = Rust backend
 - ingestion = new Rust ingestion service
 - ml = new Python ML/LLM service
 - contracts = shared schemas and contracts
@@ -21,7 +20,7 @@ Job search platform with:
 - prefer small, incremental changes
 - do not rewrite unrelated modules
 - keep web stable
-- migrate from legacy gradually
+- keep engine-api as the canonical backend
 - avoid large refactors unless requested
 - update docs when architecture changes
 

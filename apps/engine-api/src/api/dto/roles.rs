@@ -6,7 +6,6 @@ use crate::domain::role::catalog::{ROLE_CATALOG, RoleMetadata};
 pub struct RoleCatalogItemResponse {
     pub id: String,
     pub display_name: String,
-    pub deprecated_api_ids: Vec<String>,
     pub family: Option<String>,
     pub is_fallback: bool,
 }
@@ -21,12 +20,6 @@ impl From<&RoleMetadata> for RoleCatalogItemResponse {
         Self {
             id: role.canonical_key.to_string(),
             display_name: role.display_name.to_string(),
-            deprecated_api_ids: role
-                .id
-                .deprecated_api_keys()
-                .iter()
-                .map(|id| (*id).to_string())
-                .collect(),
             family: role.family.map(str::to_string),
             is_fallback: role.is_fallback,
         }
@@ -58,7 +51,6 @@ mod tests {
                 .iter()
                 .any(|role| role.id == "frontend_developer"
                     && role.display_name == "Frontend Developer"
-                    && role.deprecated_api_ids == vec!["front_end_developer".to_string()]
                     && role.family.as_deref() == Some("engineering")
                     && !role.is_fallback)
         );

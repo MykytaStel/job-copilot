@@ -15,26 +15,21 @@ Help a candidate:
 
 ---
 
-## Current state (March 2026)
+## Current state (April 2026)
 
 **Built and working:**
-- Candidate profile + resume versioning (PDF upload, text extraction)
-- Job intake by URL (scraper) or pasted text + batch import (20 URLs)
-- Fit scoring (Claude-powered, 0–100 + skill delta)
-- Application tracking board (Kanban, drag-and-drop via @hello-pangea/dnd)
-- Application detail view (notes, contacts, activities, tasks)
-- Market pulse (skill demand analysis across all saved jobs)
-- Job alerts (keyword filter + Telegram delivery)
-- Telegram 2-way bot (/status, /jobs, /tasks) via Telegraf
-- Cover letter CRUD (P3 scaffolding — AI call stubbed)
-- Interview Q&A CRUD (P3 scaffolding — AI call stubbed)
-- Offer tracking + side-by-side comparison table
-- Full-text search (jobs + contacts, debounced sidebar widget)
-- Backup / restore (JSON dump of all 14 tables)
+- engine-api health endpoint
+- jobs recent/listing endpoints
+- applications recent/listing endpoints
+- persisted profile CRUD in engine-api
+- persisted profile analysis and search-profile build flows
+- web connected to engine-api for dashboard, job details, applications board, and profile
 
 **What's still stubbed:**
-- `POST /cover-letters/:id/generate` → 503 until `ANTHROPIC_API_KEY` enabled
-- `POST /interview-qa/generate` → 503
+- application write flows in engine-api
+- resume ingestion/upload flow
+- matching and fit-score persistence
+- search, alerts, contacts, tasks, offers, backup, and other legacy-only tools
 
 ---
 
@@ -43,60 +38,36 @@ Help a candidate:
 ```
 job-copilot-ua-starter/
 ├── apps/
-│   ├── api/          ← Fastify 5 + Drizzle ORM + SQLite (better-sqlite3)
+│   ├── engine-api/   ← Rust + Axum + SQLx + Postgres
 │   │   ├── src/
-│   │   │   ├── index.ts        ← server entry, route registration
-│   │   │   ├── db/
-│   │   │   │   ├── schema.ts   ← Drizzle table definitions (14 tables)
-│   │   │   │   └── index.ts    ← db init + CREATE TABLE IF NOT EXISTS
-│   │   │   ├── lib/
-│   │   │   │   ├── claude.ts   ← Anthropic SDK calls
-│   │   │   │   ├── prompts.ts  ← prompt templates
-│   │   │   │   ├── scraper.ts  ← job URL scraper (node-html-parser)
-│   │   │   │   ├── bot.ts      ← Telegraf bot
-│   │   │   │   └── telegram.ts ← Telegram webhook helpers
-│   │   │   └── routes/         ← one file per domain (19 files)
+│   │   │   ├── api/          ← routes, DTOs, error contracts
+│   │   │   ├── db/           ← database and repositories
+│   │   │   ├── domain/       ← explicit domain models
+│   │   │   ├── services/     ← use-case services
+│   │   │   └── main.rs       ← server entry
 │   └── web/          ← React 19 + Vite + React Router 7
 │       └── src/
 │           ├── App.tsx       ← route definitions
-│           ├── Layout.tsx    ← app shell + sidebar + search
-│           ├── api.ts        ← typed fetch client for all endpoints
-│           └── pages/        ← 15 page components
+│           ├── Layout.tsx    ← app shell
+│           ├── api.ts        ← typed fetch client for engine-api
+│           └── pages/        ← active engine-api-backed screens
 ├── packages/
-│   └── shared/        ← shared TypeScript types + Zod schemas
+│   └── shared/        ← shared TypeScript types
 │       └── src/index.ts
 └── docs/              ← product decisions, roadmap
 ```
 
-**Port conventions:** API = 3001, Web = 5173
+**Port conventions:** Engine API = 8080, Web = 5173
 
 ---
 
-## DB tables (SQLite + Drizzle)
+## DB tables (current engine-api scope)
 
 | Table | Primary concern |
 |-------|----------------|
-| `profiles` | Candidate master profile (JSON skills) |
-| `jobs` | Job postings (url, source, description, notes) |
-| `resumes` | Resume versions (rawText, isActive) |
-| `match_results` | Fit scores (score 0–100, JSON skill arrays) |
-| `applications` | Tracking (status, appliedAt, dueDate) |
-| `application_notes` | Free-text notes per application |
-| `contacts` | People directory |
-| `application_contacts` | Junction (applicationId, contactId, relationship) |
-| `activities` | Event log (email/call/interview/follow_up) |
-| `tasks` | Reminders (remindAt, done) |
-| `alerts` | Keyword alerts (keywords JSON, telegramChatId) |
-| `cover_letters` | Cover letters (tone: formal/casual/enthusiastic) |
-| `interview_qa` | Q&A bank (category: behavioral/technical/situational/company) |
-| `offers` | Job offers (salary, equity, benefits JSON) |
-
-**DB patterns:**
-- IDs: `crypto.randomUUID()` (text primary key)
-- Timestamps: ISO string via `new Date().toISOString()`
-- JSON columns: stored as TEXT, parsed in route handlers
-- Migrations: handled inline in `db/index.ts` using `ALTER TABLE IF NOT EXISTS` pattern
-- No FK enforcement (SQLite default); enforce relationships in route logic
+| `profiles` | Candidate master profile + persisted analysis snapshot |
+| `jobs` | Canonical jobs read model |
+| `applications` | Application tracking read model |
 
 ---
 

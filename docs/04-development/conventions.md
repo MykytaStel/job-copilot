@@ -8,8 +8,7 @@
 
 ## Service ownership
 - `web` owns presentation
-- `api-legacy` owns temporary legacy behavior
-- `engine-api` owns future domain APIs
+- `engine-api` owns domain APIs
 - `ingestion` owns source synchronization
 - `ml` owns ML/LLM-specific processing
 

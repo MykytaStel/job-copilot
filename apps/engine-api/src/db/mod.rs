@@ -1,3 +1,5 @@
+pub mod repositories;
+
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgPool, query_scalar};
@@ -69,6 +71,10 @@ impl Database {
                 migrations_enabled_on_startup: self.migrations_enabled_on_startup,
             },
         }
+    }
+
+    pub fn pool(&self) -> Option<&PgPool> {
+        self.pool.as_ref()
     }
 }
 

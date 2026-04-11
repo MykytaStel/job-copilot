@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use super::catalog::{find_role, find_role_by_api_key, find_role_by_key};
+use super::catalog::{find_role, find_role_by_key};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RoleId {
@@ -36,16 +36,10 @@ impl RoleId {
         find_role(self).search_aliases
     }
 
-    pub fn deprecated_api_keys(self) -> &'static [&'static str] {
-        find_role(self).deprecated_api_keys
-    }
-
-    #[allow(dead_code)]
     pub fn family(self) -> Option<&'static str> {
         find_role(self).family
     }
 
-    #[allow(dead_code)]
     pub fn is_fallback(self) -> bool {
         find_role(self).is_fallback
     }
@@ -60,10 +54,6 @@ impl RoleId {
 
     pub fn parse_canonical_key(value: &str) -> Option<Self> {
         find_role_by_key(value).map(|role| role.id)
-    }
-
-    pub fn parse_api_key(value: &str) -> Option<Self> {
-        find_role_by_api_key(value).map(|role| role.id)
     }
 }
 
@@ -117,26 +107,9 @@ mod tests {
     }
 
     #[test]
-    fn parses_deprecated_api_keys() {
-        assert_eq!(
-            RoleId::parse_api_key("front_end_developer"),
-            Some(RoleId::FrontendDeveloper)
-        );
-        assert_eq!(
-            RoleId::parse_api_key("full_stack_developer"),
-            Some(RoleId::FullstackDeveloper)
-        );
-        assert_eq!(RoleId::parse_api_key("unknown_role"), None);
-    }
-
-    #[test]
     fn exposes_catalog_metadata() {
         assert_eq!(RoleId::ReactNativeDeveloper.family(), Some("engineering"));
         assert!(!RoleId::ReactNativeDeveloper.is_fallback());
         assert!(RoleId::Generalist.is_fallback());
-        assert_eq!(
-            RoleId::FrontendDeveloper.deprecated_api_keys(),
-            &["front_end_developer"]
-        );
     }
 }

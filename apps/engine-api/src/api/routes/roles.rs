@@ -33,7 +33,6 @@ mod tests {
                     == &json!({
                         "id": "frontend_developer",
                         "display_name": "Frontend Developer",
-                        "deprecated_api_ids": ["front_end_developer"],
                         "family": "engineering",
                         "is_fallback": false
                     }))

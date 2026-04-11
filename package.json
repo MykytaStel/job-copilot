@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.17.1",
   "scripts": {
-    "dev": "concurrently -n api,web -c auto \"pnpm --dir apps/api-legacy dev\" \"pnpm --dir apps/web dev\"",
+    "dev": "concurrently -n engine-api,web -c auto \"cargo run --manifest-path apps/engine-api/Cargo.toml\" \"pnpm --dir apps/web dev\"",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck"

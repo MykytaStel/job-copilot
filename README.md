@@ -1,67 +1,83 @@
 # Job Copilot UA Starter
 
-Starter monorepo for a personal AI-assisted job search tool focused on the Ukrainian market.
+Monorepo for a job search platform focused on the Ukrainian market.
 
 ## Stack
 
-- **Web:** React + Vite + TypeScript
-- **API:** Fastify + TypeScript
-- **Workspace:** pnpm workspaces
-- **Shared types:** local workspace package
-- **AI/docs support:** Claude Code project instructions, agents, skills, hooks
+- Web: React + Vite + TypeScript
+- Backend: Rust `engine-api`
+- Ingestion: Rust
+- ML: Python
+- Contracts: shared schemas in `packages/contracts`
 
-## Why this stack
-
-- Fast frontend startup
-- Simple backend without SSR complexity
-- One language across web and API
-- Easy to grow into Postgres, auth, queues, and LLM services
-
-## Project structure
+## Project Structure
 
 ```text
 job-copilot-ua-starter/
   apps/
-    web/        # React UI
-    api-legacy/ # Fastify legacy API
+    engine-api/ # canonical backend API
+    ingestion/  # ingestion service
+    ml/         # ML/LLM service
+    web/        # frontend
   packages/
-    contracts/  # Shared TS contracts
-  docs/         # Product and workflow docs
-  .claude/      # Claude Code project config
+    contracts/
+  docs/
 ```
 
-## Prerequisites
+## First Run
 
-- Node.js 22.x recommended
-- pnpm 10+
-- VS Code
-- Git
-
-## First run
+Install workspace dependencies:
 
 ```bash
 pnpm install
-pnpm dev
 ```
 
-Then open:
+Start the frontend:
 
-- Web: http://localhost:5173
-- API: http://localhost:3001/health
+```bash
+pnpm --filter web dev
+```
 
-## Useful scripts
+Start the backend:
+
+```bash
+cd apps/engine-api
+cargo run
+```
+
+Or start both together from the repo root:
 
 ```bash
 pnpm dev
-pnpm build
-pnpm lint
-pnpm typecheck
 ```
 
-## Next steps
+Default URLs:
+- Web: `http://localhost:5173`
+- Engine API: `http://localhost:8080`
 
-1. Add Postgres and Prisma
-2. Add auth
-3. Add CV upload and parsing
-4. Add job import by URL/text
-5. Add fit scoring and tailored resume output
+## Engine API
+
+`engine-api` is the backend contract for frontend integration.
+
+Useful endpoints:
+- `GET /health`
+- `GET /api/v1/jobs/recent`
+- `GET /api/v1/applications/recent`
+- `GET /api/v1/roles`
+- `POST /api/v1/profiles`
+- `GET /api/v1/profiles/:id`
+- `PATCH /api/v1/profiles/:id`
+- `POST /api/v1/profiles/:id/analyze`
+- `POST /api/v1/profiles/:id/search-profile/build`
+
+For local Postgres setup and request examples, see [apps/engine-api/README.md](/Users/mykyta/Documents/projects/job-copilot-ua-starter/apps/engine-api/README.md).
+
+## Current Frontend Scope
+
+The current `web` app is wired to `engine-api` for:
+- dashboard job list
+- job details
+- application board read view
+- persisted profile CRUD + analysis
+
+Legacy-only screens have been removed from the active router so the repository can move fully onto `engine-api`.

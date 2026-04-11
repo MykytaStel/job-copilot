@@ -18,7 +18,7 @@ Always read:
 - make small changes
 - do not rewrite unrelated modules
 - keep apps/web stable
-- treat apps/api-legacy as temporary
+- treat apps/engine-api as the canonical backend
 - prefer clear names and modular code
 - document structural changes
 

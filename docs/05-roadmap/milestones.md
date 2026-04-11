@@ -1,14 +1,13 @@
 # Milestones
 
-## Milestone 1 — Repository and migration foundation
+## Milestone 1 — Repository and backend foundation
 Goal:
 - clean repo
 - stable docs
 - new service structure
-- legacy isolated
+- backend foundation ready
 
 Success:
-- `api-legacy` separated
 - `engine-api` created
 - `ingestion` created
 - `ml` created

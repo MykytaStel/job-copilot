@@ -10,14 +10,11 @@ React frontend for:
 - applications
 - profile
 
-### api-legacy
-Existing Fastify TypeScript backend.
-Used temporarily during migration.
-
 ### engine-api
-New Rust backend.
-Will gradually own:
+Rust backend.
+Owns:
 - jobs API
+- profile API
 - applications API
 - ranking
 - search endpoints
@@ -38,11 +35,4 @@ New Python service for:
 - future LLM integration
 
 ## Data
-- legacy uses SQLite
-- new services should use Postgres
-
-## Migration strategy
-- keep web working
-- keep legacy backend alive
-- build new services beside it
-- move responsibilities gradually
+- services use Postgres

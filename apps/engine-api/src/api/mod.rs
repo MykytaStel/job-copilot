@@ -1,4 +1,5 @@
 pub mod dto;
+pub mod error;
 pub mod routes;
 
 use axum::Router;

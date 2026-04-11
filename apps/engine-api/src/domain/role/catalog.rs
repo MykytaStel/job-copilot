@@ -1,12 +1,10 @@
 use super::role_id::RoleId;
 
-#[allow(dead_code)]
 pub struct RoleMetadata {
     pub id: RoleId,
     pub canonical_key: &'static str,
     pub display_name: &'static str,
     pub search_aliases: &'static [&'static str],
-    pub deprecated_api_keys: &'static [&'static str],
     pub family: Option<&'static str>,
     pub is_fallback: bool,
 }
@@ -21,7 +19,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "mobile developer",
             "cross-platform developer",
         ],
-        deprecated_api_keys: &[],
         family: Some("engineering"),
         is_fallback: false,
     },
@@ -34,7 +31,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "mobile engineer",
             "ios android developer",
         ],
-        deprecated_api_keys: &[],
         family: Some("engineering"),
         is_fallback: false,
     },
@@ -47,7 +43,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "react developer",
             "javascript developer",
         ],
-        deprecated_api_keys: &["front_end_developer"],
         family: Some("engineering"),
         is_fallback: false,
     },
@@ -60,7 +55,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "server-side developer",
             "api developer",
         ],
-        deprecated_api_keys: &[],
         family: Some("engineering"),
         is_fallback: false,
     },
@@ -73,7 +67,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "full-stack developer",
             "software engineer",
         ],
-        deprecated_api_keys: &["full_stack_developer"],
         family: Some("engineering"),
         is_fallback: false,
     },
@@ -82,7 +75,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
         canonical_key: "qa_engineer",
         display_name: "QA Engineer",
         search_aliases: &["qa engineer", "test engineer", "automation qa engineer"],
-        deprecated_api_keys: &[],
         family: Some("engineering"),
         is_fallback: false,
     },
@@ -91,7 +83,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
         canonical_key: "devops_engineer",
         display_name: "DevOps Engineer",
         search_aliases: &["devops engineer", "platform engineer", "cloud engineer"],
-        deprecated_api_keys: &["dev_ops_engineer"],
         family: Some("engineering"),
         is_fallback: false,
     },
@@ -104,7 +95,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "business data analyst",
             "analytics specialist",
         ],
-        deprecated_api_keys: &[],
         family: Some("data"),
         is_fallback: false,
     },
@@ -113,7 +103,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
         canonical_key: "ui_ux_designer",
         display_name: "UI/UX Designer",
         search_aliases: &["ui ux designer", "product designer", "ux designer"],
-        deprecated_api_keys: &["uiux_designer"],
         family: Some("design"),
         is_fallback: false,
     },
@@ -126,7 +115,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "product owner",
             "digital product manager",
         ],
-        deprecated_api_keys: &[],
         family: Some("product"),
         is_fallback: false,
     },
@@ -135,7 +123,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
         canonical_key: "project_manager",
         display_name: "Project Manager",
         search_aliases: &["project manager", "delivery manager", "program coordinator"],
-        deprecated_api_keys: &[],
         family: Some("operations"),
         is_fallback: false,
     },
@@ -148,7 +135,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "digital marketer",
             "performance marketer",
         ],
-        deprecated_api_keys: &[],
         family: Some("marketing"),
         is_fallback: false,
     },
@@ -161,7 +147,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "business development manager",
             "account executive",
         ],
-        deprecated_api_keys: &[],
         family: Some("sales"),
         is_fallback: false,
     },
@@ -174,7 +159,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "support agent",
             "client support specialist",
         ],
-        deprecated_api_keys: &[],
         family: Some("support"),
         is_fallback: false,
     },
@@ -187,7 +171,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "talent acquisition specialist",
             "technical recruiter",
         ],
-        deprecated_api_keys: &[],
         family: Some("people"),
         is_fallback: false,
     },
@@ -196,7 +179,6 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
         canonical_key: "generalist",
         display_name: "Generalist",
         search_aliases: &[],
-        deprecated_api_keys: &[],
         family: None,
         is_fallback: true,
     },
@@ -213,14 +195,4 @@ pub fn find_role_by_key(canonical_key: &str) -> Option<&'static RoleMetadata> {
     ROLE_CATALOG
         .iter()
         .find(|role| role.canonical_key == canonical_key)
-}
-
-pub fn find_role_by_api_key(value: &str) -> Option<&'static RoleMetadata> {
-    ROLE_CATALOG.iter().find(|role| {
-        role.canonical_key == value
-            || role
-                .deprecated_api_keys
-                .iter()
-                .any(|deprecated_key| deprecated_key == &value)
-    })
 }
