@@ -67,6 +67,14 @@ impl ProfilesService {
         }
     }
 
+    pub async fn get_latest(&self) -> Result<Option<Profile>, RepositoryError> {
+        match &self.backend {
+            ProfilesServiceBackend::Repository(repository) => repository.get_latest().await,
+            #[cfg(test)]
+            ProfilesServiceBackend::Stub(stub) => stub.get_latest(),
+        }
+    }
+
     #[cfg(test)]
     pub fn for_tests(stub: ProfilesServiceStub) -> Self {
         Self {
@@ -96,6 +104,9 @@ impl ProfilesServiceStub {
             location: input.location,
             raw_text: input.raw_text,
             analysis: None,
+            salary_min_usd: None,
+            salary_max_usd: None,
+            preferred_work_mode: None,
             created_at: "2026-04-11T00:00:00+00:00".to_string(),
             updated_at: "2026-04-11T00:00:00+00:00".to_string(),
         };
@@ -174,6 +185,20 @@ impl ProfilesServiceStub {
         profile.updated_at = "2026-04-11T00:00:02+00:00".to_string();
 
         Ok(Some(profile.clone()))
+    }
+
+    fn get_latest(&self) -> Result<Option<Profile>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self
+            .profiles_by_id
+            .lock()
+            .expect("profiles stub mutex should not be poisoned")
+            .values()
+            .next()
+            .cloned())
     }
 }
 

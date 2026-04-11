@@ -3,6 +3,7 @@ use serde::Deserialize;
 
 use crate::api::dto::jobs::{JobResponse, RecentJobsResponse};
 use crate::api::dto::matching::MatchResultResponse;
+use crate::api::dto::ranking::FitScoreResponse;
 use crate::api::error::ApiError;
 use crate::state::AppState;
 
@@ -80,6 +81,48 @@ pub async fn get_job_match(
     };
 
     Ok(axum::Json(MatchResultResponse::from(result)))
+}
+
+/// Compute a fast local fit score for a job against the active resume.
+/// No external API call — runs in microseconds.
+pub async fn get_job_fit(
+    State(state): State<AppState>,
+    Path(job_id): Path<String>,
+) -> Result<axum::Json<FitScoreResponse>, ApiError> {
+    let Some(job) = state
+        .jobs_service
+        .get_by_id(&job_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "fit_query_failed"))?
+    else {
+        return Err(ApiError::not_found(
+            "job_not_found",
+            format!("Job '{job_id}' was not found"),
+        ));
+    };
+
+    let Some(resume) = state
+        .resumes_service
+        .get_active()
+        .await
+        .map_err(|error| ApiError::from_repository(error, "fit_query_failed"))?
+    else {
+        return Err(ApiError::not_found(
+            "active_resume_not_found",
+            "No active resume was found",
+        ));
+    };
+
+    let candidate = state.profile_analysis_service.analyze(&resume.raw_text);
+    // Best-effort: load the user's stored profile for salary/work mode prefs.
+    // If no profile exists yet, salary + workmode components default to neutral (0.5).
+    let profile = state.profiles_service.get_latest().await.ok().flatten();
+
+    let score = state
+        .ranking_service
+        .compute(&candidate, &job, profile.as_ref());
+
+    Ok(axum::Json(FitScoreResponse::from(score)))
 }
 
 pub async fn score_job_match(

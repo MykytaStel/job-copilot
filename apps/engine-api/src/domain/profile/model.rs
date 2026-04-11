@@ -8,6 +8,9 @@ pub struct Profile {
     pub location: Option<String>,
     pub raw_text: String,
     pub analysis: Option<ProfileAnalysis>,
+    pub salary_min_usd: Option<i32>,
+    pub salary_max_usd: Option<i32>,
+    pub preferred_work_mode: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

@@ -3,6 +3,7 @@ pub mod candidate;
 pub mod job;
 pub mod matching;
 pub mod profile;
+pub mod ranking;
 pub mod resume;
 pub mod role;
 pub mod search;

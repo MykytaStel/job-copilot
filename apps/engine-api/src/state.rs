@@ -8,6 +8,7 @@ use crate::services::jobs::JobsService;
 use crate::services::matching::MatchService;
 use crate::services::profile::service::ProfileAnalysisService;
 use crate::services::profiles::ProfilesService;
+use crate::services::ranking::RankingService;
 use crate::services::resumes::ResumesService;
 use crate::services::search_profile::service::SearchProfileService;
 
@@ -22,6 +23,7 @@ pub struct AppState {
     pub resumes_service: ResumesService,
     pub match_service: MatchService,
     pub profile_analysis_service: ProfileAnalysisService,
+    pub ranking_service: RankingService,
     pub search_profile_service: SearchProfileService,
 }
 
@@ -47,6 +49,7 @@ impl AppState {
                 profile_analysis_service.clone(),
             ),
             profile_analysis_service,
+            ranking_service: RankingService::new(),
             search_profile_service: SearchProfileService::new(),
         }
     }
@@ -78,6 +81,7 @@ impl AppState {
                 profile_analysis_service.clone(),
             ),
             profile_analysis_service,
+            ranking_service: RankingService::new(),
             search_profile_service: SearchProfileService::new(),
         }
     }

@@ -4,6 +4,7 @@ import Layout from './Layout';
 import Dashboard from './pages/Dashboard';
 import JobDetails from './pages/JobDetails';
 import ApplicationBoard from './pages/ApplicationBoard';
+import ApplicationDetail from './pages/ApplicationDetail';
 import Profile from './pages/Profile';
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="jobs/:id" element={<JobDetails />} />
           <Route path="applications" element={<ApplicationBoard />} />
+          <Route path="applications/:id" element={<ApplicationDetail />} />
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>

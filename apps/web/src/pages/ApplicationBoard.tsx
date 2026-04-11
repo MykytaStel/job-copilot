@@ -1,4 +1,5 @@
 import { Download } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { Application, JobPosting } from '@job-copilot/shared';
 
@@ -91,19 +92,25 @@ export default function ApplicationBoard() {
                     const job = jobsById.get(application.jobId);
 
                     return (
-                      <div key={application.id} className="boardCard">
-                        <div className="boardCardTitle">
-                          {job?.title ?? application.jobId}
-                        </div>
-                        <p className="muted boardCardCompany">
-                          {job?.company ?? 'Unknown company'}
-                        </p>
-                        {application.appliedAt && (
-                          <p className="muted" style={{ marginBottom: 0 }}>
-                            Applied: {new Date(application.appliedAt).toLocaleString()}
+                      <Link
+                        key={application.id}
+                        to={`/applications/${application.id}`}
+                        style={{ textDecoration: 'none', display: 'block' }}
+                      >
+                        <div className="boardCard" style={{ cursor: 'pointer' }}>
+                          <div className="boardCardTitle">
+                            {job?.title ?? application.jobId}
+                          </div>
+                          <p className="muted boardCardCompany">
+                            {job?.company ?? 'Unknown company'}
                           </p>
-                        )}
-                      </div>
+                          {application.appliedAt && (
+                            <p className="muted" style={{ marginBottom: 0 }}>
+                              Applied: {new Date(application.appliedAt).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                      </Link>
                     );
                   })}
                 </div>

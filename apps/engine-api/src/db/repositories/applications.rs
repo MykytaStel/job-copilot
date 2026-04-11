@@ -4,7 +4,8 @@ use uuid::Uuid;
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::application::model::{
-    Application, ApplicationDetail, CreateApplication, UpdateApplication,
+    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote,
+    Contact, CreateApplication, Task, UpdateApplication,
 };
 use crate::domain::job::model::Job;
 use crate::domain::resume::model::ResumeVersion;
@@ -23,6 +24,49 @@ struct ApplicationRow {
     applied_at: Option<String>,
     due_date: Option<String>,
     updated_at: String,
+}
+
+#[derive(FromRow)]
+struct NoteRow {
+    id: String,
+    application_id: String,
+    content: String,
+    created_at: String,
+}
+
+#[derive(FromRow)]
+struct ContactJoinRow {
+    id: String,
+    application_id: String,
+    relationship: String,
+    contact_id: String,
+    contact_name: String,
+    contact_email: Option<String>,
+    contact_phone: Option<String>,
+    contact_linkedin_url: Option<String>,
+    contact_company: Option<String>,
+    contact_role: Option<String>,
+    contact_created_at: String,
+}
+
+#[derive(FromRow)]
+struct ActivityRow {
+    id: String,
+    application_id: String,
+    activity_type: String,
+    description: String,
+    happened_at: String,
+    created_at: String,
+}
+
+#[derive(FromRow)]
+struct TaskRow {
+    id: String,
+    application_id: String,
+    title: String,
+    remind_at: Option<String>,
+    done: bool,
+    created_at: String,
 }
 
 #[derive(FromRow)]
@@ -169,7 +213,127 @@ impl ApplicationsRepository {
         .fetch_optional(pool)
         .await?;
 
-        Ok(row.map(ApplicationDetail::from))
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let notes: Vec<ApplicationNote> = sqlx::query_as::<_, NoteRow>(
+            r#"
+            SELECT id, application_id, content, created_at::text AS created_at
+            FROM application_notes
+            WHERE application_id = $1
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(id)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|r| ApplicationNote {
+            id: r.id,
+            application_id: r.application_id,
+            content: r.content,
+            created_at: r.created_at,
+        })
+        .collect();
+
+        let contacts: Vec<ApplicationContact> = sqlx::query_as::<_, ContactJoinRow>(
+            r#"
+            SELECT
+                ac.id AS id,
+                ac.application_id AS application_id,
+                ac.relationship AS relationship,
+                c.id AS contact_id,
+                c.name AS contact_name,
+                c.email AS contact_email,
+                c.phone AS contact_phone,
+                c.linkedin_url AS contact_linkedin_url,
+                c.company AS contact_company,
+                c.role AS contact_role,
+                c.created_at::text AS contact_created_at
+            FROM application_contacts ac
+            JOIN contacts c ON c.id = ac.contact_id
+            WHERE ac.application_id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|r| ApplicationContact {
+            id: r.id,
+            application_id: r.application_id,
+            relationship: r.relationship,
+            contact: Contact {
+                id: r.contact_id,
+                name: r.contact_name,
+                email: r.contact_email,
+                phone: r.contact_phone,
+                linkedin_url: r.contact_linkedin_url,
+                company: r.contact_company,
+                role: r.contact_role,
+                created_at: r.contact_created_at,
+            },
+        })
+        .collect();
+
+        let activities: Vec<Activity> = sqlx::query_as::<_, ActivityRow>(
+            r#"
+            SELECT
+                id,
+                application_id,
+                activity_type,
+                description,
+                happened_at::text AS happened_at,
+                created_at::text AS created_at
+            FROM activities
+            WHERE application_id = $1
+            ORDER BY happened_at DESC
+            "#,
+        )
+        .bind(id)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|r| Activity {
+            id: r.id,
+            application_id: r.application_id,
+            activity_type: r.activity_type,
+            description: r.description,
+            happened_at: r.happened_at,
+            created_at: r.created_at,
+        })
+        .collect();
+
+        let tasks: Vec<Task> = sqlx::query_as::<_, TaskRow>(
+            r#"
+            SELECT
+                id,
+                application_id,
+                title,
+                remind_at::text AS remind_at,
+                done,
+                created_at::text AS created_at
+            FROM tasks
+            WHERE application_id = $1
+            ORDER BY created_at ASC
+            "#,
+        )
+        .bind(id)
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|r| Task {
+            id: r.id,
+            application_id: r.application_id,
+            title: r.title,
+            remind_at: r.remind_at,
+            done: r.done,
+            created_at: r.created_at,
+        })
+        .collect();
+
+        Ok(Some(ApplicationDetail::from((row, notes, contacts, activities, tasks))))
     }
 
     pub async fn list_recent(&self, limit: i64) -> Result<Vec<Application>, RepositoryError> {
@@ -288,8 +452,24 @@ impl From<ApplicationRow> for Application {
     }
 }
 
-impl From<ApplicationDetailRow> for ApplicationDetail {
-    fn from(row: ApplicationDetailRow) -> Self {
+impl
+    From<(
+        ApplicationDetailRow,
+        Vec<ApplicationNote>,
+        Vec<ApplicationContact>,
+        Vec<Activity>,
+        Vec<Task>,
+    )> for ApplicationDetail
+{
+    fn from(
+        (row, notes, contacts, activities, tasks): (
+            ApplicationDetailRow,
+            Vec<ApplicationNote>,
+            Vec<ApplicationContact>,
+            Vec<Activity>,
+            Vec<Task>,
+        ),
+    ) -> Self {
         Self {
             application: Application {
                 id: row.application_id,
@@ -332,10 +512,10 @@ impl From<ApplicationDetailRow> for ApplicationDetail {
                     .resume_uploaded_at
                     .expect("uploaded_at should be present when resume is joined"),
             }),
-            notes: Vec::new(),
-            contacts: Vec::new(),
-            activities: Vec::new(),
-            tasks: Vec::new(),
+            notes,
+            contacts,
+            activities,
+            tasks,
         }
     }
 }

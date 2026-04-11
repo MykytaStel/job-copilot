@@ -24,6 +24,9 @@ struct ProfileRow {
     seniority: Option<String>,
     skills_json: String,
     keywords_json: String,
+    salary_min_usd: Option<i32>,
+    salary_max_usd: Option<i32>,
+    preferred_work_mode: Option<String>,
     created_at: String,
     updated_at: String,
 }
@@ -61,6 +64,9 @@ impl ProfilesRepository {
                 seniority,
                 skills::text AS skills_json,
                 keywords::text AS keywords_json,
+                salary_min_usd,
+                salary_max_usd,
+                preferred_work_mode,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             "#,
@@ -94,6 +100,9 @@ impl ProfilesRepository {
                 seniority,
                 skills::text AS skills_json,
                 keywords::text AS keywords_json,
+                salary_min_usd,
+                salary_max_usd,
+                preferred_work_mode,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             FROM profiles
@@ -101,6 +110,40 @@ impl ProfilesRepository {
             "#,
         )
         .bind(id)
+        .fetch_optional(pool)
+        .await?;
+
+        row.map(Profile::try_from).transpose()
+    }
+
+    pub async fn get_latest(&self) -> Result<Option<Profile>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, ProfileRow>(
+            r#"
+            SELECT
+                id,
+                name,
+                email,
+                location,
+                raw_text,
+                summary,
+                primary_role,
+                seniority,
+                skills::text AS skills_json,
+                keywords::text AS keywords_json,
+                salary_min_usd,
+                salary_max_usd,
+                preferred_work_mode,
+                created_at::text AS created_at,
+                updated_at::text AS updated_at
+            FROM profiles
+            ORDER BY updated_at DESC
+            LIMIT 1
+            "#,
+        )
         .fetch_optional(pool)
         .await?;
 
@@ -160,6 +203,9 @@ impl ProfilesRepository {
                 seniority,
                 skills::text AS skills_json,
                 keywords::text AS keywords_json,
+                salary_min_usd,
+                salary_max_usd,
+                preferred_work_mode,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             "#,
@@ -207,6 +253,9 @@ impl ProfilesRepository {
                 seniority,
                 skills::text AS skills_json,
                 keywords::text AS keywords_json,
+                salary_min_usd,
+                salary_max_usd,
+                preferred_work_mode,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             "#,
@@ -250,6 +299,9 @@ impl TryFrom<ProfileRow> for Profile {
             location: row.location,
             raw_text: row.raw_text,
             analysis,
+            salary_min_usd: row.salary_min_usd,
+            salary_max_usd: row.salary_max_usd,
+            preferred_work_mode: row.preferred_work_mode,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
