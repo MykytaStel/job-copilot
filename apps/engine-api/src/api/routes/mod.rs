@@ -31,6 +31,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/applications/{id}/activities",
             post(applications::create_activity),
         )
+        .route(
+            "/api/v1/applications/{id}/notes",
+            post(applications::create_note),
+        )
         .route("/api/v1/jobs/recent", get(jobs::get_recent_jobs))
         .route("/api/v1/jobs/{id}", get(jobs::get_job_by_id))
         .route("/api/v1/jobs/{id}/fit", get(jobs::get_job_fit))

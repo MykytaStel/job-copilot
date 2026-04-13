@@ -5,7 +5,7 @@ use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::application::model::{
     Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote,
-    Contact, CreateApplication, Task, UpdateApplication,
+    Contact, CreateApplication, CreateNote, Task, UpdateApplication,
 };
 use crate::domain::job::model::Job;
 use crate::domain::resume::model::ResumeVersion;
@@ -401,6 +401,35 @@ impl ApplicationsRepository {
         .await?;
 
         Ok(row.map(Application::from))
+    }
+
+    pub async fn create_note(
+        &self,
+        note: &CreateNote,
+    ) -> Result<ApplicationNote, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, NoteRow>(
+            r#"
+            INSERT INTO application_notes (id, application_id, content, created_at)
+            VALUES ($1, $2, $3, NOW())
+            RETURNING id, application_id, content, created_at::text AS created_at
+            "#,
+        )
+        .bind(Uuid::now_v7().to_string())
+        .bind(&note.application_id)
+        .bind(&note.content)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(ApplicationNote {
+            id: row.id,
+            application_id: row.application_id,
+            content: row.content,
+            created_at: row.created_at,
+        })
     }
 
     pub async fn attach_resume(

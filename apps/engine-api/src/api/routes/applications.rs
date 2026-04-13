@@ -3,7 +3,8 @@ use serde::Deserialize;
 
 use crate::api::dto::applications::{
     ActivityResponse, ApplicationDetailResponse, ApplicationResponse, CreateActivityRequest,
-    CreateApplicationRequest, RecentApplicationsResponse, UpdateApplicationRequest,
+    CreateApplicationRequest, CreateNoteRequest, NoteResponse, RecentApplicationsResponse,
+    UpdateApplicationRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
 use crate::state::AppState;
@@ -169,6 +170,36 @@ pub async fn create_activity(
     Ok((
         axum::http::StatusCode::CREATED,
         axum::Json(ActivityResponse::from(activity)),
+    ))
+}
+
+pub async fn create_note(
+    State(state): State<AppState>,
+    Path(application_id): Path<String>,
+    ApiJson(payload): ApiJson<CreateNoteRequest>,
+) -> Result<(axum::http::StatusCode, axum::Json<NoteResponse>), ApiError> {
+    // Verify the application exists first.
+    let Some(_) = state
+        .applications_service
+        .get_by_id(&application_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "notes_query_failed"))?
+    else {
+        return Err(ApiError::not_found(
+            "application_not_found",
+            format!("Application '{application_id}' was not found"),
+        ));
+    };
+
+    let note = state
+        .applications_service
+        .create_note(payload.validate(&application_id)?)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "notes_query_failed"))?;
+
+    Ok((
+        axum::http::StatusCode::CREATED,
+        axum::Json(NoteResponse::from(note)),
     ))
 }
 

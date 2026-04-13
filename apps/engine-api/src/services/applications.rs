@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::db::repositories::{ApplicationsRepository, RepositoryError};
 use crate::domain::application::model::{
-    Application, ApplicationDetail, CreateApplication, UpdateApplication,
+    Application, ApplicationDetail, ApplicationNote, CreateApplication, CreateNote, UpdateApplication,
 };
 
 #[derive(Clone)]
@@ -82,6 +82,19 @@ impl ApplicationsService {
             }
             #[cfg(test)]
             ApplicationsServiceBackend::Stub(stub) => stub.update(id, patch),
+        }
+    }
+
+    pub async fn create_note(
+        &self,
+        note: CreateNote,
+    ) -> Result<ApplicationNote, RepositoryError> {
+        match &self.backend {
+            ApplicationsServiceBackend::Repository(repository) => {
+                repository.create_note(&note).await
+            }
+            #[cfg(test)]
+            ApplicationsServiceBackend::Stub(stub) => stub.create_note(note),
         }
     }
 
@@ -206,6 +219,19 @@ impl ApplicationsServiceStub {
         application.updated_at = "2026-04-11T00:00:01+00:00".to_string();
 
         Ok(Some(application.clone()))
+    }
+
+    fn create_note(&self, note: CreateNote) -> Result<ApplicationNote, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(ApplicationNote {
+            id: "note_test_001".to_string(),
+            application_id: note.application_id,
+            content: note.content,
+            created_at: "2026-04-11T00:00:00+00:00".to_string(),
+        })
     }
 
     fn attach_resume(
