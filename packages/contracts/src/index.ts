@@ -27,6 +27,11 @@ export interface JobPosting {
   reactivatedAt?: string;
   lifecycleStage?: 'active' | 'inactive' | 'reactivated';
   primaryVariant?: JobSourceVariant;
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryCurrency?: string;
+  seniority?: string;
+  remoteType?: string;
 }
 
 export interface JobSourceVariant {

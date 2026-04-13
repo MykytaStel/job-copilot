@@ -1,0 +1,10 @@
+apps/engine-api/target/
+apps/ingestion/target/
+apps/web/node_modules/
+node_modules/
+apps/ml/__pycache__/
+apps/ml/.venv/
+infra/
+*.md
+docs/
+scripts/

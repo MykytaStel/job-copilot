@@ -1,0 +1,94 @@
+services:
+
+  # ── Postgres ────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    container_name: job-copilot-postgres
+    environment:
+      POSTGRES_USER: jobcopilot
+      POSTGRES_PASSWORD: jobcopilot
+      POSTGRES_DB: jobcopilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobcopilot -d jobcopilot"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
+
+  # ── Engine API (Rust/Axum) ──────────────────────────────────────────────────
+  engine-api:
+    build:
+      context: ../apps/engine-api
+      dockerfile: Dockerfile
+    container_name: job-copilot-engine-api
+    environment:
+      DATABASE_URL: postgres://jobcopilot:jobcopilot@postgres:5432/jobcopilot
+      RUN_DB_MIGRATIONS: "true"
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Web (React/Vite → nginx) ────────────────────────────────────────────────
+  # VITE_ENGINE_API_URL must be the URL the browser reaches — not the Docker
+  # internal hostname. Override with: docker compose build --build-arg VITE_ENGINE_API_URL=...
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_ENGINE_API_URL: http://localhost:8080
+    container_name: job-copilot-web
+    ports:
+      - "3000:80"
+    depends_on:
+      - engine-api
+
+  # ── Scraper daemon ──────────────────────────────────────────────────────────
+  # Scrapes Djinni + Work.ua every 60 minutes and upserts results into Postgres.
+  # Set SCRAPE_INTERVAL_MINUTES to override the default.
+  # Set SCRAPE_PAGES to control how many pages per source (default 3).
+  scraper:
+    build:
+      context: ..
+      dockerfile: apps/ingestion/Dockerfile
+    container_name: job-copilot-scraper
+    environment:
+      DATABASE_URL: postgres://jobcopilot:jobcopilot@postgres:5432/jobcopilot
+    command:
+      - "--daemon"
+      - "--sources"
+      - "all"
+      - "--pages"
+      - "${SCRAPE_PAGES:-3}"
+      - "--interval-minutes"
+      - "${SCRAPE_INTERVAL_MINUTES:-60}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      engine-api:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── ML sidecar (Python/FastAPI) ─────────────────────────────────────────────
+  ml:
+    build:
+      context: ../apps/ml
+      dockerfile: Dockerfile
+    container_name: job-copilot-ml
+    environment:
+      ENGINE_API_BASE_URL: http://engine-api:8080
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - engine-api
+
+volumes:
+  postgres-data:

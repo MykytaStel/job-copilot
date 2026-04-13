@@ -1,25 +1,32 @@
 import { useParams } from 'react-router-dom';
-import { ExternalLink, RefreshCw, TimerReset } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Bookmark, BookmarkCheck, Briefcase, ExternalLink, MapPin, Wifi } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import type { Application } from '@job-copilot/shared';
 
-import { getJob } from '../api';
+import { createApplication, getApplications, getJob } from '../api';
 import { queryKeys } from '../queryKeys';
 import { SkeletonPage } from '../components/Skeleton';
 
-function formatTimestamp(value?: string) {
-  if (!value) return 'n/a';
+function formatSalary(min?: number, max?: number, currency?: string) {
+  if (!min && !max) return null;
+  const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : (currency ?? '');
+  const fmt = (n: number) => `${sym}${n.toLocaleString()}`;
+  if (min && max) return `${fmt(min)} – ${fmt(max)}`;
+  return min ? `від ${fmt(min)}` : `до ${fmt(max!)}`;
+}
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat('uk-UA', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
+function formatDate(value?: string) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime())
+    ? null
+    : d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export default function JobDetails() {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
 
   const { data: job, isLoading, error } = useQuery({
     queryKey: queryKeys.jobs.detail(id!),
@@ -27,103 +34,125 @@ export default function JobDetails() {
     enabled: !!id,
   });
 
+  const { data: applications = [] } = useQuery<Application[]>({
+    queryKey: queryKeys.applications.all(),
+    queryFn: getApplications,
+  });
+
+  const existing = applications.find((a) => a.jobId === id);
+
+  const saveMutation = useMutation({
+    mutationFn: () => createApplication({ jobId: id!, status: 'saved' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
+      toast.success('Збережено в pipeline');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
   if (isLoading) return <SkeletonPage />;
   if (!job) {
     return (
       <p className="error">
-        {error instanceof Error ? error.message : 'Job not found'}
+        {error instanceof Error ? error.message : 'Вакансія не знайдена'}
       </p>
     );
   }
+
+  const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency);
 
   return (
     <div className="jobDetails">
       <div className="pageHeader">
         <div>
-          <p className="eyebrow">Canonical Job View</p>
           <h1>{job.title}</h1>
-          <p className="muted">{job.company}</p>
+          <p className="muted" style={{ fontSize: 16, marginTop: 4 }}>{job.company}</p>
         </div>
-        <div className={`jobStatePill jobDetailsState jobState-${job.lifecycleStage ?? 'active'}`}>
-          {job.lifecycleStage ?? (job.isActive === false ? 'inactive' : 'active')}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div className={`jobStatePill jobDetailsState jobState-${job.lifecycleStage ?? 'active'}`}>
+            {job.lifecycleStage ?? (job.isActive === false ? 'inactive' : 'active')}
+          </div>
+
+          {existing ? (
+            <span className={`statusPill status-${existing.status}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <BookmarkCheck size={13} /> {existing.status}
+            </span>
+          ) : (
+            <button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <Bookmark size={14} />
+              {saveMutation.isPending ? 'Зберігаємо…' : 'Зберегти'}
+            </button>
+          )}
+
+          {job.primaryVariant?.sourceUrl && (
+            <a
+              href={job.primaryVariant.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="ghostBtn"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+            >
+              <ExternalLink size={14} /> Джерело
+            </a>
+          )}
         </div>
       </div>
 
-      <section className="jobDetailMetaGrid">
-        <div className="card">
-          <p className="eyebrow">Lifecycle</p>
-          <div className="jobDetailFacts">
-            <div>
-              <span>first seen</span>
-              <strong>{formatTimestamp(job.firstSeenAt)}</strong>
-            </div>
-            <div>
-              <span>last seen</span>
-              <strong>{formatTimestamp(job.lastSeenAt)}</strong>
-            </div>
-            <div>
-              <span>inactive at</span>
-              <strong>{formatTimestamp(job.inactivatedAt)}</strong>
-            </div>
-            <div>
-              <span>reactivated at</span>
-              <strong>{formatTimestamp(job.reactivatedAt)}</strong>
-            </div>
-          </div>
-        </div>
+      {/* Meta chips */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+        {salary && (
+          <span className="jobMetaChip">
+            <Briefcase size={13} /> {salary}
+          </span>
+        )}
+        {job.seniority && (
+          <span className="jobMetaChip" style={{ textTransform: 'capitalize' }}>
+            {job.seniority}
+          </span>
+        )}
+        {job.remoteType && (
+          <span className="jobMetaChip">
+            <Wifi size={13} /> {job.remoteType}
+          </span>
+        )}
+        {job.primaryVariant?.source && (
+          <span className="jobMetaChip">
+            <MapPin size={13} /> {job.primaryVariant.source.replace('_', '.')}
+          </span>
+        )}
+        {job.postedAt && (
+          <span className="jobMetaChip">опубліковано {formatDate(job.postedAt)}</span>
+        )}
+      </div>
 
-        <div className="card">
-          <p className="eyebrow">Source Variant</p>
-          {job.primaryVariant ? (
-            <div className="jobDetailFacts">
-              <div>
-                <span>source</span>
-                <strong>{job.primaryVariant.source}</strong>
-              </div>
-              <div>
-                <span>source job id</span>
-                <strong>{job.primaryVariant.sourceJobId}</strong>
-              </div>
-              <div>
-                <span>fetched at</span>
-                <strong>{formatTimestamp(job.primaryVariant.fetchedAt)}</strong>
-              </div>
-              <div>
-                <span>source state</span>
-                <strong>{job.primaryVariant.isActive ? 'active' : 'inactive'}</strong>
-              </div>
-              <a
-                href={job.primaryVariant.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="jobVariantLink"
-              >
-                <ExternalLink size={14} />
-                Open source page
-              </a>
-            </div>
-          ) : (
-            <p className="muted">This job does not have a persisted source variant yet.</p>
+      {/* Description */}
+      <section className="card" style={{ marginBottom: 16 }}>
+        <p className="eyebrow">Опис вакансії</p>
+        <pre className="jobDescription">{job.description}</pre>
+      </section>
+
+      {/* Lifecycle details (collapsed, for context) */}
+      <section className="card">
+        <p className="eyebrow">Lifecycle</p>
+        <div className="jobDetailFacts">
+          <div><span>вперше побачено</span><strong>{formatDate(job.firstSeenAt) ?? 'n/a'}</strong></div>
+          <div><span>останній раз</span><strong>{formatDate(job.lastSeenAt) ?? 'n/a'}</strong></div>
+          {job.inactivatedAt && (
+            <div><span>деактивовано</span><strong>{formatDate(job.inactivatedAt)}</strong></div>
+          )}
+          {job.reactivatedAt && (
+            <div><span>реактивовано</span><strong>{formatDate(job.reactivatedAt)}</strong></div>
+          )}
+          {job.primaryVariant && (
+            <div><span>source id</span><strong>{job.primaryVariant.sourceJobId}</strong></div>
           )}
         </div>
-      </section>
-
-      <section className="card jobDetailHighlight">
-        <div className="jobDetailHighlightRow">
-          <span className="jobMetaChip">
-            <RefreshCw size={13} />
-            refresh-driven inactive/reactivation semantics enabled
-          </span>
-          <span className="jobMetaChip">
-            <TimerReset size={13} />
-            stable read-only payload from `engine-api`
-          </span>
-        </div>
-      </section>
-
-      <section className="card">
-        <p className="eyebrow">Description</p>
-        <pre className="jobDescription">{job.description}</pre>
       </section>
     </div>
   );
