@@ -6,7 +6,7 @@ use crate::api::dto::resumes::ResumeVersionResponse;
 use crate::api::error::ApiError;
 use crate::domain::application::model::{
     Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, Contact,
-    CreateActivity, CreateApplication, Task, UpdateApplication,
+    CreateActivity, CreateApplication, CreateNote, Task, UpdateApplication,
 };
 
 #[derive(Default, Deserialize)]
@@ -27,6 +27,19 @@ pub struct CreateActivityRequest {
     pub activity_type: String,
     pub description: String,
     pub happened_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateNoteRequest {
+    pub content: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct NoteResponse {
+    pub id: String,
+    pub application_id: String,
+    pub content: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -181,6 +194,27 @@ impl From<ApplicationContact> for ApplicationContactResponse {
             application_id: contact.application_id,
             contact: ContactResponse::from(contact.contact),
             relationship: contact.relationship,
+        }
+    }
+}
+
+impl CreateNoteRequest {
+    pub fn validate(self, application_id: &str) -> Result<CreateNote, ApiError> {
+        let content = validate_required("content", self.content)?;
+        Ok(CreateNote {
+            application_id: application_id.to_string(),
+            content,
+        })
+    }
+}
+
+impl From<ApplicationNote> for NoteResponse {
+    fn from(note: ApplicationNote) -> Self {
+        Self {
+            id: note.id,
+            application_id: note.application_id,
+            content: note.content,
+            created_at: note.created_at,
         }
     }
 }

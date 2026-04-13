@@ -61,6 +61,12 @@ pub struct ApplicationNote {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateNote {
+    pub application_id: String,
+    pub content: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Contact {
     pub id: String,
     pub name: String,
