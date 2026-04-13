@@ -7,7 +7,7 @@ pub mod resumes;
 pub mod roles;
 pub mod search;
 
-use axum::{Router, routing::get, routing::patch, routing::post};
+use axum::{Router, routing::get, routing::patch, routing::post, routing::put};
 
 use crate::state::AppState;
 
@@ -35,6 +35,15 @@ pub fn router() -> Router<AppState> {
             "/api/v1/applications/{id}/notes",
             post(applications::create_note),
         )
+        .route(
+            "/api/v1/applications/{id}/contacts",
+            post(applications::add_application_contact),
+        )
+        .route(
+            "/api/v1/applications/{id}/offer",
+            put(applications::upsert_offer),
+        )
+        .route("/api/v1/contacts", post(applications::create_contact))
         .route("/api/v1/jobs/recent", get(jobs::get_recent_jobs))
         .route("/api/v1/jobs/{id}", get(jobs::get_job_by_id))
         .route("/api/v1/jobs/{id}/fit", get(jobs::get_job_fit))

@@ -61,6 +61,7 @@ pub struct ProfileResponse {
     pub analysis: Option<PersistedProfileAnalysisResponse>,
     pub created_at: String,
     pub updated_at: String,
+    pub skills_updated_at: Option<String>,
 }
 
 impl CreateProfileRequest {
@@ -169,6 +170,7 @@ impl From<Profile> for ProfileResponse {
             analysis: profile.analysis.map(PersistedProfileAnalysisResponse::from),
             created_at: profile.created_at,
             updated_at: profile.updated_at,
+            skills_updated_at: profile.skills_updated_at,
         }
     }
 }

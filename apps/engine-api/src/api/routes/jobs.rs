@@ -84,24 +84,15 @@ pub async fn get_job_match(
     Ok(axum::Json(FitScoreResponse::from(score)))
 }
 
-/// Compute a fast local fit score for a job against the active resume.
-/// No external API call — runs in microseconds.
+/// Return a fit score for a job against the active resume.
+///
+/// Cache-first: returns the persisted score when one exists so repeat calls are
+/// instant.  On a cache miss the score is computed locally (no API call), then
+/// persisted for subsequent requests.
 pub async fn get_job_fit(
     State(state): State<AppState>,
     Path(job_id): Path<String>,
 ) -> Result<axum::Json<FitScoreResponse>, ApiError> {
-    let Some(job) = state
-        .jobs_service
-        .get_by_id(&job_id)
-        .await
-        .map_err(|error| ApiError::from_repository(error, "fit_query_failed"))?
-    else {
-        return Err(ApiError::not_found(
-            "job_not_found",
-            format!("Job '{job_id}' was not found"),
-        ));
-    };
-
     let Some(resume) = state
         .resumes_service
         .get_active()
@@ -114,22 +105,38 @@ pub async fn get_job_fit(
         ));
     };
 
+    // Return persisted score when available — the common path after the first visit.
+    if let Ok(Some(cached)) = state
+        .fit_scores_repository
+        .get_for_job_and_resume(&job_id, &resume.id)
+        .await
+    {
+        return Ok(axum::Json(FitScoreResponse::from(cached)));
+    }
+
+    // Cache miss: fetch the job, compute, persist, then return.
+    let Some(job) = state
+        .jobs_service
+        .get_by_id(&job_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "fit_query_failed"))?
+    else {
+        return Err(ApiError::not_found(
+            "job_not_found",
+            format!("Job '{job_id}' was not found"),
+        ));
+    };
+
     let candidate = state.profile_analysis_service.analyze(&resume.raw_text);
-    // Best-effort: load the user's stored profile for salary/work mode prefs.
-    // If no profile exists yet, salary + workmode components default to neutral (0.5).
+    // Best-effort: load stored profile for salary/work-mode prefs.
+    // If absent, those components default to neutral (0.5).
     let profile = state.profiles_service.get_latest().await.ok().flatten();
 
     let score = state
         .ranking_service
         .compute(&candidate, &job, profile.as_ref());
 
-    // Persist the computed score — this is a cache write, not the primary result.
-    // Log a warning if it fails but do not fail the request.
-    if let Err(error) = state
-        .fit_scores_repository
-        .upsert(&score, &resume.id)
-        .await
-    {
+    if let Err(error) = state.fit_scores_repository.upsert(&score, &resume.id).await {
         warn!(job_id = %job_id, resume_id = %resume.id, error = %error, "failed to persist fit score");
     }
 
@@ -171,11 +178,7 @@ pub async fn score_job_match(
         .ranking_service
         .compute(&candidate, &job, profile.as_ref());
 
-    if let Err(error) = state
-        .fit_scores_repository
-        .upsert(&score, &resume.id)
-        .await
-    {
+    if let Err(error) = state.fit_scores_repository.upsert(&score, &resume.id).await {
         warn!(job_id = %job_id, resume_id = %resume.id, error = %error, "failed to persist fit score");
     }
 

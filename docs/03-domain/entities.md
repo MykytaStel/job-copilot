@@ -70,3 +70,44 @@ Statuses:
 - interview
 - rejected
 - offer
+
+## Contact
+Represents a person related to an application.
+
+Fields:
+- id
+- name
+- email
+- phone
+- linkedin_url
+- company
+- role
+- created_at
+
+## Offer
+Represents compensation and state after an application reaches offer stage.
+
+Fields:
+- id
+- application_id
+- status
+- compensation_min
+- compensation_max
+- compensation_currency
+- starts_at
+- notes
+- created_at
+- updated_at
+
+Offer statuses:
+- draft
+- received
+- accepted
+- declined
+- expired
+
+## Profile recency
+Profile skill freshness is tracked separately from generic profile updates.
+
+Fields:
+- skills_updated_at

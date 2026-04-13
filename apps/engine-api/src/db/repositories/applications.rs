@@ -4,8 +4,9 @@ use uuid::Uuid;
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::application::model::{
-    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote,
-    Contact, CreateApplication, CreateNote, Task, UpdateApplication,
+    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, Contact,
+    CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer, Task,
+    UpdateApplication, UpsertOffer,
 };
 use crate::domain::job::model::Job;
 use crate::domain::resume::model::ResumeVersion;
@@ -35,6 +36,18 @@ struct NoteRow {
 }
 
 #[derive(FromRow)]
+struct ContactRow {
+    id: String,
+    name: String,
+    email: Option<String>,
+    phone: Option<String>,
+    linkedin_url: Option<String>,
+    company: Option<String>,
+    role: Option<String>,
+    created_at: String,
+}
+
+#[derive(FromRow)]
 struct ContactJoinRow {
     id: String,
     application_id: String,
@@ -47,6 +60,20 @@ struct ContactJoinRow {
     contact_company: Option<String>,
     contact_role: Option<String>,
     contact_created_at: String,
+}
+
+#[derive(FromRow)]
+struct OfferRow {
+    id: String,
+    application_id: String,
+    status: String,
+    compensation_min: Option<i32>,
+    compensation_max: Option<i32>,
+    compensation_currency: Option<String>,
+    starts_at: Option<String>,
+    notes: Option<String>,
+    created_at: String,
+    updated_at: String,
 }
 
 #[derive(FromRow)]
@@ -217,6 +244,28 @@ impl ApplicationsRepository {
             return Ok(None);
         };
 
+        let offer = sqlx::query_as::<_, OfferRow>(
+            r#"
+            SELECT
+                id,
+                application_id,
+                status,
+                compensation_min,
+                compensation_max,
+                compensation_currency,
+                starts_at::text AS starts_at,
+                notes,
+                created_at::text AS created_at,
+                updated_at::text AS updated_at
+            FROM offers
+            WHERE application_id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await?
+        .map(Offer::from);
+
         let notes: Vec<ApplicationNote> = sqlx::query_as::<_, NoteRow>(
             r#"
             SELECT id, application_id, content, created_at::text AS created_at
@@ -333,7 +382,9 @@ impl ApplicationsRepository {
         })
         .collect();
 
-        Ok(Some(ApplicationDetail::from((row, notes, contacts, activities, tasks))))
+        Ok(Some(ApplicationDetail::from((
+            row, offer, notes, contacts, activities, tasks,
+        ))))
     }
 
     pub async fn list_recent(&self, limit: i64) -> Result<Vec<Application>, RepositoryError> {
@@ -403,10 +454,7 @@ impl ApplicationsRepository {
         Ok(row.map(Application::from))
     }
 
-    pub async fn create_note(
-        &self,
-        note: &CreateNote,
-    ) -> Result<ApplicationNote, RepositoryError> {
+    pub async fn create_note(&self, note: &CreateNote) -> Result<ApplicationNote, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
@@ -430,6 +478,181 @@ impl ApplicationsRepository {
             content: row.content,
             created_at: row.created_at,
         })
+    }
+
+    pub async fn create_contact(
+        &self,
+        contact: &CreateContact,
+    ) -> Result<Contact, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, ContactRow>(
+            r#"
+            INSERT INTO contacts (
+                id,
+                name,
+                email,
+                phone,
+                linkedin_url,
+                company,
+                role,
+                created_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+            RETURNING
+                id,
+                name,
+                email,
+                phone,
+                linkedin_url,
+                company,
+                role,
+                created_at::text AS created_at
+            "#,
+        )
+        .bind(Uuid::now_v7().to_string())
+        .bind(&contact.name)
+        .bind(&contact.email)
+        .bind(&contact.phone)
+        .bind(&contact.linkedin_url)
+        .bind(&contact.company)
+        .bind(&contact.role)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(Contact::from(row))
+    }
+
+    pub async fn get_contact_by_id(&self, id: &str) -> Result<Option<Contact>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, ContactRow>(
+            r#"
+            SELECT
+                id,
+                name,
+                email,
+                phone,
+                linkedin_url,
+                company,
+                role,
+                created_at::text AS created_at
+            FROM contacts
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(row.map(Contact::from))
+    }
+
+    pub async fn attach_contact(
+        &self,
+        contact: &CreateApplicationContact,
+    ) -> Result<ApplicationContact, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, ContactJoinRow>(
+            r#"
+            WITH inserted AS (
+                INSERT INTO application_contacts (
+                    id,
+                    application_id,
+                    contact_id,
+                    relationship,
+                    created_at
+                )
+                VALUES ($1, $2, $3, $4, NOW())
+                RETURNING id, application_id, contact_id, relationship
+            )
+            SELECT
+                inserted.id AS id,
+                inserted.application_id AS application_id,
+                inserted.relationship AS relationship,
+                c.id AS contact_id,
+                c.name AS contact_name,
+                c.email AS contact_email,
+                c.phone AS contact_phone,
+                c.linkedin_url AS contact_linkedin_url,
+                c.company AS contact_company,
+                c.role AS contact_role,
+                c.created_at::text AS contact_created_at
+            FROM inserted
+            JOIN contacts c ON c.id = inserted.contact_id
+            "#,
+        )
+        .bind(Uuid::now_v7().to_string())
+        .bind(&contact.application_id)
+        .bind(&contact.contact_id)
+        .bind(&contact.relationship)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(ApplicationContact::from(row))
+    }
+
+    pub async fn upsert_offer(&self, offer: &UpsertOffer) -> Result<Offer, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, OfferRow>(
+            r#"
+            INSERT INTO offers (
+                id,
+                application_id,
+                status,
+                compensation_min,
+                compensation_max,
+                compensation_currency,
+                starts_at,
+                notes,
+                created_at,
+                updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8, NOW(), NOW())
+            ON CONFLICT (application_id)
+            DO UPDATE SET
+                status = EXCLUDED.status,
+                compensation_min = EXCLUDED.compensation_min,
+                compensation_max = EXCLUDED.compensation_max,
+                compensation_currency = EXCLUDED.compensation_currency,
+                starts_at = EXCLUDED.starts_at,
+                notes = EXCLUDED.notes,
+                updated_at = NOW()
+            RETURNING
+                id,
+                application_id,
+                status,
+                compensation_min,
+                compensation_max,
+                compensation_currency,
+                starts_at::text AS starts_at,
+                notes,
+                created_at::text AS created_at,
+                updated_at::text AS updated_at
+            "#,
+        )
+        .bind(Uuid::now_v7().to_string())
+        .bind(&offer.application_id)
+        .bind(&offer.status)
+        .bind(offer.compensation_min)
+        .bind(offer.compensation_max)
+        .bind(&offer.compensation_currency)
+        .bind(&offer.starts_at)
+        .bind(&offer.notes)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(Offer::from(row))
     }
 
     pub async fn attach_resume(
@@ -484,6 +707,7 @@ impl From<ApplicationRow> for Application {
 impl
     From<(
         ApplicationDetailRow,
+        Option<Offer>,
         Vec<ApplicationNote>,
         Vec<ApplicationContact>,
         Vec<Activity>,
@@ -491,8 +715,9 @@ impl
     )> for ApplicationDetail
 {
     fn from(
-        (row, notes, contacts, activities, tasks): (
+        (row, offer, notes, contacts, activities, tasks): (
             ApplicationDetailRow,
+            Option<Offer>,
             Vec<ApplicationNote>,
             Vec<ApplicationContact>,
             Vec<Activity>,
@@ -541,10 +766,63 @@ impl
                     .resume_uploaded_at
                     .expect("uploaded_at should be present when resume is joined"),
             }),
+            offer,
             notes,
             contacts,
             activities,
             tasks,
+        }
+    }
+}
+
+impl From<ContactRow> for Contact {
+    fn from(row: ContactRow) -> Self {
+        Self {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            phone: row.phone,
+            linkedin_url: row.linkedin_url,
+            company: row.company,
+            role: row.role,
+            created_at: row.created_at,
+        }
+    }
+}
+
+impl From<ContactJoinRow> for ApplicationContact {
+    fn from(row: ContactJoinRow) -> Self {
+        Self {
+            id: row.id,
+            application_id: row.application_id,
+            relationship: row.relationship,
+            contact: Contact {
+                id: row.contact_id,
+                name: row.contact_name,
+                email: row.contact_email,
+                phone: row.contact_phone,
+                linkedin_url: row.contact_linkedin_url,
+                company: row.contact_company,
+                role: row.contact_role,
+                created_at: row.contact_created_at,
+            },
+        }
+    }
+}
+
+impl From<OfferRow> for Offer {
+    fn from(row: OfferRow) -> Self {
+        Self {
+            id: row.id,
+            application_id: row.application_id,
+            status: row.status,
+            compensation_min: row.compensation_min,
+            compensation_max: row.compensation_max,
+            compensation_currency: row.compensation_currency,
+            starts_at: row.starts_at,
+            notes: row.notes,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
         }
     }
 }

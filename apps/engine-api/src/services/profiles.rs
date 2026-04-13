@@ -109,6 +109,7 @@ impl ProfilesServiceStub {
             preferred_work_mode: None,
             created_at: "2026-04-11T00:00:00+00:00".to_string(),
             updated_at: "2026-04-11T00:00:00+00:00".to_string(),
+            skills_updated_at: None,
         };
 
         self.profiles_by_id
@@ -157,6 +158,7 @@ impl ProfilesServiceStub {
         if let Some(raw_text) = input.raw_text {
             profile.raw_text = raw_text;
             profile.analysis = None;
+            profile.skills_updated_at = None;
         }
 
         profile.updated_at = "2026-04-11T00:00:01+00:00".to_string();
@@ -183,6 +185,7 @@ impl ProfilesServiceStub {
 
         profile.analysis = Some(analysis);
         profile.updated_at = "2026-04-11T00:00:02+00:00".to_string();
+        profile.skills_updated_at = Some("2026-04-11T00:00:02+00:00".to_string());
 
         Ok(Some(profile.clone()))
     }

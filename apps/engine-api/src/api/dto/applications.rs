@@ -6,7 +6,8 @@ use crate::api::dto::resumes::ResumeVersionResponse;
 use crate::api::error::ApiError;
 use crate::domain::application::model::{
     Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, Contact,
-    CreateActivity, CreateApplication, CreateNote, Task, UpdateApplication,
+    CreateActivity, CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer,
+    Task, UpdateApplication, UpsertOffer,
 };
 
 #[derive(Default, Deserialize)]
@@ -32,6 +33,32 @@ pub struct CreateActivityRequest {
 #[derive(Deserialize)]
 pub struct CreateNoteRequest {
     pub content: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateContactRequest {
+    pub name: String,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub linkedin_url: Option<String>,
+    pub company: Option<String>,
+    pub role: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct CreateApplicationContactRequest {
+    pub contact_id: String,
+    pub relationship: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpsertOfferRequest {
+    pub status: String,
+    pub compensation_min: Option<i32>,
+    pub compensation_max: Option<i32>,
+    pub compensation_currency: Option<String>,
+    pub starts_at: Option<String>,
+    pub notes: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -82,6 +109,20 @@ pub struct ApplicationContactResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct OfferResponse {
+    pub id: String,
+    pub application_id: String,
+    pub status: String,
+    pub compensation_min: Option<i32>,
+    pub compensation_max: Option<i32>,
+    pub compensation_currency: Option<String>,
+    pub starts_at: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ActivityResponse {
     pub id: String,
     pub application_id: String,
@@ -107,6 +148,7 @@ pub struct ApplicationDetailResponse {
     pub application: ApplicationResponse,
     pub job: JobResponse,
     pub resume: Option<ResumeVersionResponse>,
+    pub offer: Option<OfferResponse>,
     pub notes: Vec<ApplicationNoteResponse>,
     pub contacts: Vec<ApplicationContactResponse>,
     pub activities: Vec<ActivityResponse>,
@@ -124,6 +166,29 @@ impl CreateApplicationRequest {
             job_id: validate_required("job_id", self.job_id)?,
             status: validate_status(self.status)?,
             applied_at: self.applied_at,
+        })
+    }
+}
+
+impl CreateContactRequest {
+    pub fn validate(self) -> Result<CreateContact, ApiError> {
+        Ok(CreateContact {
+            name: validate_required("name", self.name)?,
+            email: validate_optional_email(self.email)?,
+            phone: validate_optional_trimmed(self.phone),
+            linkedin_url: validate_optional_trimmed(self.linkedin_url),
+            company: validate_optional_trimmed(self.company),
+            role: validate_optional_trimmed(self.role),
+        })
+    }
+}
+
+impl CreateApplicationContactRequest {
+    pub fn validate(self, application_id: &str) -> Result<CreateApplicationContact, ApiError> {
+        Ok(CreateApplicationContact {
+            application_id: application_id.to_string(),
+            contact_id: validate_required("contact_id", self.contact_id)?,
+            relationship: validate_relationship(self.relationship)?,
         })
     }
 }
@@ -198,12 +263,57 @@ impl From<ApplicationContact> for ApplicationContactResponse {
     }
 }
 
+impl From<Offer> for OfferResponse {
+    fn from(offer: Offer) -> Self {
+        Self {
+            id: offer.id,
+            application_id: offer.application_id,
+            status: offer.status,
+            compensation_min: offer.compensation_min,
+            compensation_max: offer.compensation_max,
+            compensation_currency: offer.compensation_currency,
+            starts_at: offer.starts_at,
+            notes: offer.notes,
+            created_at: offer.created_at,
+            updated_at: offer.updated_at,
+        }
+    }
+}
+
 impl CreateNoteRequest {
     pub fn validate(self, application_id: &str) -> Result<CreateNote, ApiError> {
         let content = validate_required("content", self.content)?;
         Ok(CreateNote {
             application_id: application_id.to_string(),
             content,
+        })
+    }
+}
+
+impl UpsertOfferRequest {
+    pub fn validate(self, application_id: &str) -> Result<UpsertOffer, ApiError> {
+        if let (Some(min), Some(max)) = (self.compensation_min, self.compensation_max) {
+            if min > max {
+                return Err(ApiError::bad_request_with_details(
+                    "invalid_offer_input",
+                    "Field 'compensation_min' must be less than or equal to 'compensation_max'",
+                    json!({
+                        "field": "compensation_min",
+                        "compensation_min": min,
+                        "compensation_max": max,
+                    }),
+                ));
+            }
+        }
+
+        Ok(UpsertOffer {
+            application_id: application_id.to_string(),
+            status: validate_offer_status(self.status)?,
+            compensation_min: self.compensation_min,
+            compensation_max: self.compensation_max,
+            compensation_currency: validate_optional_trimmed(self.compensation_currency),
+            starts_at: validate_optional_trimmed(self.starts_at),
+            notes: validate_optional_trimmed(self.notes),
         })
     }
 }
@@ -251,6 +361,7 @@ impl From<ApplicationDetail> for ApplicationDetailResponse {
             application: ApplicationResponse::from(detail.application),
             job: JobResponse::from(detail.job),
             resume: detail.resume.map(ResumeVersionResponse::from),
+            offer: detail.offer.map(OfferResponse::from),
             notes: detail
                 .notes
                 .into_iter()
@@ -314,6 +425,75 @@ fn validate_required(field: &'static str, value: String) -> Result<String, ApiEr
     Ok(value)
 }
 
+fn validate_optional_trimmed(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let value = value.trim().to_string();
+        (!value.is_empty()).then_some(value)
+    })
+}
+
+fn validate_optional_email(value: Option<String>) -> Result<Option<String>, ApiError> {
+    validate_optional_trimmed(value)
+        .map(validate_email)
+        .transpose()
+}
+
+fn validate_email(value: String) -> Result<String, ApiError> {
+    let value = validate_required("email", value)?;
+
+    if !value.contains('@') {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_application_input",
+            "Field 'email' must contain '@'",
+            json!({ "field": "email" }),
+        ));
+    }
+
+    Ok(value)
+}
+
+fn validate_relationship(value: String) -> Result<String, ApiError> {
+    let value = validate_required("relationship", value)?;
+
+    if !matches!(
+        value.as_str(),
+        "recruiter" | "hiring_manager" | "interviewer" | "referrer" | "other"
+    ) {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_contact_relationship",
+            "Unsupported contact relationship",
+            json!({
+                "field": "relationship",
+                "allowed_values": ["recruiter", "hiring_manager", "interviewer", "referrer", "other"],
+                "received": value,
+            }),
+        ));
+    }
+
+    Ok(value)
+}
+
+fn validate_offer_status(value: String) -> Result<String, ApiError> {
+    let value = validate_required("status", value)?;
+
+    if !matches!(
+        value.as_str(),
+        "draft" | "received" | "accepted" | "declined" | "expired"
+    ) {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_offer_status",
+            "Unsupported offer status",
+            json!({
+                "field": "status",
+                "allowed_values": ["draft", "received", "accepted", "declined", "expired"],
+                "received": value,
+            }),
+        ));
+    }
+
+    Ok(value)
+}
+
 fn validate_status(value: String) -> Result<String, ApiError> {
     let value = validate_required("status", value)?;
 
@@ -333,4 +513,77 @@ fn validate_status(value: String) -> Result<String, ApiError> {
     }
 
     Ok(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::response::IntoResponse;
+
+    use super::{
+        CreateApplicationContactRequest, CreateContactRequest, UpdateApplicationRequest,
+        UpsertOfferRequest,
+    };
+
+    #[test]
+    fn rejects_empty_patch_payload() {
+        let response = UpdateApplicationRequest::default()
+            .validate()
+            .expect_err("empty patch should be rejected")
+            .into_response();
+
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn rejects_invalid_contact_relationship() {
+        let response = CreateApplicationContactRequest {
+            contact_id: "contact-1".to_string(),
+            relationship: "friend".to_string(),
+        }
+        .validate("application-1")
+        .expect_err("unsupported relationship should be rejected")
+        .into_response();
+
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn trims_blank_optional_contact_fields() {
+        let payload = CreateContactRequest {
+            name: " Recruiter ".to_string(),
+            email: Some(" recruiter@example.com ".to_string()),
+            phone: Some("   ".to_string()),
+            linkedin_url: Some(" https://linkedin.com/in/recruiter ".to_string()),
+            company: None,
+            role: Some(" Talent Partner ".to_string()),
+        }
+        .validate()
+        .expect("contact payload should validate");
+
+        assert_eq!(payload.name, "Recruiter");
+        assert_eq!(payload.email.as_deref(), Some("recruiter@example.com"));
+        assert_eq!(payload.phone, None);
+        assert_eq!(
+            payload.linkedin_url.as_deref(),
+            Some("https://linkedin.com/in/recruiter")
+        );
+        assert_eq!(payload.role.as_deref(), Some("Talent Partner"));
+    }
+
+    #[test]
+    fn rejects_offer_range_when_min_exceeds_max() {
+        let response = UpsertOfferRequest {
+            status: "received".to_string(),
+            compensation_min: Some(5000),
+            compensation_max: Some(4000),
+            compensation_currency: Some("USD".to_string()),
+            starts_at: None,
+            notes: None,
+        }
+        .validate("application-1")
+        .expect_err("invalid offer range should be rejected")
+        .into_response();
+
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+    }
 }
