@@ -27,9 +27,7 @@ impl ActivitiesService {
 
     pub async fn create(&self, activity: CreateActivity) -> Result<Activity, RepositoryError> {
         match &self.backend {
-            ActivitiesServiceBackend::Repository(repository) => {
-                repository.create(&activity).await
-            }
+            ActivitiesServiceBackend::Repository(repository) => repository.create(&activity).await,
             #[cfg(test)]
             ActivitiesServiceBackend::Stub(stub) => stub.create(activity),
         }

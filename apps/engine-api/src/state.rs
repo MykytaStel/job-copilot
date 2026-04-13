@@ -67,7 +67,6 @@ impl AppState {
         Self::new(Database::disabled())
     }
 
-
     #[cfg(test)]
     pub fn for_services(
         profiles_service: ProfilesService,

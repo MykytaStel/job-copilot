@@ -1,22 +1,22 @@
 {
-  "fetched_at": "2026-04-15T09:00:00Z",
+  "fetched_at": "2026-04-16T09:00:00Z",
   "jobs": [
     {
-      "source_job_id": "data-002",
-      "source_url": "https://mock-source.example/jobs/data-002",
-      "position": "Senior Search Data Engineer",
-      "employer": "NovaLedger",
-      "city": "Lviv",
+      "source_job_id": "platform-001",
+      "source_url": "https://mock-source.example/jobs/platform-001",
+      "position": "Senior Platform Ingestion Engineer",
+      "employer": "SignalHire",
+      "city": "Kyiv",
       "work_mode": "remote",
       "seniority": "senior",
-      "description": "Own ingestion-safe search inputs, ranking features, and lifecycle-aware analytics for source refreshes.",
+      "description": "Return a previously inactive job back into the canonical feed and verify reactivation state in the product UI.",
       "compensation": {
-        "min": 3900,
-        "max": 5200,
+        "min": 5400,
+        "max": 7000,
         "currency": "USD"
       },
-      "posted_at": "2026-04-15T07:30:00Z",
-      "last_seen_at": "2026-04-15T09:00:00Z",
+      "posted_at": "2026-04-16T07:45:00Z",
+      "last_seen_at": "2026-04-16T09:00:00Z",
       "active": true
     },
     {
@@ -25,16 +25,16 @@
       "position": "Platform Operations Analyst",
       "employer": "SignalHire",
       "city": "Kyiv",
-      "work_mode": "onsite",
+      "work_mode": "hybrid",
       "seniority": "middle",
       "description": "Track source freshness, monitor inactive transitions, and keep ingestion demo flows ready for product reviews.",
       "compensation": {
-        "min": 2400,
-        "max": 3200,
+        "min": 2500,
+        "max": 3300,
         "currency": "USD"
       },
       "posted_at": "2026-04-15T08:10:00Z",
-      "last_seen_at": "2026-04-15T09:00:00Z",
+      "last_seen_at": "2026-04-16T09:00:00Z",
       "active": true
     }
   ]

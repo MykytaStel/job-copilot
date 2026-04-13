@@ -121,6 +121,23 @@ curl http://localhost:8080/api/v1/applications/recent
 curl http://localhost:8080/api/v1/roles
 ```
 
+`GET /api/v1/jobs/recent` now returns:
+- canonical job fields
+- lifecycle fields: `first_seen_at`, `last_seen_at`, `inactivated_at`, `reactivated_at`
+- source metadata for the most recent variant
+- feed summary counts for `active`, `inactive`, and `reactivated` jobs
+
+Local ingestion lifecycle demo:
+
+```bash
+pnpm local:ingestion:demo
+```
+
+The demo runs three ingestion passes:
+1. initial source snapshot
+2. refresh where one job disappears and becomes inactive
+3. refresh where the job reappears and becomes reactivated
+
 Create and update an application:
 
 ```bash

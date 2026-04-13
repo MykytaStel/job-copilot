@@ -264,6 +264,18 @@ button:disabled {
   text-decoration: none;
 }
 
+.ghostBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #dbe4fb;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .linkBtn {
   color: #95a7ff;
   font-size: 13px;
@@ -307,6 +319,258 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.dashboardPage {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.dashboardHero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(145deg, rgba(84, 104, 255, 0.18), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    rgba(14, 20, 33, 0.92);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.28);
+}
+
+.dashboardHero h1 {
+  margin: 0;
+  font-size: clamp(32px, 4vw, 44px);
+  line-height: 1.05;
+  max-width: 620px;
+}
+
+.dashboardHeroText {
+  max-width: 620px;
+  margin-top: 14px;
+  line-height: 1.7;
+}
+
+.dashboardHeroActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.sourceActivityGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.sourceActivityCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 25, 39, 0.85);
+}
+
+.sourceActivityIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sourceActivityValue {
+  font-size: 28px;
+  font-weight: 700;
+  color: #f7f9ff;
+}
+
+.sourceActivityLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9aa8bc;
+}
+
+.tone-active .sourceActivityIcon {
+  background: rgba(46, 196, 182, 0.16);
+  color: #c9fff8;
+}
+
+.tone-inactive .sourceActivityIcon {
+  background: rgba(255, 80, 80, 0.14);
+  color: #ffb4b4;
+}
+
+.tone-reactivated .sourceActivityIcon {
+  background: rgba(255, 196, 87, 0.16);
+  color: #ffe7a5;
+}
+
+.tone-neutral .sourceActivityIcon {
+  background: rgba(84, 104, 255, 0.18);
+  color: #d7ddff;
+}
+
+.jobLifecycleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.jobLifecycleCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+    rgba(16, 23, 36, 0.92);
+}
+
+.jobLifecycleHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.jobLifecycleHeader h2 {
+  margin: 10px 0 6px;
+  font-size: 20px;
+}
+
+.jobLifecycleCompany {
+  margin: 0;
+}
+
+.jobLifecycleActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.jobStatePill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.jobState-active {
+  background: rgba(46, 196, 182, 0.16);
+  color: #c9fff8;
+}
+
+.jobState-inactive {
+  background: rgba(255, 80, 80, 0.14);
+  color: #ffb4b4;
+}
+
+.jobState-reactivated {
+  background: rgba(255, 196, 87, 0.16);
+  color: #ffe7a5;
+}
+
+.jobLifecycleDescription {
+  margin: 0;
+  color: #c2cede;
+  line-height: 1.7;
+}
+
+.jobMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.jobMetaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #d5def0;
+  font-size: 12px;
+}
+
+.jobMetaLink {
+  text-decoration: none;
+}
+
+.jobTimeline {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.jobTimeline div,
+.jobDetailFacts div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.jobTimeline span,
+.jobDetailFacts span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8fa2bd;
+}
+
+.jobTimeline strong,
+.jobDetailFacts strong {
+  color: #f5f7ff;
+  font-size: 14px;
+}
+
+.jobDetailMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.jobDetailsState {
+  flex-shrink: 0;
+}
+
+.jobVariantLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: #95a7ff;
+  text-decoration: none;
+}
+
+.jobDetailHighlight {
+  padding: 18px 24px;
+}
+
+.jobDetailHighlightRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .statusSelect {
@@ -536,3 +800,54 @@ input[type="file"] {
 .noteForm { display: flex; gap: 10px; align-items: flex-end; }
 .noteForm textarea { flex: 1; resize: vertical; min-height: 60px; }
 .noteForm button { flex-shrink: 0; padding: 10px 16px; font-size: 13px; }
+
+@media (max-width: 960px) {
+  .appShell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: auto;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .content {
+    max-width: none;
+    padding: 24px 20px 40px;
+  }
+
+  .dashboardHero {
+    flex-direction: column;
+  }
+
+  .dashboardHeroActions {
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 720px) {
+  .pageHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .jobLifecycleHeader {
+    flex-direction: column;
+  }
+
+  .jobLifecycleActions {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .jobTimeline {
+    grid-template-columns: 1fr;
+  }
+
+  .noteForm {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

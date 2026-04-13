@@ -10,7 +10,7 @@ Python ML/LLM service for:
 
 This service now exposes a read-only Phase 9 integration layer:
 - fetch canonical profile data from `engine-api`
-- fetch canonical job data from `engine-api`
+- fetch a dedicated lifecycle-aware job payload from `engine-api`
 - compute heuristic fit analysis without writing to Postgres
 - rerank a provided list of jobs for a persisted profile
 
@@ -78,3 +78,4 @@ curl \
 - `ml` does not write canonical job, profile, or application data
 - `engine-api` remains the only write authority
 - this service consumes `engine-api` over HTTP as a sidecar
+- `app/engine_api_client.py` is the only place that knows the ML read-only engine-api surface

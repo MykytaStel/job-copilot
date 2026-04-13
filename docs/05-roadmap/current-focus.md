@@ -15,7 +15,8 @@ See also:
 - [x] create the first ingestion-safe canonical job upsert path over DB-managed `search_vector`
 - [x] persist the first source-specific raw snapshot / variant layer in Postgres
 - [x] add first refresh/change-detection semantics for repeated source ingestion
-- [ ] define the first read-only `ml` integration surface over canonical engine data
+- [x] define the first read-only `ml` integration surface over canonical engine data
+- [x] harden dedupe identity over `job_variants` and add a dedicated ML lifecycle read surface/client
 - [ ] document the service boundary after Phase 8 stabilization
 
 ## Focus details
@@ -51,6 +52,9 @@ Done in the first ingestion slice:
 - real local verification confirmed that adapter-normalized jobs are searchable through the DB-managed index
 - raw snapshots and canonical jobs are now separated in storage instead of only in memory
 - repeat ingestion for the same `source + source_job_id` now reports `created` / `updated` / `unchanged` at the variant layer
+- source refresh now also marks missing variants inactive and reactivates jobs when they reappear in later refreshes
+- `engine-api` jobs read APIs now expose lifecycle fields and source metadata for UI/ML read-only consumers
+- `web` dashboard now visualizes active / inactive / reactivated jobs from canonical engine data
 
 Do not expand scope yet:
 - no ingestion-owned search index writes outside DB-managed `search_vector`
@@ -59,8 +63,8 @@ Do not expand scope yet:
 
 ## After current focus
 - harden search and ranking on seeded DB data
-- extend ingestion into dedupe / refresh behavior on top of `job_variants`
-- add the first read-only `ml` endpoint over canonical engine data
+- extend ingestion dedupe heuristics beyond the first exact canonical fingerprint
+- expand the dedicated `ml` read surface beyond job lifecycle when new ML flows need it
 
 ## Default rules
 - keep `engine-api` as the only write authority

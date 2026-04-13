@@ -1,11 +1,17 @@
 import asyncio
-import os
 import re
-from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
+
+from app.engine_api_client import (
+    EngineApiClient,
+    EngineJobLifecycle,
+    EngineProfile,
+    engine_api_base_url,
+    engine_api_timeout_seconds,
+)
 
 
 TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -38,51 +44,10 @@ app = FastAPI(
 )
 
 
-class EngineApiError(BaseModel):
-    code: str | None = None
-    message: str | None = None
-    details: dict[str, Any] | None = None
-
-
 class HealthResponse(BaseModel):
     status: str
     service: str
     engine_api_base_url: str
-
-
-class EngineProfileAnalysis(BaseModel):
-    summary: str
-    primary_role: str
-    seniority: str
-    skills: list[str]
-    keywords: list[str]
-
-
-class EngineProfile(BaseModel):
-    id: str
-    name: str
-    email: str
-    location: str | None = None
-    raw_text: str
-    analysis: EngineProfileAnalysis | None = None
-    created_at: str
-    updated_at: str
-    skills_updated_at: str | None = None
-
-
-class EngineJob(BaseModel):
-    id: str
-    title: str
-    company_name: str
-    remote_type: str | None = None
-    seniority: str | None = None
-    description_text: str
-    salary_min: int | None = None
-    salary_max: int | None = None
-    salary_currency: str | None = None
-    posted_at: str | None = None
-    last_seen_at: str
-    is_active: bool
 
 
 class FitAnalyzeRequest(BaseModel):
@@ -116,18 +81,6 @@ class RerankedJob(BaseModel):
 class RerankResponse(BaseModel):
     profile_id: str
     jobs: list[RerankedJob]
-
-
-def engine_api_base_url() -> str:
-    return os.getenv("ENGINE_API_BASE_URL", "http://localhost:8080").rstrip("/")
-
-
-def engine_api_timeout_seconds() -> float:
-    raw = os.getenv("ENGINE_API_TIMEOUT_SECONDS", "10").strip()
-    try:
-        return max(1.0, float(raw))
-    except ValueError:
-        return 10.0
 
 
 def normalize_text(value: str) -> str:
@@ -180,7 +133,7 @@ def profile_terms(profile: EngineProfile) -> list[str]:
     return unique_preserving_order(terms)[:40]
 
 
-def job_terms(job: EngineJob) -> list[str]:
+def job_terms(job: EngineJobLifecycle) -> list[str]:
     return unique_preserving_order(
         tokenize(
             job.title,
@@ -199,7 +152,7 @@ def overlap(profile_values: list[str], job_values: list[str]) -> list[str]:
 
 def build_evidence(
     profile: EngineProfile,
-    job: EngineJob,
+    job: EngineJobLifecycle,
     matched_terms: list[str],
     title_matches: list[str],
 ) -> list[str]:
@@ -214,13 +167,19 @@ def build_evidence(
     if seniority and job.seniority and seniority.lower() == job.seniority.lower():
         evidence.append(f"seniority match: {job.seniority}")
 
+    if job.lifecycle_stage != "active":
+        evidence.append(f"lifecycle: {job.lifecycle_stage}")
     if job.remote_type:
         evidence.append(f"job mode: {job.remote_type}")
+    elif job.primary_variant:
+        evidence.append(f"source: {job.primary_variant.source}")
 
     return evidence[:4]
 
 
-def score_job(profile: EngineProfile, job: EngineJob) -> tuple[int, list[str], list[str], list[str]]:
+def score_job(
+    profile: EngineProfile, job: EngineJobLifecycle
+) -> tuple[int, list[str], list[str], list[str]]:
     profile_values = profile_terms(profile)
     job_values = job_terms(job)
 
@@ -240,43 +199,15 @@ def score_job(profile: EngineProfile, job: EngineJob) -> tuple[int, list[str], l
             seniority_bonus = 10
 
     active_bonus = 5 if job.is_active else 0
-    score = min(int(round(overlap_ratio * 70)) + title_bonus + seniority_bonus + active_bonus, 100)
+    lifecycle_bonus = 3 if job.lifecycle_stage == "reactivated" else 0
+    score = min(
+        int(round(overlap_ratio * 70)) + title_bonus + seniority_bonus + active_bonus + lifecycle_bonus,
+        100,
+    )
 
     missing_terms = [value for value in profile_values if value not in set(job_values)][:8]
     evidence = build_evidence(profile, job, matched_terms, title_matches)
     return score, matched_terms[:10], missing_terms, evidence
-
-
-async def fetch_json(client: httpx.AsyncClient, path: str) -> dict[str, Any]:
-    url = f"{engine_api_base_url()}{path}"
-    try:
-        response = await client.get(url)
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"engine-api request failed: {exc}",
-        ) from exc
-
-    if response.status_code >= 400:
-        try:
-            payload = response.json() if response.content else {}
-        except ValueError:
-            payload = {}
-        error = EngineApiError.model_validate(payload)
-        detail = error.message or error.code or f"engine-api returned {response.status_code}"
-        raise HTTPException(status_code=response.status_code, detail=detail)
-
-    return response.json()
-
-
-async def fetch_profile(client: httpx.AsyncClient, profile_id: str) -> EngineProfile:
-    payload = await fetch_json(client, f"/api/v1/profiles/{profile_id}")
-    return EngineProfile.model_validate(payload)
-
-
-async def fetch_job(client: httpx.AsyncClient, job_id: str) -> EngineJob:
-    payload = await fetch_json(client, f"/api/v1/jobs/{job_id}")
-    return EngineJob.model_validate(payload)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -292,8 +223,9 @@ async def health() -> HealthResponse:
 async def analyze_fit(payload: FitAnalyzeRequest) -> FitAnalyzeResponse:
     timeout = httpx.Timeout(engine_api_timeout_seconds())
     async with httpx.AsyncClient(timeout=timeout) as client:
-        profile = await fetch_profile(client, payload.profile_id)
-        job = await fetch_job(client, payload.job_id)
+        engine_api = EngineApiClient(client)
+        profile = await engine_api.fetch_profile(payload.profile_id)
+        job = await engine_api.fetch_job_lifecycle(payload.job_id)
 
     score, matched_terms, missing_terms, evidence = score_job(profile, job)
     return FitAnalyzeResponse(
@@ -317,8 +249,11 @@ async def rerank_jobs(payload: RerankRequest) -> RerankResponse:
 
     timeout = httpx.Timeout(engine_api_timeout_seconds())
     async with httpx.AsyncClient(timeout=timeout) as client:
-        profile = await fetch_profile(client, payload.profile_id)
-        jobs = await asyncio.gather(*(fetch_job(client, job_id) for job_id in unique_job_ids))
+        engine_api = EngineApiClient(client)
+        profile = await engine_api.fetch_profile(payload.profile_id)
+        jobs = await asyncio.gather(
+            *(engine_api.fetch_job_lifecycle(job_id) for job_id in unique_job_ids)
+        )
 
     ranked_jobs: list[RerankedJob] = []
     for job in jobs:

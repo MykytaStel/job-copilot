@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::db::repositories::{JobsRepository, RepositoryError};
-use crate::domain::job::model::Job;
+use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 
 #[derive(Clone)]
 enum JobsServiceBackend {
@@ -33,11 +33,27 @@ impl JobsService {
         }
     }
 
-    pub async fn list_recent(&self, limit: i64) -> Result<Vec<Job>, RepositoryError> {
+    pub async fn get_view_by_id(&self, id: &str) -> Result<Option<JobView>, RepositoryError> {
         match &self.backend {
-            JobsServiceBackend::Repository(repository) => repository.list_recent(limit).await,
+            JobsServiceBackend::Repository(repository) => repository.get_view_by_id(id).await,
             #[cfg(test)]
-            JobsServiceBackend::Stub(stub) => stub.list_recent(limit),
+            JobsServiceBackend::Stub(stub) => stub.get_view_by_id(id),
+        }
+    }
+
+    pub async fn list_recent_views(&self, limit: i64) -> Result<Vec<JobView>, RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => repository.list_recent_views(limit).await,
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.list_recent_views(limit),
+        }
+    }
+
+    pub async fn feed_summary(&self) -> Result<JobFeedSummary, RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => repository.feed_summary().await,
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.feed_summary(),
         }
     }
 
@@ -65,11 +81,12 @@ impl JobsService {
 }
 
 #[cfg(test)]
-#[derive(Default)]
 pub struct JobsServiceStub {
     jobs_by_id: HashMap<String, Job>,
-    recent_jobs: Vec<Job>,
+    job_views_by_id: HashMap<String, JobView>,
+    recent_job_views: Vec<JobView>,
     search_jobs: Vec<Job>,
+    feed_summary: JobFeedSummary,
     database_disabled: bool,
 }
 
@@ -77,8 +94,19 @@ pub struct JobsServiceStub {
 impl JobsServiceStub {
     pub fn with_job(mut self, job: Job) -> Self {
         self.jobs_by_id.insert(job.id.clone(), job.clone());
-        self.recent_jobs.push(job.clone());
         self.search_jobs.push(job);
+        self
+    }
+
+    pub fn with_job_view(mut self, job_view: JobView) -> Self {
+        self.job_views_by_id
+            .insert(job_view.job.id.clone(), job_view.clone());
+        self.recent_job_views.push(job_view);
+        self
+    }
+
+    pub fn with_feed_summary(mut self, summary: JobFeedSummary) -> Self {
+        self.feed_summary = summary;
         self
     }
 
@@ -90,13 +118,21 @@ impl JobsServiceStub {
         Ok(self.jobs_by_id.get(id).cloned())
     }
 
-    fn list_recent(&self, limit: i64) -> Result<Vec<Job>, RepositoryError> {
+    fn get_view_by_id(&self, id: &str) -> Result<Option<JobView>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self.job_views_by_id.get(id).cloned())
+    }
+
+    fn list_recent_views(&self, limit: i64) -> Result<Vec<JobView>, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }
 
         Ok(self
-            .recent_jobs
+            .recent_job_views
             .iter()
             .take(limit as usize)
             .cloned()
@@ -115,6 +151,33 @@ impl JobsServiceStub {
             .take(limit as usize)
             .cloned()
             .collect())
+    }
+
+    fn feed_summary(&self) -> Result<JobFeedSummary, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self.feed_summary.clone())
+    }
+}
+
+#[cfg(test)]
+impl Default for JobsServiceStub {
+    fn default() -> Self {
+        Self {
+            jobs_by_id: HashMap::new(),
+            job_views_by_id: HashMap::new(),
+            recent_job_views: Vec::new(),
+            search_jobs: Vec::new(),
+            feed_summary: JobFeedSummary {
+                total_jobs: 0,
+                active_jobs: 0,
+                inactive_jobs: 0,
+                reactivated_jobs: 0,
+            },
+            database_disabled: false,
+        }
     }
 }
 

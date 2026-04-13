@@ -1,5 +1,5 @@
-use sqlx::types::Json;
 use sqlx::FromRow;
+use sqlx::types::Json;
 use uuid::Uuid;
 
 use crate::db::Database;
