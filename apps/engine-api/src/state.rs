@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::db::repositories::{
-    ActivitiesRepository, ApplicationsRepository, JobsRepository, MatchResultsRepository,
-    ProfilesRepository, ResumesRepository, TasksRepository,
+    ActivitiesRepository, ApplicationsRepository, FitScoresRepository, JobsRepository,
+    MatchResultsRepository, ProfilesRepository, ResumesRepository, TasksRepository,
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
@@ -28,6 +28,7 @@ pub struct AppState {
     pub match_service: MatchService,
     pub profile_analysis_service: ProfileAnalysisService,
     pub ranking_service: RankingService,
+    pub fit_scores_repository: FitScoresRepository,
     pub search_profile_service: SearchProfileService,
     pub followup_service: FollowUpService,
     pub salary_service: SalaryService,
@@ -43,6 +44,7 @@ impl AppState {
         let tasks_repository = TasksRepository::new(database.clone());
         let resumes_repository = ResumesRepository::new(database.clone());
         let match_results_repository = MatchResultsRepository::new(database.clone());
+        let fit_scores_repository = FitScoresRepository::new(database.clone());
         let profile_analysis_service = ProfileAnalysisService::new();
 
         Self {
@@ -60,6 +62,7 @@ impl AppState {
             ),
             profile_analysis_service,
             ranking_service: RankingService::new(),
+            fit_scores_repository,
             search_profile_service: SearchProfileService::new(),
             followup_service: FollowUpService::new(tasks_repository),
             salary_service: SalaryService::new(salary_jobs_repository),
@@ -98,6 +101,7 @@ impl AppState {
             ),
             profile_analysis_service,
             ranking_service: RankingService::new(),
+            fit_scores_repository: FitScoresRepository::new(Database::disabled()),
             search_profile_service: SearchProfileService::new(),
             followup_service: FollowUpService::new(TasksRepository::new(Database::disabled())),
             salary_service: SalaryService::new(JobsRepository::new(Database::disabled())),
