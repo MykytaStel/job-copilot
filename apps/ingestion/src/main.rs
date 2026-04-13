@@ -1,21 +1,52 @@
 mod adapters;
 mod db;
 mod models;
+mod scrapers;
 
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::time::Duration;
 
-use tracing::info;
+use tracing::{error, info, warn};
 
 use crate::adapters::SourceAdapter;
 use crate::adapters::mock_source::MockSourceAdapter;
 use crate::models::{IngestionBatch, InputDocument, MockSourceInput};
+use crate::scrapers::ScraperConfig;
+use crate::scrapers::djinni::DjinniScraper;
+use crate::scrapers::work_ua::WorkUaScraper;
+
+// ── Config ─────────────────────────────────────────────────────────────────
 
 struct Config {
     database_url: String,
+    run_mode: RunMode,
+}
+
+enum RunMode {
+    File(FileMode),
+    Scrape(ScrapeMode),
+    Daemon(DaemonMode),
+}
+
+struct FileMode {
     input_path: PathBuf,
     input_format: InputFormat,
+}
+
+struct ScrapeMode {
+    source: ScrapeSource,
+    pages: u32,
+    keyword: Option<String>,
+}
+
+/// Runs all configured sources in a loop with a fixed interval.
+struct DaemonMode {
+    sources: Vec<ScrapeSource>,
+    pages: u32,
+    interval_minutes: u64,
+    keyword: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,18 +55,46 @@ enum InputFormat {
     MockSource,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScrapeSource {
+    Djinni,
+    WorkUa,
+}
+
+// ── Entry point ─────────────────────────────────────────────────────────────
+
 #[tokio::main]
 async fn main() -> Result<(), String> {
     tracing_subscriber::fmt().with_env_filter("info").init();
 
     let config = Config::from_env()?;
-    let batch = load_batch(&config)?;
+
+    if let RunMode::Daemon(ref daemon_mode) = config.run_mode {
+        let pool = db::connect(&config.database_url).await?;
+        db::run_migrations(&pool).await?;
+        info!("migrations applied");
+        return run_daemon(daemon_mode, &pool).await;
+    }
+
+    let batch = match config.run_mode {
+        RunMode::File(ref file_mode) => load_batch(file_mode)?,
+        RunMode::Scrape(ref scrape_mode) => run_scraper(scrape_mode).await?,
+        RunMode::Daemon(_) => unreachable!(),
+    };
 
     if batch.jobs.is_empty() {
-        return Err("input file does not contain any jobs".to_string());
+        return Err("no jobs to ingest".to_string());
     }
 
     let pool = db::connect(&config.database_url).await?;
+
+    // Run migrations if RUN_DB_MIGRATIONS=true — useful when running ingestion
+    // standalone without engine-api having started first.
+    if env::var("RUN_DB_MIGRATIONS").map(|v| v.trim().to_lowercase()).as_deref() == Ok("true") {
+        db::run_migrations(&pool).await?;
+        info!("migrations applied");
+    }
+
     let summary = db::upsert_batch(&pool, &batch).await?;
 
     info!(
@@ -47,8 +106,6 @@ async fn main() -> Result<(), String> {
         jobs_inactivated = summary.jobs_inactivated,
         jobs_reactivated = summary.jobs_reactivated,
         sources_refreshed = summary.sources_refreshed,
-        input = %config.input_path.display(),
-        input_format = ?config.input_format,
         "ingestion completed"
     );
 
@@ -66,51 +123,127 @@ async fn main() -> Result<(), String> {
     Ok(())
 }
 
+// ── Config parsing ──────────────────────────────────────────────────────────
+
 impl Config {
     fn from_env() -> Result<Self, String> {
         let database_url = env::var("DATABASE_URL")
             .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
             .ok_or_else(|| "DATABASE_URL is required".to_string())?;
 
         let mut args = env::args().skip(1);
-        let Some(flag) = args.next() else {
-            return Err(
-                "usage: cargo run -- --input <path-to-jobs.json> [--input-format normalized|mock-source]"
-                    .to_string(),
-            );
-        };
+        let flag = args
+            .next()
+            .ok_or_else(|| usage_error())?;
 
-        if flag != "--input" {
-            return Err(format!("unsupported argument '{flag}', expected '--input'"));
-        }
-
-        let Some(path) = args.next() else {
-            return Err("missing value for --input".to_string());
-        };
-
-        let mut input_format = InputFormat::Normalized;
-        while let Some(flag) = args.next() {
-            if flag != "--input-format" {
-                return Err(format!(
-                    "unsupported argument '{flag}', expected '--input-format'"
-                ));
+        let run_mode = match flag.as_str() {
+            "--input" => {
+                let path = args.next().ok_or("missing value for --input")?;
+                let mut input_format = InputFormat::Normalized;
+                while let Some(f) = args.next() {
+                    if f != "--input-format" {
+                        return Err(format!("unsupported argument '{f}', expected '--input-format'"));
+                    }
+                    let val = args.next().ok_or("missing value for --input-format")?;
+                    input_format = InputFormat::from_cli(&val)?;
+                }
+                RunMode::File(FileMode {
+                    input_path: PathBuf::from(path),
+                    input_format,
+                })
             }
+            "--source" => {
+                let source_str = args.next().ok_or("missing value for --source")?;
+                let source = ScrapeSource::from_cli(&source_str)?;
+                let mut pages: u32 = 3;
+                let mut keyword: Option<String> = None;
 
-            let Some(value) = args.next() else {
-                return Err("missing value for --input-format".to_string());
-            };
+                while let Some(f) = args.next() {
+                    match f.as_str() {
+                        "--pages" => {
+                            let val = args.next().ok_or("missing value for --pages")?;
+                            pages = val.parse::<u32>().map_err(|_| {
+                                format!("--pages must be a positive integer, got '{val}'")
+                            })?;
+                            if pages == 0 {
+                                return Err("--pages must be at least 1".to_string());
+                            }
+                        }
+                        "--keyword" => {
+                            keyword = Some(args.next().ok_or("missing value for --keyword")?);
+                        }
+                        other => return Err(format!("unsupported argument '{other}'")),
+                    }
+                }
 
-            input_format = InputFormat::from_cli(&value)?;
-        }
+                RunMode::Scrape(ScrapeMode { source, pages, keyword })
+            }
+            "--daemon" => {
+                let mut sources: Vec<ScrapeSource> = Vec::new();
+                let mut pages: u32 = 3;
+                let mut interval_minutes: u64 = 60;
+                let mut keyword: Option<String> = None;
 
-        Ok(Self {
-            database_url,
-            input_path: PathBuf::from(path),
-            input_format,
-        })
+                while let Some(f) = args.next() {
+                    match f.as_str() {
+                        "--sources" => {
+                            let val = args.next().ok_or("missing value for --sources")?;
+                            for s in val.split(',') {
+                                let s = s.trim();
+                                if s == "all" {
+                                    sources.push(ScrapeSource::Djinni);
+                                    sources.push(ScrapeSource::WorkUa);
+                                } else {
+                                    sources.push(ScrapeSource::from_cli(s)?);
+                                }
+                            }
+                        }
+                        "--pages" => {
+                            let val = args.next().ok_or("missing value for --pages")?;
+                            pages = val.parse::<u32>().map_err(|_| {
+                                format!("--pages must be a positive integer, got '{val}'")
+                            })?;
+                            if pages == 0 {
+                                return Err("--pages must be at least 1".to_string());
+                            }
+                        }
+                        "--interval-minutes" => {
+                            let val = args.next().ok_or("missing value for --interval-minutes")?;
+                            interval_minutes = val.parse::<u64>().map_err(|_| {
+                                format!("--interval-minutes must be a positive integer, got '{val}'")
+                            })?;
+                            if interval_minutes == 0 {
+                                return Err("--interval-minutes must be at least 1".to_string());
+                            }
+                        }
+                        "--keyword" => {
+                            keyword = Some(args.next().ok_or("missing value for --keyword")?);
+                        }
+                        other => return Err(format!("unsupported daemon argument '{other}'")),
+                    }
+                }
+
+                // Default: scrape all sources
+                if sources.is_empty() {
+                    sources.push(ScrapeSource::Djinni);
+                    sources.push(ScrapeSource::WorkUa);
+                }
+                sources.dedup();
+
+                RunMode::Daemon(DaemonMode { sources, pages, interval_minutes, keyword })
+            }
+            other => return Err(format!("unsupported flag '{other}'\n{}", usage_error())),
+        };
+
+        Ok(Self { database_url, run_mode })
     }
+}
+
+fn usage_error() -> String {
+    "usage:\n  cargo run -- --input <path> [--input-format normalized|mock-source]\n  cargo run -- --source <djinni|workua> [--pages <n>] [--keyword <kw>]\n  cargo run -- --daemon [--sources all|djinni|workua] [--pages <n>] [--interval-minutes <m>] [--keyword <kw>]"
+        .to_string()
 }
 
 impl InputFormat {
@@ -125,19 +258,41 @@ impl InputFormat {
     }
 }
 
-fn load_batch(config: &Config) -> Result<IngestionBatch, String> {
-    let raw = read_input_file(&config.input_path)?;
+impl ScrapeSource {
+    fn from_cli(value: &str) -> Result<Self, String> {
+        match value.trim().to_lowercase().as_str() {
+            "djinni" => Ok(Self::Djinni),
+            "workua" | "work_ua" | "work.ua" => Ok(Self::WorkUa),
+            other => Err(format!(
+                "unsupported source '{other}', expected 'djinni' or 'workua'"
+            )),
+        }
+    }
 
-    match config.input_format {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Djinni => "djinni",
+            Self::WorkUa => "work_ua",
+        }
+    }
+}
+
+// ── Batch loaders ────────────────────────────────────────────────────────────
+
+fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
+    let raw = fs::read_to_string(&mode.input_path)
+        .map_err(|e| format!("failed to read {}: {e}", mode.input_path.display()))?;
+
+    match mode.input_format {
         InputFormat::Normalized => {
-            let payload = serde_json::from_str::<InputDocument>(&raw).map_err(|error| {
-                format!("failed to parse {}: {error}", config.input_path.display())
+            let payload = serde_json::from_str::<InputDocument>(&raw).map_err(|e| {
+                format!("failed to parse {}: {e}", mode.input_path.display())
             })?;
             Ok(IngestionBatch::from_jobs(payload.into_jobs()))
         }
         InputFormat::MockSource => {
-            let payload = serde_json::from_str::<MockSourceInput>(&raw).map_err(|error| {
-                format!("failed to parse {}: {error}", config.input_path.display())
+            let payload = serde_json::from_str::<MockSourceInput>(&raw).map_err(|e| {
+                format!("failed to parse {}: {e}", mode.input_path.display())
             })?;
             let adapter = MockSourceAdapter;
             let normalized = adapter.normalize(payload)?;
@@ -146,9 +301,77 @@ fn load_batch(config: &Config) -> Result<IngestionBatch, String> {
     }
 }
 
-fn read_input_file(path: &PathBuf) -> Result<String, String> {
-    fs::read_to_string(path).map_err(|error| format!("failed to read {}: {error}", path.display()))
+async fn run_scraper(mode: &ScrapeMode) -> Result<IngestionBatch, String> {
+    let config = ScraperConfig {
+        pages: mode.pages,
+        keyword: mode.keyword.clone(),
+        page_delay_ms: 600,
+    };
+
+    let results = match mode.source {
+        ScrapeSource::Djinni => {
+            let scraper = DjinniScraper::new()?;
+            scraper.scrape(&config).await?
+        }
+        ScrapeSource::WorkUa => {
+            let scraper = WorkUaScraper::new()?;
+            scraper.scrape(&config).await?
+        }
+    };
+
+    if results.is_empty() {
+        return Err("scraper returned no jobs — site structure may have changed, check selectors".to_string());
+    }
+
+    IngestionBatch::from_normalization_results(results)
 }
+
+// ── Daemon loop ──────────────────────────────────────────────────────────────
+
+/// Runs all configured sources on repeat, sleeping `interval_minutes` between rounds.
+/// Never returns unless a fatal error occurs.
+async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result<(), String> {
+    let interval = Duration::from_secs(mode.interval_minutes * 60);
+    info!(
+        sources = ?mode.sources.iter().map(|s| s.name()).collect::<Vec<_>>(),
+        pages = mode.pages,
+        interval_minutes = mode.interval_minutes,
+        "daemon started"
+    );
+
+    loop {
+        for &source in &mode.sources {
+            let scrape_mode = ScrapeMode {
+                source,
+                pages: mode.pages,
+                keyword: mode.keyword.clone(),
+            };
+
+            match run_scraper(&scrape_mode).await {
+                Ok(batch) => {
+                    match db::upsert_batch(pool, &batch).await {
+                        Ok(summary) => info!(
+                            source = source.name(),
+                            jobs_written = summary.jobs_written,
+                            variants_created = summary.variants_created,
+                            variants_updated = summary.variants_updated,
+                            variants_unchanged = summary.variants_unchanged,
+                            variants_inactivated = summary.variants_inactivated,
+                            "daemon round complete"
+                        ),
+                        Err(e) => error!(source = source.name(), error = %e, "db upsert failed"),
+                    }
+                }
+                Err(e) => warn!(source = source.name(), error = %e, "scrape failed, skipping source"),
+            }
+        }
+
+        info!(next_in_minutes = mode.interval_minutes, "sleeping until next round");
+        tokio::time::sleep(interval).await;
+    }
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -156,7 +379,7 @@ mod tests {
 
     use crate::models::{InputDocument, canonical_job_id, compute_dedupe_key};
 
-    use super::{Config, InputFormat, load_batch, read_input_file};
+    use super::{FileMode, InputFormat, load_batch};
 
     #[test]
     fn parses_wrapped_job_input() {
@@ -182,8 +405,11 @@ mod tests {
 
     #[test]
     fn returns_read_error_for_missing_file() {
-        let error = read_input_file(&"/definitely/missing.json".into())
-            .expect_err("missing file should fail");
+        let error = load_batch(&FileMode {
+            input_path: "/definitely/missing.json".into(),
+            input_format: InputFormat::Normalized,
+        })
+        .expect_err("missing file should fail");
 
         assert!(error.contains("failed to read"));
     }
@@ -220,8 +446,7 @@ mod tests {
         )
         .expect("mock input file should be written");
 
-        let batch = load_batch(&Config {
-            database_url: "postgres://unused".to_string(),
+        let batch = load_batch(&FileMode {
             input_path: path.clone(),
             input_format: InputFormat::MockSource,
         })

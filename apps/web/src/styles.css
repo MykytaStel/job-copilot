@@ -801,6 +801,50 @@ input[type="file"] {
 .noteForm textarea { flex: 1; resize: vertical; min-height: 60px; }
 .noteForm button { flex-shrink: 0; padding: 10px 16px; font-size: 13px; }
 
+/* ─── Jobs search bar ───────────────────────────────────────────────────────── */
+
+.jobsHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.searchBox {
+  position: relative;
+  flex: 1;
+  max-width: 420px;
+}
+
+.searchBox .searchIcon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.searchBox input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 7px 12px 7px 32px;
+  color: #e9eef6;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.searchBox input:focus {
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+.searchBox input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
 @media (max-width: 960px) {
   .appShell {
     flex-direction: column;

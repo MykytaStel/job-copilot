@@ -20,9 +20,6 @@ export default function Layout() {
     <div className="appShell">
       <nav className="sidebar">
         <p className="navBrand">Job Copilot UA</p>
-        <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>
-          `engine-api` mode
-        </p>
         <ul className="navList">
           {links.map((link) => (
             <li key={link.to}>

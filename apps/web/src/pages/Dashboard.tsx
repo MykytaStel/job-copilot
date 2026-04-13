@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity,
@@ -9,10 +10,12 @@ import {
   CalendarDays,
   Clock3,
   RefreshCw,
+  Search,
   Send,
   XCircle,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import type {
   Application,
   ApplicationStatus,
@@ -20,7 +23,7 @@ import type {
   JobPosting,
 } from '@job-copilot/shared';
 
-import { getApplications, getDashboardStats, getJobsFeed } from '../api';
+import { createApplication, getApplications, getDashboardStats, getJobsFeed } from '../api';
 import { queryKeys } from '../queryKeys';
 
 const STATUS_COLUMNS: ApplicationStatus[] = [
@@ -98,7 +101,10 @@ function SourceActivityCard({
 }
 
 export default function Dashboard() {
-  const { data: jobsFeed, error: jobsError } = useQuery<{
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+
+  const { data: jobsFeed, error: jobsError, isLoading: jobsLoading } = useQuery<{
     jobs: JobPosting[];
     summary: JobFeedSummary;
   }>({
@@ -106,8 +112,19 @@ export default function Dashboard() {
     queryFn: getJobsFeed,
   });
 
-  const jobs = jobsFeed?.jobs ?? [];
+  const allJobs = jobsFeed?.jobs ?? [];
   const jobSummary = jobsFeed?.summary;
+
+  const jobs = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allJobs;
+    return allJobs.filter(
+      (j) =>
+        j.title.toLowerCase().includes(q) ||
+        j.company.toLowerCase().includes(q) ||
+        j.description.toLowerCase().includes(q),
+    );
+  }, [allJobs, search]);
 
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: queryKeys.applications.all(),
@@ -119,6 +136,16 @@ export default function Dashboard() {
     queryFn: getDashboardStats,
   });
 
+  const saveMutation = useMutation({
+    mutationFn: (jobId: string) => createApplication({ jobId, status: 'saved' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
+      toast.success('Збережено в pipeline');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
   const applicationByJob = new Map(applications.map((item) => [item.jobId, item]));
   const error =
     jobsError instanceof Error ? jobsError.message : jobsError ? 'Error' : null;
@@ -127,11 +154,10 @@ export default function Dashboard() {
     <div className="dashboardPage">
       <section className="dashboardHero">
         <div>
-          <p className="eyebrow">Demo Surface</p>
-          <h1>Ingestion lifecycle is now visible in the product.</h1>
+          <p className="eyebrow">Job Copilot UA</p>
+          <h1>Відстежуйте вакансії та заявки в одному місці.</h1>
           <p className="muted dashboardHeroText">
-            `engine-api` now serves canonical job lifecycle state, source refresh
-            metadata, and reactivation signals that can later be reused by `ml`.
+            Вакансії автоматично збираються з Djinni та Work.ua. Налаштуйте профіль — і система підбере найкращі збіги.
           </p>
         </div>
         <div className="dashboardHeroActions">
@@ -202,8 +228,27 @@ export default function Dashboard() {
         </section>
       )}
 
-      {jobs.length === 0 ? (
-        <p className="muted">No jobs returned by `engine-api` yet.</p>
+      <div className="jobsHeader">
+        <div className="searchBox">
+          <Search size={14} className="searchIcon" />
+          <input
+            type="search"
+            placeholder="Фільтр за назвою, компанією, описом…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {search && (
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+            {jobs.length} з {allJobs.length} вакансій
+          </p>
+        )}
+      </div>
+
+      {jobsLoading ? (
+        <p className="muted">Завантаження вакансій…</p>
+      ) : jobs.length === 0 ? (
+        <p className="muted">{search ? 'Нічого не знайдено.' : 'Вакансій поки немає — запустіть pnpm scrape:djinni'}</p>
       ) : (
         <section className="jobLifecycleGrid">
           {jobs.map((job) => {
@@ -220,13 +265,22 @@ export default function Dashboard() {
                     <p className="muted jobLifecycleCompany">{job.company}</p>
                   </div>
                   <div className="jobLifecycleActions">
-                    {application && (
+                    {application ? (
                       <span className={`statusPill status-${application.status}`}>
                         {application.status}
                       </span>
+                    ) : (
+                      <button
+                        className="ghostBtn"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 13 }}
+                        disabled={saveMutation.isPending}
+                        onClick={() => saveMutation.mutate(job.id)}
+                      >
+                        <Bookmark size={13} /> Зберегти
+                      </button>
                     )}
                     <Link to={`/jobs/${job.id}`} className="linkBtn">
-                      Details <ArrowRight size={13} />
+                      Деталі <ArrowRight size={13} />
                     </Link>
                   </div>
                 </div>

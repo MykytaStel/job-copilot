@@ -237,7 +237,86 @@ type EngineAnalyzeProfile = {
 
 const API_URL =
   import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
+const ML_URL =
+  import.meta.env.VITE_ML_URL?.trim() || 'http://localhost:8000';
 const PROFILE_ID_KEY = 'engine_api_profile_id';
+
+export type RankedJob = {
+  jobId: string;
+  title: string;
+  companyName: string;
+  score: number;
+  matchedTerms: string[];
+  evidence: string[];
+};
+
+export type FitAnalysis = {
+  profileId: string;
+  jobId: string;
+  score: number;
+  matchedTerms: string[];
+  missingTerms: string[];
+  evidence: string[];
+};
+
+async function mlRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${ML_URL}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(body.detail ?? `ML HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function rerankJobs(profileId: string, jobIds: string[]): Promise<RankedJob[]> {
+  const result = await mlRequest<{
+    profile_id: string;
+    jobs: Array<{
+      job_id: string;
+      title: string;
+      company_name: string;
+      score: number;
+      matched_terms: string[];
+      evidence: string[];
+    }>;
+  }>('/api/v1/rerank', {
+    method: 'POST',
+    body: JSON.stringify({ profile_id: profileId, job_ids: jobIds }),
+  });
+  return result.jobs.map((j) => ({
+    jobId: j.job_id,
+    title: j.title,
+    companyName: j.company_name,
+    score: j.score,
+    matchedTerms: j.matched_terms,
+    evidence: j.evidence,
+  }));
+}
+
+export async function analyzeFit(profileId: string, jobId: string): Promise<FitAnalysis> {
+  const result = await mlRequest<{
+    profile_id: string;
+    job_id: string;
+    score: number;
+    matched_terms: string[];
+    missing_terms: string[];
+    evidence: string[];
+  }>('/api/v1/fit/analyze', {
+    method: 'POST',
+    body: JSON.stringify({ profile_id: profileId, job_id: jobId }),
+  });
+  return {
+    profileId: result.profile_id,
+    jobId: result.job_id,
+    score: result.score,
+    matchedTerms: result.matched_terms,
+    missingTerms: result.missing_terms,
+    evidence: result.evidence,
+  };
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, init);
@@ -292,6 +371,11 @@ function mapJob(job: EngineJob): JobPosting {
     inactivatedAt: job.inactivated_at ?? undefined,
     reactivatedAt: job.reactivated_at ?? undefined,
     lifecycleStage: job.lifecycle_stage,
+    salaryMin: job.salary_min ?? undefined,
+    salaryMax: job.salary_max ?? undefined,
+    salaryCurrency: job.salary_currency ?? undefined,
+    seniority: job.seniority ?? undefined,
+    remoteType: job.remote_type ?? undefined,
     primaryVariant: job.primary_variant
       ? {
           source: job.primary_variant.source,
@@ -517,10 +601,15 @@ export async function saveProfile(
 
   writeStoredProfileId(profile.id);
 
-  const analyzed = await request<EngineAnalyzeProfile>(
-    `/api/v1/profiles/${profile.id}/analyze`,
-    json('POST', {}),
-  );
+  // Upload resume in parallel with analysis so the engine-api fit-score endpoint
+  // has an active resume to work with (resumes and profiles are separate records).
+  const [analyzed] = await Promise.all([
+    request<EngineAnalyzeProfile>(`/api/v1/profiles/${profile.id}/analyze`, json('POST', {})),
+    request<EngineResume>('/api/v1/resume/upload', json('POST', {
+      filename: 'profile.md',
+      raw_text: payload.rawText,
+    })).catch(() => null), // best-effort; don't block profile save if this fails
+  ]);
 
   return {
     id: profile.id,
