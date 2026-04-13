@@ -31,6 +31,7 @@ export interface CandidateProfile {
   summary?: string;
   skills: string[];
   updatedAt: string;
+  skillsUpdatedAt?: string;
 }
 
 export interface CandidateProfileInput {
@@ -104,6 +105,7 @@ export interface Application {
 export interface ApplicationDetail extends Application {
   job: JobPosting;
   resume?: ResumeVersion;
+  offer?: Offer;
   notes: ApplicationNote[];
   contacts: ApplicationContact[];
   activities: Activity[];
@@ -128,7 +130,12 @@ export interface DashboardStats {
 
 // ─── Contacts / People ────────────────────────────────────────────────────────
 
-export type ContactRelationship = 'recruiter' | 'hiring_manager' | 'interviewer' | 'other';
+export type ContactRelationship =
+  | 'recruiter'
+  | 'hiring_manager'
+  | 'interviewer'
+  | 'referrer'
+  | 'other';
 
 export interface Contact {
   id: string;
@@ -249,25 +256,28 @@ export interface InterviewQAInput {
 
 // ─── Offer ────────────────────────────────────────────────────────────────────
 
+export type OfferStatus = 'draft' | 'received' | 'accepted' | 'declined' | 'expired';
+
 export interface Offer {
   id: string;
-  jobId: string;
-  salary?: number;
-  currency: string;
-  equity?: string;
-  benefits: string[];
-  deadline?: string;
-  notes: string;
+  applicationId: string;
+  status: OfferStatus;
+  compensationMin?: number;
+  compensationMax?: number;
+  compensationCurrency?: string;
+  startsAt?: string;
+  notes?: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface OfferInput {
-  jobId: string;
-  salary?: number;
-  currency?: string;
-  equity?: string;
-  benefits?: string[];
-  deadline?: string;
+  applicationId: string;
+  status: OfferStatus;
+  compensationMin?: number;
+  compensationMax?: number;
+  compensationCurrency?: string;
+  startsAt?: string;
   notes?: string;
 }
 
@@ -296,6 +306,9 @@ export interface BackupMeta {
 export interface SearchResults {
   jobs: JobPosting[];
   contacts: Contact[];
+  page: number;
+  perPage: number;
+  hasMore: boolean;
 }
 
 // ─── Health ───────────────────────────────────────────────────────────────────

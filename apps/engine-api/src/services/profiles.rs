@@ -209,7 +209,8 @@ impl ProfilesServiceStub {
 mod tests {
     use crate::db::Database;
     use crate::db::repositories::RepositoryError;
-    use crate::domain::profile::model::CreateProfile;
+    use crate::domain::profile::model::{CreateProfile, ProfileAnalysis};
+    use crate::domain::role::RoleId;
 
     use super::{ProfilesService, ProfilesServiceStub};
 
@@ -243,5 +244,50 @@ mod tests {
 
         assert_eq!(profile.id, "profile_test_001");
         assert_eq!(profile.name, "Jane Doe");
+    }
+
+    #[tokio::test]
+    async fn unrelated_profile_updates_keep_skills_timestamp() {
+        let service = ProfilesService::for_tests(ProfilesServiceStub::default());
+
+        let created = service
+            .create(CreateProfile {
+                name: "Jane Doe".to_string(),
+                email: "jane@example.com".to_string(),
+                location: Some("Kyiv".to_string()),
+                raw_text: "Senior frontend engineer".to_string(),
+            })
+            .await
+            .expect("stub should create a profile");
+
+        let analyzed = service
+            .save_analysis(
+                &created.id,
+                ProfileAnalysis {
+                    summary: "Experienced frontend engineer".to_string(),
+                    primary_role: RoleId::FrontendDeveloper,
+                    seniority: "senior".to_string(),
+                    skills: vec!["react".to_string()],
+                    keywords: vec!["frontend".to_string()],
+                },
+            )
+            .await
+            .expect("analysis save should succeed")
+            .expect("profile should exist");
+
+        let updated = service
+            .update(
+                &created.id,
+                crate::domain::profile::model::UpdateProfile {
+                    name: Some("Jane Smith".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("profile update should succeed")
+            .expect("profile should exist");
+
+        assert_eq!(updated.name, "Jane Smith");
+        assert_eq!(updated.skills_updated_at, analyzed.skills_updated_at);
     }
 }

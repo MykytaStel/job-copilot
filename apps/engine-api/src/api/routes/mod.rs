@@ -43,7 +43,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/applications/{id}/offer",
             put(applications::upsert_offer),
         )
-        .route("/api/v1/contacts", post(applications::create_contact))
+        .route(
+            "/api/v1/contacts",
+            get(applications::list_contacts).post(applications::create_contact),
+        )
         .route("/api/v1/jobs/recent", get(jobs::get_recent_jobs))
         .route("/api/v1/jobs/{id}", get(jobs::get_job_by_id))
         .route("/api/v1/jobs/{id}/fit", get(jobs::get_job_fit))
