@@ -75,7 +75,7 @@ For local Postgres setup and request examples, see [apps/engine-api/README.md](/
 ## Current Frontend Scope
 
 The current `web` app is wired to `engine-api` for:
-- dashboard job list
+- dashboard job lifecycle demo
 - job details
 - application board read view
 - persisted profile CRUD + analysis

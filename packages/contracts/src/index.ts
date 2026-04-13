@@ -19,6 +19,31 @@ export interface JobPosting {
   description: string;
   notes: string;
   createdAt: string;
+  postedAt?: string;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+  isActive?: boolean;
+  inactivatedAt?: string;
+  reactivatedAt?: string;
+  lifecycleStage?: 'active' | 'inactive' | 'reactivated';
+  primaryVariant?: JobSourceVariant;
+}
+
+export interface JobSourceVariant {
+  source: string;
+  sourceJobId: string;
+  sourceUrl: string;
+  fetchedAt: string;
+  lastSeenAt: string;
+  isActive: boolean;
+  inactivatedAt?: string;
+}
+
+export interface JobFeedSummary {
+  totalJobs: number;
+  activeJobs: number;
+  inactiveJobs: number;
+  reactivatedJobs: number;
 }
 
 // ─── Candidate Profile ────────────────────────────────────────────────────────

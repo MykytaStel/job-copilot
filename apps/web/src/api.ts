@@ -19,6 +19,7 @@ import type {
   ImportBatchResponse,
   InterviewQA,
   InterviewQAInput,
+  JobFeedSummary,
   JobAlert,
   JobAlertInput,
   JobPosting,
@@ -65,6 +66,7 @@ type EngineHealthResponse = {
 
 type EngineRecentJobsResponse = {
   jobs: EngineJob[];
+  summary: EngineJobFeedSummary;
 };
 
 type EngineRecentApplicationsResponse = {
@@ -100,8 +102,34 @@ type EngineJob = {
   title: string;
   company_name: string;
   description_text: string;
+  remote_type?: string | null;
+  seniority?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  salary_currency?: string | null;
   posted_at: string | null;
+  first_seen_at: string;
   last_seen_at: string;
+  is_active: boolean;
+  inactivated_at?: string | null;
+  reactivated_at?: string | null;
+  lifecycle_stage: 'active' | 'inactive' | 'reactivated';
+  primary_variant?: {
+    source: string;
+    source_job_id: string;
+    source_url: string;
+    fetched_at: string;
+    last_seen_at: string;
+    is_active: boolean;
+    inactivated_at?: string | null;
+  } | null;
+};
+
+type EngineJobFeedSummary = {
+  total_jobs: number;
+  active_jobs: number;
+  inactive_jobs: number;
+  reactivated_jobs: number;
 };
 
 type EngineApplication = {
@@ -251,11 +279,39 @@ function mapJob(job: EngineJob): JobPosting {
   return {
     id: job.id,
     source: 'manual',
+    url: job.primary_variant?.source_url ?? undefined,
     title: job.title,
     company: job.company_name,
     description: job.description_text,
     notes: '',
     createdAt: job.posted_at ?? job.last_seen_at,
+    postedAt: job.posted_at ?? undefined,
+    firstSeenAt: job.first_seen_at,
+    lastSeenAt: job.last_seen_at,
+    isActive: job.is_active,
+    inactivatedAt: job.inactivated_at ?? undefined,
+    reactivatedAt: job.reactivated_at ?? undefined,
+    lifecycleStage: job.lifecycle_stage,
+    primaryVariant: job.primary_variant
+      ? {
+          source: job.primary_variant.source,
+          sourceJobId: job.primary_variant.source_job_id,
+          sourceUrl: job.primary_variant.source_url,
+          fetchedAt: job.primary_variant.fetched_at,
+          lastSeenAt: job.primary_variant.last_seen_at,
+          isActive: job.primary_variant.is_active,
+          inactivatedAt: job.primary_variant.inactivated_at ?? undefined,
+        }
+      : undefined,
+  };
+}
+
+function mapJobFeedSummary(summary: EngineJobFeedSummary): JobFeedSummary {
+  return {
+    totalJobs: summary.total_jobs,
+    activeJobs: summary.active_jobs,
+    inactiveJobs: summary.inactive_jobs,
+    reactivatedJobs: summary.reactivated_jobs,
   };
 }
 
@@ -407,6 +463,17 @@ export async function getHealth(): Promise<HealthResponse> {
 export async function getJobs(): Promise<JobPosting[]> {
   const response = await request<EngineRecentJobsResponse>('/api/v1/jobs/recent');
   return response.jobs.map(mapJob);
+}
+
+export async function getJobsFeed(): Promise<{
+  jobs: JobPosting[];
+  summary: JobFeedSummary;
+}> {
+  const response = await request<EngineRecentJobsResponse>('/api/v1/jobs/recent');
+  return {
+    jobs: response.jobs.map(mapJob),
+    summary: mapJobFeedSummary(response.summary),
+  };
 }
 
 export async function getJob(id: string): Promise<JobPosting> {

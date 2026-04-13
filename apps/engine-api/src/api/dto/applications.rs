@@ -438,9 +438,7 @@ fn validate_optional_trimmed(value: Option<String>) -> Option<String> {
     })
 }
 
-fn deserialize_patch_due_date<'de, D>(
-    deserializer: D,
-) -> Result<Option<Option<String>>, D::Error>
+fn deserialize_patch_due_date<'de, D>(deserializer: D) -> Result<Option<Option<String>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -567,7 +565,9 @@ mod tests {
         let payload: UpdateApplicationRequest =
             serde_json::from_str(r#"{"due_date":null}"#).expect("json payload should deserialize");
 
-        let validated = payload.validate().expect("null due_date patch should be valid");
+        let validated = payload
+            .validate()
+            .expect("null due_date patch should be valid");
 
         assert_eq!(validated.status, None);
         assert_eq!(validated.due_date, Some(None));
@@ -581,7 +581,10 @@ mod tests {
 
         let validated = payload.validate().expect("due_date patch should be valid");
 
-        assert_eq!(validated.due_date, Some(Some("2026-05-10T12:00:00Z".to_string())));
+        assert_eq!(
+            validated.due_date,
+            Some(Some("2026-05-10T12:00:00Z".to_string()))
+        );
     }
 
     #[test]

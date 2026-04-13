@@ -35,9 +35,12 @@ Fields:
 - salary_min
 - salary_max
 - salary_currency
+- first_seen_at
 - posted_at
 - last_seen_at
 - is_active
+- inactivated_at
+- reactivated_at
 
 ## JobVariant
 Source-specific copy of a job.
@@ -48,14 +51,20 @@ Fields:
 - source
 - source_job_id
 - source_url
+- dedupe_key
 - raw_hash
 - raw_payload
 - fetched_at
+- last_seen_at
+- is_active
+- inactivated_at
 
 Current implementation:
 - stored in Postgres as `job_variants`
 - linked back to canonical `jobs` via `job_id`
 - upserted by `apps/ingestion` for adapter-backed inputs
+- carries a normalized `dedupe_key` that lets ingestion collapse new source copies onto an existing canonical job
+- source refresh marks missing variants inactive and can reactivate them on later refreshes
 
 ## Application
 Represents a user's job application state.

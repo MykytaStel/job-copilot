@@ -1,5 +1,4 @@
 pub mod activities;
-pub mod salary;
 pub mod applications;
 pub mod followup;
 pub mod jobs;
@@ -7,4 +6,5 @@ pub mod profile;
 pub mod profiles;
 pub mod ranking;
 pub mod resumes;
+pub mod salary;
 pub mod search_profile;

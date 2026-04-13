@@ -18,6 +18,24 @@
       "posted_at": "2026-04-14T08:00:00Z",
       "last_seen_at": "2026-04-14T10:00:00Z",
       "active": true
+    },
+    {
+      "source_job_id": "data-002",
+      "source_url": "https://mock-source.example/jobs/data-002",
+      "position": "Search Data Engineer",
+      "employer": "NovaLedger",
+      "city": "Lviv",
+      "work_mode": "remote",
+      "seniority": "middle",
+      "description": "Own ingestion-safe search inputs, ranking features, and refresh-aware job analytics.",
+      "compensation": {
+        "min": 3400,
+        "max": 4600,
+        "currency": "USD"
+      },
+      "posted_at": "2026-04-14T07:20:00Z",
+      "last_seen_at": "2026-04-14T10:00:00Z",
+      "active": true
     }
   ]
 }

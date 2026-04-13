@@ -18,6 +18,8 @@ INPUT_PATH="${INPUT_PATH:-apps/ingestion/examples/mock_source_jobs.json}"
 INPUT_FORMAT="${INPUT_FORMAT:-mock-source}"
 RUN_SECOND_PASS="${RUN_SECOND_PASS:-1}"
 SECOND_INPUT_PATH="${SECOND_INPUT_PATH:-apps/ingestion/examples/mock_source_jobs_updated.json}"
+RUN_THIRD_PASS="${RUN_THIRD_PASS:-1}"
+THIRD_INPUT_PATH="${THIRD_INPUT_PATH:-apps/ingestion/examples/mock_source_jobs_reactivated.json}"
 KEEP_RUNNING="${KEEP_RUNNING:-1}"
 
 ENGINE_PID=""
@@ -135,18 +137,29 @@ run_ingestion "$INPUT_PATH"
 
 if [[ "$RUN_SECOND_PASS" == "1" ]]; then
   run_ingestion "$SECOND_INPUT_PATH"
-  run_ingestion "$SECOND_INPUT_PATH"
+fi
+
+if [[ "$RUN_THIRD_PASS" == "1" ]]; then
+  run_ingestion "$THIRD_INPUT_PATH"
 fi
 
 echo ""
 echo "Local stack is ready."
 echo "Health: http://127.0.0.1:${PORT}/health"
 echo "Search demo: http://127.0.0.1:${PORT}/api/v1/search?q=SignalHire"
+echo "Jobs feed demo: http://127.0.0.1:${PORT}/api/v1/jobs/recent"
 echo "Engine log: $ENGINE_LOG"
+echo ""
+echo "Current job lifecycle rows:"
+compose_cmd exec -T postgres psql -U "$PGUSER" -d "$PGDATABASE" -P pager=off -c \
+  "SELECT id, is_active, first_seen_at, last_seen_at, inactivated_at, reactivated_at FROM jobs ORDER BY last_seen_at DESC;"
 echo ""
 echo "Current job_variants rows:"
 compose_cmd exec -T postgres psql -U "$PGUSER" -d "$PGDATABASE" -P pager=off -c \
-  "SELECT source, source_job_id, job_id, LEFT(raw_hash, 12) AS raw_hash_prefix, fetched_at FROM job_variants ORDER BY source, source_job_id;"
+  "SELECT source, source_job_id, job_id, is_active, last_seen_at, inactivated_at, LEFT(raw_hash, 12) AS raw_hash_prefix, fetched_at FROM job_variants ORDER BY source, source_job_id;"
+echo ""
+echo "API summary:"
+curl -sS "http://127.0.0.1:${PORT}/api/v1/jobs/recent" | jq '{summary, jobs: [.jobs[] | {id, lifecycle_stage, is_active, source: .primary_variant.source}]}'
 echo ""
 
 if [[ "$KEEP_RUNNING" == "1" ]]; then

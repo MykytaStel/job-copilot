@@ -43,17 +43,25 @@ async fn main() -> Result<(), String> {
         variants_created = summary.variants_created,
         variants_updated = summary.variants_updated,
         variants_unchanged = summary.variants_unchanged,
+        variants_inactivated = summary.variants_inactivated,
+        jobs_inactivated = summary.jobs_inactivated,
+        jobs_reactivated = summary.jobs_reactivated,
+        sources_refreshed = summary.sources_refreshed,
         input = %config.input_path.display(),
         input_format = ?config.input_format,
         "ingestion completed"
     );
 
     println!(
-        "Wrote {} jobs; variants created: {}, updated: {}, unchanged: {}",
+        "Wrote {} jobs; variants created: {}, updated: {}, unchanged: {}, inactivated: {}; jobs inactivated: {}, reactivated: {}; sources refreshed: {}",
         summary.jobs_written,
         summary.variants_created,
         summary.variants_updated,
-        summary.variants_unchanged
+        summary.variants_unchanged,
+        summary.variants_inactivated,
+        summary.jobs_inactivated,
+        summary.jobs_reactivated,
+        summary.sources_refreshed
     );
     Ok(())
 }
@@ -146,7 +154,7 @@ fn read_input_file(path: &PathBuf) -> Result<String, String> {
 mod tests {
     use std::fs;
 
-    use crate::models::InputDocument;
+    use crate::models::{InputDocument, canonical_job_id, compute_dedupe_key};
 
     use super::{Config, InputFormat, load_batch, read_input_file};
 
@@ -221,11 +229,14 @@ mod tests {
 
         fs::remove_file(path).ok();
 
+        let expected_dedupe_key = compute_dedupe_key(&batch.jobs[0]);
+
         assert_eq!(batch.jobs.len(), 1);
-        assert_eq!(batch.jobs[0].id, "job_mock_source_777");
+        assert_eq!(batch.jobs[0].id, canonical_job_id(&expected_dedupe_key));
         assert_eq!(batch.jobs[0].company_name, "SignalHire");
         assert_eq!(batch.job_variants.len(), 1);
-        assert_eq!(batch.job_variants[0].job_id, "job_mock_source_777");
+        assert_eq!(batch.job_variants[0].job_id, batch.jobs[0].id);
+        assert_eq!(batch.job_variants[0].dedupe_key, expected_dedupe_key);
         assert_eq!(batch.job_variants[0].source, "mock_source");
     }
 }

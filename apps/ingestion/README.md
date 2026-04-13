@@ -7,6 +7,7 @@ Current slice:
 - supports one adapter-backed `mock-source` normalization flow
 - upserts canonical jobs into Postgres
 - persists source-specific raw snapshots into `job_variants`
+- resolves adapter-backed canonical job ids through `job_variants` using a normalized dedupe fingerprint
 - reports whether source variants were created, updated, or unchanged on repeat runs
 - does not write `search_vector`
 - relies on the database trigger in `engine-api` migrations to maintain search indexing
@@ -27,6 +28,7 @@ It also accepts one adapter-backed source format:
 - payload shape: `{ "fetched_at": "...", "jobs": [...] }`
 - source fields are normalized into canonical job fields before upsert
 - the adapter also stores the latest source payload in `job_variants`
+- adapter-backed canonical ids are no longer tied to `source_job_id`; ingestion first keeps existing variant mappings and otherwise groups new variants by `dedupe_key`
 
 Each job uses canonical fields:
 - `id`
