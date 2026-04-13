@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::db::repositories::{ApplicationsRepository, RepositoryError};
 use crate::domain::application::model::{
-    Application, ApplicationDetail, ApplicationNote, CreateApplication, CreateNote, UpdateApplication,
+    Application, ApplicationContact, ApplicationDetail, ApplicationNote, Contact,
+    CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer,
+    UpdateApplication, UpsertOffer,
 };
 
 #[derive(Clone)]
@@ -85,16 +87,56 @@ impl ApplicationsService {
         }
     }
 
-    pub async fn create_note(
-        &self,
-        note: CreateNote,
-    ) -> Result<ApplicationNote, RepositoryError> {
+    pub async fn create_note(&self, note: CreateNote) -> Result<ApplicationNote, RepositoryError> {
         match &self.backend {
             ApplicationsServiceBackend::Repository(repository) => {
                 repository.create_note(&note).await
             }
             #[cfg(test)]
             ApplicationsServiceBackend::Stub(stub) => stub.create_note(note),
+        }
+    }
+
+    pub async fn create_contact(&self, contact: CreateContact) -> Result<Contact, RepositoryError> {
+        match &self.backend {
+            ApplicationsServiceBackend::Repository(repository) => {
+                repository.create_contact(&contact).await
+            }
+            #[cfg(test)]
+            ApplicationsServiceBackend::Stub(stub) => stub.create_contact(contact),
+        }
+    }
+
+    pub async fn get_contact_by_id(&self, id: &str) -> Result<Option<Contact>, RepositoryError> {
+        match &self.backend {
+            ApplicationsServiceBackend::Repository(repository) => {
+                repository.get_contact_by_id(id).await
+            }
+            #[cfg(test)]
+            ApplicationsServiceBackend::Stub(stub) => stub.get_contact_by_id(id),
+        }
+    }
+
+    pub async fn attach_contact(
+        &self,
+        contact: CreateApplicationContact,
+    ) -> Result<ApplicationContact, RepositoryError> {
+        match &self.backend {
+            ApplicationsServiceBackend::Repository(repository) => {
+                repository.attach_contact(&contact).await
+            }
+            #[cfg(test)]
+            ApplicationsServiceBackend::Stub(stub) => stub.attach_contact(contact),
+        }
+    }
+
+    pub async fn upsert_offer(&self, offer: UpsertOffer) -> Result<Offer, RepositoryError> {
+        match &self.backend {
+            ApplicationsServiceBackend::Repository(repository) => {
+                repository.upsert_offer(&offer).await
+            }
+            #[cfg(test)]
+            ApplicationsServiceBackend::Stub(stub) => stub.upsert_offer(offer),
         }
     }
 
@@ -126,6 +168,7 @@ pub struct ApplicationsServiceStub {
     applications_by_id: Mutex<HashMap<String, Application>>,
     recent_applications: Vec<Application>,
     details_by_id: Mutex<HashMap<String, ApplicationDetail>>,
+    contacts_by_id: Mutex<HashMap<String, Contact>>,
     database_disabled: bool,
 }
 
@@ -232,6 +275,112 @@ impl ApplicationsServiceStub {
             content: note.content,
             created_at: "2026-04-11T00:00:00+00:00".to_string(),
         })
+    }
+
+    fn create_contact(&self, contact: CreateContact) -> Result<Contact, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let created = Contact {
+            id: "contact_test_001".to_string(),
+            name: contact.name,
+            email: contact.email,
+            phone: contact.phone,
+            linkedin_url: contact.linkedin_url,
+            company: contact.company,
+            role: contact.role,
+            created_at: "2026-04-11T00:00:00+00:00".to_string(),
+        };
+
+        self.contacts_by_id
+            .lock()
+            .expect("contacts stub mutex should not be poisoned")
+            .insert(created.id.clone(), created.clone());
+
+        Ok(created)
+    }
+
+    fn get_contact_by_id(&self, id: &str) -> Result<Option<Contact>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self
+            .contacts_by_id
+            .lock()
+            .expect("contacts stub mutex should not be poisoned")
+            .get(id)
+            .cloned())
+    }
+
+    fn attach_contact(
+        &self,
+        contact: CreateApplicationContact,
+    ) -> Result<ApplicationContact, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let Some(existing_contact) = self
+            .contacts_by_id
+            .lock()
+            .expect("contacts stub mutex should not be poisoned")
+            .get(&contact.contact_id)
+            .cloned()
+        else {
+            return Err(RepositoryError::InvalidData {
+                message: format!("Contact '{}' was not found", contact.contact_id),
+            });
+        };
+
+        let attached = ApplicationContact {
+            id: "application_contact_test_001".to_string(),
+            application_id: contact.application_id.clone(),
+            contact: existing_contact,
+            relationship: contact.relationship,
+        };
+
+        if let Some(detail) = self
+            .details_by_id
+            .lock()
+            .expect("application details stub mutex should not be poisoned")
+            .get_mut(&contact.application_id)
+        {
+            detail.contacts.push(attached.clone());
+        }
+
+        Ok(attached)
+    }
+
+    fn upsert_offer(&self, offer: UpsertOffer) -> Result<Offer, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let created = Offer {
+            id: "offer_test_001".to_string(),
+            application_id: offer.application_id.clone(),
+            status: offer.status,
+            compensation_min: offer.compensation_min,
+            compensation_max: offer.compensation_max,
+            compensation_currency: offer.compensation_currency,
+            starts_at: offer.starts_at,
+            notes: offer.notes,
+            created_at: "2026-04-11T00:00:00+00:00".to_string(),
+            updated_at: "2026-04-11T00:00:01+00:00".to_string(),
+        };
+
+        if let Some(detail) = self
+            .details_by_id
+            .lock()
+            .expect("application details stub mutex should not be poisoned")
+            .get_mut(&offer.application_id)
+        {
+            detail.offer = Some(created.clone());
+        }
+
+        Ok(created)
     }
 
     fn attach_resume(

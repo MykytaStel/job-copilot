@@ -21,7 +21,12 @@ impl RankingService {
     ///
     /// `candidate` comes from analyzing the active resume via ProfileAnalysisService.
     /// `profile`   is the user's stored profile (optional — salary/workmode prefs).
-    pub fn compute(&self, candidate: &CandidateProfile, job: &Job, profile: Option<&Profile>) -> FitScore {
+    pub fn compute(
+        &self,
+        candidate: &CandidateProfile,
+        job: &Job,
+        profile: Option<&Profile>,
+    ) -> FitScore {
         let job_description_lower = job.description_text.to_ascii_lowercase();
 
         // Extract skills mentioned in the job description using the same list used for CV parsing.
@@ -43,10 +48,8 @@ impl RankingService {
         };
 
         // --- Component 2: seniority alignment (weight 25%) ---
-        let seniority_alignment = compute_seniority_alignment(
-            &candidate.seniority,
-            job.seniority.as_deref(),
-        );
+        let seniority_alignment =
+            compute_seniority_alignment(&candidate.seniority, job.seniority.as_deref());
 
         // --- Component 3: salary overlap (weight 15%) ---
         let (salary_min_usd, salary_max_usd) = profile
@@ -62,11 +65,17 @@ impl RankingService {
 
         // --- Component 4: work mode match (weight 10%) ---
         let preferred_work_mode = profile.and_then(|p| p.preferred_work_mode.as_deref());
-        let work_mode_match = compute_work_mode_match(preferred_work_mode, job.remote_type.as_deref());
+        let work_mode_match =
+            compute_work_mode_match(preferred_work_mode, job.remote_type.as_deref());
 
         // --- Component 5: recency bonus (weight 10%) ---
-        // Neutral value until we track which skills are "recent" in the CV.
-        let recency_bonus = 0.5_f32;
+        // How fresh is the profile relative to when the job was posted?
+        // A profile updated after (or close to) the posting date scores 1.0;
+        // older profiles decay linearly to 0.0 at 180 days of lag.
+        let recency_bonus = compute_recency_bonus(
+            profile.and_then(|p| p.skills_updated_at.as_deref()),
+            job.posted_at.as_deref(),
+        );
 
         let total = (skill_overlap * 0.40
             + seniority_alignment * 0.25
@@ -92,7 +101,10 @@ impl RankingService {
 }
 
 /// Returns (matched, missing) partitions of `candidate_skills` against `job_skills`.
-fn partition_skills(candidate_skills: &[String], job_skills: &[String]) -> (Vec<String>, Vec<String>) {
+fn partition_skills(
+    candidate_skills: &[String],
+    job_skills: &[String],
+) -> (Vec<String>, Vec<String>) {
     let job_lower: Vec<String> = job_skills.iter().map(|s| s.to_ascii_lowercase()).collect();
 
     let mut matched = Vec::new();
@@ -201,6 +213,44 @@ fn normalize_work_mode(s: &str) -> Option<String> {
     }
 }
 
+/// Convert an ISO date string ("YYYY-MM-DD" or "YYYY-MM-DDTHH:…") to a Julian
+/// Day Number. Uses the proleptic Gregorian formula; accurate to ±1 day for
+/// years 2000-2100 which is all we need for recency calculations.
+fn parse_date_to_jdn(date_str: &str) -> Option<i64> {
+    let date = date_str.get(..10)?; // take "YYYY-MM-DD"
+    let y: i64 = date.get(..4)?.parse().ok()?;
+    let m: i64 = date.get(5..7)?.parse().ok()?;
+    let d: i64 = date.get(8..10)?.parse().ok()?;
+
+    // Standard Julian Day Number formula (integer arithmetic only).
+    let a = (14 - m) / 12;
+    let yy = y + 4800 - a;
+    let mm = m + 12 * a - 3;
+    Some(d + (153 * mm + 2) / 5 + 365 * yy + yy / 4 - yy / 100 + yy / 400 - 32045)
+}
+
+/// Score how fresh the candidate's profile is relative to when the job was posted.
+///
+/// - Profile updated on or after the job posting  → 1.0 (fully current)
+/// - 180+ days before the job was posted          → 0.0 (stale)
+/// - Linear interpolation in between
+/// - Either date absent or unparseable             → 0.5 (neutral)
+fn compute_recency_bonus(profile_updated_at: Option<&str>, job_posted_at: Option<&str>) -> f32 {
+    let (Some(profile_date), Some(job_date)) = (profile_updated_at, job_posted_at) else {
+        return 0.5;
+    };
+
+    let (Some(profile_jdn), Some(job_jdn)) =
+        (parse_date_to_jdn(profile_date), parse_date_to_jdn(job_date))
+    else {
+        return 0.5;
+    };
+
+    // Positive lag means profile is older than the job posting.
+    let lag_days = (job_jdn - profile_jdn).max(0) as f32;
+    (1.0 - lag_days / 180.0).max(0.0)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::domain::candidate::profile::{CandidateProfile, RoleScore};
@@ -209,7 +259,14 @@ mod tests {
 
     use super::RankingService;
 
-    fn make_job(skills_in_desc: &str, seniority: Option<&str>, salary_min: Option<i32>, salary_max: Option<i32>, currency: Option<&str>, remote_type: Option<&str>) -> Job {
+    fn make_job(
+        skills_in_desc: &str,
+        seniority: Option<&str>,
+        salary_min: Option<i32>,
+        salary_max: Option<i32>,
+        currency: Option<&str>,
+        remote_type: Option<&str>,
+    ) -> Job {
         Job {
             id: "job-1".to_string(),
             title: "Engineer".to_string(),
@@ -247,11 +304,22 @@ mod tests {
     fn perfect_skill_match_scores_high() {
         let service = RankingService::new();
         let candidate = make_candidate(&["react", "typescript"], "senior");
-        let job = make_job("We need react and typescript developers", Some("senior"), None, None, None, None);
+        let job = make_job(
+            "We need react and typescript developers",
+            Some("senior"),
+            None,
+            None,
+            None,
+            None,
+        );
 
         let score = service.compute(&candidate, &job, None);
 
-        assert!(score.total >= 70, "perfect skill + seniority match should score >= 70, got {}", score.total);
+        assert!(
+            score.total >= 70,
+            "perfect skill + seniority match should score >= 70, got {}",
+            score.total
+        );
         assert_eq!(score.matched_skills, vec!["react", "typescript"]);
         assert!(score.missing_skills.is_empty());
     }
@@ -260,12 +328,23 @@ mod tests {
     fn no_skill_overlap_scores_lower() {
         let service = RankingService::new();
         let candidate = make_candidate(&["react", "typescript"], "senior");
-        let job = make_job("We need python and java developers", Some("senior"), None, None, None, None);
+        let job = make_job(
+            "We need python and java developers",
+            Some("senior"),
+            None,
+            None,
+            None,
+            None,
+        );
 
         let score = service.compute(&candidate, &job, None);
 
         // Skill overlap = 0, but seniority match + recency neutral push it above 0.
-        assert!(score.total < 50, "no skill match should score < 50, got {}", score.total);
+        assert!(
+            score.total < 50,
+            "no skill match should score < 50, got {}",
+            score.total
+        );
         assert!(score.matched_skills.is_empty());
     }
 
@@ -273,13 +352,30 @@ mod tests {
     fn seniority_mismatch_penalizes_score() {
         let service = RankingService::new();
         let candidate = make_candidate(&["react"], "junior");
-        let job_senior = make_job("react developer needed", Some("senior"), None, None, None, None);
-        let job_junior = make_job("react developer needed", Some("junior"), None, None, None, None);
+        let job_senior = make_job(
+            "react developer needed",
+            Some("senior"),
+            None,
+            None,
+            None,
+            None,
+        );
+        let job_junior = make_job(
+            "react developer needed",
+            Some("junior"),
+            None,
+            None,
+            None,
+            None,
+        );
 
         let score_senior = service.compute(&candidate, &job_senior, None);
         let score_junior = service.compute(&candidate, &job_junior, None);
 
-        assert!(score_junior.total > score_senior.total, "junior→junior should score higher than junior→senior");
+        assert!(
+            score_junior.total > score_senior.total,
+            "junior→junior should score higher than junior→senior"
+        );
     }
 
     #[test]
@@ -291,5 +387,44 @@ mod tests {
         let score = service.compute(&candidate, &job, None);
         let expected_seniority = 0.5_f32;
         assert!((score.components.seniority_alignment - expected_seniority).abs() < 0.01);
+    }
+
+    #[test]
+    fn recency_bonus_is_max_when_profile_is_current() {
+        // Profile updated same day as the job posting → 1.0.
+        let bonus = super::compute_recency_bonus(Some("2026-04-01"), Some("2026-04-01"));
+        assert!(
+            (bonus - 1.0).abs() < 0.01,
+            "same-day profile should give recency 1.0, got {bonus}"
+        );
+    }
+
+    #[test]
+    fn recency_bonus_decays_linearly() {
+        // 90-day lag → 0.5
+        let bonus = super::compute_recency_bonus(Some("2026-01-01"), Some("2026-04-01"));
+        assert!(
+            (bonus - 0.5).abs() < 0.02,
+            "90-day lag should give ~0.5, got {bonus}"
+        );
+    }
+
+    #[test]
+    fn recency_bonus_is_zero_when_profile_is_stale() {
+        // 180+ day lag → 0.0
+        let bonus = super::compute_recency_bonus(Some("2025-10-01"), Some("2026-04-01"));
+        assert!(
+            bonus <= 0.01,
+            "180+ day lag should give recency ~0.0, got {bonus}"
+        );
+    }
+
+    #[test]
+    fn recency_bonus_is_neutral_when_dates_are_absent() {
+        let bonus = super::compute_recency_bonus(None, None);
+        assert!(
+            (bonus - 0.5).abs() < 0.01,
+            "absent dates should give recency 0.5, got {bonus}"
+        );
     }
 }

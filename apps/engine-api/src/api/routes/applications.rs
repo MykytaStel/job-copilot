@@ -2,9 +2,10 @@ use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 
 use crate::api::dto::applications::{
-    ActivityResponse, ApplicationDetailResponse, ApplicationResponse, CreateActivityRequest,
-    CreateApplicationRequest, CreateNoteRequest, NoteResponse, RecentApplicationsResponse,
-    UpdateApplicationRequest,
+    ActivityResponse, ApplicationContactResponse, ApplicationDetailResponse, ApplicationResponse,
+    ContactResponse, CreateActivityRequest, CreateApplicationContactRequest,
+    CreateApplicationRequest, CreateContactRequest, CreateNoteRequest, NoteResponse, OfferResponse,
+    RecentApplicationsResponse, UpdateApplicationRequest, UpsertOfferRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
 use crate::state::AppState;
@@ -201,6 +202,98 @@ pub async fn create_note(
         axum::http::StatusCode::CREATED,
         axum::Json(NoteResponse::from(note)),
     ))
+}
+
+pub async fn create_contact(
+    State(state): State<AppState>,
+    ApiJson(payload): ApiJson<CreateContactRequest>,
+) -> Result<(axum::http::StatusCode, axum::Json<ContactResponse>), ApiError> {
+    let contact = state
+        .applications_service
+        .create_contact(payload.validate()?)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "contacts_query_failed"))?;
+
+    Ok((
+        axum::http::StatusCode::CREATED,
+        axum::Json(ContactResponse::from(contact)),
+    ))
+}
+
+pub async fn add_application_contact(
+    State(state): State<AppState>,
+    Path(application_id): Path<String>,
+    ApiJson(payload): ApiJson<CreateApplicationContactRequest>,
+) -> Result<
+    (
+        axum::http::StatusCode,
+        axum::Json<ApplicationContactResponse>,
+    ),
+    ApiError,
+> {
+    let Some(_) = state
+        .applications_service
+        .get_by_id(&application_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "contacts_query_failed"))?
+    else {
+        return Err(ApiError::not_found(
+            "application_not_found",
+            format!("Application '{application_id}' was not found"),
+        ));
+    };
+
+    let contact_id = payload.contact_id.clone();
+    let payload = payload.validate(&application_id)?;
+
+    let Some(_) = state
+        .applications_service
+        .get_contact_by_id(&contact_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "contacts_query_failed"))?
+    else {
+        return Err(ApiError::not_found(
+            "contact_not_found",
+            format!("Contact '{contact_id}' was not found"),
+        ));
+    };
+
+    let contact = state
+        .applications_service
+        .attach_contact(payload)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "contacts_query_failed"))?;
+
+    Ok((
+        axum::http::StatusCode::CREATED,
+        axum::Json(ApplicationContactResponse::from(contact)),
+    ))
+}
+
+pub async fn upsert_offer(
+    State(state): State<AppState>,
+    Path(application_id): Path<String>,
+    ApiJson(payload): ApiJson<UpsertOfferRequest>,
+) -> Result<axum::Json<OfferResponse>, ApiError> {
+    let Some(_) = state
+        .applications_service
+        .get_by_id(&application_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "offers_query_failed"))?
+    else {
+        return Err(ApiError::not_found(
+            "application_not_found",
+            format!("Application '{application_id}' was not found"),
+        ));
+    };
+
+    let offer = state
+        .applications_service
+        .upsert_offer(payload.validate(&application_id)?)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "offers_query_failed"))?;
+
+    Ok(axum::Json(OfferResponse::from(offer)))
 }
 
 #[cfg(test)]

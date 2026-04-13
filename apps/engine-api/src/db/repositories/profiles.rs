@@ -29,6 +29,7 @@ struct ProfileRow {
     preferred_work_mode: Option<String>,
     created_at: String,
     updated_at: String,
+    skills_updated_at: Option<String>,
 }
 
 impl ProfilesRepository {
@@ -68,7 +69,8 @@ impl ProfilesRepository {
                 salary_max_usd,
                 preferred_work_mode,
                 created_at::text AS created_at,
-                updated_at::text AS updated_at
+                updated_at::text AS updated_at,
+                skills_updated_at::text AS skills_updated_at
             "#,
         )
         .bind(Uuid::now_v7().to_string())
@@ -104,7 +106,8 @@ impl ProfilesRepository {
                 salary_max_usd,
                 preferred_work_mode,
                 created_at::text AS created_at,
-                updated_at::text AS updated_at
+                updated_at::text AS updated_at,
+                skills_updated_at::text AS skills_updated_at
             FROM profiles
             WHERE id = $1
             "#,
@@ -138,7 +141,8 @@ impl ProfilesRepository {
                 salary_max_usd,
                 preferred_work_mode,
                 created_at::text AS created_at,
-                updated_at::text AS updated_at
+                updated_at::text AS updated_at,
+                skills_updated_at::text AS skills_updated_at
             FROM profiles
             ORDER BY updated_at DESC
             LIMIT 1
@@ -190,6 +194,10 @@ impl ProfilesRepository {
                     WHEN $6 IS NULL THEN keywords
                     ELSE '[]'::jsonb
                 END,
+                skills_updated_at = CASE
+                    WHEN $6 IS NULL THEN skills_updated_at
+                    ELSE NULL
+                END,
                 updated_at = NOW()
             WHERE id = $1
             RETURNING
@@ -207,7 +215,8 @@ impl ProfilesRepository {
                 salary_max_usd,
                 preferred_work_mode,
                 created_at::text AS created_at,
-                updated_at::text AS updated_at
+                updated_at::text AS updated_at,
+                skills_updated_at::text AS skills_updated_at
             "#,
         )
         .bind(id)
@@ -240,6 +249,7 @@ impl ProfilesRepository {
                 seniority = $4,
                 skills = $5,
                 keywords = $6,
+                skills_updated_at = NOW(),
                 updated_at = NOW()
             WHERE id = $1
             RETURNING
@@ -257,7 +267,8 @@ impl ProfilesRepository {
                 salary_max_usd,
                 preferred_work_mode,
                 created_at::text AS created_at,
-                updated_at::text AS updated_at
+                updated_at::text AS updated_at,
+                skills_updated_at::text AS skills_updated_at
             "#,
         )
         .bind(id)
@@ -304,6 +315,7 @@ impl TryFrom<ProfileRow> for Profile {
             preferred_work_mode: row.preferred_work_mode,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            skills_updated_at: row.skills_updated_at,
         })
     }
 }

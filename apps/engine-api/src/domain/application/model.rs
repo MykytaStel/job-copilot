@@ -17,6 +17,7 @@ pub struct ApplicationDetail {
     pub application: Application,
     pub job: Job,
     pub resume: Option<ResumeVersion>,
+    pub offer: Option<Offer>,
     pub notes: Vec<ApplicationNote>,
     pub contacts: Vec<ApplicationContact>,
     pub activities: Vec<Activity>,
@@ -67,6 +68,16 @@ pub struct CreateNote {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateContact {
+    pub name: String,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub linkedin_url: Option<String>,
+    pub company: Option<String>,
+    pub role: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Contact {
     pub id: String,
     pub name: String,
@@ -84,6 +95,38 @@ pub struct ApplicationContact {
     pub application_id: String,
     pub contact: Contact,
     pub relationship: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateApplicationContact {
+    pub application_id: String,
+    pub contact_id: String,
+    pub relationship: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Offer {
+    pub id: String,
+    pub application_id: String,
+    pub status: String,
+    pub compensation_min: Option<i32>,
+    pub compensation_max: Option<i32>,
+    pub compensation_currency: Option<String>,
+    pub starts_at: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpsertOffer {
+    pub application_id: String,
+    pub status: String,
+    pub compensation_min: Option<i32>,
+    pub compensation_max: Option<i32>,
+    pub compensation_currency: Option<String>,
+    pub starts_at: Option<String>,
+    pub notes: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

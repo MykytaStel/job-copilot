@@ -13,6 +13,7 @@ pub struct Profile {
     pub preferred_work_mode: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub skills_updated_at: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

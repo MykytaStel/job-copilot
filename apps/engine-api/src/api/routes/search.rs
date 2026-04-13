@@ -8,6 +8,8 @@ use crate::state::AppState;
 #[derive(Deserialize)]
 pub struct SearchQuery {
     pub q: String,
+    pub limit: Option<i64>,
+    pub page: Option<i64>,
 }
 
 pub async fn search(
@@ -23,11 +25,21 @@ pub async fn search(
         ));
     }
 
-    let jobs = state
+    let per_page = query.limit.unwrap_or(20).clamp(1, 50);
+    let page = query.page.unwrap_or(1).max(1);
+    let offset = (page - 1) * per_page;
+
+    // Fetch one extra row so we can cheaply detect whether a next page exists.
+    let mut jobs = state
         .jobs_service
-        .search(q, 20)
+        .search(q, per_page + 1, offset)
         .await
         .map_err(|error| ApiError::from_repository(error, "search_query_failed"))?;
 
-    Ok(axum::Json(SearchResponse::from_jobs(jobs)))
+    let has_more = jobs.len() as i64 > per_page;
+    jobs.truncate(per_page as usize);
+
+    Ok(axum::Json(SearchResponse::from_jobs(
+        jobs, page, per_page, has_more,
+    )))
 }

@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
-use crate::domain::job::model::Job;
 use crate::domain::analytics::model::SalaryBucket;
+use crate::domain::job::model::Job;
 use sqlx::FromRow;
 
 #[derive(Clone)]
@@ -139,12 +139,16 @@ impl JobsRepository {
             .collect())
     }
 
-    pub async fn search(&self, query: &str, limit: i64) -> Result<Vec<Job>, RepositoryError> {
+    pub async fn search(
+        &self,
+        query: &str,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Job>, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        let pattern = format!("%{}%", query);
         let rows = sqlx::query_as::<_, JobRow>(
             r#"
             SELECT
@@ -161,16 +165,18 @@ impl JobsRepository {
                 last_seen_at::text AS last_seen_at,
                 is_active
             FROM jobs
-            WHERE
-                title ILIKE $1
-                OR company_name ILIKE $1
-                OR description_text ILIKE $1
-            ORDER BY last_seen_at DESC, posted_at DESC NULLS LAST
+            WHERE search_vector @@ websearch_to_tsquery('simple', $1)
+            ORDER BY
+                ts_rank_cd(search_vector, websearch_to_tsquery('simple', $1)) DESC,
+                last_seen_at DESC,
+                posted_at DESC NULLS LAST
             LIMIT $2
+            OFFSET $3
             "#,
         )
-        .bind(pattern)
+        .bind(query)
         .bind(limit)
+        .bind(offset)
         .fetch_all(pool)
         .await?;
 
