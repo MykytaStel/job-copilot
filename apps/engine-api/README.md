@@ -20,12 +20,7 @@ Behavior:
 Start Postgres:
 
 ```bash
-docker run --name job-copilot-postgres \
-  -e POSTGRES_USER=jobcopilot \
-  -e POSTGRES_PASSWORD=jobcopilot \
-  -e POSTGRES_DB=jobcopilot \
-  -p 5432:5432 \
-  -d postgres:16
+pnpm db:up
 ```
 
 Set the connection string:
@@ -45,6 +40,12 @@ Optional demo data:
 
 ```bash
 psql "$DATABASE_URL" -f seeds/dev.sql
+```
+
+Stop Postgres and remove the local verification volume:
+
+```bash
+pnpm db:down
 ```
 
 ## Canonical API Flows
@@ -166,6 +167,35 @@ Search:
 ```bash
 curl "http://localhost:8080/api/v1/search?q=rust"
 ```
+
+## Phase 8 DB Verification
+
+Automated smoke verification for:
+- notes
+- contacts
+- offers
+- search
+- application `status`
+- application `due_date`
+- `search_vector` backfill and trigger behavior
+
+Run it from repo root:
+
+```bash
+pnpm verify:phase8:db
+```
+
+What the script does:
+- starts local Postgres via `infra/docker-compose.postgres.yml`
+- runs `engine-api` with migrations enabled
+- seeds demo data
+- verifies `search_vector` backfill and trigger updates directly in Postgres
+- exercises the latest Phase 3 write/read APIs against a real database
+
+Useful flags:
+- `KEEP_POSTGRES=1 pnpm verify:phase8:db` keeps the Postgres container running after verification
+- by default the verification script uses `PORT=18080` to avoid collisions with local dev servers
+- `PORT=18081 pnpm verify:phase8:db` runs `engine-api` on a different local port
 
 ## Error Contract
 

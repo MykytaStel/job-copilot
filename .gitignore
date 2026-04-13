@@ -23,6 +23,7 @@ __pycache__/
 venv/
 .coverage
 *.log
+.tmp/
 
 .DS_Store
 __MACOSX/

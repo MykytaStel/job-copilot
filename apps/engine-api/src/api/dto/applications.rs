@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::json;
 
 use crate::api::dto::jobs::JobResponse;
@@ -20,6 +20,7 @@ pub struct CreateApplicationRequest {
 #[derive(Default, Deserialize)]
 pub struct UpdateApplicationRequest {
     pub status: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_patch_due_date")]
     pub due_date: Option<Option<String>>,
 }
 
@@ -437,6 +438,15 @@ fn validate_optional_trimmed(value: Option<String>) -> Option<String> {
     })
 }
 
+fn deserialize_patch_due_date<'de, D>(
+    deserializer: D,
+) -> Result<Option<Option<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Some(Option::<String>::deserialize(deserializer)?))
+}
+
 fn validate_optional_email(value: Option<String>) -> Result<Option<String>, ApiError> {
     validate_optional_trimmed(value)
         .map(validate_email)
@@ -550,6 +560,28 @@ mod tests {
         .into_response();
 
         assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn allows_clearing_due_date_with_null() {
+        let payload: UpdateApplicationRequest =
+            serde_json::from_str(r#"{"due_date":null}"#).expect("json payload should deserialize");
+
+        let validated = payload.validate().expect("null due_date patch should be valid");
+
+        assert_eq!(validated.status, None);
+        assert_eq!(validated.due_date, Some(None));
+    }
+
+    #[test]
+    fn allows_setting_due_date() {
+        let payload: UpdateApplicationRequest =
+            serde_json::from_str(r#"{"due_date":"2026-05-10T12:00:00Z"}"#)
+                .expect("json payload should deserialize");
+
+        let validated = payload.validate().expect("due_date patch should be valid");
+
+        assert_eq!(validated.due_date, Some(Some("2026-05-10T12:00:00Z".to_string())));
     }
 
     #[test]

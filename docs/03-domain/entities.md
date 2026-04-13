@@ -52,6 +52,11 @@ Fields:
 - raw_payload
 - fetched_at
 
+Current implementation:
+- stored in Postgres as `job_variants`
+- linked back to canonical `jobs` via `job_id`
+- upserted by `apps/ingestion` for adapter-backed inputs
+
 ## Application
 Represents a user's job application state.
 
