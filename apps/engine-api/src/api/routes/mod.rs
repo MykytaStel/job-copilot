@@ -1,3 +1,4 @@
+pub mod analytics;
 pub mod applications;
 pub mod health;
 pub mod jobs;
@@ -35,6 +36,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/jobs/{id}/fit", get(jobs::get_job_fit))
         .route("/api/v1/jobs/{id}/match", get(jobs::get_job_match))
         .route("/api/v1/jobs/{id}/match", post(jobs::score_job_match))
+        .route(
+            "/api/v1/analytics/salary",
+            get(analytics::get_salary_intelligence),
+        )
         .route("/api/v1/roles", get(roles::list_roles))
         .route("/api/v1/resumes", get(resumes::list_resumes))
         .route("/api/v1/resumes/active", get(resumes::get_active_resume))
