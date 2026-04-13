@@ -1,8 +1,40 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import type { ApplicationDetail as ApplicationDetailType } from '@job-copilot/shared';
-import { getApplicationDetail } from '../api';
+import type {
+  ApplicationContact,
+  ApplicationDetail as ApplicationDetailType,
+  ContactInput,
+  ContactRelationship,
+  OfferStatus,
+} from '@job-copilot/shared';
+
+import {
+  addNote,
+  createContact,
+  createOffer,
+  getApplicationDetail,
+  getContacts,
+  linkContact,
+} from '../api';
+import { queryKeys } from '../queryKeys';
+
+const RELATIONSHIP_OPTIONS: ContactRelationship[] = [
+  'recruiter',
+  'hiring_manager',
+  'interviewer',
+  'referrer',
+  'other',
+];
+
+const OFFER_STATUS_OPTIONS: OfferStatus[] = [
+  'draft',
+  'received',
+  'accepted',
+  'declined',
+  'expired',
+];
 
 function fmt(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-GB', {
@@ -13,9 +45,7 @@ function fmt(dateStr: string): string {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  return (
-    <span className={`statusPill status-${status}`}>{status}</span>
-  );
+  return <span className={`statusPill status-${status}`}>{status}</span>;
 }
 
 function SectionHeader({ title }: { title: string }) {
@@ -23,14 +53,18 @@ function SectionHeader({ title }: { title: string }) {
 }
 
 function EmptyState({ message }: { message: string }) {
-  return <p className="muted" style={{ margin: 0, fontStyle: 'italic' }}>{message}</p>;
+  return (
+    <p className="muted" style={{ margin: 0, fontStyle: 'italic' }}>
+      {message}
+    </p>
+  );
 }
 
 function DescriptionBlock({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
   const limit = 600;
   const shouldTruncate = text.length > limit;
-  const displayed = expanded || !shouldTruncate ? text : text.slice(0, limit) + '…';
+  const displayed = expanded || !shouldTruncate ? text : text.slice(0, limit) + '...';
 
   return (
     <div>
@@ -54,35 +88,221 @@ function DescriptionBlock({ text }: { text: string }) {
   );
 }
 
+function normalizeDateInput(value?: string) {
+  return value?.slice(0, 10) ?? '';
+}
+
+function parseOptionalNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function formatRelationship(value: string) {
+  return value.replace('_', ' ');
+}
+
+function formatCompensation(detail: ApplicationDetailType) {
+  const offer = detail.offer;
+  if (!offer) return null;
+
+  const min = offer.compensationMin;
+  const max = offer.compensationMax;
+  const currency = offer.compensationCurrency ?? '';
+
+  if (min == null && max == null) return null;
+  if (min != null && max != null) return `${min} - ${max} ${currency}`.trim();
+  if (min != null) return `${min}+ ${currency}`.trim();
+  return `Up to ${max} ${currency}`.trim();
+}
+
+const formStackStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 12,
+} as const;
+
+const formGridStyle = {
+  display: 'grid',
+  gap: 12,
+  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+} as const;
+
 export default function ApplicationDetail() {
   const { id } = useParams<{ id: string }>();
-  const [detail, setDetail] = useState<ApplicationDetailType | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const [noteContent, setNoteContent] = useState('');
+  const [existingContactId, setExistingContactId] = useState('');
+  const [existingRelationship, setExistingRelationship] =
+    useState<ContactRelationship>('recruiter');
+  const [newContactRelationship, setNewContactRelationship] =
+    useState<ContactRelationship>('recruiter');
+  const [newContact, setNewContact] = useState<ContactInput>({
+    name: '',
+    email: '',
+    phone: '',
+    linkedinUrl: '',
+    company: '',
+    role: '',
+  });
+  const [offerStatus, setOfferStatus] = useState<OfferStatus>('draft');
+  const [offerMin, setOfferMin] = useState('');
+  const [offerMax, setOfferMax] = useState('');
+  const [offerCurrency, setOfferCurrency] = useState('USD');
+  const [offerStartsAt, setOfferStartsAt] = useState('');
+  const [offerNotes, setOfferNotes] = useState('');
+
+  const detailQuery = useQuery({
+    queryKey: queryKeys.applications.detail(id ?? ''),
+    enabled: Boolean(id),
+    queryFn: () => getApplicationDetail(id!),
+  });
+
+  const contactsQuery = useQuery({
+    queryKey: queryKeys.contacts.all(),
+    queryFn: getContacts,
+  });
+
+  const detail = detailQuery.data;
 
   useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    getApplicationDetail(id)
-      .then(setDetail)
-      .catch((err) => {
-        const msg = err instanceof Error ? err.message : 'Failed to load application';
-        setError(msg);
-        toast.error(msg);
-      })
-      .finally(() => setLoading(false));
-  }, [id]);
+    if (!detail?.offer) {
+      setOfferStatus('draft');
+      setOfferMin('');
+      setOfferMax('');
+      setOfferCurrency('USD');
+      setOfferStartsAt('');
+      setOfferNotes('');
+      return;
+    }
 
-  if (loading) return <p className="muted">Loading…</p>;
-  if (error || !detail) {
-    return <p className="error">{error ?? 'Application not found'}</p>;
+    setOfferStatus(detail.offer.status);
+    setOfferMin(detail.offer.compensationMin?.toString() ?? '');
+    setOfferMax(detail.offer.compensationMax?.toString() ?? '');
+    setOfferCurrency(detail.offer.compensationCurrency ?? 'USD');
+    setOfferStartsAt(normalizeDateInput(detail.offer.startsAt));
+    setOfferNotes(detail.offer.notes ?? '');
+  }, [detail?.offer]);
+
+  const availableContacts = useMemo(() => {
+    if (!detail || !contactsQuery.data) return [];
+
+    const attachedIds = new Set(detail.contacts.map((item) => item.contact.id));
+    return contactsQuery.data.filter((contact) => !attachedIds.has(contact.id));
+  }, [contactsQuery.data, detail]);
+
+  useEffect(() => {
+    if (!existingContactId && availableContacts.length > 0) {
+      setExistingContactId(availableContacts[0].id);
+    }
+    if (availableContacts.length === 0) {
+      setExistingContactId('');
+    }
+  }, [availableContacts, existingContactId]);
+
+  async function refreshDetail() {
+    if (!id) return;
+    await queryClient.invalidateQueries({ queryKey: queryKeys.applications.detail(id) });
+  }
+
+  const noteMutation = useMutation({
+    mutationFn: (content: string) => addNote(id!, content),
+    onSuccess: async () => {
+      setNoteContent('');
+      await refreshDetail();
+      toast.success('Note added');
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to add note');
+    },
+  });
+
+  const linkExistingContactMutation = useMutation({
+    mutationFn: (payload: {
+      contactId: string;
+      relationship: ApplicationContact['relationship'];
+    }) => linkContact(id!, payload.contactId, payload.relationship),
+    onSuccess: async () => {
+      await Promise.all([
+        refreshDetail(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all() }),
+      ]);
+      toast.success('Contact linked');
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to link contact');
+    },
+  });
+
+  const createAndLinkContactMutation = useMutation({
+    mutationFn: async (payload: {
+      contact: ContactInput;
+      relationship: ApplicationContact['relationship'];
+    }) => {
+      const created = await createContact(payload.contact);
+      return linkContact(id!, created.id, payload.relationship);
+    },
+    onSuccess: async () => {
+      setNewContact({
+        name: '',
+        email: '',
+        phone: '',
+        linkedinUrl: '',
+        company: '',
+        role: '',
+      });
+      setNewContactRelationship('recruiter');
+      await Promise.all([
+        refreshDetail(),
+        queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all() }),
+      ]);
+      toast.success('Contact created and linked');
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to create contact');
+    },
+  });
+
+  const offerMutation = useMutation({
+    mutationFn: () =>
+      createOffer({
+        applicationId: id!,
+        status: offerStatus,
+        compensationMin: parseOptionalNumber(offerMin),
+        compensationMax: parseOptionalNumber(offerMax),
+        compensationCurrency: offerCurrency.trim() || undefined,
+        startsAt: offerStartsAt || undefined,
+        notes: offerNotes.trim() || undefined,
+      }),
+    onSuccess: async () => {
+      await refreshDetail();
+      toast.success('Offer saved');
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to save offer');
+    },
+  });
+
+  if (!id) return <p className="error">Application not found</p>;
+  if (detailQuery.isLoading) return <p className="muted">Loading...</p>;
+  if (detailQuery.error || !detail) {
+    return (
+      <p className="error">
+        {detailQuery.error instanceof Error
+          ? detailQuery.error.message
+          : 'Application not found'}
+      </p>
+    );
   }
 
   const { job } = detail;
+  const compensationLabel = formatCompensation(detail);
 
   return (
     <div className="jobDetails">
-      {/* Header */}
       <div className="pageHeader" style={{ alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Link to="/applications" className="linkBtn" style={{ marginBottom: 4 }}>
@@ -106,7 +326,6 @@ export default function ApplicationDetail() {
         </div>
       </div>
 
-      {/* Job details */}
       <section className="card">
         <SectionHeader title="Job Details" />
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginBottom: 16 }}>
@@ -125,9 +344,32 @@ export default function ApplicationDetail() {
         <DescriptionBlock text={job.description || 'No description available.'} />
       </section>
 
-      {/* Notes */}
       <section className="card">
         <SectionHeader title="Notes" />
+        <form
+          style={{ ...formStackStyle, marginBottom: detail.notes.length > 0 ? 16 : 0 }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!noteContent.trim()) return;
+            noteMutation.mutate(noteContent.trim());
+          }}
+        >
+          <textarea
+            value={noteContent}
+            onChange={(event) => setNoteContent(event.target.value)}
+            rows={4}
+            placeholder="Add context from recruiter calls, takeaways, or follow-up reminders."
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              type="submit"
+              disabled={noteMutation.isPending || !noteContent.trim()}
+            >
+              {noteMutation.isPending ? 'Saving...' : 'Add note'}
+            </button>
+          </div>
+        </form>
+
         {detail.notes.length === 0 ? (
           <EmptyState message="No notes yet" />
         ) : (
@@ -149,9 +391,181 @@ export default function ApplicationDetail() {
         )}
       </section>
 
-      {/* Contacts */}
       <section className="card">
         <SectionHeader title="Contacts" />
+
+        <form
+          style={{ ...formStackStyle, marginBottom: 16 }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!existingContactId) return;
+            linkExistingContactMutation.mutate({
+              contactId: existingContactId,
+              relationship: existingRelationship,
+            });
+          }}
+        >
+          <p className="muted" style={{ margin: 0 }}>Attach existing contact</p>
+          {contactsQuery.isLoading ? (
+            <p className="muted" style={{ margin: 0 }}>Loading contacts...</p>
+          ) : availableContacts.length === 0 ? (
+            <EmptyState message="No unlinked contacts available yet." />
+          ) : (
+            <div style={formGridStyle}>
+              <label>
+                Contact
+                <select
+                  value={existingContactId}
+                  onChange={(event) => setExistingContactId(event.target.value)}
+                >
+                  {availableContacts.map((contact) => (
+                    <option key={contact.id} value={contact.id}>
+                      {contact.name}
+                      {contact.company ? ` - ${contact.company}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Relationship
+                <select
+                  value={existingRelationship}
+                  onChange={(event) =>
+                    setExistingRelationship(event.target.value as ContactRelationship)
+                  }
+                >
+                  {RELATIONSHIP_OPTIONS.map((value) => (
+                    <option key={value} value={value}>
+                      {formatRelationship(value)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              type="submit"
+              disabled={
+                linkExistingContactMutation.isPending ||
+                availableContacts.length === 0 ||
+                !existingContactId
+              }
+            >
+              {linkExistingContactMutation.isPending ? 'Linking...' : 'Link contact'}
+            </button>
+          </div>
+        </form>
+
+        <form
+          style={{ ...formStackStyle, marginBottom: detail.contacts.length > 0 ? 16 : 0 }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!newContact.name.trim()) return;
+
+            createAndLinkContactMutation.mutate({
+              relationship: newContactRelationship,
+              contact: {
+                name: newContact.name.trim(),
+                email: newContact.email?.trim() || undefined,
+                phone: newContact.phone?.trim() || undefined,
+                linkedinUrl: newContact.linkedinUrl?.trim() || undefined,
+                company: newContact.company?.trim() || undefined,
+                role: newContact.role?.trim() || undefined,
+              },
+            });
+          }}
+        >
+          <p className="muted" style={{ margin: 0 }}>Create and link new contact</p>
+          <div style={formGridStyle}>
+            <label>
+              Name
+              <input
+                value={newContact.name}
+                onChange={(event) =>
+                  setNewContact((current) => ({ ...current, name: event.target.value }))
+                }
+                placeholder="Jane Recruiter"
+                required
+              />
+            </label>
+            <label>
+              Relationship
+              <select
+                value={newContactRelationship}
+                onChange={(event) =>
+                  setNewContactRelationship(event.target.value as ContactRelationship)
+                }
+              >
+                {RELATIONSHIP_OPTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {formatRelationship(value)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                value={newContact.email ?? ''}
+                onChange={(event) =>
+                  setNewContact((current) => ({ ...current, email: event.target.value }))
+                }
+                placeholder="jane@example.com"
+              />
+            </label>
+            <label>
+              Phone
+              <input
+                value={newContact.phone ?? ''}
+                onChange={(event) =>
+                  setNewContact((current) => ({ ...current, phone: event.target.value }))
+                }
+                placeholder="+380..."
+              />
+            </label>
+            <label>
+              Company
+              <input
+                value={newContact.company ?? ''}
+                onChange={(event) =>
+                  setNewContact((current) => ({ ...current, company: event.target.value }))
+                }
+                placeholder="NovaLedger"
+              />
+            </label>
+            <label>
+              Role
+              <input
+                value={newContact.role ?? ''}
+                onChange={(event) =>
+                  setNewContact((current) => ({ ...current, role: event.target.value }))
+                }
+                placeholder="Recruiter"
+              />
+            </label>
+          </div>
+          <label>
+            LinkedIn URL
+            <input
+              value={newContact.linkedinUrl ?? ''}
+              onChange={(event) =>
+                setNewContact((current) => ({ ...current, linkedinUrl: event.target.value }))
+              }
+              placeholder="https://linkedin.com/in/..."
+            />
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              type="submit"
+              disabled={createAndLinkContactMutation.isPending || !newContact.name.trim()}
+            >
+              {createAndLinkContactMutation.isPending ? 'Saving...' : 'Create contact'}
+            </button>
+          </div>
+        </form>
+
         {detail.contacts.length === 0 ? (
           <EmptyState message="No contacts yet" />
         ) : (
@@ -172,8 +586,11 @@ export default function ApplicationDetail() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</span>
-                    <span className="badge badge-secondary" style={{ fontSize: 11, padding: '3px 8px' }}>
-                      {ac.relationship.replace('_', ' ')}
+                    <span
+                      className="badge badge-secondary"
+                      style={{ fontSize: 11, padding: '3px 8px' }}
+                    >
+                      {formatRelationship(ac.relationship)}
                     </span>
                   </div>
                   {(c.role || c.company) && (
@@ -191,7 +608,13 @@ export default function ApplicationDetail() {
                       <span className="muted" style={{ fontSize: 13 }}>{c.phone}</span>
                     )}
                     {c.linkedinUrl && (
-                      <a href={c.linkedinUrl} target="_blank" rel="noopener noreferrer" className="linkBtn" style={{ fontSize: 13 }}>
+                      <a
+                        href={c.linkedinUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="linkBtn"
+                        style={{ fontSize: 13 }}
+                      >
                         LinkedIn
                       </a>
                     )}
@@ -203,7 +626,113 @@ export default function ApplicationDetail() {
         )}
       </section>
 
-      {/* Activities */}
+      <section className="card">
+        <SectionHeader title="Offer" />
+
+        {detail.offer ? (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '6px 16px',
+              marginBottom: 16,
+            }}
+          >
+            <span className="statusPill">
+              {detail.offer.status}
+            </span>
+            {compensationLabel && (
+              <span className="muted" style={{ fontSize: 13 }}>
+                Compensation: {compensationLabel}
+              </span>
+            )}
+            {detail.offer.startsAt && (
+              <span className="muted" style={{ fontSize: 13 }}>
+                Start: {fmt(detail.offer.startsAt)}
+              </span>
+            )}
+          </div>
+        ) : (
+          <p className="muted" style={{ marginTop: 0 }}>
+            No offer saved yet.
+          </p>
+        )}
+
+        <form
+          style={formStackStyle}
+          onSubmit={(event) => {
+            event.preventDefault();
+            offerMutation.mutate();
+          }}
+        >
+          <div style={formGridStyle}>
+            <label>
+              Status
+              <select
+                value={offerStatus}
+                onChange={(event) => setOfferStatus(event.target.value as OfferStatus)}
+              >
+                {OFFER_STATUS_OPTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Currency
+              <input
+                value={offerCurrency}
+                onChange={(event) => setOfferCurrency(event.target.value)}
+                placeholder="USD"
+              />
+            </label>
+            <label>
+              Compensation min
+              <input
+                type="number"
+                min="0"
+                value={offerMin}
+                onChange={(event) => setOfferMin(event.target.value)}
+                placeholder="5000"
+              />
+            </label>
+            <label>
+              Compensation max
+              <input
+                type="number"
+                min="0"
+                value={offerMax}
+                onChange={(event) => setOfferMax(event.target.value)}
+                placeholder="6500"
+              />
+            </label>
+            <label>
+              Starts at
+              <input
+                type="date"
+                value={offerStartsAt}
+                onChange={(event) => setOfferStartsAt(event.target.value)}
+              />
+            </label>
+          </div>
+          <label>
+            Notes
+            <textarea
+              rows={4}
+              value={offerNotes}
+              onChange={(event) => setOfferNotes(event.target.value)}
+              placeholder="Offer notes, package details, or decision context."
+            />
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="submit" disabled={offerMutation.isPending}>
+              {offerMutation.isPending ? 'Saving...' : detail.offer ? 'Update offer' : 'Save offer'}
+            </button>
+          </div>
+        </form>
+      </section>
+
       <section className="card">
         <SectionHeader title="Activities" />
         {detail.activities.length === 0 ? (
@@ -237,7 +766,6 @@ export default function ApplicationDetail() {
         )}
       </section>
 
-      {/* Tasks */}
       <section className="card">
         <SectionHeader title="Tasks" />
         {detail.tasks.length === 0 ? (

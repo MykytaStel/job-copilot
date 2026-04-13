@@ -255,6 +255,7 @@ fn compute_recency_bonus(profile_updated_at: Option<&str>, job_posted_at: Option
 mod tests {
     use crate::domain::candidate::profile::{CandidateProfile, RoleScore};
     use crate::domain::job::model::Job;
+    use crate::domain::profile::model::Profile;
     use crate::domain::role::RoleId;
 
     use super::RankingService;
@@ -425,6 +426,44 @@ mod tests {
         assert!(
             (bonus - 0.5).abs() < 0.01,
             "absent dates should give recency 0.5, got {bonus}"
+        );
+    }
+
+    #[test]
+    fn compute_uses_skills_timestamp_instead_of_generic_profile_update_time() {
+        let service = RankingService::new();
+        let candidate = make_candidate(&["rust"], "senior");
+        let mut job = make_job(
+            "rust engineer needed",
+            Some("senior"),
+            None,
+            None,
+            None,
+            Some("remote"),
+        );
+        job.posted_at = Some("2026-04-01".to_string());
+
+        let profile = Profile {
+            id: "profile-1".to_string(),
+            name: "Jane Doe".to_string(),
+            email: "jane@example.com".to_string(),
+            location: None,
+            raw_text: "Senior Rust engineer".to_string(),
+            analysis: None,
+            salary_min_usd: None,
+            salary_max_usd: None,
+            preferred_work_mode: Some("remote".to_string()),
+            created_at: "2026-01-01".to_string(),
+            updated_at: "2026-04-01".to_string(),
+            skills_updated_at: Some("2026-01-01".to_string()),
+        };
+
+        let score = service.compute(&candidate, &job, Some(&profile));
+
+        assert!(
+            score.components.recency_bonus < 0.6,
+            "recency should follow stale skills timestamp, got {}",
+            score.components.recency_bonus
         );
     }
 }

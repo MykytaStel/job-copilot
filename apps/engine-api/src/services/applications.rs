@@ -107,6 +107,14 @@ impl ApplicationsService {
         }
     }
 
+    pub async fn list_contacts(&self) -> Result<Vec<Contact>, RepositoryError> {
+        match &self.backend {
+            ApplicationsServiceBackend::Repository(repository) => repository.list_contacts().await,
+            #[cfg(test)]
+            ApplicationsServiceBackend::Stub(stub) => stub.list_contacts(),
+        }
+    }
+
     pub async fn get_contact_by_id(&self, id: &str) -> Result<Option<Contact>, RepositoryError> {
         match &self.backend {
             ApplicationsServiceBackend::Repository(repository) => {
@@ -174,6 +182,22 @@ pub struct ApplicationsServiceStub {
 
 #[cfg(test)]
 impl ApplicationsServiceStub {
+    pub fn with_application(self, application: Application) -> Self {
+        self.applications_by_id
+            .lock()
+            .expect("applications stub mutex should not be poisoned")
+            .insert(application.id.clone(), application);
+        self
+    }
+
+    pub fn with_contact(self, contact: Contact) -> Self {
+        self.contacts_by_id
+            .lock()
+            .expect("contacts stub mutex should not be poisoned")
+            .insert(contact.id.clone(), contact);
+        self
+    }
+
     fn create(&self, application: CreateApplication) -> Result<Application, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
@@ -312,6 +336,20 @@ impl ApplicationsServiceStub {
             .expect("contacts stub mutex should not be poisoned")
             .get(id)
             .cloned())
+    }
+
+    fn list_contacts(&self) -> Result<Vec<Contact>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self
+            .contacts_by_id
+            .lock()
+            .expect("contacts stub mutex should not be poisoned")
+            .values()
+            .cloned()
+            .collect())
     }
 
     fn attach_contact(

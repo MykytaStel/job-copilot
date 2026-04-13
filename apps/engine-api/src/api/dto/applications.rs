@@ -160,6 +160,11 @@ pub struct RecentApplicationsResponse {
     pub applications: Vec<ApplicationResponse>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ContactsResponse {
+    pub contacts: Vec<ContactResponse>,
+}
+
 impl CreateApplicationRequest {
     pub fn validate(self) -> Result<CreateApplication, ApiError> {
         Ok(CreateApplication {

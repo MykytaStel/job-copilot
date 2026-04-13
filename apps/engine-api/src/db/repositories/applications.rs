@@ -525,6 +525,32 @@ impl ApplicationsRepository {
         Ok(Contact::from(row))
     }
 
+    pub async fn list_contacts(&self) -> Result<Vec<Contact>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let rows = sqlx::query_as::<_, ContactRow>(
+            r#"
+            SELECT
+                id,
+                name,
+                email,
+                phone,
+                linkedin_url,
+                company,
+                role,
+                created_at::text AS created_at
+            FROM contacts
+            ORDER BY created_at DESC, name ASC
+            "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows.into_iter().map(Contact::from).collect())
+    }
+
     pub async fn get_contact_by_id(&self, id: &str) -> Result<Option<Contact>, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);

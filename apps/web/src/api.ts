@@ -71,6 +71,10 @@ type EngineRecentApplicationsResponse = {
   applications: EngineApplication[];
 };
 
+type EngineContactsResponse = {
+  contacts: EngineContact[];
+};
+
 type EngineResume = {
   id: string;
   version: number;
@@ -113,6 +117,7 @@ type EngineApplication = {
 type EngineApplicationDetail = EngineApplication & {
   job: EngineJob;
   resume: EngineResume | null;
+  offer?: EngineOffer | null;
   notes: Array<{
     id: string;
     application_id: string;
@@ -152,6 +157,30 @@ type EngineApplicationDetail = EngineApplication & {
   }>;
 };
 
+type EngineContact = {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  linkedin_url?: string | null;
+  company?: string | null;
+  role?: string | null;
+  created_at: string;
+};
+
+type EngineOffer = {
+  id: string;
+  application_id: string;
+  status: Offer['status'];
+  compensation_min?: number | null;
+  compensation_max?: number | null;
+  compensation_currency?: string | null;
+  starts_at?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type EngineProfile = {
   id: string;
   name: string;
@@ -167,6 +196,7 @@ type EngineProfile = {
   } | null;
   created_at: string;
   updated_at: string;
+  skills_updated_at?: string | null;
 };
 
 type EngineAnalyzeProfile = {
@@ -250,6 +280,35 @@ function mapProfile(profile: EngineProfile): CandidateProfile {
     summary: profile.analysis?.summary,
     skills: profile.analysis?.skills ?? [],
     updatedAt: profile.updated_at,
+    skillsUpdatedAt: profile.skills_updated_at ?? undefined,
+  };
+}
+
+function mapContact(contact: EngineContact): Contact {
+  return {
+    id: contact.id,
+    name: contact.name,
+    email: contact.email ?? undefined,
+    phone: contact.phone ?? undefined,
+    linkedinUrl: contact.linkedin_url ?? undefined,
+    company: contact.company ?? undefined,
+    role: contact.role ?? undefined,
+    createdAt: contact.created_at,
+  };
+}
+
+function mapOffer(offer: EngineOffer): Offer {
+  return {
+    id: offer.id,
+    applicationId: offer.application_id,
+    status: offer.status,
+    compensationMin: offer.compensation_min ?? undefined,
+    compensationMax: offer.compensation_max ?? undefined,
+    compensationCurrency: offer.compensation_currency ?? undefined,
+    startsAt: offer.starts_at ?? undefined,
+    notes: offer.notes ?? undefined,
+    createdAt: offer.created_at,
+    updatedAt: offer.updated_at,
   };
 }
 
@@ -282,6 +341,7 @@ function mapApplicationDetail(detail: EngineApplicationDetail): ApplicationDetai
     ...mapApplication(detail),
     job: mapJob(detail.job),
     resume: detail.resume ? mapResume(detail.resume) : undefined,
+    offer: detail.offer ? mapOffer(detail.offer) : undefined,
     notes: detail.notes.map((note) => ({
       id: note.id,
       applicationId: note.application_id,
@@ -292,16 +352,7 @@ function mapApplicationDetail(detail: EngineApplicationDetail): ApplicationDetai
       id: contact.id,
       applicationId: contact.application_id,
       relationship: contact.relationship as ApplicationContact['relationship'],
-      contact: {
-        id: contact.contact.id,
-        name: contact.contact.name,
-        email: contact.contact.email ?? undefined,
-        phone: contact.contact.phone ?? undefined,
-        linkedinUrl: contact.contact.linkedin_url ?? undefined,
-        company: contact.contact.company ?? undefined,
-        role: contact.contact.role ?? undefined,
-        createdAt: contact.contact.created_at,
-      },
+      contact: mapContact(contact.contact),
     })),
     activities: detail.activities.map((activity) => ({
       id: activity.id,
@@ -532,8 +583,24 @@ export async function setDueDate(
   );
   return mapApplication(application);
 }
-export const addNote = (_applicationId: string, _content: string): Promise<ApplicationNote> =>
-  unsupported('Application notes');
+export async function addNote(
+  applicationId: string,
+  content: string,
+): Promise<ApplicationNote> {
+  const note = await request<{
+    id: string;
+    application_id: string;
+    content: string;
+    created_at: string;
+  }>(`/api/v1/applications/${applicationId}/notes`, json('POST', { content }));
+
+  return {
+    id: note.id,
+    applicationId: note.application_id,
+    content: note.content,
+    createdAt: note.created_at,
+  };
+}
 export const updateJobNote = (_id: string, _note: string): Promise<JobPosting> =>
   unsupported('Job notes');
 export const deleteJob = (_id: string): Promise<void> => unsupported('Job deletion');
@@ -552,6 +619,9 @@ export async function search(q: string): Promise<SearchResults> {
   const result = await request<{
     jobs: EngineJob[];
     contacts: Array<{ id: string; name: string; role?: string | null; email?: string | null }>;
+    page: number;
+    per_page: number;
+    has_more: boolean;
   }>(`/api/v1/search?q=${encodeURIComponent(q)}`);
 
   return {
@@ -563,21 +633,61 @@ export async function search(q: string): Promise<SearchResults> {
       email: contact.email ?? undefined,
       createdAt: '',
     })),
+    page: result.page,
+    perPage: result.per_page,
+    hasMore: result.has_more,
   };
 }
-export const getContacts = (): Promise<Contact[]> => unsupported('Contacts');
-export const createContact = (_payload: ContactInput): Promise<Contact> =>
-  unsupported('Contacts');
+export async function getContacts(): Promise<Contact[]> {
+  const response = await request<EngineContactsResponse>('/api/v1/contacts');
+  return response.contacts.map(mapContact);
+}
+
+export async function createContact(payload: ContactInput): Promise<Contact> {
+  const contact = await request<EngineContact>(
+    '/api/v1/contacts',
+    json('POST', {
+      name: payload.name,
+      email: payload.email,
+      phone: payload.phone,
+      linkedin_url: payload.linkedinUrl,
+      company: payload.company,
+      role: payload.role,
+    }),
+  );
+
+  return mapContact(contact);
+}
 export const updateContact = (
   _id: string,
   _payload: Partial<ContactInput>,
 ): Promise<Contact> => unsupported('Contacts');
 export const deleteContact = (_id: string): Promise<void> => unsupported('Contacts');
-export const linkContact = (
-  _applicationId: string,
-  _contactId: string,
-  _relationship: string,
-): Promise<ApplicationContact> => unsupported('Application contacts');
+export async function linkContact(
+  applicationId: string,
+  contactId: string,
+  relationship: ApplicationContact['relationship'],
+): Promise<ApplicationContact> {
+  const contact = await request<{
+    id: string;
+    application_id: string;
+    relationship: ApplicationContact['relationship'];
+    contact: EngineContact;
+  }>(
+    `/api/v1/applications/${applicationId}/contacts`,
+    json('POST', {
+      contact_id: contactId,
+      relationship,
+    }),
+  );
+
+  return {
+    id: contact.id,
+    applicationId: contact.application_id,
+    relationship: contact.relationship,
+    contact: mapContact(contact.contact),
+  };
+}
 export const unlinkContact = (
   _applicationId: string,
   _linkId: string,
@@ -618,7 +728,21 @@ export const updateInterviewQA = (
 export const deleteInterviewQA = (_id: string): Promise<void> =>
   unsupported('Interview Q&A');
 export const getOffers = (): Promise<Offer[]> => unsupported('Offers');
-export const createOffer = (_payload: OfferInput): Promise<Offer> => unsupported('Offers');
+export async function createOffer(payload: OfferInput): Promise<Offer> {
+  const offer = await request<EngineOffer>(
+    `/api/v1/applications/${payload.applicationId}/offer`,
+    json('PUT', {
+      status: payload.status,
+      compensation_min: payload.compensationMin,
+      compensation_max: payload.compensationMax,
+      compensation_currency: payload.compensationCurrency,
+      starts_at: payload.startsAt,
+      notes: payload.notes,
+    }),
+  );
+
+  return mapOffer(offer);
+}
 export const deleteOffer = (_id: string): Promise<void> => unsupported('Offers');
 export const importBatch = (_urls: string[]): Promise<ImportBatchResponse> =>
   unsupported('Batch import');
