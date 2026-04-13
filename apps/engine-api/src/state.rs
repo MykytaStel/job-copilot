@@ -1,13 +1,12 @@
 use crate::db::Database;
 use crate::db::repositories::{
     ActivitiesRepository, ApplicationsRepository, FitScoresRepository, JobsRepository,
-    MatchResultsRepository, ProfilesRepository, ResumesRepository, TasksRepository,
+    ProfilesRepository, ResumesRepository, TasksRepository,
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
 use crate::services::followup::FollowUpService;
 use crate::services::jobs::JobsService;
-use crate::services::matching::MatchService;
 use crate::services::profile::service::ProfileAnalysisService;
 use crate::services::profiles::ProfilesService;
 use crate::services::ranking::RankingService;
@@ -25,7 +24,6 @@ pub struct AppState {
     pub applications_service: ApplicationsService,
     pub activities_service: ActivitiesService,
     pub resumes_service: ResumesService,
-    pub match_service: MatchService,
     pub profile_analysis_service: ProfileAnalysisService,
     pub ranking_service: RankingService,
     pub fit_scores_repository: FitScoresRepository,
@@ -43,7 +41,6 @@ impl AppState {
         let activities_repository = ActivitiesRepository::new(database.clone());
         let tasks_repository = TasksRepository::new(database.clone());
         let resumes_repository = ResumesRepository::new(database.clone());
-        let match_results_repository = MatchResultsRepository::new(database.clone());
         let fit_scores_repository = FitScoresRepository::new(database.clone());
         let profile_analysis_service = ProfileAnalysisService::new();
 
@@ -56,10 +53,6 @@ impl AppState {
             applications_service: ApplicationsService::new(applications_repository),
             activities_service: ActivitiesService::new(activities_repository),
             resumes_service: ResumesService::new(resumes_repository),
-            match_service: MatchService::new(
-                match_results_repository,
-                profile_analysis_service.clone(),
-            ),
             profile_analysis_service,
             ranking_service: RankingService::new(),
             fit_scores_repository,
@@ -95,10 +88,6 @@ impl AppState {
                 crate::services::activities::ActivitiesServiceStub::default(),
             ),
             resumes_service,
-            match_service: MatchService::new(
-                MatchResultsRepository::new(Database::disabled()),
-                profile_analysis_service.clone(),
-            ),
             profile_analysis_service,
             ranking_service: RankingService::new(),
             fit_scores_repository: FitScoresRepository::new(Database::disabled()),

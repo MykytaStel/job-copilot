@@ -1,13 +1,46 @@
 use sqlx::types::Json;
+use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
-use crate::domain::ranking::FitScore;
+use crate::domain::ranking::{FitScore, FitScoreComponents};
 
 #[derive(Clone)]
 pub struct FitScoresRepository {
     database: Database,
+}
+
+#[derive(FromRow)]
+struct FitScoreRow {
+    job_id: String,
+    total: i32,
+    skill_overlap: f32,
+    seniority_alignment: f32,
+    salary_overlap: f32,
+    work_mode_match: f32,
+    matched_skills_json: String,
+    missing_skills_json: String,
+}
+
+impl TryFrom<FitScoreRow> for FitScore {
+    type Error = RepositoryError;
+
+    fn try_from(row: FitScoreRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            job_id: row.job_id,
+            total: row.total.clamp(0, 100) as u8,
+            components: FitScoreComponents {
+                skill_overlap: row.skill_overlap,
+                seniority_alignment: row.seniority_alignment,
+                salary_overlap: row.salary_overlap,
+                work_mode_match: row.work_mode_match,
+                recency_bonus: 0.5, // not persisted; default to neutral
+            },
+            matched_skills: serde_json::from_str(&row.matched_skills_json)?,
+            missing_skills: serde_json::from_str(&row.missing_skills_json)?,
+        })
+    }
 }
 
 impl FitScoresRepository {
@@ -55,6 +88,38 @@ impl FitScoresRepository {
         .await?;
 
         Ok(())
+    }
+
+    pub async fn get_for_job_and_resume(
+        &self,
+        job_id: &str,
+        resume_id: &str,
+    ) -> Result<Option<FitScore>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, FitScoreRow>(
+            r#"
+            SELECT
+                job_id,
+                total,
+                skill_overlap,
+                seniority_alignment,
+                salary_overlap,
+                work_mode_match,
+                matched_skills::text AS matched_skills_json,
+                missing_skills::text AS missing_skills_json
+            FROM fit_scores
+            WHERE job_id = $1 AND resume_id = $2
+            "#,
+        )
+        .bind(job_id)
+        .bind(resume_id)
+        .fetch_optional(pool)
+        .await?;
+
+        row.map(FitScore::try_from).transpose()
     }
 }
 
