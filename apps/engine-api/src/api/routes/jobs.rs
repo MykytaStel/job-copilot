@@ -3,7 +3,6 @@ use serde::Deserialize;
 use tracing::warn;
 
 use crate::api::dto::jobs::{JobResponse, RecentJobsResponse};
-use crate::api::dto::matching::MatchResultResponse;
 use crate::api::dto::ranking::FitScoreResponse;
 use crate::api::error::ApiError;
 use crate::state::AppState;
@@ -53,10 +52,11 @@ pub async fn get_recent_jobs(
     }))
 }
 
+/// Read the persisted fit score for a job (previously computed via GET /fit or POST /match).
 pub async fn get_job_match(
     State(state): State<AppState>,
     Path(job_id): Path<String>,
-) -> Result<axum::Json<MatchResultResponse>, ApiError> {
+) -> Result<axum::Json<FitScoreResponse>, ApiError> {
     let Some(resume) = state
         .resumes_service
         .get_active()
@@ -69,19 +69,19 @@ pub async fn get_job_match(
         ));
     };
 
-    let Some(result) = state
-        .match_service
+    let Some(score) = state
+        .fit_scores_repository
         .get_for_job_and_resume(&job_id, &resume.id)
         .await
         .map_err(|error| ApiError::from_repository(error, "match_query_failed"))?
     else {
         return Err(ApiError::not_found(
             "match_result_not_found",
-            format!("No match result exists for job '{job_id}' and the active resume"),
+            format!("No fit score exists for job '{job_id}' — call GET /fit first"),
         ));
     };
 
-    Ok(axum::Json(MatchResultResponse::from(result)))
+    Ok(axum::Json(FitScoreResponse::from(score)))
 }
 
 /// Compute a fast local fit score for a job against the active resume.
@@ -136,10 +136,11 @@ pub async fn get_job_fit(
     Ok(axum::Json(FitScoreResponse::from(score)))
 }
 
+/// Force-recompute and persist a fit score for a job (same as GET /fit but via POST).
 pub async fn score_job_match(
     State(state): State<AppState>,
     Path(job_id): Path<String>,
-) -> Result<axum::Json<MatchResultResponse>, ApiError> {
+) -> Result<axum::Json<FitScoreResponse>, ApiError> {
     let Some(job) = state
         .jobs_service
         .get_by_id(&job_id)
@@ -164,13 +165,21 @@ pub async fn score_job_match(
         ));
     };
 
-    let result = state
-        .match_service
-        .score_and_save(&job, &resume)
-        .await
-        .map_err(|error| ApiError::from_repository(error, "match_query_failed"))?;
+    let candidate = state.profile_analysis_service.analyze(&resume.raw_text);
+    let profile = state.profiles_service.get_latest().await.ok().flatten();
+    let score = state
+        .ranking_service
+        .compute(&candidate, &job, profile.as_ref());
 
-    Ok(axum::Json(MatchResultResponse::from(result)))
+    if let Err(error) = state
+        .fit_scores_repository
+        .upsert(&score, &resume.id)
+        .await
+    {
+        warn!(job_id = %job_id, resume_id = %resume.id, error = %error, "failed to persist fit score");
+    }
+
+    Ok(axum::Json(FitScoreResponse::from(score)))
 }
 
 #[cfg(test)]

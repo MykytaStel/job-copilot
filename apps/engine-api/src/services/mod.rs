@@ -3,7 +3,6 @@ pub mod salary;
 pub mod applications;
 pub mod followup;
 pub mod jobs;
-pub mod matching;
 pub mod profile;
 pub mod profiles;
 pub mod ranking;
