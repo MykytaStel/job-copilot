@@ -562,26 +562,45 @@ export async function createApplication(
   return mapApplication(application);
 }
 
+export async function updateApplication(
+  id: string,
+  payload: {
+    status?: ApplicationStatus;
+    dueDate?: string | null;
+  },
+): Promise<Application> {
+  const body: {
+    status?: ApplicationStatus;
+    due_date?: string | null;
+  } = {};
+
+  if (payload.status !== undefined) {
+    body.status = payload.status;
+  }
+
+  if (payload.dueDate !== undefined) {
+    body.due_date = payload.dueDate;
+  }
+
+  const application = await request<EngineApplication>(
+    `/api/v1/applications/${id}`,
+    json('PATCH', body),
+  );
+  return mapApplication(application);
+}
+
 export async function patchApplication(
   id: string,
   status: ApplicationStatus,
 ): Promise<Application> {
-  const application = await request<EngineApplication>(
-    `/api/v1/applications/${id}`,
-    json('PATCH', { status }),
-  );
-  return mapApplication(application);
+  return updateApplication(id, { status });
 }
 
 export async function setDueDate(
   id: string,
   dueDate: string | null,
 ): Promise<Application> {
-  const application = await request<EngineApplication>(
-    `/api/v1/applications/${id}`,
-    json('PATCH', { due_date: dueDate }),
-  );
-  return mapApplication(application);
+  return updateApplication(id, { dueDate });
 }
 export async function addNote(
   applicationId: string,

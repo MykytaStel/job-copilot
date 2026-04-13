@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import type {
   ApplicationContact,
   ApplicationDetail as ApplicationDetailType,
+  ApplicationStatus,
   ContactInput,
   ContactRelationship,
   OfferStatus,
@@ -17,6 +18,7 @@ import {
   getApplicationDetail,
   getContacts,
   linkContact,
+  updateApplication,
 } from '../api';
 import { queryKeys } from '../queryKeys';
 
@@ -34,6 +36,14 @@ const OFFER_STATUS_OPTIONS: OfferStatus[] = [
   'accepted',
   'declined',
   'expired',
+];
+
+const APPLICATION_STATUS_OPTIONS: ApplicationStatus[] = [
+  'saved',
+  'applied',
+  'interview',
+  'offer',
+  'rejected',
 ];
 
 function fmt(dateStr: string): string {
@@ -154,6 +164,8 @@ export default function ApplicationDetail() {
   const [offerCurrency, setOfferCurrency] = useState('USD');
   const [offerStartsAt, setOfferStartsAt] = useState('');
   const [offerNotes, setOfferNotes] = useState('');
+  const [applicationStatus, setApplicationStatus] = useState<ApplicationStatus>('saved');
+  const [dueDate, setDueDate] = useState('');
 
   const detailQuery = useQuery({
     queryKey: queryKeys.applications.detail(id ?? ''),
@@ -186,6 +198,13 @@ export default function ApplicationDetail() {
     setOfferStartsAt(normalizeDateInput(detail.offer.startsAt));
     setOfferNotes(detail.offer.notes ?? '');
   }, [detail?.offer]);
+
+  useEffect(() => {
+    if (!detail) return;
+
+    setApplicationStatus(detail.status);
+    setDueDate(normalizeDateInput(detail.dueDate));
+  }, [detail]);
 
   const availableContacts = useMemo(() => {
     if (!detail || !contactsQuery.data) return [];
@@ -286,6 +305,21 @@ export default function ApplicationDetail() {
     },
   });
 
+  const applicationMutation = useMutation({
+    mutationFn: () =>
+      updateApplication(id!, {
+        status: applicationStatus,
+        dueDate: dueDate || null,
+      }),
+    onSuccess: async () => {
+      await refreshDetail();
+      toast.success('Application updated');
+    },
+    onError: (error: unknown) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to update application');
+    },
+  });
+
   if (!id) return <p className="error">Application not found</p>;
   if (detailQuery.isLoading) return <p className="muted">Loading...</p>;
   if (detailQuery.error || !detail) {
@@ -300,6 +334,9 @@ export default function ApplicationDetail() {
 
   const { job } = detail;
   const compensationLabel = formatCompensation(detail);
+  const normalizedCurrentDueDate = normalizeDateInput(detail.dueDate);
+  const hasApplicationChanges =
+    applicationStatus !== detail.status || dueDate !== normalizedCurrentDueDate;
 
   return (
     <div className="jobDetails">
@@ -325,6 +362,59 @@ export default function ApplicationDetail() {
           </div>
         </div>
       </div>
+
+      <section className="card">
+        <SectionHeader title="Application" />
+        <form
+          style={formStackStyle}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!hasApplicationChanges) return;
+            applicationMutation.mutate();
+          }}
+        >
+          <div style={formGridStyle}>
+            <label>
+              Status
+              <select
+                value={applicationStatus}
+                onChange={(event) =>
+                  setApplicationStatus(event.target.value as ApplicationStatus)
+                }
+              >
+                {APPLICATION_STATUS_OPTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Due date
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+              />
+            </label>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            <button
+              type="button"
+              onClick={() => setDueDate('')}
+              disabled={applicationMutation.isPending || !dueDate}
+            >
+              Clear due date
+            </button>
+            <button
+              type="submit"
+              disabled={applicationMutation.isPending || !hasApplicationChanges}
+            >
+              {applicationMutation.isPending ? 'Saving...' : 'Save application'}
+            </button>
+          </div>
+        </form>
+      </section>
 
       <section className="card">
         <SectionHeader title="Job Details" />

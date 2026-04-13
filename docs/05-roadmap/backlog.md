@@ -1,34 +1,44 @@
 # Backlog
 
+See also:
+- `docs/05-roadmap/current-focus.md`
+- `docs/05-roadmap/project-status.md`
+- `docs/05-roadmap/future-work.md`
+
+## Current focus
+See `docs/05-roadmap/current-focus.md` for the active near-term slice.
+
 ## Core architecture
 - [ ] isolate legacy backend
-- [ ] create Rust engine-api
-- [ ] create Rust ingestion service
-- [ ] create Python ML service
-- [ ] introduce Postgres
-- [ ] define contracts package
+- [x] create Rust engine-api
+- [x] create Rust ingestion service
+- [x] create Python ML service
+- [x] introduce Postgres
+- [x] define contracts package
 
 ## Domain
 - [ ] finalize entities
 - [ ] define ranking input/output models
 - [ ] define change event models
-- [ ] define source adapter interfaces
+- [x] define source adapter interfaces
 
 ## Ingestion
-- [ ] raw snapshot model
+- [x] raw snapshot model
 - [ ] source fetch abstraction
 - [ ] parser abstraction
-- [ ] normalization pipeline
+- [x] normalization pipeline
 - [ ] dedupe pipeline
 - [ ] refresh scheduler
 
 ## Search
-- [ ] keyword search
+- [x] keyword search
 - [ ] filters
 - [ ] ranking formula v1
 - [ ] ranking explanation
 - [ ] recency score
 - [ ] remote/seniority fit
+- [x] verify PostgreSQL full-text search on real DB data
+- [x] confirm `search_vector` trigger/backfill behavior
 
 ## ML
 - [ ] extraction endpoint
@@ -39,13 +49,17 @@
 
 ## Frontend
 - [ ] search page cleanup
-- [ ] job details page
+- [x] job details page
 - [ ] save job flow
 - [ ] application status flow
 - [ ] profile/preferences UI
+- [x] application detail write flow for notes, contacts, and offer
+- [x] application detail write flow for status and due date
+- [ ] remove remaining legacy API assumptions after Phase 3
 
 ## Quality
 - [ ] unit tests for ranking
 - [ ] integration tests for jobs/applications
-- [ ] ingestion tests
+- [x] ingestion tests
 - [ ] E2E smoke flow
+- [x] DB-backed smoke tests for notes, contacts, offers, search, and application patching

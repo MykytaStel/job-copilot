@@ -1,0 +1,19 @@
+{
+  "jobs": [
+    {
+      "id": "job_ingestion_platform_001",
+      "title": "Platform Ingestion Engineer",
+      "company_name": "SignalHire",
+      "location": "Kyiv",
+      "remote_type": "hybrid",
+      "seniority": "senior",
+      "description_text": "Build normalization pipelines, keep Postgres search indexing stable, and improve job ingestion reliability.",
+      "salary_min": 4800,
+      "salary_max": 6200,
+      "salary_currency": "USD",
+      "posted_at": "2026-04-14T08:00:00Z",
+      "last_seen_at": "2026-04-14T08:00:00Z",
+      "is_active": true
+    }
+  ]
+}

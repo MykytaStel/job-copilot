@@ -6,7 +6,14 @@
     "dev": "concurrently -n engine-api,web -c auto \"cargo run --manifest-path apps/engine-api/Cargo.toml\" \"pnpm --dir apps/web dev\"",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "db:up": "docker compose -f infra/docker-compose.postgres.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.postgres.yml down -v",
+    "verify:phase8:db": "./scripts/verify_phase8_db.sh",
+    "local:ingestion:demo": "./scripts/run_local_ingestion_demo.sh",
+    "ingestion:demo": "DATABASE_URL=${DATABASE_URL:-postgres://jobcopilot:jobcopilot@127.0.0.1:5432/jobcopilot} cargo run --manifest-path apps/ingestion/Cargo.toml -- --input apps/ingestion/examples/sample_jobs.json",
+    "ingestion:demo:mock": "DATABASE_URL=${DATABASE_URL:-postgres://jobcopilot:jobcopilot@127.0.0.1:5432/jobcopilot} cargo run --manifest-path apps/ingestion/Cargo.toml -- --input apps/ingestion/examples/mock_source_jobs.json --input-format mock-source",
+    "ingestion:demo:mock:update": "DATABASE_URL=${DATABASE_URL:-postgres://jobcopilot:jobcopilot@127.0.0.1:5432/jobcopilot} cargo run --manifest-path apps/ingestion/Cargo.toml -- --input apps/ingestion/examples/mock_source_jobs_updated.json --input-format mock-source"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

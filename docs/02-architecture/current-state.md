@@ -1,9 +1,9 @@
 # Current State Audit
 
-Date: 2026-04-11
+Date: 2026-04-14
 
 ## Scope
-Repository audit after switching the active frontend path to `engine-api`.
+Repository audit after the latest Phase 3 backend and application-detail workflow changes.
 
 ## Current structure
 - `apps/web` is the active React frontend
@@ -24,13 +24,29 @@ Repository audit after switching the active frontend path to `engine-api`.
 - use `packages/contracts` as the shared contracts path
 - keep `@job-copilot/shared` as the import/package name
 
-## Additional findings
-- `web` now routes only through `engine-api`-backed screens
-- profile CRUD and analysis are now persisted in `engine-api`
-- jobs and applications read flows are available from `engine-api`
-- several non-MVP legacy screens have been removed from the active router pending replacement APIs
+## Current implementation state
+- `web` routes through `engine-api` for the active product screens
+- profile CRUD and profile analysis are persisted in `engine-api`
+- jobs read flows, application read flows, and search are available from `engine-api`
+- application detail now supports notes, contacts, offer, `status`, and `due_date` writes through `engine-api`
+- PostgreSQL full-text search and `search_vector` trigger/backfill logic are now in the backend migration layer
+- local DB-backed verification exists for notes, contacts, offer, search, `status`, and `due_date`
+- `apps/ingestion` now supports:
+  - canonical job upsert into `jobs`
+  - one adapter-backed normalization path
+  - raw snapshot persistence into `job_variants`
+
+## Remaining gap before the next architecture slice
+- production source adapters, dedupe, and refresh logic are not implemented yet
+- ML remains a sidecar skeleton and is not part of the core product flow
+- contracts and roadmap docs need to stay aligned with the ingestion boundary as it expands
 
 ## Recommended next step
-- remove leftover legacy-only source files and docs
-- continue migrating missing application write flows into `engine-api`
-- add integration coverage for the new profile endpoints against Postgres
+- extend ingestion beyond the first adapter-backed path
+- keep `job_variants` as the raw/source-owned layer and `jobs` as the canonical read layer
+- only then define the first read-only ML integration surface over canonical engine data
+
+## See also
+- `docs/05-roadmap/project-status.md`
+- `docs/05-roadmap/current-focus.md`
+- `docs/05-roadmap/future-work.md`

@@ -1,0 +1,23 @@
+{
+  "fetched_at": "2026-04-15T09:00:00Z",
+  "jobs": [
+    {
+      "source_job_id": "platform-001",
+      "source_url": "https://mock-source.example/jobs/platform-001",
+      "position": "Senior Platform Ingestion Engineer",
+      "employer": "SignalHire",
+      "city": "Kyiv",
+      "work_mode": "remote",
+      "seniority": "senior",
+      "description": "Build normalization pipelines, detect raw payload changes, and keep Postgres search indexing stable.",
+      "compensation": {
+        "min": 5200,
+        "max": 6800,
+        "currency": "USD"
+      },
+      "posted_at": "2026-04-15T07:30:00Z",
+      "last_seen_at": "2026-04-15T09:00:00Z",
+      "active": true
+    }
+  ]
+}
