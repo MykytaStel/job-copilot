@@ -1,5 +1,6 @@
 mod activities;
 mod applications;
+mod fit_scores;
 mod jobs;
 mod match_results;
 mod profiles;
@@ -11,6 +12,7 @@ use std::fmt;
 
 pub use activities::ActivitiesRepository;
 pub use applications::ApplicationsRepository;
+pub use fit_scores::FitScoresRepository;
 pub use jobs::JobsRepository;
 pub use match_results::MatchResultsRepository;
 pub use profiles::ProfilesRepository;

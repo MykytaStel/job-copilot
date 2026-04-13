@@ -1,5 +1,6 @@
 use axum::extract::{Path, Query, State};
 use serde::Deserialize;
+use tracing::warn;
 
 use crate::api::dto::jobs::{JobResponse, RecentJobsResponse};
 use crate::api::dto::matching::MatchResultResponse;
@@ -121,6 +122,16 @@ pub async fn get_job_fit(
     let score = state
         .ranking_service
         .compute(&candidate, &job, profile.as_ref());
+
+    // Persist the computed score — this is a cache write, not the primary result.
+    // Log a warning if it fails but do not fail the request.
+    if let Err(error) = state
+        .fit_scores_repository
+        .upsert(&score, &resume.id)
+        .await
+    {
+        warn!(job_id = %job_id, resume_id = %resume.id, error = %error, "failed to persist fit score");
+    }
 
     Ok(axum::Json(FitScoreResponse::from(score)))
 }
