@@ -1,6 +1,7 @@
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::job::model::Job;
+use crate::domain::analytics::model::SalaryBucket;
 use sqlx::FromRow;
 
 #[derive(Clone)]
@@ -90,6 +91,52 @@ impl JobsRepository {
         .await?;
 
         Ok(rows.into_iter().map(Job::from).collect())
+    }
+
+    pub async fn salary_intelligence(&self) -> Result<Vec<SalaryBucket>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(FromRow)]
+        struct SalaryRow {
+            seniority: Option<String>,
+            salary_currency: Option<String>,
+            salary_min_min: Option<i32>,
+            salary_max_max: Option<i32>,
+            salary_avg: Option<f64>,
+            job_count: i64,
+        }
+
+        let rows = sqlx::query_as::<_, SalaryRow>(
+            r#"
+            SELECT
+                seniority,
+                salary_currency,
+                MIN(salary_min)                                   AS salary_min_min,
+                MAX(salary_max)                                   AS salary_max_max,
+                AVG((salary_min + salary_max) / 2.0)              AS salary_avg,
+                COUNT(*)                                          AS job_count
+            FROM jobs
+            WHERE salary_min IS NOT NULL
+            GROUP BY seniority, salary_currency
+            ORDER BY salary_currency NULLS LAST, seniority NULLS LAST
+            "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| SalaryBucket {
+                seniority: r.seniority,
+                currency: r.salary_currency,
+                min: r.salary_min_min,
+                max: r.salary_max_max,
+                avg: r.salary_avg,
+                job_count: r.job_count,
+            })
+            .collect())
     }
 
     pub async fn search(&self, query: &str, limit: i64) -> Result<Vec<Job>, RepositoryError> {

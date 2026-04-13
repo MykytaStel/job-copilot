@@ -1,4 +1,5 @@
 pub mod activities;
+pub mod salary;
 pub mod applications;
 pub mod followup;
 pub mod jobs;

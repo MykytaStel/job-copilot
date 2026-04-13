@@ -12,6 +12,7 @@ use crate::services::profile::service::ProfileAnalysisService;
 use crate::services::profiles::ProfilesService;
 use crate::services::ranking::RankingService;
 use crate::services::resumes::ResumesService;
+use crate::services::salary::SalaryService;
 use crate::services::search_profile::service::SearchProfileService;
 
 #[derive(Clone)]
@@ -29,12 +30,14 @@ pub struct AppState {
     pub ranking_service: RankingService,
     pub search_profile_service: SearchProfileService,
     pub followup_service: FollowUpService,
+    pub salary_service: SalaryService,
 }
 
 impl AppState {
     pub fn new(database: Database) -> Self {
         let profiles_repository = ProfilesRepository::new(database.clone());
         let jobs_repository = JobsRepository::new(database.clone());
+        let salary_jobs_repository = JobsRepository::new(database.clone());
         let applications_repository = ApplicationsRepository::new(database.clone());
         let activities_repository = ActivitiesRepository::new(database.clone());
         let tasks_repository = TasksRepository::new(database.clone());
@@ -59,6 +62,7 @@ impl AppState {
             ranking_service: RankingService::new(),
             search_profile_service: SearchProfileService::new(),
             followup_service: FollowUpService::new(tasks_repository),
+            salary_service: SalaryService::new(salary_jobs_repository),
         }
     }
 
@@ -96,6 +100,7 @@ impl AppState {
             ranking_service: RankingService::new(),
             search_profile_service: SearchProfileService::new(),
             followup_service: FollowUpService::new(TasksRepository::new(Database::disabled())),
+            salary_service: SalaryService::new(JobsRepository::new(Database::disabled())),
         }
     }
 }
