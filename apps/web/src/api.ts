@@ -281,6 +281,35 @@ type EngineBuildSearchProfileResponse = {
   search_profile: EngineSearchProfile;
 };
 
+type EngineRunSearchResponse = {
+  results: EngineRankedJobResult[];
+  meta: EngineSearchRunMeta;
+};
+
+type EngineRankedJobResult = {
+  job: EngineJob;
+  fit: EngineFitExplanation;
+};
+
+type EngineFitExplanation = {
+  job_id: string;
+  score: number;
+  matched_roles: string[];
+  matched_skills: string[];
+  matched_keywords: string[];
+  source_match: boolean;
+  work_mode_match?: boolean | null;
+  region_match?: boolean | null;
+  reasons: string[];
+};
+
+type EngineSearchRunMeta = {
+  total_candidates: number;
+  filtered_out_by_source: number;
+  scored_jobs: number;
+  returned_jobs: number;
+};
+
 const API_URL =
   import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
 const ML_URL =
@@ -360,6 +389,39 @@ export type SearchProfileBuildResult = {
     allowedSources: string[];
     searchTerms: string[];
     excludeTerms: string[];
+  };
+};
+
+export type SearchRunRequest = {
+  searchProfile: SearchProfileBuildResult['searchProfile'];
+  limit?: number;
+};
+
+export type FitExplanation = {
+  jobId: string;
+  score: number;
+  matchedRoles: string[];
+  matchedSkills: string[];
+  matchedKeywords: string[];
+  sourceMatch: boolean;
+  workModeMatch?: boolean;
+  regionMatch?: boolean;
+  reasons: string[];
+};
+
+export type RankedJobResult = {
+  job: JobPosting;
+  source: string;
+  fit: FitExplanation;
+};
+
+export type SearchRunResult = {
+  results: RankedJobResult[];
+  meta: {
+    totalCandidates: number;
+    filteredOutBySource: number;
+    scoredJobs: number;
+    returnedJobs: number;
   };
 };
 
@@ -731,6 +793,51 @@ export async function buildSearchProfile(
       allowedSources: response.search_profile.allowed_sources,
       searchTerms: response.search_profile.search_terms,
       excludeTerms: response.search_profile.exclude_terms,
+    },
+  };
+}
+
+export async function runSearch(
+  payload: SearchRunRequest,
+): Promise<SearchRunResult> {
+  const response = await request<EngineRunSearchResponse>(
+    '/api/v1/search/run',
+    json('POST', {
+      search_profile: {
+        primary_role: payload.searchProfile.primaryRole,
+        target_roles: payload.searchProfile.targetRoles,
+        seniority: payload.searchProfile.seniority,
+        target_regions: payload.searchProfile.targetRegions,
+        work_modes: payload.searchProfile.workModes,
+        allowed_sources: payload.searchProfile.allowedSources,
+        search_terms: payload.searchProfile.searchTerms,
+        exclude_terms: payload.searchProfile.excludeTerms,
+      },
+      limit: payload.limit,
+    }),
+  );
+
+  return {
+    results: response.results.map((result) => ({
+      job: mapJob(result.job),
+      source: result.job.primary_variant?.source ?? 'unknown',
+      fit: {
+        jobId: result.fit.job_id,
+        score: result.fit.score,
+        matchedRoles: result.fit.matched_roles,
+        matchedSkills: result.fit.matched_skills,
+        matchedKeywords: result.fit.matched_keywords,
+        sourceMatch: result.fit.source_match,
+        workModeMatch: result.fit.work_mode_match ?? undefined,
+        regionMatch: result.fit.region_match ?? undefined,
+        reasons: result.fit.reasons,
+      },
+    })),
+    meta: {
+      totalCandidates: response.meta.total_candidates,
+      filteredOutBySource: response.meta.filtered_out_by_source,
+      scoredJobs: response.meta.scored_jobs,
+      returnedJobs: response.meta.returned_jobs,
     },
   };
 }
