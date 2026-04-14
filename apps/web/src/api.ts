@@ -103,6 +103,13 @@ type EngineFeedbackOverviewResponse = {
   profile_id: string;
   jobs: EngineJobFeedbackRecord[];
   companies: EngineCompanyFeedbackRecord[];
+  summary: {
+    saved_jobs_count: number;
+    hidden_jobs_count: number;
+    bad_fit_jobs_count: number;
+    whitelisted_companies_count: number;
+    blacklisted_companies_count: number;
+  };
 };
 
 type EngineContactsResponse = {
@@ -989,6 +996,13 @@ export async function getFeedback(profileId: string): Promise<FeedbackOverview> 
     profileId: response.profile_id,
     jobs: response.jobs.map(mapJobFeedbackRecord),
     companies: response.companies.map(mapCompanyFeedbackRecord),
+    summary: {
+      savedJobsCount: response.summary.saved_jobs_count,
+      hiddenJobsCount: response.summary.hidden_jobs_count,
+      badFitJobsCount: response.summary.bad_fit_jobs_count,
+      whitelistedCompaniesCount: response.summary.whitelisted_companies_count,
+      blacklistedCompaniesCount: response.summary.blacklisted_companies_count,
+    },
   };
 }
 

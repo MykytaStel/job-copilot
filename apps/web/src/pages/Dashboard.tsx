@@ -302,6 +302,7 @@ export default function Dashboard() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
+      if (profileId) void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
       toast.success('Збережено в pipeline');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -317,6 +318,7 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      if (profileId) void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
       toast.success('Вакансію приховано');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -332,6 +334,7 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      if (profileId) void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
       toast.success('Позначено як bad fit');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -347,6 +350,7 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      if (profileId) void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
       toast.success('Позначку bad fit знято');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -383,6 +387,7 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      if (profileId) void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
       toast.success('Оновлено список компанії');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),

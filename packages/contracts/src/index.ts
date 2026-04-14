@@ -60,10 +60,19 @@ export interface CompanyFeedbackRecord {
   updatedAt: string;
 }
 
+export interface FeedbackSummary {
+  savedJobsCount: number;
+  hiddenJobsCount: number;
+  badFitJobsCount: number;
+  whitelistedCompaniesCount: number;
+  blacklistedCompaniesCount: number;
+}
+
 export interface FeedbackOverview {
   profileId: string;
   jobs: JobFeedbackRecord[];
   companies: CompanyFeedbackRecord[];
+  summary: FeedbackSummary;
 }
 
 export interface JobSourceVariant {
