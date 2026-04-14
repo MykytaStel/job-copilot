@@ -25,6 +25,8 @@ Profile-scoped tables in `engine-api`:
 
 Company list status is last-write-wins for a given normalized company name.
 
+Feedback writes also emit immutable `user_events` records so future personalization can learn from actions without changing feedback as the mutable source of truth.
+
 ## Search rules in this slice
 
 Deterministic search now applies profile feedback before scoring:

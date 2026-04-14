@@ -2,11 +2,14 @@ use std::collections::HashMap;
 
 use axum::extract::{Query, State};
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::api::dto::search::{RunSearchRequest, RunSearchResponse, SearchResponse};
 use crate::api::error::{ApiError, ApiJson};
+use crate::api::routes::events::log_user_event_softly;
 use crate::api::routes::jobs::load_feedback_state;
 use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackState};
+use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::matching::RankedJob;
 use crate::state::AppState;
 
@@ -125,18 +128,74 @@ pub async fn run_search(
         })
         .collect();
 
+    let meta = crate::api::dto::search::SearchRunMetaResponse {
+        total_candidates,
+        filtered_out_by_source: result.filtered_out_by_source,
+        filtered_out_hidden,
+        filtered_out_company_blacklist,
+        scored_jobs: total_candidates
+            .saturating_sub(result.filtered_out_by_source)
+            .saturating_sub(filtered_out_hidden)
+            .saturating_sub(filtered_out_company_blacklist),
+        returned_jobs: ranked_jobs.len(),
+    };
+
+    if let Some(profile_id) = input.profile_id.clone() {
+        let allowed_sources = input
+            .search_profile
+            .allowed_sources
+            .iter()
+            .map(|source| source.canonical_key().to_string())
+            .collect::<Vec<_>>();
+        let primary_source = match allowed_sources.as_slice() {
+            [source] => Some(source.clone()),
+            _ => None,
+        };
+
+        log_user_event_softly(
+            &state,
+            CreateUserEvent {
+                profile_id,
+                event_type: UserEventType::SearchRun,
+                job_id: None,
+                company_name: None,
+                source: primary_source,
+                role_family: input
+                    .search_profile
+                    .primary_role
+                    .family()
+                    .map(str::to_string),
+                payload_json: Some(json!({
+                    "limit": input.limit,
+                    "primary_role": input.search_profile.primary_role.canonical_key(),
+                    "primary_role_confidence": input.search_profile.primary_role_confidence,
+                    "target_roles": input
+                        .search_profile
+                        .target_roles
+                        .iter()
+                        .map(|role| role.canonical_key())
+                        .collect::<Vec<_>>(),
+                    "allowed_sources": allowed_sources,
+                    "target_regions": input.search_profile.target_regions,
+                    "work_modes": input.search_profile.work_modes,
+                    "search_terms": input.search_profile.search_terms,
+                    "exclude_terms": input.search_profile.exclude_terms,
+                    "meta": {
+                        "total_candidates": meta.total_candidates,
+                        "filtered_out_by_source": meta.filtered_out_by_source,
+                        "filtered_out_hidden": meta.filtered_out_hidden,
+                        "filtered_out_company_blacklist": meta.filtered_out_company_blacklist,
+                        "scored_jobs": meta.scored_jobs,
+                        "returned_jobs": meta.returned_jobs,
+                    }
+                })),
+            },
+        )
+        .await;
+    }
+
     Ok(axum::Json(RunSearchResponse {
-        meta: crate::api::dto::search::SearchRunMetaResponse {
-            total_candidates,
-            filtered_out_by_source: result.filtered_out_by_source,
-            filtered_out_hidden,
-            filtered_out_company_blacklist,
-            scored_jobs: total_candidates
-                .saturating_sub(result.filtered_out_by_source)
-                .saturating_sub(filtered_out_hidden)
-                .saturating_sub(filtered_out_company_blacklist),
-            returned_jobs: ranked_jobs.len(),
-        },
+        meta,
         results: ranked_jobs,
     }))
 }
@@ -205,11 +264,13 @@ mod tests {
     use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
     use crate::domain::profile::model::Profile;
     use crate::domain::search::profile::{TargetRegion, WorkMode};
+    use crate::domain::user_event::model::UserEventType;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::feedback::{FeedbackService, FeedbackServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
+    use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
     use crate::state::AppState;
 
     use super::{SearchQuery, run_search, search};
@@ -382,6 +443,112 @@ mod tests {
         assert_eq!(payload["jobs"].as_array().map(Vec::len), Some(1));
         assert_eq!(payload["page"].as_i64(), Some(2));
         assert_eq!(payload["has_more"].as_bool(), Some(false));
+    }
+
+    #[tokio::test]
+    async fn run_search_creates_search_run_event() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default().with_job_view(sample_job_view(
+                    "job-1",
+                    "Senior Backend Developer",
+                    "Rust and Postgres",
+                    Some("remote"),
+                    "djinni",
+                )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        );
+
+        let Json(_) = run_search(
+            State(state.clone()),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(91),
+                    target_roles: vec!["backend_developer".to_string()],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::Ua],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["postgres".to_string()],
+                    search_terms: vec!["rust".to_string(), "backend".to_string()],
+                    exclude_terms: vec!["php".to_string()],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run_search should succeed");
+
+        let events = state
+            .user_events_service
+            .list_by_profile("profile-1")
+            .await
+            .expect("events should be queryable");
+
+        assert!(
+            events.iter().any(|event| {
+                event.event_type == UserEventType::SearchRun
+                    && event.role_family.as_deref() == Some("engineering")
+            }),
+            "run_search should emit a structured search_run event"
+        );
+    }
+
+    #[tokio::test]
+    async fn run_search_succeeds_when_event_logging_fails_softly() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default().with_job_view(sample_job_view(
+                    "job-1",
+                    "Senior Backend Developer",
+                    "Rust and Postgres",
+                    Some("remote"),
+                    "djinni",
+                )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default().with_database_disabled(),
+        ));
+
+        let result = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(91),
+                    target_roles: vec!["backend_developer".to_string()],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::Ua],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["postgres".to_string()],
+                    search_terms: vec!["rust".to_string(), "backend".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await;
+
+        assert!(result.is_ok(), "search should not fail when event logging is unavailable");
     }
 
     #[tokio::test]

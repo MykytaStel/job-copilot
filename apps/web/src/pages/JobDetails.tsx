@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Bookmark, BookmarkCheck, Briefcase, ExternalLink, MapPin, Sparkles, Wifi } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +14,7 @@ import {
   getApplications,
   getJob,
   hideJobForProfile,
+  logUserEvent,
   markJobBadFit,
   markJobSaved,
   removeCompanyBlacklist,
@@ -72,6 +74,16 @@ export default function JobDetails() {
   });
 
   const profileId = readProfileId();
+
+  useEffect(() => {
+    if (!profileId || !job?.id) return;
+
+    void logUserEvent(profileId, {
+      eventType: 'job_opened',
+      jobId: job.id,
+      payloadJson: { surface: 'job_details' },
+    }).catch(() => null);
+  }, [job?.id, profileId]);
 
   const { data: fit } = useQuery<FitAnalysis>({
     queryKey: queryKeys.ml.fit(profileId ?? '', id!),

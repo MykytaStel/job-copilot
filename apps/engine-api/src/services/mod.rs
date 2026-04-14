@@ -10,3 +10,4 @@ pub mod ranking;
 pub mod resumes;
 pub mod salary;
 pub mod search_profile;
+pub mod user_events;

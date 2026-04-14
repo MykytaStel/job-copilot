@@ -10,3 +10,4 @@ pub mod resume;
 pub mod role;
 pub mod search;
 pub mod source;
+pub mod user_event;
