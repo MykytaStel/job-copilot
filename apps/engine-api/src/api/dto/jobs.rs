@@ -3,6 +3,9 @@ use serde::Serialize;
 use crate::domain::job::model::{
     Job, JobFeedSummary, JobLifecycleStage, JobSourceVariant, JobView,
 };
+use crate::domain::job::presentation::{
+    JobPresentation, build_job_presentation, build_job_view_presentation,
+};
 
 #[derive(Debug, Serialize)]
 pub struct JobSourceVariantResponse {
@@ -13,6 +16,20 @@ pub struct JobSourceVariantResponse {
     pub last_seen_at: String,
     pub is_active: bool,
     pub inactivated_at: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JobPresentationResponse {
+    pub title: String,
+    pub company: String,
+    pub summary: Option<String>,
+    pub location_label: Option<String>,
+    pub work_mode_label: Option<String>,
+    pub source_label: Option<String>,
+    pub outbound_url: Option<String>,
+    pub salary_label: Option<String>,
+    pub freshness_label: Option<String>,
+    pub badges: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -42,6 +59,7 @@ pub struct JobResponse {
     pub reactivated_at: Option<String>,
     pub lifecycle_stage: JobLifecycleStageResponse,
     pub primary_variant: Option<JobSourceVariantResponse>,
+    pub presentation: JobPresentationResponse,
 }
 
 #[derive(Debug, Serialize)]
@@ -81,6 +99,8 @@ pub struct RecentJobsResponse {
 
 impl From<Job> for JobResponse {
     fn from(job: Job) -> Self {
+        let presentation = JobPresentationResponse::from(build_job_presentation(&job));
+
         Self {
             id: job.id,
             title: job.title,
@@ -103,12 +123,15 @@ impl From<Job> for JobResponse {
                 JobLifecycleStageResponse::Inactive
             },
             primary_variant: None,
+            presentation,
         }
     }
 }
 
 impl From<JobView> for JobResponse {
     fn from(view: JobView) -> Self {
+        let presentation = JobPresentationResponse::from(build_job_view_presentation(&view));
+
         Self {
             id: view.job.id,
             title: view.job.title,
@@ -127,6 +150,7 @@ impl From<JobView> for JobResponse {
             reactivated_at: view.reactivated_at,
             lifecycle_stage: view.lifecycle_stage.into(),
             primary_variant: view.primary_variant.map(JobSourceVariantResponse::from),
+            presentation,
         }
     }
 }
@@ -175,6 +199,23 @@ impl From<JobSourceVariant> for JobSourceVariantResponse {
             last_seen_at: value.last_seen_at,
             is_active: value.is_active,
             inactivated_at: value.inactivated_at,
+        }
+    }
+}
+
+impl From<JobPresentation> for JobPresentationResponse {
+    fn from(value: JobPresentation) -> Self {
+        Self {
+            title: value.title,
+            company: value.company,
+            summary: value.summary,
+            location_label: value.location_label,
+            work_mode_label: value.work_mode_label,
+            source_label: value.source_label,
+            outbound_url: value.outbound_url,
+            salary_label: value.salary_label,
+            freshness_label: value.freshness_label,
+            badges: value.badges,
         }
     }
 }

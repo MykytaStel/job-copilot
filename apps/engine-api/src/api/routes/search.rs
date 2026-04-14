@@ -107,6 +107,13 @@ mod tests {
         remote_type: Option<&str>,
         source: &str,
     ) -> JobView {
+        let source_url = match source {
+            "djinni" => format!("https://djinni.co/jobs/{id}-sample-role/"),
+            "work_ua" => format!("https://www.work.ua/jobs/{id}/"),
+            "robota_ua" => format!("https://robota.ua/vacancy/{id}"),
+            _ => format!("https://example.com/{id}"),
+        };
+
         JobView {
             job: Job {
                 id: id.to_string(),
@@ -129,7 +136,8 @@ mod tests {
             primary_variant: Some(JobSourceVariant {
                 source: source.to_string(),
                 source_job_id: format!("{id}-source"),
-                source_url: format!("https://example.com/{id}"),
+                source_url,
+                raw_payload: None,
                 fetched_at: "2026-04-14T09:00:00Z".to_string(),
                 last_seen_at: "2026-04-14T09:00:00Z".to_string(),
                 is_active: true,
@@ -282,6 +290,14 @@ mod tests {
         assert_eq!(payload["meta"]["filtered_out_by_source"], json!(1));
         assert_eq!(payload["results"].as_array().map(Vec::len), Some(1));
         assert_eq!(payload["results"][0]["job"]["id"], json!("job-1"));
+        assert_eq!(
+            payload["results"][0]["job"]["presentation"]["source_label"],
+            json!("Djinni")
+        );
+        assert_eq!(
+            payload["results"][0]["job"]["presentation"]["outbound_url"],
+            json!("https://djinni.co/jobs/job-1-sample-role")
+        );
         assert!(
             payload["results"][0]["fit"]["reasons"]
                 .as_array()

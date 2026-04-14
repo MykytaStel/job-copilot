@@ -1,5 +1,5 @@
 import type { ChangeEventHandler, RefObject } from 'react';
-import { Upload } from 'lucide-react';
+import { ExternalLink, Upload } from 'lucide-react';
 
 import type {
   RankedJobResult,
@@ -516,16 +516,57 @@ function SearchResultCard({
     result.job.primaryVariant?.source ?? result.source,
   );
   const scoreTone = getFitScoreTone(result.fit.score);
+  const presentation = result.job.presentation;
+  const displayTitle = presentation?.title || result.job.title;
+  const displayCompany = presentation?.company || result.job.company;
+  const displaySource = presentation?.sourceLabel || sourceLabel;
+  const outboundUrl = presentation?.outboundUrl || result.job.url;
+  const metaItems = [
+    presentation?.locationLabel,
+    presentation?.workModeLabel,
+    presentation?.salaryLabel,
+    presentation?.freshnessLabel,
+  ].filter(Boolean) as string[];
 
   return (
     <article className="stackListItem searchResultCard">
       <div className="searchResultMain">
         <div className="searchResultHeader">
-          <strong className="searchResultTitle">{result.job.title}</strong>
-          <span className="badge badge-secondary">{sourceLabel}</span>
+          <strong className="searchResultTitle">{displayTitle}</strong>
+          <span className="badge badge-secondary">{displaySource}</span>
+          {presentation?.badges.map((badge) => (
+            <span key={badge} className="badge badge-secondary searchResultBadge">
+              {badge}
+            </span>
+          ))}
         </div>
 
-        <p className="muted sectionText">{result.job.company}</p>
+        <p className="muted sectionText">{displayCompany}</p>
+
+        {presentation?.summary && (
+          <p className="sectionText searchResultSummary">{presentation.summary}</p>
+        )}
+
+        {(metaItems.length > 0 || outboundUrl) && (
+          <div className="searchResultMetaRow">
+            {metaItems.map((item) => (
+              <span key={item} className="jobMetaChip">
+                {item}
+              </span>
+            ))}
+            {outboundUrl && (
+              <a
+                href={outboundUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="linkBtn searchResultLink"
+              >
+                <ExternalLink size={13} />
+                Open source
+              </a>
+            )}
+          </div>
+        )}
 
         <div className="resultSection">
           <span className="detailLabel">Fit reasons</span>

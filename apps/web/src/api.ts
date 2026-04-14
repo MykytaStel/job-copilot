@@ -144,6 +144,18 @@ type EngineJob = {
     is_active: boolean;
     inactivated_at?: string | null;
   } | null;
+  presentation: {
+    title: string;
+    company: string;
+    summary?: string | null;
+    location_label?: string | null;
+    work_mode_label?: string | null;
+    source_label?: string | null;
+    outbound_url?: string | null;
+    salary_label?: string | null;
+    freshness_label?: string | null;
+    badges: string[];
+  };
 };
 
 type EngineJobFeedSummary = {
@@ -524,9 +536,9 @@ function mapJob(job: EngineJob): JobPosting {
   return {
     id: job.id,
     source: 'manual',
-    url: job.primary_variant?.source_url ?? undefined,
-    title: job.title,
-    company: job.company_name,
+    url: job.presentation.outbound_url ?? job.primary_variant?.source_url ?? undefined,
+    title: job.presentation.title || job.title,
+    company: job.presentation.company || job.company_name,
     description: job.description_text,
     notes: '',
     createdAt: job.posted_at ?? job.last_seen_at,
@@ -553,6 +565,18 @@ function mapJob(job: EngineJob): JobPosting {
           inactivatedAt: job.primary_variant.inactivated_at ?? undefined,
         }
       : undefined,
+    presentation: {
+      title: job.presentation.title,
+      company: job.presentation.company,
+      summary: job.presentation.summary ?? undefined,
+      locationLabel: job.presentation.location_label ?? undefined,
+      workModeLabel: job.presentation.work_mode_label ?? undefined,
+      sourceLabel: job.presentation.source_label ?? undefined,
+      outboundUrl: job.presentation.outbound_url ?? undefined,
+      salaryLabel: job.presentation.salary_label ?? undefined,
+      freshnessLabel: job.presentation.freshness_label ?? undefined,
+      badges: job.presentation.badges,
+    },
   };
 }
 

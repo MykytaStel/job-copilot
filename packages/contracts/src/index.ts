@@ -32,6 +32,7 @@ export interface JobPosting {
   salaryCurrency?: string;
   seniority?: string;
   remoteType?: string;
+  presentation?: JobPresentation;
 }
 
 export interface JobSourceVariant {
@@ -42,6 +43,19 @@ export interface JobSourceVariant {
   lastSeenAt: string;
   isActive: boolean;
   inactivatedAt?: string;
+}
+
+export interface JobPresentation {
+  title: string;
+  company: string;
+  summary?: string;
+  locationLabel?: string;
+  workModeLabel?: string;
+  sourceLabel?: string;
+  outboundUrl?: string;
+  salaryLabel?: string;
+  freshnessLabel?: string;
+  badges: string[];
 }
 
 export interface JobFeedSummary {
