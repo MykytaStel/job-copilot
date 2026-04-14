@@ -116,6 +116,83 @@ curl \
   }'
 ```
 
+Generate additive fit explanations for a deterministically ranked job:
+
+```bash
+curl \
+  -X POST http://localhost:8000/v1/enrichment/job-fit-explanation \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile_id": "profile_test_001",
+    "analyzed_profile": {
+      "summary": "Senior backend engineer with Rust experience",
+      "primary_role": "backend_developer",
+      "seniority": "senior",
+      "skills": ["rust", "postgres"],
+      "keywords": ["backend", "distributed systems"]
+    },
+    "search_profile": {
+      "primary_role": "backend_developer",
+      "primary_role_confidence": 0.92,
+      "target_roles": ["backend_developer", "platform_engineer"],
+      "role_candidates": [{ "role": "backend_developer", "confidence": 0.92 }],
+      "seniority": "senior",
+      "target_regions": ["eu_remote"],
+      "work_modes": ["remote"],
+      "allowed_sources": ["djinni"],
+      "profile_skills": ["rust", "postgres"],
+      "profile_keywords": ["backend", "distributed systems"],
+      "search_terms": ["rust backend", "platform engineer"],
+      "exclude_terms": ["php"]
+    },
+    "ranked_job": {
+      "id": "job_backend_rust_001",
+      "title": "Senior Rust Backend Engineer",
+      "company_name": "Example",
+      "description_text": "Own APIs and platform services.",
+      "summary": "Remote backend role with Rust and Postgres.",
+      "source": "djinni",
+      "source_job_id": "source_123",
+      "source_url": "https://example.com/job/123",
+      "remote_type": "remote",
+      "seniority": "senior",
+      "salary_label": "$4,000 - $5,000",
+      "location_label": "Remote EU",
+      "work_mode_label": "Remote",
+      "freshness_label": "Seen today",
+      "badges": ["remote", "active"]
+    },
+    "deterministic_fit": {
+      "job_id": "job_backend_rust_001",
+      "score": 82,
+      "matched_roles": ["backend_developer"],
+      "matched_skills": ["rust", "postgres"],
+      "matched_keywords": ["backend"],
+      "source_match": true,
+      "work_mode_match": true,
+      "region_match": true,
+      "reasons": ["Strong role overlap with backend_developer target."]
+    },
+    "feedback_state": {
+      "summary": {
+        "saved_jobs_count": 6,
+        "hidden_jobs_count": 2,
+        "bad_fit_jobs_count": 1,
+        "whitelisted_companies_count": 1,
+        "blacklisted_companies_count": 0
+      },
+      "top_positive_evidence": [{ "type": "saved_job", "label": "job_backend_rust_001" }],
+      "top_negative_evidence": [],
+      "current_job_feedback": {
+        "saved": false,
+        "hidden": false,
+        "bad_fit": false,
+        "company_status": "whitelist"
+      }
+    }
+  }'
+```
+
 ## Rules
 
 - `ml` does not write canonical job, profile, or application data

@@ -14,7 +14,14 @@ from app.engine_api_client import (
     engine_api_base_url,
     engine_api_timeout_seconds,
 )
-from app.llm_provider import build_profile_insights_provider
+from app.job_fit_explanation import (
+    JobFitExplanationProviderError,
+    JobFitExplanationRequest,
+    JobFitExplanationResponse,
+    http_error_from_job_fit_explanation_error,
+)
+from app.job_fit_explanation_service import JobFitExplanationService
+from app.llm_provider import build_job_fit_explanation_provider, build_profile_insights_provider
 from app.profile_insights import (
     LlmContextRequest,
     ProfileInsightsProviderError,
@@ -98,6 +105,18 @@ class RerankedJob(BaseModel):
 class RerankResponse(BaseModel):
     profile_id: str
     jobs: list[RerankedJob]
+
+
+@lru_cache(maxsize=1)
+def build_cached_job_fit_explanation_service() -> JobFitExplanationService:
+    return JobFitExplanationService(build_job_fit_explanation_provider())
+
+
+def get_job_fit_explanation_service() -> JobFitExplanationService:
+    try:
+        return build_cached_job_fit_explanation_service()
+    except JobFitExplanationProviderError as exc:
+        raise http_error_from_job_fit_explanation_error(exc) from exc
 
 
 @lru_cache(maxsize=1)
@@ -312,3 +331,15 @@ async def enrich_profile_insights(
         return await service.enrich(payload)
     except ProfileInsightsProviderError as exc:
         raise http_error_from_provider_error(exc) from exc
+
+
+@app.post("/v1/enrichment/job-fit-explanation", response_model=JobFitExplanationResponse)
+@app.post("/api/v1/enrichment/job-fit-explanation", response_model=JobFitExplanationResponse)
+async def enrich_job_fit_explanation(
+    payload: JobFitExplanationRequest,
+    service: JobFitExplanationService = Depends(get_job_fit_explanation_service),
+) -> JobFitExplanationResponse:
+    try:
+        return await service.enrich(payload)
+    except JobFitExplanationProviderError as exc:
+        raise http_error_from_job_fit_explanation_error(exc) from exc

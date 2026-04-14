@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import {
   analyzeStoredProfile,
   buildSearchProfile,
+  getLlmContext,
   getProfile,
   getRoles,
   getSources,
@@ -46,6 +47,11 @@ export function useProfilePage() {
   const sourcesQuery = useQuery({
     queryKey: queryKeys.sources.all(),
     queryFn: getSources,
+  });
+  const llmContextQuery = useQuery({
+    queryKey: queryKeys.analytics.llmContext(profileQuery.data?.id ?? ''),
+    queryFn: () => getLlmContext(profileQuery.data!.id),
+    enabled: !!profileQuery.data?.id,
   });
 
   useEffect(() => {
@@ -203,6 +209,9 @@ export function useProfilePage() {
     sources: sourcesQuery.data ?? [],
     rolesError: rolesQuery.error,
     sourcesError: sourcesQuery.error,
+    llmContext: llmContextQuery.data ?? null,
+    llmContextError: llmContextQuery.error,
+    llmContextLoading: llmContextQuery.isLoading,
     name,
     email,
     location,
