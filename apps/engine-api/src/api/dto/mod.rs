@@ -1,5 +1,6 @@
 pub mod analytics;
 pub mod applications;
+pub mod behavior;
 pub mod events;
 pub mod feedback;
 pub mod jobs;

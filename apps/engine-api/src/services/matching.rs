@@ -1,4 +1,6 @@
-use crate::domain::job::model::JobView;
+use std::collections::BTreeMap;
+
+use crate::domain::job::model::{Job, JobView};
 use crate::domain::matching::JobFit;
 use crate::domain::role::RoleId;
 use crate::domain::role::catalog::ROLE_CATALOG;
@@ -70,11 +72,7 @@ impl SearchMatchingService {
     /// The result is sorted by descending score, then by recency, then by job id.
     /// No truncation is applied here — callers must truncate after any
     /// post-ranking adjustments (e.g. feedback scoring).
-    pub fn run(
-        &self,
-        search_profile: &SearchProfile,
-        jobs: Vec<JobView>,
-    ) -> SearchRunResult {
+    pub fn run(&self, search_profile: &SearchProfile, jobs: Vec<JobView>) -> SearchRunResult {
         let total_candidates = jobs.len();
         let mut filtered_out_by_source = 0usize;
         let mut ranked_jobs = Vec::new();
@@ -220,28 +218,66 @@ impl SearchMatchingService {
             reasons,
         }
     }
+
+    pub fn infer_role_family(&self, job: &JobView) -> Option<String> {
+        infer_role_family_for_job(
+            &job.job,
+            job.primary_variant
+                .as_ref()
+                .map(|variant| variant.source.as_str()),
+        )
+        .map(str::to_string)
+    }
+
+    pub fn infer_role_family_for_job(&self, job: &Job) -> Option<String> {
+        infer_role_family_for_job(job, None).map(str::to_string)
+    }
 }
 
 fn build_searchable_text(job: &JobView) -> String {
+    build_searchable_text_parts(
+        &job.job,
+        job.primary_variant
+            .as_ref()
+            .map(|variant| variant.source.as_str()),
+    )
+}
+
+fn build_searchable_text_parts(job: &Job, source: Option<&str>) -> String {
     let mut parts = vec![
-        job.job.title.as_str(),
-        job.job.company_name.as_str(),
-        job.job.description_text.as_str(),
+        job.title.as_str(),
+        job.company_name.as_str(),
+        job.description_text.as_str(),
     ];
 
-    if let Some(remote_type) = job.job.remote_type.as_deref() {
+    if let Some(remote_type) = job.remote_type.as_deref() {
         parts.push(remote_type);
     }
 
-    if let Some(source) = job
-        .primary_variant
-        .as_ref()
-        .map(|variant| variant.source.as_str())
-    {
+    if let Some(source) = source {
         parts.push(source);
     }
 
     parts.join(" ")
+}
+
+fn infer_role_family_for_job(job: &Job, source: Option<&str>) -> Option<&'static str> {
+    let prepared_text = PreparedText::new(&build_searchable_text_parts(job, source));
+    let job_roles = collect_job_roles(&prepared_text);
+    let mut families = BTreeMap::new();
+
+    for role in job_roles {
+        let Some(family) = role.family() else {
+            continue;
+        };
+
+        *families.entry(family).or_insert(0usize) += 1;
+    }
+
+    families
+        .into_iter()
+        .max_by(|left, right| left.1.cmp(&right.1).then_with(|| right.0.cmp(left.0)))
+        .map(|(family, _)| family)
 }
 
 fn collect_target_roles(search_profile: &SearchProfile) -> Vec<RoleId> {
@@ -1309,10 +1345,7 @@ mod tests {
             "djinni",
         );
 
-        let result = service.run(
-            &profile,
-            vec![weak_match, partial_devops, exact_backend],
-        );
+        let result = service.run(&profile, vec![weak_match, partial_devops, exact_backend]);
 
         assert_eq!(result.ranked_jobs[0].job.job.id, "job-1");
         assert_eq!(result.ranked_jobs[1].job.job.id, "job-2");

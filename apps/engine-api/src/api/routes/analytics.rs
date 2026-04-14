@@ -142,13 +142,16 @@ pub async fn get_llm_context(
         .await
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
 
-    let analyzed_profile = profile.analysis.as_ref().map(|analysis| LlmContextAnalyzedProfile {
-        summary: analysis.summary.clone(),
-        primary_role: analysis.primary_role.to_string(),
-        seniority: analysis.seniority.clone(),
-        skills: analysis.skills.clone(),
-        keywords: analysis.keywords.clone(),
-    });
+    let analyzed_profile = profile
+        .analysis
+        .as_ref()
+        .map(|analysis| LlmContextAnalyzedProfile {
+            summary: analysis.summary.clone(),
+            primary_role: analysis.primary_role.to_string(),
+            seniority: analysis.seniority.clone(),
+            skills: analysis.skills.clone(),
+            keywords: analysis.keywords.clone(),
+        });
 
     let profile_skills = profile
         .analysis
@@ -441,7 +444,10 @@ mod tests {
 
         assert!(saved.is_some(), "should include saved job evidence");
         assert_eq!(saved.unwrap().label, "job-1");
-        assert!(whitelisted.is_some(), "should include whitelisted company evidence");
+        assert!(
+            whitelisted.is_some(),
+            "should include whitelisted company evidence"
+        );
         assert_eq!(whitelisted.unwrap().label, "GoodCorp");
     }
 
@@ -464,7 +470,10 @@ mod tests {
 
         assert!(bad_fit.is_some(), "should include bad fit job evidence");
         assert_eq!(bad_fit.unwrap().label, "job-2");
-        assert!(blacklisted.is_some(), "should include blacklisted company evidence");
+        assert!(
+            blacklisted.is_some(),
+            "should include blacklisted company evidence"
+        );
         assert_eq!(blacklisted.unwrap().label, "BadCorp");
     }
 
@@ -476,7 +485,9 @@ mod tests {
             .await
             .expect("llm context should succeed");
 
-        let analysis = ctx.analyzed_profile.expect("analyzed_profile should be present");
+        let analysis = ctx
+            .analyzed_profile
+            .expect("analyzed_profile should be present");
         assert_eq!(analysis.primary_role, "backend_developer");
         assert_eq!(analysis.seniority, "senior");
         assert!(analysis.skills.contains(&"rust".to_string()));

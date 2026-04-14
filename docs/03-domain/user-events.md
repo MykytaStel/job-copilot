@@ -68,6 +68,7 @@ Logged through explicit `engine-api` event endpoint from web:
 
 - `POST /api/v1/profiles/:id/events`
 - `GET /api/v1/profiles/:id/events/summary`
+- `GET /api/v1/profiles/:id/behavior-summary`
 
 The explicit endpoint exists for flows that do not naturally pass through `engine-api` business routes, such as ML enrichment requests initiated from web.
 
@@ -85,3 +86,21 @@ The summary endpoint exposes raw event counts for:
 - `interview_prep_requested_count`
 
 These are event counts, not current-state counts.
+
+## Behavior-aware personalization v2
+
+`engine-api` now derives explicit behavior aggregates from `user_events` for:
+
+- save / hide / bad-fit counts by source
+- save / hide / bad-fit counts by role family
+- application-created counts by source and role family when available
+- search run count
+
+Job-scoped feedback writes and explicit job events now auto-fill `role_family` when it can be inferred from canonical Rust-side role signals. That keeps behavior analytics and ranking grounded in the same deterministic domain layer.
+
+Search ranking consumes these aggregates as a small additive layer:
+
+- deterministic fit remains the base score
+- repeated positive source or role-family signals can add a small boost
+- repeated hide / bad-fit source or role-family signals can add a small penalty
+- fit reasons include explicit behavior explanations when those adjustments fire

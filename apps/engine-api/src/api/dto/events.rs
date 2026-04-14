@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::api::error::ApiError;
-use crate::domain::user_event::model::{CreateUserEvent, UserEventRecord, UserEventSummary, UserEventType};
+use crate::domain::user_event::model::{
+    CreateUserEvent, UserEventRecord, UserEventSummary, UserEventType,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct LogUserEventRequest {
