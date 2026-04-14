@@ -1,9 +1,9 @@
 export const queryKeys = {
   jobs: {
     all: () => ['jobs'] as const,
-    filtered: (lifecycle: string, source: string | null) =>
-      ['jobs', 'filtered', lifecycle, source ?? 'all'] as const,
-    detail: (id: string) => ['jobs', id] as const,
+    filtered: (lifecycle: string, source: string | null, profileId?: string | null) =>
+      ['jobs', 'filtered', lifecycle, source ?? 'all', profileId ?? 'none'] as const,
+    detail: (id: string, profileId?: string | null) => ['jobs', id, profileId ?? 'none'] as const,
   },
   sources: {
     all: () => ['sources'] as const,
@@ -56,6 +56,9 @@ export const queryKeys = {
   },
   search: {
     results: (q: string) => ['search', q] as const,
+  },
+  feedback: {
+    profile: (profileId: string) => ['feedback', profileId] as const,
   },
   ml: {
     rerank: (profileId: string) => ['ml', 'rerank', profileId] as const,

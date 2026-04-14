@@ -1,5 +1,6 @@
 pub mod analytics;
 pub mod applications;
+pub mod feedback;
 pub mod health;
 pub mod jobs;
 pub mod profile;
@@ -48,6 +49,30 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/contacts",
             get(applications::list_contacts).post(applications::create_contact),
+        )
+        .route(
+            "/api/v1/profiles/{id}/feedback",
+            get(feedback::list_feedback),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/saved",
+            put(feedback::save_job),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/hidden",
+            put(feedback::hide_job),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/bad-fit",
+            put(feedback::mark_job_bad_fit),
+        )
+        .route(
+            "/api/v1/profiles/{id}/companies/whitelist",
+            put(feedback::add_company_whitelist).delete(feedback::remove_company_whitelist),
+        )
+        .route(
+            "/api/v1/profiles/{id}/companies/blacklist",
+            put(feedback::add_company_blacklist).delete(feedback::remove_company_blacklist),
         )
         .route("/api/v1/jobs/recent", get(jobs::get_recent_jobs))
         .route("/api/v1/jobs/{id}", get(jobs::get_job_by_id))

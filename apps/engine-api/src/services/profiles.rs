@@ -92,6 +92,14 @@ pub struct ProfilesServiceStub {
 
 #[cfg(test)]
 impl ProfilesServiceStub {
+    pub fn with_profile(self, profile: Profile) -> Self {
+        self.profiles_by_id
+            .lock()
+            .expect("profiles stub mutex should not be poisoned")
+            .insert(profile.id.clone(), profile);
+        self
+    }
+
     fn create(&self, input: CreateProfile) -> Result<Profile, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);

@@ -33,6 +33,8 @@ pub struct SearchRunResult {
     pub ranked_jobs: Vec<RankedJob>,
     pub total_candidates: usize,
     pub filtered_out_by_source: usize,
+    pub filtered_out_hidden: usize,
+    pub filtered_out_company_blacklist: usize,
 }
 
 #[derive(Clone, Default)]
@@ -96,6 +98,8 @@ impl SearchMatchingService {
             ranked_jobs,
             total_candidates,
             filtered_out_by_source,
+            filtered_out_hidden: 0,
+            filtered_out_company_blacklist: 0,
         }
     }
 

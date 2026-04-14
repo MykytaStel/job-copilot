@@ -1,6 +1,7 @@
 pub mod analytics;
 pub mod application;
 pub mod candidate;
+pub mod feedback;
 pub mod job;
 pub mod matching;
 pub mod profile;
