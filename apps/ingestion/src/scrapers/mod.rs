@@ -1,4 +1,5 @@
 pub mod djinni;
+pub mod robota_ua;
 pub mod work_ua;
 
 use std::time::Duration;

@@ -87,15 +87,13 @@ pub async fn create_application(
         .get_active()
         .await
         .map_err(|error| ApiError::from_repository(error, "applications_query_failed"))?
-    {
-        if let Some(updated) = state
+        && let Some(updated) = state
             .applications_service
             .attach_resume(&application.id, &active_resume.id)
             .await
             .map_err(|error| ApiError::from_repository(error, "applications_query_failed"))?
-        {
-            application = updated;
-        }
+    {
+        application = updated;
     }
 
     Ok((

@@ -15,6 +15,7 @@ use crate::adapters::mock_source::MockSourceAdapter;
 use crate::models::{IngestionBatch, InputDocument, MockSourceInput};
 use crate::scrapers::ScraperConfig;
 use crate::scrapers::djinni::DjinniScraper;
+use crate::scrapers::robota_ua::RobotaUaScraper;
 use crate::scrapers::work_ua::WorkUaScraper;
 
 // ── Config ─────────────────────────────────────────────────────────────────
@@ -59,6 +60,7 @@ enum InputFormat {
 enum ScrapeSource {
     Djinni,
     WorkUa,
+    RobotaUa,
 }
 
 // ── Entry point ─────────────────────────────────────────────────────────────
@@ -195,6 +197,7 @@ impl Config {
                                 if s == "all" {
                                     sources.push(ScrapeSource::Djinni);
                                     sources.push(ScrapeSource::WorkUa);
+                                    sources.push(ScrapeSource::RobotaUa);
                                 } else {
                                     sources.push(ScrapeSource::from_cli(s)?);
                                 }
@@ -229,6 +232,7 @@ impl Config {
                 if sources.is_empty() {
                     sources.push(ScrapeSource::Djinni);
                     sources.push(ScrapeSource::WorkUa);
+                    sources.push(ScrapeSource::RobotaUa);
                 }
                 sources.dedup();
 
@@ -263,8 +267,9 @@ impl ScrapeSource {
         match value.trim().to_lowercase().as_str() {
             "djinni" => Ok(Self::Djinni),
             "workua" | "work_ua" | "work.ua" => Ok(Self::WorkUa),
+            "robotaua" | "robota_ua" | "robota.ua" => Ok(Self::RobotaUa),
             other => Err(format!(
-                "unsupported source '{other}', expected 'djinni' or 'workua'"
+                "unsupported source '{other}', expected 'djinni', 'workua', or 'robotaua'"
             )),
         }
     }
@@ -273,6 +278,7 @@ impl ScrapeSource {
         match self {
             Self::Djinni => "djinni",
             Self::WorkUa => "work_ua",
+            Self::RobotaUa => "robota_ua",
         }
     }
 }
@@ -315,6 +321,10 @@ async fn run_scraper(mode: &ScrapeMode) -> Result<IngestionBatch, String> {
         }
         ScrapeSource::WorkUa => {
             let scraper = WorkUaScraper::new()?;
+            scraper.scrape(&config).await?
+        }
+        ScrapeSource::RobotaUa => {
+            let scraper = RobotaUaScraper::new()?;
             scraper.scrape(&config).await?
         }
     };

@@ -3,6 +3,7 @@ import re
 
 import httpx
 from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.engine_api_client import (
@@ -41,6 +42,13 @@ app = FastAPI(
     title="job-copilot-ml",
     version="0.1.0",
     description="Read-only ML sidecar over canonical engine-api data.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

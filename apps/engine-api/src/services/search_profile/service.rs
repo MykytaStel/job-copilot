@@ -18,11 +18,11 @@ impl SearchProfileService {
         let mut target_roles: Vec<RoleId> = Vec::new();
 
         for role_candidate in &analyzed_profile.role_candidates {
-            push_unique(&mut target_roles, role_candidate.role.clone());
+            push_unique(&mut target_roles, role_candidate.role);
         }
 
         for preferred_role in &preferences.preferred_roles {
-            push_unique(&mut target_roles, preferred_role.clone());
+            push_unique(&mut target_roles, *preferred_role);
         }
 
         let mut search_terms = Vec::new();
@@ -46,7 +46,7 @@ impl SearchProfileService {
         }
 
         SearchProfile {
-            primary_role: analyzed_profile.primary_role.clone(),
+            primary_role: analyzed_profile.primary_role,
             target_roles,
             seniority: analyzed_profile.seniority.clone(),
             target_regions: preferences.target_regions.clone(),

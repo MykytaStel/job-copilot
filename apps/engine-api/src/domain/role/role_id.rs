@@ -36,10 +36,12 @@ impl RoleId {
         find_role(self).search_aliases
     }
 
+    #[allow(dead_code)]
     pub fn family(self) -> Option<&'static str> {
         find_role(self).family
     }
 
+    #[allow(dead_code)]
     pub fn is_fallback(self) -> bool {
         find_role(self).is_fallback
     }
