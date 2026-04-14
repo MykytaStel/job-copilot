@@ -263,6 +263,7 @@ mod tests {
                 source: "mock_source".to_string(),
                 source_job_id: "platform-001".to_string(),
                 source_url: "https://mock-source.example/jobs/platform-001".to_string(),
+                raw_payload: None,
                 fetched_at: "2026-04-16T09:00:00Z".to_string(),
                 last_seen_at: "2026-04-16T09:00:00Z".to_string(),
                 is_active: true,
@@ -382,6 +383,10 @@ mod tests {
         assert_eq!(
             payload["jobs"][0]["primary_variant"]["source"],
             json!("mock_source")
+        );
+        assert_eq!(
+            payload["jobs"][0]["presentation"]["salary_label"],
+            json!("5,000-6,500 USD")
         );
     }
 

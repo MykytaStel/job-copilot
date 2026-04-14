@@ -19,6 +19,7 @@ pub struct JobSourceVariant {
     pub source: String,
     pub source_job_id: String,
     pub source_url: String,
+    pub raw_payload: Option<serde_json::Value>,
     pub fetched_at: String,
     pub last_seen_at: String,
     pub is_active: bool,

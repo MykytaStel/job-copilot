@@ -568,6 +568,7 @@ mod tests {
                 source: source.to_string(),
                 source_job_id: format!("{id}-source"),
                 source_url: format!("https://example.com/{id}"),
+                raw_payload: None,
                 fetched_at: "2026-04-14T09:00:00Z".to_string(),
                 last_seen_at: "2026-04-14T09:00:00Z".to_string(),
                 is_active: true,
