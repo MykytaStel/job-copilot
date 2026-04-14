@@ -6,3 +6,9 @@ pub struct SalaryBucket {
     pub avg: Option<f64>,
     pub job_count: i64,
 }
+
+#[derive(Clone, Debug)]
+pub struct JobSourceCount {
+    pub source: String,
+    pub count: i64,
+}

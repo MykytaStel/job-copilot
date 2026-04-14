@@ -1369,6 +1369,171 @@ export async function getContacts(): Promise<Contact[]> {
   return response.contacts.map(mapContact);
 }
 
+// ─── Analytics types ──────────────────────────────────────────────────────────
+
+type EngineJobsBySourceEntry = {
+  source: string;
+  count: number;
+};
+
+type EngineJobsByLifecycle = {
+  total: number;
+  active: number;
+  inactive: number;
+  reactivated: number;
+};
+
+type EngineFeedbackSummarySection = {
+  saved_jobs_count: number;
+  hidden_jobs_count: number;
+  bad_fit_jobs_count: number;
+  whitelisted_companies_count: number;
+  blacklisted_companies_count: number;
+};
+
+type EngineAnalyticsSummaryResponse = {
+  profile_id: string;
+  feedback: EngineFeedbackSummarySection;
+  jobs_by_source: EngineJobsBySourceEntry[];
+  jobs_by_lifecycle: EngineJobsByLifecycle;
+  top_matched_roles: string[];
+  top_matched_skills: string[];
+  top_matched_keywords: string[];
+};
+
+type EngineLlmContextAnalyzedProfile = {
+  summary: string;
+  primary_role: string;
+  seniority: string;
+  skills: string[];
+  keywords: string[];
+};
+
+type EngineLlmContextEvidenceEntry = {
+  type: string;
+  label: string;
+};
+
+type EngineLlmContextResponse = {
+  profile_id: string;
+  analyzed_profile: EngineLlmContextAnalyzedProfile | null;
+  profile_skills: string[];
+  profile_keywords: string[];
+  jobs_feed_summary: EngineJobsByLifecycle;
+  feedback_summary: EngineFeedbackSummarySection;
+  top_positive_evidence: EngineLlmContextEvidenceEntry[];
+  top_negative_evidence: EngineLlmContextEvidenceEntry[];
+};
+
+export type JobsBySourceEntry = {
+  source: string;
+  count: number;
+};
+
+export type JobsByLifecycle = {
+  total: number;
+  active: number;
+  inactive: number;
+  reactivated: number;
+};
+
+export type AnalyticsFeedbackSummary = {
+  savedJobsCount: number;
+  hiddenJobsCount: number;
+  badFitJobsCount: number;
+  whitelistedCompaniesCount: number;
+  blacklistedCompaniesCount: number;
+};
+
+export type AnalyticsSummary = {
+  profileId: string;
+  feedback: AnalyticsFeedbackSummary;
+  jobsBySource: JobsBySourceEntry[];
+  jobsByLifecycle: JobsByLifecycle;
+  topMatchedRoles: string[];
+  topMatchedSkills: string[];
+  topMatchedKeywords: string[];
+};
+
+export type LlmContextEvidenceEntry = {
+  type: string;
+  label: string;
+};
+
+export type LlmContextAnalyzedProfile = {
+  summary: string;
+  primaryRole: string;
+  seniority: string;
+  skills: string[];
+  keywords: string[];
+};
+
+export type LlmContext = {
+  profileId: string;
+  analyzedProfile: LlmContextAnalyzedProfile | null;
+  profileSkills: string[];
+  profileKeywords: string[];
+  jobsFeedSummary: JobsByLifecycle;
+  feedbackSummary: AnalyticsFeedbackSummary;
+  topPositiveEvidence: LlmContextEvidenceEntry[];
+  topNegativeEvidence: LlmContextEvidenceEntry[];
+};
+
+function mapFeedbackSummarySection(s: EngineFeedbackSummarySection): AnalyticsFeedbackSummary {
+  return {
+    savedJobsCount: s.saved_jobs_count,
+    hiddenJobsCount: s.hidden_jobs_count,
+    badFitJobsCount: s.bad_fit_jobs_count,
+    whitelistedCompaniesCount: s.whitelisted_companies_count,
+    blacklistedCompaniesCount: s.blacklisted_companies_count,
+  };
+}
+
+function mapJobsByLifecycle(l: EngineJobsByLifecycle): JobsByLifecycle {
+  return { total: l.total, active: l.active, inactive: l.inactive, reactivated: l.reactivated };
+}
+
+export async function getAnalyticsSummary(profileId: string): Promise<AnalyticsSummary> {
+  const response = await request<EngineAnalyticsSummaryResponse>(
+    `/api/v1/profiles/${profileId}/analytics/summary`,
+  );
+
+  return {
+    profileId: response.profile_id,
+    feedback: mapFeedbackSummarySection(response.feedback),
+    jobsBySource: response.jobs_by_source,
+    jobsByLifecycle: mapJobsByLifecycle(response.jobs_by_lifecycle),
+    topMatchedRoles: response.top_matched_roles,
+    topMatchedSkills: response.top_matched_skills,
+    topMatchedKeywords: response.top_matched_keywords,
+  };
+}
+
+export async function getLlmContext(profileId: string): Promise<LlmContext> {
+  const response = await request<EngineLlmContextResponse>(
+    `/api/v1/profiles/${profileId}/analytics/llm-context`,
+  );
+
+  return {
+    profileId: response.profile_id,
+    analyzedProfile: response.analyzed_profile
+      ? {
+          summary: response.analyzed_profile.summary,
+          primaryRole: response.analyzed_profile.primary_role,
+          seniority: response.analyzed_profile.seniority,
+          skills: response.analyzed_profile.skills,
+          keywords: response.analyzed_profile.keywords,
+        }
+      : null,
+    profileSkills: response.profile_skills,
+    profileKeywords: response.profile_keywords,
+    jobsFeedSummary: mapJobsByLifecycle(response.jobs_feed_summary),
+    feedbackSummary: mapFeedbackSummarySection(response.feedback_summary),
+    topPositiveEvidence: response.top_positive_evidence,
+    topNegativeEvidence: response.top_negative_evidence,
+  };
+}
+
 export async function createContact(payload: ContactInput): Promise<Contact> {
   const contact = await request<EngineContact>(
     '/api/v1/contacts',

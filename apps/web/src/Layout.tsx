@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
-import { KanbanSquare, LayoutDashboard, Star, User } from 'lucide-react';
+import { BarChart2, KanbanSquare, LayoutDashboard, Star, User } from 'lucide-react';
 
 type NavLinkItem = {
   to: string;
@@ -13,6 +13,7 @@ const links: NavLinkItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/applications', label: 'Applications', icon: KanbanSquare },
   { to: '/feedback', label: 'Feedback', icon: Star },
+  { to: '/analytics', label: 'Analytics', icon: BarChart2 },
   { to: '/profile', label: 'Profile', icon: User },
 ];
 
