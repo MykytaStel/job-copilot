@@ -49,6 +49,23 @@ impl JobsService {
         }
     }
 
+    pub async fn list_filtered_views(
+        &self,
+        limit: i64,
+        lifecycle: Option<&str>,
+        source: Option<&str>,
+    ) -> Result<Vec<JobView>, RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => {
+                repository
+                    .list_filtered_views(limit, lifecycle, source)
+                    .await
+            }
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.list_filtered_views(limit, lifecycle, source),
+        }
+    }
+
     pub async fn feed_summary(&self) -> Result<JobFeedSummary, RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => repository.feed_summary().await,
@@ -137,6 +154,44 @@ impl JobsServiceStub {
             .take(limit as usize)
             .cloned()
             .collect())
+    }
+
+    fn list_filtered_views(
+        &self,
+        limit: i64,
+        lifecycle: Option<&str>,
+        source: Option<&str>,
+    ) -> Result<Vec<JobView>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let iter = self.recent_job_views.iter().filter(|v| {
+            let lifecycle_ok = match lifecycle {
+                Some("inactive") => !v.job.is_active,
+                Some("reactivated") => {
+                    v.job.is_active
+                        && v.reactivated_at
+                            .as_ref()
+                            .is_some_and(|r| r == &v.job.last_seen_at)
+                }
+                Some("active") => {
+                    v.job.is_active
+                        && !v
+                            .reactivated_at
+                            .as_ref()
+                            .is_some_and(|r| r == &v.job.last_seen_at)
+                }
+                _ => true,
+            };
+            let source_ok = match source {
+                Some(s) => v.primary_variant.as_ref().is_some_and(|pv| pv.source == s),
+                None => true,
+            };
+            lifecycle_ok && source_ok
+        });
+
+        Ok(iter.take(limit as usize).cloned().collect())
     }
 
     fn search(&self, _query: &str, limit: i64, offset: i64) -> Result<Vec<Job>, RepositoryError> {

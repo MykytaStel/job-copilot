@@ -1,6 +1,7 @@
 use crate::domain::candidate::profile::{CandidateProfile, RoleScore};
 use crate::domain::role::RoleId;
 use crate::domain::search::profile::{SearchPreferences, TargetRegion, WorkMode};
+use crate::domain::source::SourceId;
 
 use super::service::SearchProfileService;
 
@@ -12,6 +13,7 @@ fn builds_search_profile_from_profile_and_preferences() {
         target_regions: vec![TargetRegion::Ua, TargetRegion::EuRemote],
         work_modes: vec![WorkMode::Remote, WorkMode::Hybrid],
         preferred_roles: vec![RoleId::FrontendDeveloper],
+        allowed_sources: vec![SourceId::Djinni, SourceId::WorkUa],
         include_keywords: vec!["product company".to_string()],
         exclude_keywords: vec!["gambling".to_string()],
     };
@@ -35,6 +37,10 @@ fn builds_search_profile_from_profile_and_preferences() {
     assert_eq!(
         search_profile.work_modes,
         vec![WorkMode::Remote, WorkMode::Hybrid]
+    );
+    assert_eq!(
+        search_profile.allowed_sources,
+        vec![SourceId::Djinni, SourceId::WorkUa]
     );
     assert_eq!(
         search_profile.search_terms,
@@ -129,6 +135,7 @@ fn works_when_preferences_are_mostly_empty() {
 
     assert_eq!(search_profile.target_regions, Vec::<TargetRegion>::new());
     assert_eq!(search_profile.work_modes, Vec::<WorkMode>::new());
+    assert_eq!(search_profile.allowed_sources, Vec::<SourceId>::new());
     assert_eq!(
         search_profile.target_roles,
         vec![RoleId::ReactNativeDeveloper, RoleId::MobileDeveloper]

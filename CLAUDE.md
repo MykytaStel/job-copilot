@@ -1,155 +1,65 @@
-# CLAUDE.md — Job Copilot UA
+# CLAUDE.md
 
-You are working on **Job Copilot UA**, a personal AI-assisted job search platform for Ukrainian tech candidates.
+You are working in the Job Copilot monorepo.
 
----
+## Product intent
+Job Copilot is not a simple job board. It is a candidate intelligence and action system:
+1. understand the user
+2. understand what they want now
+3. ingest and normalize jobs
+4. rank jobs for that user
+5. explain fit/gaps
+6. support actions: save, hide, apply, follow up, tailor CV, learn from outcomes
 
-## Product goal
+## Current repo shape
+- `engine-api/` — canonical backend and domain authority
+- `ingestion/` — source fetch, scrape, normalize, dedupe, lifecycle
+- `ml/` — Python enrichment sidecar, reranking, analytics, future LLM orchestration
+- `web/` — operator UI / dashboard
 
-Help a candidate:
-- Organize their master profile and CV
-- Ingest job postings from Ukrainian job sites (Djinni, Work.ua, Robota.ua) or pasted text
-- Understand fit and skill gaps vs each job
-- Tailor CV content using AI grounded in the candidate's real experience
-- Track applications, prep interviews, manage offers
+## Architecture rules
+- Domain truth lives in Rust, not in UI and not in LLM prompts.
+- LLM is an enrichment layer, not the source of canonical truth.
+- Internal role identity must use a canonical role model (`RoleId` / role catalog), not free-form strings.
+- Search filters such as region/work mode/source must stay structured, not be flattened into free text.
+- Prefer explicit DTOs, small services, testable helpers, and stable contracts.
 
----
+## Immediate priorities
+1. Canonical role catalog in domain.
+2. Search preferences + search profile.
+3. Source filtering for parsed jobs (which sources to ingest/search from).
+4. Fix web navigation stale-data behavior so pages refresh correctly on transitions.
+5. Ranking v2: deterministic baseline + explainable fit.
+6. Lists and controls: saved, hidden, bad, whitelist, blacklist.
+7. ML/LLM enrichment with strict validation back in Rust.
 
-## Current state (April 2026)
+## UX direction
+Quiet operator dashboard:
+- dark base
+- restrained gradients
+- dense but readable cards
+- low-noise interaction
+- fit/explanation first
+- act quickly from any list
 
-**Built and working:**
-- engine-api health endpoint
-- jobs recent/listing endpoints
-- applications recent/listing endpoints
-- persisted profile CRUD in engine-api
-- persisted profile analysis and search-profile build flows
-- web connected to engine-api for dashboard, job details, applications board, and profile
+## Guardrails
+- Do not invent new role IDs outside the canonical catalog.
+- Do not bypass DTO validation.
+- Do not move domain truth into the frontend.
+- Do not make LLM output authoritative without Rust-side validation.
+- Do not add broad abstractions unless a real second use-case exists.
 
-**What's still stubbed:**
-- application write flows in engine-api
-- resume ingestion/upload flow
-- matching and fit-score persistence
-- search, alerts, contacts, tasks, offers, backup, and other legacy-only tools
+## Preferred working style
+- Make one vertical slice at a time.
+- Update docs when the slice changes architecture or contracts.
+- Add tests for all new matching/ranking/merge logic.
+- Keep comments short and useful.
+- Prefer maintainability over cleverness.
 
----
-
-## Architecture
-
-```
-job-copilot-ua-starter/
-├── apps/
-│   ├── engine-api/   ← Rust + Axum + SQLx + Postgres
-│   │   ├── src/
-│   │   │   ├── api/          ← routes, DTOs, error contracts
-│   │   │   ├── db/           ← database and repositories
-│   │   │   ├── domain/       ← explicit domain models
-│   │   │   ├── services/     ← use-case services
-│   │   │   └── main.rs       ← server entry
-│   └── web/          ← React 19 + Vite + React Router 7
-│       └── src/
-│           ├── App.tsx       ← route definitions
-│           ├── Layout.tsx    ← app shell
-│           ├── api.ts        ← typed fetch client for engine-api
-│           └── pages/        ← active engine-api-backed screens
-├── packages/
-│   └── shared/        ← shared TypeScript types
-│       └── src/index.ts
-└── docs/              ← product decisions, roadmap
-```
-
-**Port conventions:** Engine API = 8080, Web = 5173
-
----
-
-## DB tables (current engine-api scope)
-
-| Table | Primary concern |
-|-------|----------------|
-| `profiles` | Candidate master profile + persisted analysis snapshot |
-| `jobs` | Canonical jobs read model |
-| `applications` | Application tracking read model |
-
----
-
-## Tech rules
-
-- TypeScript everywhere. No `any` on public boundaries.
-- Prefer simple solutions over abstractions.
-- Keep web and API fully separated — no shared runtime code, only shared types.
-- Shared DTOs and Zod schemas belong in `packages/contracts/src/index.ts`.
-- Do not invent product fields or fake candidate experience.
-- Any AI-generated text must be grounded in user-provided resume/profile facts.
-- Zod validation on all POST/PATCH inputs (API side).
-- Frontend: no heavy state library — plain `useState`/`useEffect` until a clear need arises.
-
----
-
-## Coding rules
-
-- Small functions with single responsibility
-- Explicit return types on all exported functions
-- No hidden magic, no decorators, no DI containers
-- Comments only where the reasoning is non-obvious (not what, but why)
-- Readability over cleverness
-- Route handler pattern:
-  ```ts
-  app.post('/resource', async (req, reply) => {
-    const body = Schema.parse(req.body);   // validate
-    const id = crypto.randomUUID();
-    db.insert(table).values({ id, ...body, createdAt: new Date().toISOString() }).run();
-    return reply.code(201).send({ id, ...body });
-  });
-  ```
-- Prefer `db.select().from(table).where(eq(table.id, id)).get()` pattern (Drizzle)
-
----
-
-## AI integration pattern
-
-```ts
-// lib/claude.ts — always check for key before calling
-if (!process.env.ANTHROPIC_API_KEY) {
-  return reply.code(503).send({ error: 'AI generation not enabled. Set ANTHROPIC_API_KEY.' });
-}
-const client = new Anthropic();
-const msg = await client.messages.create({ model: 'claude-opus-4-6', ... });
-```
-
-Prompts live in `lib/prompts.ts`. Each prompt function returns a string.
-Prompts must reference only facts from the user's profile/resume, never invented content.
-
----
-
-## Agent guide
-
-Specialized agents live in `.claude/agents/`. Use them for focused tasks:
-
-| Agent | When to use |
-|-------|------------|
-| `backend-implementer` | New API routes, DB schema changes, Zod schemas |
-| `frontend-builder` | New pages, UI components, form flows |
-| `ai-feature-engineer` | Claude API integration, prompt engineering |
-| `job-ingestion-engineer` | URL scraper improvements, new job site parsers |
-| `review-guardian` | Code review before committing |
-| `mvp-architect` | Scope decisions, feature slicing |
-| `db-schema-guard` | DB migrations, index strategy, schema changes |
-
----
-
-## Workflow
-
-- Before implementing, restate the task in one sentence.
-- Propose the smallest working change first.
-- Prefer editing existing files over creating new ones.
-- After implementation, list changed files and short rationale.
-- Run `pnpm -r typecheck` before calling a task done.
-
----
-
-## Environment variables
-
-```
-ANTHROPIC_API_KEY=sk-ant-...      # enables AI generation (P3 features)
-TELEGRAM_BOT_TOKEN=               # enables Telegram bot
-PORT=3001                         # API port (optional, default 3001)
-```
+## Good next slices
+- canonical role catalog
+- search-profile/build
+- source filters for search + ingestion
+- web query invalidation / route refresh fixes
+- company list statuses and job list labels
+- analytics endpoints for timeline / charts

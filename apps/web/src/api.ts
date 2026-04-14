@@ -69,6 +69,15 @@ type EngineRecentJobsResponse = {
   summary: EngineJobFeedSummary;
 };
 
+type EngineSourceCatalogResponse = {
+  sources: EngineSourceCatalogItem[];
+};
+
+type EngineSourceCatalogItem = {
+  id: string;
+  display_name: string;
+};
+
 type EngineRecentApplicationsResponse = {
   applications: EngineApplication[];
 };
@@ -257,6 +266,11 @@ export type FitAnalysis = {
   matchedTerms: string[];
   missingTerms: string[];
   evidence: string[];
+};
+
+export type SourceCatalogItem = {
+  id: string;
+  displayName: string;
 };
 
 async function mlRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -549,15 +563,34 @@ export async function getJobs(): Promise<JobPosting[]> {
   return response.jobs.map(mapJob);
 }
 
-export async function getJobsFeed(): Promise<{
+export async function getJobsFeed(params?: {
+  lifecycle?: string;
+  source?: string;
+  limit?: number;
+}): Promise<{
   jobs: JobPosting[];
   summary: JobFeedSummary;
 }> {
-  const response = await request<EngineRecentJobsResponse>('/api/v1/jobs/recent');
+  const qs = new URLSearchParams();
+  if (params?.lifecycle) qs.set('lifecycle', params.lifecycle);
+  if (params?.source) qs.set('source', params.source);
+  if (params?.limit) qs.set('limit', String(params.limit));
+  const query = qs.toString();
+  const response = await request<EngineRecentJobsResponse>(
+    `/api/v1/jobs/recent${query ? `?${query}` : ''}`,
+  );
   return {
     jobs: response.jobs.map(mapJob),
     summary: mapJobFeedSummary(response.summary),
   };
+}
+
+export async function getSources(): Promise<SourceCatalogItem[]> {
+  const response = await request<EngineSourceCatalogResponse>('/api/v1/sources');
+  return response.sources.map((source) => ({
+    id: source.id,
+    displayName: source.display_name,
+  }));
 }
 
 export async function getJob(id: string): Promise<JobPosting> {

@@ -5,11 +5,16 @@ use tracing::warn;
 use crate::api::dto::jobs::{JobResponse, MlJobLifecycleResponse, RecentJobsResponse};
 use crate::api::dto::ranking::FitScoreResponse;
 use crate::api::error::ApiError;
+use crate::domain::source::SourceId;
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct RecentJobsQuery {
     pub limit: Option<i64>,
+    /// Filter by lifecycle stage: "active" | "inactive" | "reactivated"
+    pub lifecycle: Option<String>,
+    /// Filter by source name: "djinni" | "work_ua" | "robota_ua"
+    pub source: Option<SourceId>,
 }
 
 pub async fn get_job_by_id(
@@ -54,15 +59,18 @@ pub async fn get_recent_jobs(
     State(state): State<AppState>,
     Query(query): Query<RecentJobsQuery>,
 ) -> Result<axum::Json<RecentJobsResponse>, ApiError> {
-    let limit = query.limit.unwrap_or(20);
+    let limit = query.limit.unwrap_or(50);
 
-    if !(1..=100).contains(&limit) {
+    if !(1..=200).contains(&limit) {
         return Err(ApiError::invalid_limit(limit));
     }
 
+    let lifecycle = query.lifecycle.as_deref();
+    let source = query.source.map(SourceId::canonical_key);
+
     let jobs = state
         .jobs_service
-        .list_recent_views(limit)
+        .list_filtered_views(limit, lifecycle, source)
         .await
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
     let summary = state
@@ -214,6 +222,7 @@ pub async fn score_job_match(
 mod tests {
     use axum::Json;
     use axum::extract::{Path, Query, State};
+    use axum::http::Uri;
     use axum::response::IntoResponse;
     use axum::{body, http::StatusCode};
     use serde_json::{Value, json};
@@ -221,6 +230,7 @@ mod tests {
     use crate::domain::job::model::{
         Job, JobFeedSummary, JobLifecycleStage, JobSourceVariant, JobView,
     };
+    use crate::domain::source::SourceId;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
@@ -307,7 +317,11 @@ mod tests {
     async fn rejects_invalid_recent_jobs_limit() {
         let result = get_recent_jobs(
             State(AppState::without_database()),
-            Query(RecentJobsQuery { limit: Some(0) }),
+            Query(RecentJobsQuery {
+                limit: Some(0),
+                lifecycle: None,
+                source: None,
+            }),
         )
         .await;
 
@@ -345,10 +359,17 @@ mod tests {
             ResumesService::for_tests(ResumesServiceStub::default()),
         );
 
-        let response = get_recent_jobs(State(state), Query(RecentJobsQuery { limit: Some(20) }))
-            .await
-            .expect("recent jobs should succeed")
-            .into_response();
+        let response = get_recent_jobs(
+            State(state),
+            Query(RecentJobsQuery {
+                limit: Some(20),
+                lifecycle: None,
+                source: None,
+            }),
+        )
+        .await
+        .expect("recent jobs should succeed")
+        .into_response();
 
         let body = body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -392,5 +413,27 @@ mod tests {
             payload["primary_variant"]["source_url"],
             json!("https://mock-source.example/jobs/platform-001")
         );
+    }
+
+    #[test]
+    fn recent_jobs_query_accepts_known_source() {
+        let uri: Uri = "/api/v1/jobs/recent?source=djinni"
+            .parse()
+            .expect("uri should parse");
+        let Query(query) =
+            Query::<RecentJobsQuery>::try_from_uri(&uri).expect("query should deserialize");
+
+        assert_eq!(query.source, Some(SourceId::Djinni));
+    }
+
+    #[test]
+    fn recent_jobs_query_rejects_unknown_source() {
+        let uri: Uri = "/api/v1/jobs/recent?source=linkedin"
+            .parse()
+            .expect("uri should parse");
+
+        let result = Query::<RecentJobsQuery>::try_from_uri(&uri);
+
+        assert!(result.is_err());
     }
 }

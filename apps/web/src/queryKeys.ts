@@ -1,7 +1,12 @@
 export const queryKeys = {
   jobs: {
     all: () => ['jobs'] as const,
+    filtered: (lifecycle: string, source: string | null) =>
+      ['jobs', 'filtered', lifecycle, source ?? 'all'] as const,
     detail: (id: string) => ['jobs', id] as const,
+  },
+  sources: {
+    all: () => ['sources'] as const,
   },
   profile: {
     root: () => ['profile'] as const,

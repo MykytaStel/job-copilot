@@ -801,6 +801,22 @@ input[type="file"] {
 .noteForm textarea { flex: 1; resize: vertical; min-height: 60px; }
 .noteForm button { flex-shrink: 0; padding: 10px 16px; font-size: 13px; }
 
+/* ─── Jobs filters (lifecycle + source) ─────────────────────────────────────── */
+
+.jobsFilters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.lifecycleTabs,
+.sourceTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* ─── Jobs search bar ───────────────────────────────────────────────────────── */
 
 .jobsHeader {

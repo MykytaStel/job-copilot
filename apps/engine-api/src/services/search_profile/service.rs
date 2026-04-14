@@ -51,6 +51,7 @@ impl SearchProfileService {
             seniority: analyzed_profile.seniority.clone(),
             target_regions: preferences.target_regions.clone(),
             work_modes: preferences.work_modes.clone(),
+            allowed_sources: preferences.allowed_sources.clone(),
             search_terms,
             exclude_terms,
         }
