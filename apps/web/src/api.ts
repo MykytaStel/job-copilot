@@ -411,6 +411,33 @@ export type RoleCatalogItem = {
   isFallback: boolean;
 };
 
+export type UserEventType =
+  | 'job_impression'
+  | 'job_opened'
+  | 'job_saved'
+  | 'job_unsaved'
+  | 'job_hidden'
+  | 'job_unhidden'
+  | 'job_bad_fit'
+  | 'job_bad_fit_removed'
+  | 'company_whitelisted'
+  | 'company_blacklisted'
+  | 'search_run'
+  | 'fit_explanation_requested'
+  | 'application_coach_requested'
+  | 'cover_letter_draft_requested'
+  | 'interview_prep_requested'
+  | 'application_created';
+
+type UserEventLogInput = {
+  eventType: UserEventType;
+  jobId?: string;
+  companyName?: string;
+  source?: string;
+  roleFamily?: string;
+  payloadJson?: Record<string, unknown>;
+};
+
 export type SearchTargetRegion =
   | 'ua'
   | 'eu'
@@ -589,6 +616,23 @@ function readStoredProfileId() {
 
 function writeStoredProfileId(profileId: string) {
   window.localStorage.setItem(PROFILE_ID_KEY, profileId);
+}
+
+export async function logUserEvent(
+  profileId: string,
+  input: UserEventLogInput,
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/events`,
+    json('POST', {
+      event_type: input.eventType,
+      job_id: input.jobId,
+      company_name: input.companyName,
+      source: input.source,
+      role_family: input.roleFamily,
+      payload_json: input.payloadJson,
+    }),
+  );
 }
 
 function withProfileIdQuery(path: string) {
@@ -1266,6 +1310,20 @@ export async function createApplication(
       applied_at: payload.appliedAt,
     }),
   );
+
+  const profileId = readStoredProfileId();
+  if (profileId) {
+    void logUserEvent(profileId, {
+      eventType: 'application_created',
+      jobId: payload.jobId,
+      payloadJson: {
+        application_id: application.id,
+        status: payload.status,
+        applied_at: payload.appliedAt ?? null,
+      },
+    }).catch(() => null);
+  }
+
   return mapApplication(application);
 }
 
@@ -1756,6 +1814,17 @@ export async function getProfileInsights(context: LlmContext): Promise<ProfileIn
 export async function getJobFitExplanation(
   payload: JobFitExplanationRequest,
 ): Promise<JobFitExplanation> {
+  void logUserEvent(payload.profileId, {
+    eventType: 'fit_explanation_requested',
+    jobId: payload.rankedJob.id,
+    payloadJson: {
+      surface: 'profile_page',
+      deterministic_fit_score: payload.deterministicFit.score,
+      primary_role: payload.searchProfile?.primaryRole ?? null,
+      has_feedback_state: Boolean(payload.feedbackState),
+    },
+  }).catch(() => null);
+
   const response = await mlRequest<MlJobFitExplanationResponse>('/v1/enrichment/job-fit-explanation', {
     method: 'POST',
     body: JSON.stringify({
@@ -1858,6 +1927,17 @@ export async function getJobFitExplanation(
 export async function getApplicationCoach(
   payload: ApplicationCoachRequest,
 ): Promise<ApplicationCoach> {
+  void logUserEvent(payload.profileId, {
+    eventType: 'application_coach_requested',
+    jobId: payload.rankedJob.id,
+    payloadJson: {
+      surface: 'profile_page',
+      deterministic_fit_score: payload.deterministicFit.score,
+      has_fit_explanation: Boolean(payload.jobFitExplanation),
+      primary_role: payload.searchProfile?.primaryRole ?? null,
+    },
+  }).catch(() => null);
+
   const response = await mlRequest<MlApplicationCoachResponse>('/v1/enrichment/application-coach', {
     method: 'POST',
     body: JSON.stringify({
@@ -1972,6 +2052,18 @@ export async function getApplicationCoach(
 export async function getCoverLetterDraft(
   payload: CoverLetterDraftRequest,
 ): Promise<CoverLetterDraft> {
+  void logUserEvent(payload.profileId, {
+    eventType: 'cover_letter_draft_requested',
+    jobId: payload.rankedJob.id,
+    payloadJson: {
+      surface: 'profile_page',
+      deterministic_fit_score: payload.deterministicFit.score,
+      has_fit_explanation: Boolean(payload.jobFitExplanation),
+      has_application_coach: Boolean(payload.applicationCoach),
+      has_raw_profile_text: Boolean(payload.rawProfileText),
+    },
+  }).catch(() => null);
+
   const response = await mlRequest<MlCoverLetterDraftResponse>('/v1/enrichment/cover-letter-draft', {
     method: 'POST',
     body: JSON.stringify({
@@ -2097,6 +2189,19 @@ export async function getCoverLetterDraft(
 export async function getInterviewPrep(
   payload: InterviewPrepRequest,
 ): Promise<InterviewPrep> {
+  void logUserEvent(payload.profileId, {
+    eventType: 'interview_prep_requested',
+    jobId: payload.rankedJob.id,
+    payloadJson: {
+      surface: 'profile_page',
+      deterministic_fit_score: payload.deterministicFit.score,
+      has_fit_explanation: Boolean(payload.jobFitExplanation),
+      has_application_coach: Boolean(payload.applicationCoach),
+      has_cover_letter_draft: Boolean(payload.coverLetterDraft),
+      has_raw_profile_text: Boolean(payload.rawProfileText),
+    },
+  }).catch(() => null);
+
   const response = await mlRequest<MlInterviewPrepResponse>('/v1/enrichment/interview-prep', {
     method: 'POST',
     body: JSON.stringify({

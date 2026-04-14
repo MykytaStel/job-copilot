@@ -6,6 +6,7 @@ mod jobs;
 mod profiles;
 mod resumes;
 mod tasks;
+mod user_events;
 
 use std::error::Error;
 use std::fmt;
@@ -18,6 +19,7 @@ pub use jobs::JobsRepository;
 pub use profiles::ProfilesRepository;
 pub use resumes::ResumesRepository;
 pub use tasks::TasksRepository;
+pub use user_events::UserEventsRepository;
 
 #[derive(Debug)]
 pub enum RepositoryError {

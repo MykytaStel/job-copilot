@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::db::repositories::{
     ActivitiesRepository, ApplicationsRepository, FeedbackRepository, FitScoresRepository,
-    JobsRepository, ProfilesRepository, ResumesRepository, TasksRepository,
+    JobsRepository, ProfilesRepository, ResumesRepository, TasksRepository, UserEventsRepository,
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
@@ -15,6 +15,7 @@ use crate::services::ranking::RankingService;
 use crate::services::resumes::ResumesService;
 use crate::services::salary::SalaryService;
 use crate::services::search_profile::service::SearchProfileService;
+use crate::services::user_events::UserEventsService;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -34,6 +35,7 @@ pub struct AppState {
     pub search_profile_service: SearchProfileService,
     pub followup_service: FollowUpService,
     pub salary_service: SalaryService,
+    pub user_events_service: UserEventsService,
 }
 
 impl AppState {
@@ -47,6 +49,7 @@ impl AppState {
         let tasks_repository = TasksRepository::new(database.clone());
         let resumes_repository = ResumesRepository::new(database.clone());
         let fit_scores_repository = FitScoresRepository::new(database.clone());
+        let user_events_repository = UserEventsRepository::new(database.clone());
         let profile_analysis_service = ProfileAnalysisService::new();
 
         Self {
@@ -66,6 +69,7 @@ impl AppState {
             search_profile_service: SearchProfileService::new(),
             followup_service: FollowUpService::new(tasks_repository),
             salary_service: SalaryService::new(salary_jobs_repository),
+            user_events_service: UserEventsService::new(user_events_repository),
         }
     }
 
@@ -104,12 +108,21 @@ impl AppState {
             search_profile_service: SearchProfileService::new(),
             followup_service: FollowUpService::new(TasksRepository::new(Database::disabled())),
             salary_service: SalaryService::new(JobsRepository::new(Database::disabled())),
+            user_events_service: UserEventsService::for_tests(
+                crate::services::user_events::UserEventsServiceStub::default(),
+            ),
         }
     }
 
     #[cfg(test)]
     pub fn with_feedback_service(mut self, feedback_service: FeedbackService) -> Self {
         self.feedback_service = feedback_service;
+        self
+    }
+
+    #[cfg(test)]
+    pub fn with_user_events_service(mut self, user_events_service: UserEventsService) -> Self {
+        self.user_events_service = user_events_service;
         self
     }
 }

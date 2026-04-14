@@ -81,3 +81,16 @@ The current `web` app is wired to `engine-api` for:
 - persisted profile CRUD + analysis
 
 Legacy-only screens have been removed from the active router so the repository can move fully onto `engine-api`.
+
+# Learning Layer Prompt Pack
+
+This pack contains:
+- `docs/learning-layer-roadmap.md` — product + architecture roadmap
+- `.claude/learning-architecture-prompt.md` — prompt for Claude planning
+- `codex/event-logging-v1.md` — first implementation slice
+- `codex/behavior-aware-personalization-v2.md` — next slice after events
+
+Recommended order:
+1. Use the Claude prompt to review architecture
+2. Give Codex `event-logging-v1.md`
+3. After that lands, give Codex `behavior-aware-personalization-v2.md`

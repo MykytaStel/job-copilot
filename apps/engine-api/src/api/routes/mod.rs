@@ -1,5 +1,6 @@
 pub mod analytics;
 pub mod applications;
+pub mod events;
 pub mod feedback;
 pub mod health;
 pub mod jobs;
@@ -53,6 +54,11 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/profiles/{id}/feedback",
             get(feedback::list_feedback),
+        )
+        .route("/api/v1/profiles/{id}/events", post(events::log_user_event))
+        .route(
+            "/api/v1/profiles/{id}/events/summary",
+            get(events::get_user_event_summary),
         )
         .route(
             "/api/v1/profiles/{id}/jobs/{job_id}/saved",

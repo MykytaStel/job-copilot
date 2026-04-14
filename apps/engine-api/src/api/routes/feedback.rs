@@ -1,12 +1,14 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 
+use crate::api::routes::events::{load_job_event_metadata, log_user_event_softly};
 use crate::api::dto::feedback::{
     CompanyFeedbackResponse, FeedbackOverviewResponse, FeedbackSummary, JobFeedbackResponse,
     UpdateCompanyFeedbackRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
 use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackFlags};
+use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::feedback::FeedbackService;
 use crate::state::AppState;
 
@@ -57,6 +59,7 @@ pub async fn save_job(
         state,
         profile_id,
         job_id,
+        UserEventType::JobSaved,
         JobFeedbackFlags {
             saved: true,
             ..JobFeedbackFlags::default()
@@ -73,6 +76,7 @@ pub async fn hide_job(
         state,
         profile_id,
         job_id,
+        UserEventType::JobHidden,
         JobFeedbackFlags {
             hidden: true,
             ..JobFeedbackFlags::default()
@@ -89,6 +93,7 @@ pub async fn mark_job_bad_fit(
         state,
         profile_id,
         job_id,
+        UserEventType::JobBadFit,
         JobFeedbackFlags {
             bad_fit: true,
             ..JobFeedbackFlags::default()
@@ -105,6 +110,7 @@ pub async fn unsave_job(
         state,
         profile_id,
         job_id,
+        UserEventType::JobUnsaved,
         JobFeedbackFlags {
             saved: true,
             ..JobFeedbackFlags::default()
@@ -121,6 +127,7 @@ pub async fn unhide_job(
         state,
         profile_id,
         job_id,
+        UserEventType::JobUnhidden,
         JobFeedbackFlags {
             hidden: true,
             ..JobFeedbackFlags::default()
@@ -137,6 +144,7 @@ pub async fn unmark_job_bad_fit(
         state,
         profile_id,
         job_id,
+        UserEventType::JobBadFitRemoved,
         JobFeedbackFlags {
             bad_fit: true,
             ..JobFeedbackFlags::default()
@@ -149,15 +157,31 @@ async fn clear_job_feedback_flags(
     state: AppState,
     profile_id: String,
     job_id: String,
+    event_type: UserEventType,
     flags: JobFeedbackFlags,
 ) -> Result<StatusCode, ApiError> {
     ensure_profile_exists(&state, &profile_id).await?;
+    let metadata = load_job_event_metadata(&state, &job_id).await?;
 
     state
         .feedback_service
         .clear_job_feedback(&profile_id, &job_id, flags)
         .await
         .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+
+    log_user_event_softly(
+        &state,
+        CreateUserEvent {
+            profile_id,
+            event_type,
+            job_id: Some(job_id),
+            company_name: metadata.company_name,
+            source: metadata.source,
+            role_family: None,
+            payload_json: None,
+        },
+    )
+    .await;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -198,16 +222,31 @@ async fn update_job_feedback(
     state: AppState,
     profile_id: String,
     job_id: String,
+    event_type: UserEventType,
     flags: JobFeedbackFlags,
 ) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
     ensure_profile_exists(&state, &profile_id).await?;
-    ensure_job_exists(&state, &job_id).await?;
+    let metadata = load_job_event_metadata(&state, &job_id).await?;
 
     let feedback = state
         .feedback_service
         .upsert_job_feedback(&profile_id, &job_id, flags)
         .await
         .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+
+    log_user_event_softly(
+        &state,
+        CreateUserEvent {
+            profile_id,
+            event_type,
+            job_id: Some(job_id),
+            company_name: metadata.company_name,
+            source: metadata.source,
+            role_family: None,
+            payload_json: None,
+        },
+    )
+    .await;
 
     Ok(axum::Json(JobFeedbackResponse::from(feedback)))
 }
@@ -227,6 +266,24 @@ async fn update_company_feedback(
         .upsert_company_feedback(&profile_id, &company_name, &normalized_company_name, status)
         .await
         .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+
+    let event_type = match status {
+        CompanyFeedbackStatus::Whitelist => UserEventType::CompanyWhitelisted,
+        CompanyFeedbackStatus::Blacklist => UserEventType::CompanyBlacklisted,
+    };
+    log_user_event_softly(
+        &state,
+        CreateUserEvent {
+            profile_id,
+            event_type,
+            job_id: None,
+            company_name: Some(company_name),
+            source: None,
+            role_family: None,
+            payload_json: None,
+        },
+    )
+    .await;
 
     Ok(axum::Json(CompanyFeedbackResponse::from(feedback)))
 }
@@ -269,22 +326,6 @@ pub(crate) async fn ensure_profile_exists(
     Ok(())
 }
 
-async fn ensure_job_exists(state: &AppState, job_id: &str) -> Result<(), ApiError> {
-    let Some(_) = state
-        .jobs_service
-        .get_by_id(job_id)
-        .await
-        .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?
-    else {
-        return Err(ApiError::not_found(
-            "job_not_found",
-            format!("Job '{job_id}' was not found"),
-        ));
-    };
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use axum::extract::{Path, State};
@@ -297,18 +338,20 @@ mod tests {
     use crate::domain::feedback::model::{
         CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackRecord,
     };
-    use crate::domain::job::model::Job;
+    use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
     use crate::domain::profile::model::Profile;
+    use crate::domain::user_event::model::UserEventType;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::feedback::{FeedbackService, FeedbackServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
+    use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
     use crate::state::AppState;
 
     use super::{
-        add_company_blacklist, list_feedback, mark_job_bad_fit, save_job, unmark_job_bad_fit,
-        unhide_job, unsave_job,
+        add_company_blacklist, hide_job, list_feedback, mark_job_bad_fit, save_job,
+        unhide_job, unmark_job_bad_fit, unsave_job,
     };
 
     fn sample_profile() -> Profile {
@@ -345,13 +388,35 @@ mod tests {
         }
     }
 
+    fn sample_job_view(job_id: &str, company_name: &str) -> JobView {
+        JobView {
+            job: sample_job(job_id, company_name),
+            first_seen_at: "2026-04-12T00:00:00Z".to_string(),
+            inactivated_at: None,
+            reactivated_at: None,
+            lifecycle_stage: JobLifecycleStage::Active,
+            primary_variant: Some(JobSourceVariant {
+                source: "djinni".to_string(),
+                source_job_id: format!("djinni-{job_id}"),
+                source_url: format!("https://djinni.co/jobs/{job_id}"),
+                raw_payload: None,
+                fetched_at: "2026-04-14T00:00:00Z".to_string(),
+                last_seen_at: "2026-04-14T00:00:00Z".to_string(),
+                is_active: true,
+                inactivated_at: None,
+            }),
+        }
+    }
+
     fn test_state() -> AppState {
         AppState::for_services(
             ProfilesService::for_tests(
                 ProfilesServiceStub::default().with_profile(sample_profile()),
             ),
             JobsService::for_tests(
-                JobsServiceStub::default().with_job(sample_job("job-1", "NovaLedger")),
+                JobsServiceStub::default()
+                    .with_job(sample_job("job-1", "NovaLedger"))
+                    .with_job_view(sample_job_view("job-1", "NovaLedger")),
             ),
             ApplicationsService::for_tests(ApplicationsServiceStub::default()),
             ResumesService::for_tests(ResumesServiceStub::default()),
@@ -627,5 +692,104 @@ mod tests {
         assert_eq!(overview.summary.bad_fit_jobs_count, 1);
         assert_eq!(overview.summary.whitelisted_companies_count, 1);
         assert_eq!(overview.summary.blacklisted_companies_count, 1);
+    }
+
+    #[tokio::test]
+    async fn feedback_actions_create_expected_user_events() {
+        let state = test_state();
+
+        let _ = save_job(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await
+        .expect("save should succeed");
+        unsave_job(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await
+        .expect("unsave should succeed");
+        let _ = hide_job(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await
+        .expect("hide should succeed");
+        unhide_job(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await
+        .expect("unhide should succeed");
+        let _ = mark_job_bad_fit(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await
+        .expect("bad fit should succeed");
+        unmark_job_bad_fit(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await
+        .expect("remove bad fit should succeed");
+
+        let events = state
+            .user_events_service
+            .list_by_profile("profile-1")
+            .await
+            .expect("events should be queryable");
+        let event_types: Vec<UserEventType> = events.into_iter().map(|event| event.event_type).collect();
+
+        assert!(event_types.contains(&UserEventType::JobSaved));
+        assert!(event_types.contains(&UserEventType::JobUnsaved));
+        assert!(event_types.contains(&UserEventType::JobHidden));
+        assert!(event_types.contains(&UserEventType::JobUnhidden));
+        assert!(event_types.contains(&UserEventType::JobBadFit));
+        assert!(event_types.contains(&UserEventType::JobBadFitRemoved));
+    }
+
+    #[tokio::test]
+    async fn company_blacklist_creates_user_event() {
+        let state = test_state();
+
+        let _ = add_company_blacklist(
+            State(state.clone()),
+            Path("profile-1".to_string()),
+            ApiJson(UpdateCompanyFeedbackRequest {
+                company_name: "NovaLedger".to_string(),
+            }),
+        )
+        .await
+        .expect("blacklist should succeed");
+
+        let events = state
+            .user_events_service
+            .list_by_profile("profile-1")
+            .await
+            .expect("events should be queryable");
+
+        assert!(
+            events
+                .iter()
+                .any(|event| event.event_type == UserEventType::CompanyBlacklisted),
+            "company blacklist action should emit an immutable user event"
+        );
+    }
+
+    #[tokio::test]
+    async fn save_job_still_succeeds_when_event_logging_fails_softly() {
+        let state = test_state().with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default().with_database_disabled(),
+        ));
+
+        let result = save_job(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await;
+
+        assert!(result.is_ok(), "feedback write should not fail when event logging is unavailable");
     }
 }
