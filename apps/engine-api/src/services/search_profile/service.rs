@@ -1,6 +1,6 @@
 use crate::domain::candidate::profile::CandidateProfile;
 use crate::domain::role::RoleId;
-use crate::domain::search::profile::{SearchPreferences, SearchProfile};
+use crate::domain::search::profile::{SearchPreferences, SearchProfile, SearchRoleCandidate};
 
 #[derive(Clone, Default)]
 pub struct SearchProfileService;
@@ -45,13 +45,31 @@ impl SearchProfileService {
             push_unique(&mut exclude_terms, keyword.clone());
         }
 
+        let role_candidates = analyzed_profile
+            .role_candidates
+            .iter()
+            .map(|candidate| SearchRoleCandidate {
+                role: candidate.role,
+                confidence: candidate.confidence,
+            })
+            .collect::<Vec<_>>();
+        let primary_role_confidence = analyzed_profile
+            .role_candidates
+            .iter()
+            .find(|candidate| candidate.role == analyzed_profile.primary_role)
+            .map(|candidate| candidate.confidence);
+
         SearchProfile {
             primary_role: analyzed_profile.primary_role,
+            primary_role_confidence,
             target_roles,
+            role_candidates,
             seniority: analyzed_profile.seniority.clone(),
             target_regions: preferences.target_regions.clone(),
             work_modes: preferences.work_modes.clone(),
             allowed_sources: preferences.allowed_sources.clone(),
+            profile_skills: analyzed_profile.skills.clone(),
+            profile_keywords: analyzed_profile.keywords.clone(),
             search_terms,
             exclude_terms,
         }

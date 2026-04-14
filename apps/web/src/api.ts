@@ -277,13 +277,22 @@ type EngineRoleCandidate = {
   matched_signals: string[];
 };
 
+type EngineSearchRoleCandidate = {
+  role: string;
+  confidence: number;
+};
+
 type EngineSearchProfile = {
   primary_role: string;
+  primary_role_confidence?: number | null;
   target_roles: string[];
+  role_candidates: EngineSearchRoleCandidate[];
   seniority: string;
   target_regions: SearchTargetRegion[];
   work_modes: SearchWorkMode[];
   allowed_sources: string[];
+  profile_skills: string[];
+  profile_keywords: string[];
   search_terms: string[];
   exclude_terms: string[];
 };
@@ -394,11 +403,15 @@ export type SearchProfileBuildResult = {
   };
   searchProfile: {
     primaryRole: string;
+    primaryRoleConfidence?: number;
     targetRoles: string[];
+    roleCandidates: EngineSearchRoleCandidate[];
     seniority: string;
     targetRegions: SearchTargetRegion[];
     workModes: SearchWorkMode[];
     allowedSources: string[];
+    profileSkills: string[];
+    profileKeywords: string[];
     searchTerms: string[];
     excludeTerms: string[];
   };
@@ -810,11 +823,16 @@ export async function buildSearchProfile(
     },
     searchProfile: {
       primaryRole: response.search_profile.primary_role,
+      primaryRoleConfidence:
+        response.search_profile.primary_role_confidence ?? undefined,
       targetRoles: response.search_profile.target_roles,
+      roleCandidates: response.search_profile.role_candidates ?? [],
       seniority: response.search_profile.seniority,
       targetRegions: response.search_profile.target_regions,
       workModes: response.search_profile.work_modes,
       allowedSources: response.search_profile.allowed_sources,
+      profileSkills: response.search_profile.profile_skills ?? [],
+      profileKeywords: response.search_profile.profile_keywords ?? [],
       searchTerms: response.search_profile.search_terms,
       excludeTerms: response.search_profile.exclude_terms,
     },
@@ -829,11 +847,15 @@ export async function runSearch(
     json('POST', {
       search_profile: {
         primary_role: payload.searchProfile.primaryRole,
+        primary_role_confidence: payload.searchProfile.primaryRoleConfidence,
         target_roles: payload.searchProfile.targetRoles,
+        role_candidates: payload.searchProfile.roleCandidates,
         seniority: payload.searchProfile.seniority,
         target_regions: payload.searchProfile.targetRegions,
         work_modes: payload.searchProfile.workModes,
         allowed_sources: payload.searchProfile.allowedSources,
+        profile_skills: payload.searchProfile.profileSkills,
+        profile_keywords: payload.searchProfile.profileKeywords,
         search_terms: payload.searchProfile.searchTerms,
         exclude_terms: payload.searchProfile.excludeTerms,
       },
