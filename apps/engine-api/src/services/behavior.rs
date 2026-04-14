@@ -476,4 +476,31 @@ mod tests {
         assert_eq!(adjustment.score_delta, 0);
         assert!(adjustment.reasons.is_empty());
     }
+
+    #[test]
+    fn impressions_do_not_change_behavior_aggregates() {
+        let service = BehaviorService::new();
+        let events = vec![
+            event(
+                "evt-1",
+                UserEventType::JobImpression,
+                Some("djinni"),
+                Some("engineering"),
+            ),
+            event(
+                "evt-2",
+                UserEventType::JobSaved,
+                Some("djinni"),
+                Some("engineering"),
+            ),
+        ];
+
+        let aggregates = service.build_aggregates(events.iter());
+        let summary = service.summarize(&aggregates);
+
+        assert_eq!(aggregates.save_count_by_source.get("djinni"), Some(&1));
+        assert_eq!(aggregates.hide_count_by_source.get("djinni"), None);
+        assert_eq!(summary.top_positive_sources[0].save_count, 1);
+        assert_eq!(summary.top_positive_sources[0].positive_count, 1);
+    }
 }

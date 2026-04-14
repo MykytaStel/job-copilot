@@ -103,6 +103,10 @@ pub fn router() -> Router<AppState> {
             get(analytics::get_analytics_summary),
         )
         .route(
+            "/api/v1/profiles/{id}/funnel-summary",
+            get(analytics::get_funnel_summary),
+        )
+        .route(
             "/api/v1/profiles/{id}/analytics/llm-context",
             get(analytics::get_llm_context),
         )

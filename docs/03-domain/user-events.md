@@ -57,6 +57,7 @@ Logged directly inside `engine-api`:
 
 Logged through explicit `engine-api` event endpoint from web:
 
+- `job_impression`
 - `job_opened`
 - `fit_explanation_requested`
 - `application_coach_requested`
@@ -69,8 +70,10 @@ Logged through explicit `engine-api` event endpoint from web:
 - `POST /api/v1/profiles/:id/events`
 - `GET /api/v1/profiles/:id/events/summary`
 - `GET /api/v1/profiles/:id/behavior-summary`
+- `GET /api/v1/profiles/:id/funnel-summary`
 
 The explicit endpoint exists for flows that do not naturally pass through `engine-api` business routes, such as ML enrichment requests initiated from web.
+It now also captures conservative web impression writes for dashboard cards and ranked search results when a profile context exists.
 
 ## Analytics-ready summary in v1
 
@@ -86,6 +89,34 @@ The summary endpoint exposes raw event counts for:
 - `interview_prep_requested_count`
 
 These are event counts, not current-state counts.
+
+## Funnel analytics v1
+
+The funnel summary endpoint derives a first end-to-end job funnel directly from `user_events`:
+
+- `impression_count`
+- `open_count`
+- `save_count`
+- `hide_count`
+- `bad_fit_count`
+- `application_created_count`
+- `fit_explanation_requested_count`
+- `application_coach_requested_count`
+- `cover_letter_draft_requested_count`
+- `interview_prep_requested_count`
+
+It also exposes defensive conversion ratios:
+
+- `open_rate_from_impressions`
+- `save_rate_from_opens`
+- `application_rate_from_saves`
+
+And a simple source breakdown when source metadata exists:
+
+- `impressions_by_source`
+- `opens_by_source`
+- `saves_by_source`
+- `applications_by_source`
 
 ## Behavior-aware personalization v2
 

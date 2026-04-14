@@ -1,13 +1,14 @@
 use axum::extract::{Path, State};
 
 use crate::api::dto::analytics::{
-    AnalyticsSummaryResponse, FeedbackSummarySection, JobsByLifecycleSection, JobsBySourceEntry,
-    LlmContextAnalyzedProfile, LlmContextEvidenceEntry, LlmContextResponse,
-    SalaryIntelligenceResponse,
+    AnalyticsSummaryResponse, FeedbackSummarySection, FunnelSummaryResponse,
+    JobsByLifecycleSection, JobsBySourceEntry, LlmContextAnalyzedProfile, LlmContextEvidenceEntry,
+    LlmContextResponse, SalaryIntelligenceResponse,
 };
 use crate::api::error::ApiError;
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::domain::feedback::model::CompanyFeedbackStatus;
+use crate::services::funnel::FunnelService;
 use crate::state::AppState;
 
 pub async fn get_salary_intelligence(
@@ -109,6 +110,26 @@ pub async fn get_analytics_summary(
         top_matched_skills,
         top_matched_keywords,
     }))
+}
+
+pub async fn get_funnel_summary(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+) -> Result<axum::Json<FunnelSummaryResponse>, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+
+    let events = state
+        .user_events_service
+        .list_by_profile(&profile_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "user_event_query_failed"))?;
+    let funnel_service = FunnelService::new();
+    let aggregates = funnel_service.build_aggregates(events.iter());
+    let summary = funnel_service.summarize(&aggregates);
+
+    Ok(axum::Json(FunnelSummaryResponse::from_summary(
+        profile_id, summary,
+    )))
 }
 
 pub async fn get_llm_context(
@@ -239,6 +260,7 @@ pub async fn get_llm_context(
 mod tests {
     use axum::Json;
     use axum::extract::{Path, State};
+    use serde_json::json;
 
     use crate::domain::analytics::model::JobSourceCount;
     use crate::domain::feedback::model::{
@@ -247,14 +269,16 @@ mod tests {
     use crate::domain::job::model::JobFeedSummary;
     use crate::domain::profile::model::{Profile, ProfileAnalysis};
     use crate::domain::role::RoleId;
+    use crate::domain::user_event::model::{UserEventRecord, UserEventType};
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::feedback::{FeedbackService, FeedbackServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
+    use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
     use crate::state::AppState;
 
-    use super::{get_analytics_summary, get_llm_context};
+    use super::{get_analytics_summary, get_funnel_summary, get_llm_context};
 
     fn sample_profile_with_analysis() -> Profile {
         Profile {
@@ -348,6 +372,109 @@ mod tests {
         ))
     }
 
+    fn event(
+        id: &str,
+        event_type: UserEventType,
+        job_id: &str,
+        source: Option<&str>,
+    ) -> UserEventRecord {
+        UserEventRecord {
+            id: id.to_string(),
+            profile_id: "profile-1".to_string(),
+            event_type,
+            job_id: Some(job_id.to_string()),
+            company_name: Some("NovaLedger".to_string()),
+            source: source.map(str::to_string),
+            role_family: Some("engineering".to_string()),
+            payload_json: Some(json!({ "surface": "test" })),
+            created_at: "2026-04-15T00:00:00Z".to_string(),
+        }
+    }
+
+    fn with_funnel_events(state: AppState) -> AppState {
+        state.with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default()
+                .with_event(event(
+                    "evt-1",
+                    UserEventType::JobImpression,
+                    "job-1",
+                    Some("djinni"),
+                ))
+                .with_event(event(
+                    "evt-2",
+                    UserEventType::JobImpression,
+                    "job-2",
+                    Some("djinni"),
+                ))
+                .with_event(event(
+                    "evt-3",
+                    UserEventType::JobImpression,
+                    "job-3",
+                    Some("work_ua"),
+                ))
+                .with_event(event(
+                    "evt-4",
+                    UserEventType::JobOpened,
+                    "job-1",
+                    Some("djinni"),
+                ))
+                .with_event(event(
+                    "evt-5",
+                    UserEventType::JobOpened,
+                    "job-2",
+                    Some("djinni"),
+                ))
+                .with_event(event(
+                    "evt-6",
+                    UserEventType::JobSaved,
+                    "job-1",
+                    Some("djinni"),
+                ))
+                .with_event(event(
+                    "evt-7",
+                    UserEventType::JobHidden,
+                    "job-3",
+                    Some("work_ua"),
+                ))
+                .with_event(event(
+                    "evt-8",
+                    UserEventType::JobBadFit,
+                    "job-3",
+                    Some("work_ua"),
+                ))
+                .with_event(event(
+                    "evt-9",
+                    UserEventType::ApplicationCreated,
+                    "job-1",
+                    Some("djinni"),
+                ))
+                .with_event(event(
+                    "evt-10",
+                    UserEventType::FitExplanationRequested,
+                    "job-1",
+                    Some("djinni"),
+                ))
+                .with_event(event(
+                    "evt-11",
+                    UserEventType::ApplicationCoachRequested,
+                    "job-1",
+                    Some("djinni"),
+                ))
+                .with_event(event(
+                    "evt-12",
+                    UserEventType::CoverLetterDraftRequested,
+                    "job-1",
+                    Some("djinni"),
+                ))
+                .with_event(event(
+                    "evt-13",
+                    UserEventType::InterviewPrepRequested,
+                    "job-1",
+                    Some("djinni"),
+                )),
+        ))
+    }
+
     // ─── analytics summary tests ──────────────────────────────────────────────
 
     #[tokio::test]
@@ -405,6 +532,65 @@ mod tests {
         assert_eq!(summary.top_matched_roles, vec!["backend_developer"]);
         assert_eq!(summary.top_matched_skills, vec!["rust", "postgres"]);
         assert_eq!(summary.top_matched_keywords, vec!["backend", "distributed"]);
+    }
+
+    #[tokio::test]
+    async fn funnel_summary_counts_impressions_and_actions() {
+        let state = with_funnel_events(test_state());
+
+        let Json(summary) = get_funnel_summary(State(state), Path("profile-1".to_string()))
+            .await
+            .expect("funnel summary should succeed");
+
+        assert_eq!(summary.impression_count, 3);
+        assert_eq!(summary.open_count, 2);
+        assert_eq!(summary.save_count, 1);
+        assert_eq!(summary.hide_count, 1);
+        assert_eq!(summary.bad_fit_count, 1);
+        assert_eq!(summary.application_created_count, 1);
+        assert_eq!(summary.fit_explanation_requested_count, 1);
+        assert_eq!(summary.application_coach_requested_count, 1);
+        assert_eq!(summary.cover_letter_draft_requested_count, 1);
+        assert_eq!(summary.interview_prep_requested_count, 1);
+        assert_eq!(summary.impressions_by_source[0].source, "djinni");
+        assert_eq!(summary.impressions_by_source[0].count, 2);
+        assert_eq!(summary.applications_by_source[0].source, "djinni");
+        assert_eq!(summary.applications_by_source[0].count, 1);
+    }
+
+    #[tokio::test]
+    async fn funnel_summary_derived_ratios_are_correct() {
+        let state = with_funnel_events(test_state());
+
+        let Json(summary) = get_funnel_summary(State(state), Path("profile-1".to_string()))
+            .await
+            .expect("funnel summary should succeed");
+
+        assert!((summary.conversion_rates.open_rate_from_impressions - (2.0 / 3.0)).abs() < 1e-9);
+        assert!((summary.conversion_rates.save_rate_from_opens - 0.5).abs() < 1e-9);
+        assert!((summary.conversion_rates.application_rate_from_saves - 1.0).abs() < 1e-9);
+    }
+
+    #[tokio::test]
+    async fn funnel_summary_avoids_divide_by_zero() {
+        let state = test_state().with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default().with_event(event(
+                "evt-1",
+                UserEventType::JobSaved,
+                "job-1",
+                Some("djinni"),
+            )),
+        ));
+
+        let Json(summary) = get_funnel_summary(State(state), Path("profile-1".to_string()))
+            .await
+            .expect("funnel summary should succeed");
+
+        assert_eq!(summary.impression_count, 0);
+        assert_eq!(summary.open_count, 0);
+        assert_eq!(summary.conversion_rates.open_rate_from_impressions, 0.0);
+        assert_eq!(summary.conversion_rates.save_rate_from_opens, 0.0);
+        assert_eq!(summary.conversion_rates.application_rate_from_saves, 0.0);
     }
 
     // ─── LLM context tests ────────────────────────────────────────────────────
