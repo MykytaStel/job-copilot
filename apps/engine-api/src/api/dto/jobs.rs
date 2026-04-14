@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use crate::api::dto::feedback::JobFeedbackStateResponse;
+use crate::domain::feedback::model::JobFeedbackState;
 use crate::domain::job::model::{
     Job, JobFeedSummary, JobLifecycleStage, JobSourceVariant, JobView,
 };
@@ -60,6 +62,7 @@ pub struct JobResponse {
     pub lifecycle_stage: JobLifecycleStageResponse,
     pub primary_variant: Option<JobSourceVariantResponse>,
     pub presentation: JobPresentationResponse,
+    pub feedback: JobFeedbackStateResponse,
 }
 
 #[derive(Debug, Serialize)]
@@ -99,6 +102,18 @@ pub struct RecentJobsResponse {
 
 impl From<Job> for JobResponse {
     fn from(job: Job) -> Self {
+        Self::from_job_with_feedback(job, JobFeedbackState::default())
+    }
+}
+
+impl From<JobView> for JobResponse {
+    fn from(view: JobView) -> Self {
+        Self::from_view_with_feedback(view, JobFeedbackState::default())
+    }
+}
+
+impl JobResponse {
+    pub fn from_job_with_feedback(job: Job, feedback: JobFeedbackState) -> Self {
         let presentation = JobPresentationResponse::from(build_job_presentation(&job));
 
         Self {
@@ -124,12 +139,11 @@ impl From<Job> for JobResponse {
             },
             primary_variant: None,
             presentation,
+            feedback: JobFeedbackStateResponse::from(feedback),
         }
     }
-}
 
-impl From<JobView> for JobResponse {
-    fn from(view: JobView) -> Self {
+    pub fn from_view_with_feedback(view: JobView, feedback: JobFeedbackState) -> Self {
         let presentation = JobPresentationResponse::from(build_job_view_presentation(&view));
 
         Self {
@@ -151,6 +165,7 @@ impl From<JobView> for JobResponse {
             lifecycle_stage: view.lifecycle_stage.into(),
             primary_variant: view.primary_variant.map(JobSourceVariantResponse::from),
             presentation,
+            feedback: JobFeedbackStateResponse::from(feedback),
         }
     }
 }

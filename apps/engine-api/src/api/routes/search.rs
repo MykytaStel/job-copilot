@@ -3,6 +3,8 @@ use serde::Deserialize;
 
 use crate::api::dto::search::{RunSearchRequest, RunSearchResponse, SearchResponse};
 use crate::api::error::{ApiError, ApiJson};
+use crate::api::routes::jobs::load_feedback_state;
+use crate::domain::feedback::model::CompanyFeedbackStatus;
 use crate::state::AppState;
 
 #[derive(Deserialize)]
@@ -51,17 +53,79 @@ pub async fn run_search(
     let input = payload.validate()?;
     let fetch_limit = (input.limit * 5).clamp(50, 200);
 
-    let jobs = state
+    let candidate_jobs = state
         .jobs_service
         .list_filtered_views(fetch_limit, Some("active"), None)
         .await
         .map_err(|error| ApiError::from_repository(error, "search_run_failed"))?;
-    let result =
-        state
-            .search_matching_service
-            .run(&input.search_profile, jobs, input.limit as usize);
+    let total_candidates = candidate_jobs.len();
+    let feedback_states =
+        load_feedback_state(&state, input.profile_id.as_deref(), &candidate_jobs).await?;
+    let mut filtered_out_hidden = 0usize;
+    let mut filtered_out_company_blacklist = 0usize;
+    let jobs_with_feedback = candidate_jobs
+        .into_iter()
+        .zip(feedback_states.into_iter())
+        .filter_map(|(job, feedback)| {
+            if feedback.hidden {
+                filtered_out_hidden += 1;
+                return None;
+            }
 
-    Ok(axum::Json(RunSearchResponse::from_result(result)))
+            if feedback.company_status == Some(CompanyFeedbackStatus::Blacklist) {
+                filtered_out_company_blacklist += 1;
+                return None;
+            }
+
+            Some((job, feedback))
+        })
+        .collect::<Vec<_>>();
+    let mut feedback_by_job_id = std::collections::HashMap::new();
+    let ranked_candidates = jobs_with_feedback
+        .iter()
+        .map(|(job, feedback)| {
+            feedback_by_job_id.insert(job.job.id.clone(), feedback.clone());
+            job.clone()
+        })
+        .collect::<Vec<_>>();
+
+    let result = state.search_matching_service.run(
+        &input.search_profile,
+        ranked_candidates,
+        input.limit as usize,
+    );
+    let ranked_jobs: Vec<crate::api::dto::search::RankedJobResponse> = result
+        .ranked_jobs
+        .into_iter()
+        .map(|ranked| {
+            let feedback = feedback_by_job_id
+                .get(&ranked.job.job.id)
+                .cloned()
+                .unwrap_or_default();
+
+            crate::api::dto::search::RankedJobResponse {
+                job: crate::api::dto::jobs::JobResponse::from_view_with_feedback(
+                    ranked.job, feedback,
+                ),
+                fit: crate::api::dto::search::JobFitResponse::from(ranked.fit),
+            }
+        })
+        .collect();
+
+    Ok(axum::Json(RunSearchResponse {
+        meta: crate::api::dto::search::SearchRunMetaResponse {
+            total_candidates,
+            filtered_out_by_source: result.filtered_out_by_source,
+            filtered_out_hidden,
+            filtered_out_company_blacklist,
+            scored_jobs: total_candidates
+                .saturating_sub(result.filtered_out_by_source)
+                .saturating_sub(filtered_out_hidden)
+                .saturating_sub(filtered_out_company_blacklist),
+            returned_jobs: ranked_jobs.len(),
+        },
+        results: ranked_jobs,
+    }))
 }
 
 #[cfg(test)]
@@ -73,9 +137,14 @@ mod tests {
 
     use crate::api::dto::search::{RunSearchRequest, SearchProfileRequest};
     use crate::api::error::ApiJson;
+    use crate::domain::feedback::model::{
+        CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackRecord,
+    };
     use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
+    use crate::domain::profile::model::Profile;
     use crate::domain::search::profile::{TargetRegion, WorkMode};
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
+    use crate::services::feedback::{FeedbackService, FeedbackServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
@@ -97,6 +166,23 @@ mod tests {
             posted_at: None,
             last_seen_at: "2026-04-11T00:00:00Z".to_string(),
             is_active: true,
+        }
+    }
+
+    fn sample_profile() -> Profile {
+        Profile {
+            id: "profile-1".to_string(),
+            name: "Jane Doe".to_string(),
+            email: "jane@example.com".to_string(),
+            location: Some("Kyiv".to_string()),
+            raw_text: "Senior backend engineer".to_string(),
+            analysis: None,
+            salary_min_usd: None,
+            salary_max_usd: None,
+            preferred_work_mode: None,
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+            skills_updated_at: None,
         }
     }
 
@@ -239,7 +325,9 @@ mod tests {
     #[tokio::test]
     async fn run_search_returns_ranked_jobs_with_fit_reasons() {
         let state = AppState::for_services(
-            ProfilesService::for_tests(ProfilesServiceStub::default()),
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
             JobsService::for_tests(
                 JobsServiceStub::default()
                     .with_job_view(sample_job_view(
@@ -264,6 +352,7 @@ mod tests {
         let response = run_search(
             State(state),
             ApiJson(RunSearchRequest {
+                profile_id: None,
                 search_profile: SearchProfileRequest {
                     primary_role: "backend_developer".to_string(),
                     primary_role_confidence: Some(95),
@@ -320,5 +409,151 @@ mod tests {
                     .as_str()
                     .is_some_and(|reason| reason.contains("Matched target roles")))
         );
+    }
+
+    #[tokio::test]
+    async fn hidden_jobs_are_excluded_from_ranked_results() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        "Remote EU role working with Rust and Postgres",
+                        Some("remote"),
+                        "djinni",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Senior Backend Engineer",
+                        "Remote role working with Rust and distributed systems",
+                        Some("remote"),
+                        "djinni",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_feedback_service(FeedbackService::for_tests(
+            FeedbackServiceStub::default().with_job_feedback(JobFeedbackRecord {
+                profile_id: "profile-1".to_string(),
+                job_id: "job-1".to_string(),
+                saved: false,
+                hidden: true,
+                bad_fit: false,
+                created_at: "2026-04-14T00:00:00Z".to_string(),
+                updated_at: "2026-04-14T00:00:00Z".to_string(),
+            }),
+        ));
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(payload["meta"]["filtered_out_hidden"], json!(1));
+        assert_eq!(payload["results"].as_array().map(Vec::len), Some(1));
+        assert_eq!(payload["results"][0]["job"]["id"], json!("job-2"));
+    }
+
+    #[tokio::test]
+    async fn blacklisted_companies_are_excluded_from_ranked_results() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        "Remote EU role working with Rust and Postgres",
+                        Some("remote"),
+                        "djinni",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Senior Backend Engineer",
+                        "Remote role working with Rust and distributed systems",
+                        Some("remote"),
+                        "djinni",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_feedback_service(FeedbackService::for_tests(
+            FeedbackServiceStub::default().with_company_feedback(CompanyFeedbackRecord {
+                profile_id: "profile-1".to_string(),
+                company_name: "NovaLedger".to_string(),
+                normalized_company_name: "novaledger".to_string(),
+                status: CompanyFeedbackStatus::Blacklist,
+                created_at: "2026-04-14T00:00:00Z".to_string(),
+                updated_at: "2026-04-14T00:00:00Z".to_string(),
+            }),
+        ));
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(payload["meta"]["filtered_out_company_blacklist"], json!(2));
+        assert_eq!(payload["results"].as_array().map(Vec::len), Some(0));
     }
 }

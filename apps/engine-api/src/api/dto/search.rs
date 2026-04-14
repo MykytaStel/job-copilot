@@ -43,12 +43,15 @@ impl SearchResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct RunSearchRequest {
+    #[serde(default)]
+    pub profile_id: Option<String>,
     pub search_profile: SearchProfileRequest,
     pub limit: Option<i64>,
 }
 
 #[derive(Debug)]
 pub struct RunSearchInput {
+    pub profile_id: Option<String>,
     pub search_profile: SearchProfile,
     pub limit: i64,
 }
@@ -115,6 +118,8 @@ pub struct JobFitResponse {
 pub struct SearchRunMetaResponse {
     pub total_candidates: usize,
     pub filtered_out_by_source: usize,
+    pub filtered_out_hidden: usize,
+    pub filtered_out_company_blacklist: usize,
     pub scored_jobs: usize,
     pub returned_jobs: usize,
 }
@@ -128,6 +133,10 @@ impl RunSearchRequest {
         }
 
         Ok(RunSearchInput {
+            profile_id: self
+                .profile_id
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
             search_profile: self.search_profile.validate()?,
             limit,
         })
@@ -182,7 +191,9 @@ impl RunSearchResponse {
     pub fn from_result(result: SearchRunResult) -> Self {
         let scored_jobs = result
             .total_candidates
-            .saturating_sub(result.filtered_out_by_source);
+            .saturating_sub(result.filtered_out_by_source)
+            .saturating_sub(result.filtered_out_hidden)
+            .saturating_sub(result.filtered_out_company_blacklist);
         let results = result
             .ranked_jobs
             .into_iter()
@@ -195,6 +206,8 @@ impl RunSearchResponse {
             meta: SearchRunMetaResponse {
                 total_candidates: result.total_candidates,
                 filtered_out_by_source: result.filtered_out_by_source,
+                filtered_out_hidden: result.filtered_out_hidden,
+                filtered_out_company_blacklist: result.filtered_out_company_blacklist,
                 scored_jobs,
                 returned_jobs,
             },
@@ -385,6 +398,7 @@ mod tests {
     #[test]
     fn validates_run_search_request() {
         let input = RunSearchRequest {
+            profile_id: None,
             search_profile: SearchProfileRequest {
                 primary_role: "backend_developer".to_string(),
                 primary_role_confidence: Some(92),
@@ -431,6 +445,7 @@ mod tests {
     #[test]
     fn rejects_unknown_primary_role() {
         let error = RunSearchRequest {
+            profile_id: None,
             search_profile: SearchProfileRequest {
                 primary_role: "wizard".to_string(),
                 primary_role_confidence: None,
@@ -484,12 +499,17 @@ mod tests {
             ranked_jobs: Vec::<RankedJob>::new(),
             total_candidates: 10,
             filtered_out_by_source: 3,
+            filtered_out_hidden: 2,
+            filtered_out_company_blacklist: 1,
         });
 
         let payload = serde_json::to_value(response).expect("run search response should serialize");
 
         assert_eq!(payload["meta"]["total_candidates"], json!(10));
         assert_eq!(payload["meta"]["filtered_out_by_source"], json!(3));
+        assert_eq!(payload["meta"]["filtered_out_hidden"], json!(2));
+        assert_eq!(payload["meta"]["filtered_out_company_blacklist"], json!(1));
+        assert_eq!(payload["meta"]["scored_jobs"], json!(4));
         assert_eq!(payload["meta"]["returned_jobs"], json!(0));
     }
 }

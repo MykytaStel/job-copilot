@@ -5,7 +5,10 @@ use tracing::warn;
 use crate::api::dto::jobs::{JobResponse, MlJobLifecycleResponse, RecentJobsResponse};
 use crate::api::dto::ranking::FitScoreResponse;
 use crate::api::error::ApiError;
+use crate::api::routes::feedback::ensure_profile_exists;
+use crate::domain::feedback::model::{CompanyFeedbackRecord, JobFeedbackRecord, JobFeedbackState};
 use crate::domain::source::SourceId;
+use crate::services::feedback::FeedbackService;
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -15,11 +18,18 @@ pub struct RecentJobsQuery {
     pub lifecycle: Option<String>,
     /// Filter by source name: "djinni" | "work_ua" | "robota_ua"
     pub source: Option<SourceId>,
+    pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct JobContextQuery {
+    pub profile_id: Option<String>,
 }
 
 pub async fn get_job_by_id(
     State(state): State<AppState>,
     Path(job_id): Path<String>,
+    Query(query): Query<JobContextQuery>,
 ) -> Result<axum::Json<JobResponse>, ApiError> {
     let Some(job) = state
         .jobs_service
@@ -33,7 +43,19 @@ pub async fn get_job_by_id(
         ));
     };
 
-    Ok(axum::Json(JobResponse::from(job)))
+    let feedback = load_feedback_state(
+        &state,
+        query.profile_id.as_deref(),
+        std::slice::from_ref(&job),
+    )
+    .await?
+    .into_iter()
+    .next()
+    .unwrap_or_default();
+
+    Ok(axum::Json(JobResponse::from_view_with_feedback(
+        job, feedback,
+    )))
 }
 
 pub async fn get_ml_job_lifecycle(
@@ -67,12 +89,20 @@ pub async fn get_recent_jobs(
 
     let lifecycle = query.lifecycle.as_deref();
     let source = query.source.map(SourceId::canonical_key);
+    let profile_id = query.profile_id.as_deref();
 
     let jobs = state
         .jobs_service
         .list_filtered_views(limit, lifecycle, source)
         .await
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
+    let feedback_states = load_feedback_state(&state, profile_id, &jobs).await?;
+    let jobs = jobs
+        .into_iter()
+        .zip(feedback_states.into_iter())
+        .filter(|(_, feedback)| !feedback.hidden)
+        .map(|(job, feedback)| JobResponse::from_view_with_feedback(job, feedback))
+        .collect();
     let summary = state
         .jobs_service
         .feed_summary()
@@ -80,7 +110,7 @@ pub async fn get_recent_jobs(
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
 
     Ok(axum::Json(RecentJobsResponse {
-        jobs: jobs.into_iter().map(JobResponse::from).collect(),
+        jobs,
         summary: summary.into(),
     }))
 }
@@ -115,6 +145,66 @@ pub async fn get_job_match(
     };
 
     Ok(axum::Json(FitScoreResponse::from(score)))
+}
+
+pub(crate) async fn load_feedback_state(
+    state: &AppState,
+    profile_id: Option<&str>,
+    jobs: &[crate::domain::job::model::JobView],
+) -> Result<Vec<JobFeedbackState>, ApiError> {
+    let Some(profile_id) = profile_id.filter(|value| !value.trim().is_empty()) else {
+        return Ok(vec![JobFeedbackState::default(); jobs.len()]);
+    };
+
+    ensure_profile_exists(state, profile_id).await?;
+
+    let job_ids = jobs
+        .iter()
+        .map(|job| job.job.id.clone())
+        .collect::<Vec<_>>();
+    let normalized_company_names = jobs
+        .iter()
+        .map(|job| FeedbackService::normalize_company_name(&job.job.company_name))
+        .collect::<Vec<_>>();
+
+    let job_feedback = state
+        .feedback_service
+        .list_job_feedback_for_jobs(profile_id, &job_ids)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_query_failed"))?;
+    let company_feedback = state
+        .feedback_service
+        .list_company_feedback_for_names(profile_id, &normalized_company_names)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_query_failed"))?;
+
+    Ok(build_feedback_states(jobs, job_feedback, company_feedback))
+}
+
+pub(crate) fn build_feedback_states(
+    jobs: &[crate::domain::job::model::JobView],
+    job_feedback: Vec<JobFeedbackRecord>,
+    company_feedback: Vec<CompanyFeedbackRecord>,
+) -> Vec<JobFeedbackState> {
+    let job_feedback_by_job_id = job_feedback
+        .into_iter()
+        .map(|record| (record.job_id.clone(), record))
+        .collect::<std::collections::HashMap<_, _>>();
+    let company_feedback_by_name = company_feedback
+        .into_iter()
+        .map(|record| (record.normalized_company_name.clone(), record))
+        .collect::<std::collections::HashMap<_, _>>();
+
+    jobs.iter()
+        .map(|job| {
+            let normalized_company_name =
+                FeedbackService::normalize_company_name(&job.job.company_name);
+            JobFeedbackState::from_sources(
+                job_feedback_by_job_id.get(&job.job.id),
+                company_feedback_by_name.get(&normalized_company_name),
+            )
+        })
+        .collect()
 }
 
 /// Return a fit score for a job against the active resume.
@@ -237,7 +327,9 @@ mod tests {
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
     use crate::state::AppState;
 
-    use super::{RecentJobsQuery, get_job_by_id, get_ml_job_lifecycle, get_recent_jobs};
+    use super::{
+        JobContextQuery, RecentJobsQuery, get_job_by_id, get_ml_job_lifecycle, get_recent_jobs,
+    };
 
     fn sample_job_view(id: &str) -> JobView {
         JobView {
@@ -277,6 +369,7 @@ mod tests {
         let result = get_job_by_id(
             State(AppState::without_database()),
             Path("job-123".to_string()),
+            Query(JobContextQuery::default()),
         )
         .await;
 
@@ -296,7 +389,12 @@ mod tests {
             ApplicationsService::for_tests(ApplicationsServiceStub::default()),
             ResumesService::for_tests(ResumesServiceStub::default()),
         );
-        let result = get_job_by_id(State(state), Path("missing-job".to_string())).await;
+        let result = get_job_by_id(
+            State(state),
+            Path("missing-job".to_string()),
+            Query(JobContextQuery::default()),
+        )
+        .await;
 
         let response = match result {
             Ok(_) => panic!("handler should return not found for unknown job"),
@@ -322,6 +420,7 @@ mod tests {
                 limit: Some(0),
                 lifecycle: None,
                 source: None,
+                profile_id: None,
             }),
         )
         .await;
@@ -366,6 +465,7 @@ mod tests {
                 limit: Some(20),
                 lifecycle: None,
                 source: None,
+                profile_id: None,
             }),
         )
         .await

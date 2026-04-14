@@ -11,6 +11,8 @@ import type {
   CandidateProfile,
   CandidateProfileInput,
   Contact,
+  CompanyFeedbackRecord,
+  CompanyFeedbackStatus,
   ContactInput,
   CoverLetter,
   CoverLetterInput,
@@ -19,6 +21,8 @@ import type {
   ImportBatchResponse,
   InterviewQA,
   InterviewQAInput,
+  JobFeedbackRecord,
+  JobFeedbackState,
   JobFeedSummary,
   JobAlert,
   JobAlertInput,
@@ -32,6 +36,7 @@ import type {
   SearchResults,
   Task,
   TaskInput,
+  FeedbackOverview,
 } from '@job-copilot/shared';
 
 export interface SkillStat {
@@ -92,6 +97,12 @@ type EngineRoleCatalogItem = {
 
 type EngineRecentApplicationsResponse = {
   applications: EngineApplication[];
+};
+
+type EngineFeedbackOverviewResponse = {
+  profile_id: string;
+  jobs: EngineJobFeedbackRecord[];
+  companies: EngineCompanyFeedbackRecord[];
 };
 
 type EngineContactsResponse = {
@@ -156,6 +167,29 @@ type EngineJob = {
     freshness_label?: string | null;
     badges: string[];
   };
+  feedback: EngineJobFeedbackState;
+};
+
+type EngineJobFeedbackState = {
+  saved: boolean;
+  hidden: boolean;
+  bad_fit: boolean;
+  company_status?: CompanyFeedbackStatus | null;
+};
+
+type EngineJobFeedbackRecord = {
+  job_id: string;
+  saved: boolean;
+  hidden: boolean;
+  bad_fit: boolean;
+  updated_at: string;
+};
+
+type EngineCompanyFeedbackRecord = {
+  company_name: string;
+  normalized_company_name: string;
+  status: CompanyFeedbackStatus;
+  updated_at: string;
 };
 
 type EngineJobFeedSummary = {
@@ -327,6 +361,8 @@ type EngineFitExplanation = {
 type EngineSearchRunMeta = {
   total_candidates: number;
   filtered_out_by_source: number;
+  filtered_out_hidden: number;
+  filtered_out_company_blacklist: number;
   scored_jobs: number;
   returned_jobs: number;
 };
@@ -419,6 +455,7 @@ export type SearchProfileBuildResult = {
 
 export type SearchRunRequest = {
   searchProfile: SearchProfileBuildResult['searchProfile'];
+  profileId?: string;
   limit?: number;
 };
 
@@ -445,6 +482,8 @@ export type SearchRunResult = {
   meta: {
     totalCandidates: number;
     filteredOutBySource: number;
+    filteredOutHidden: number;
+    filteredOutCompanyBlacklist: number;
     scoredJobs: number;
     returnedJobs: number;
   };
@@ -545,6 +584,14 @@ function writeStoredProfileId(profileId: string) {
   window.localStorage.setItem(PROFILE_ID_KEY, profileId);
 }
 
+function withProfileIdQuery(path: string) {
+  const profileId = readStoredProfileId();
+  if (!profileId) return path;
+
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}profile_id=${encodeURIComponent(profileId)}`;
+}
+
 function mapJob(job: EngineJob): JobPosting {
   return {
     id: job.id,
@@ -590,6 +637,37 @@ function mapJob(job: EngineJob): JobPosting {
       freshnessLabel: job.presentation.freshness_label ?? undefined,
       badges: job.presentation.badges,
     },
+    feedback: mapJobFeedbackState(job.feedback),
+  };
+}
+
+function mapJobFeedbackState(feedback: EngineJobFeedbackState): JobFeedbackState {
+  return {
+    saved: feedback.saved,
+    hidden: feedback.hidden,
+    badFit: feedback.bad_fit,
+    companyStatus: feedback.company_status ?? undefined,
+  };
+}
+
+function mapJobFeedbackRecord(record: EngineJobFeedbackRecord): JobFeedbackRecord {
+  return {
+    jobId: record.job_id,
+    saved: record.saved,
+    hidden: record.hidden,
+    badFit: record.bad_fit,
+    updatedAt: record.updated_at,
+  };
+}
+
+function mapCompanyFeedbackRecord(
+  record: EngineCompanyFeedbackRecord,
+): CompanyFeedbackRecord {
+  return {
+    companyName: record.company_name,
+    normalizedCompanyName: record.normalized_company_name,
+    status: record.status,
+    updatedAt: record.updated_at,
   };
 }
 
@@ -748,7 +826,9 @@ export async function getHealth(): Promise<HealthResponse> {
 }
 
 export async function getJobs(): Promise<JobPosting[]> {
-  const response = await request<EngineRecentJobsResponse>('/api/v1/jobs/recent');
+  const response = await request<EngineRecentJobsResponse>(
+    withProfileIdQuery('/api/v1/jobs/recent'),
+  );
   return response.jobs.map(mapJob);
 }
 
@@ -764,6 +844,8 @@ export async function getJobsFeed(params?: {
   if (params?.lifecycle) qs.set('lifecycle', params.lifecycle);
   if (params?.source) qs.set('source', params.source);
   if (params?.limit) qs.set('limit', String(params.limit));
+  const profileId = readStoredProfileId();
+  if (profileId) qs.set('profile_id', profileId);
   const query = qs.toString();
   const response = await request<EngineRecentJobsResponse>(
     `/api/v1/jobs/recent${query ? `?${query}` : ''}`,
@@ -842,9 +924,11 @@ export async function buildSearchProfile(
 export async function runSearch(
   payload: SearchRunRequest,
 ): Promise<SearchRunResult> {
+  const profileId = readStoredProfileId();
   const response = await request<EngineRunSearchResponse>(
     '/api/v1/search/run',
     json('POST', {
+      profile_id: payload.profileId ?? profileId ?? undefined,
       search_profile: {
         primary_role: payload.searchProfile.primaryRole,
         primary_role_confidence: payload.searchProfile.primaryRoleConfidence,
@@ -882,6 +966,9 @@ export async function runSearch(
     meta: {
       totalCandidates: response.meta.total_candidates,
       filteredOutBySource: response.meta.filtered_out_by_source,
+      filteredOutHidden: response.meta.filtered_out_hidden,
+      filteredOutCompanyBlacklist:
+        response.meta.filtered_out_company_blacklist,
       scoredJobs: response.meta.scored_jobs,
       returnedJobs: response.meta.returned_jobs,
     },
@@ -889,8 +976,100 @@ export async function runSearch(
 }
 
 export async function getJob(id: string): Promise<JobPosting> {
-  const job = await request<EngineJob>(`/api/v1/jobs/${id}`);
+  const job = await request<EngineJob>(withProfileIdQuery(`/api/v1/jobs/${id}`));
   return mapJob(job);
+}
+
+export async function getFeedback(profileId: string): Promise<FeedbackOverview> {
+  const response = await request<EngineFeedbackOverviewResponse>(
+    `/api/v1/profiles/${profileId}/feedback`,
+  );
+
+  return {
+    profileId: response.profile_id,
+    jobs: response.jobs.map(mapJobFeedbackRecord),
+    companies: response.companies.map(mapCompanyFeedbackRecord),
+  };
+}
+
+export async function markJobSaved(
+  profileId: string,
+  jobId: string,
+): Promise<JobFeedbackRecord> {
+  const record = await request<EngineJobFeedbackRecord>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/saved`,
+    json('PUT', {}),
+  );
+
+  return mapJobFeedbackRecord(record);
+}
+
+export async function hideJobForProfile(
+  profileId: string,
+  jobId: string,
+): Promise<JobFeedbackRecord> {
+  const record = await request<EngineJobFeedbackRecord>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/hidden`,
+    json('PUT', {}),
+  );
+
+  return mapJobFeedbackRecord(record);
+}
+
+export async function markJobBadFit(
+  profileId: string,
+  jobId: string,
+): Promise<JobFeedbackRecord> {
+  const record = await request<EngineJobFeedbackRecord>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/bad-fit`,
+    json('PUT', {}),
+  );
+
+  return mapJobFeedbackRecord(record);
+}
+
+export async function addCompanyWhitelist(
+  profileId: string,
+  companyName: string,
+): Promise<CompanyFeedbackRecord> {
+  const record = await request<EngineCompanyFeedbackRecord>(
+    `/api/v1/profiles/${profileId}/companies/whitelist`,
+    json('PUT', { company_name: companyName }),
+  );
+
+  return mapCompanyFeedbackRecord(record);
+}
+
+export async function removeCompanyWhitelist(
+  profileId: string,
+  companyName: string,
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/companies/whitelist`,
+    json('DELETE', { company_name: companyName }),
+  );
+}
+
+export async function addCompanyBlacklist(
+  profileId: string,
+  companyName: string,
+): Promise<CompanyFeedbackRecord> {
+  const record = await request<EngineCompanyFeedbackRecord>(
+    `/api/v1/profiles/${profileId}/companies/blacklist`,
+    json('PUT', { company_name: companyName }),
+  );
+
+  return mapCompanyFeedbackRecord(record);
+}
+
+export async function removeCompanyBlacklist(
+  profileId: string,
+  companyName: string,
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/companies/blacklist`,
+    json('DELETE', { company_name: companyName }),
+  );
 }
 
 export async function getApplications(): Promise<Application[]> {

@@ -26,10 +26,17 @@ import type {
 
 import {
   type RankedJob,
+  addCompanyBlacklist,
+  addCompanyWhitelist,
   createApplication,
   getApplications,
   getDashboardStats,
   getJobsFeed,
+  hideJobForProfile,
+  markJobBadFit,
+  markJobSaved,
+  removeCompanyBlacklist,
+  removeCompanyWhitelist,
   getSources,
   rerankJobs,
 } from '../api';
@@ -209,7 +216,7 @@ export default function Dashboard() {
     jobs: JobPosting[];
     summary: JobFeedSummary;
   }>({
-    queryKey: queryKeys.jobs.filtered(lifecycleFilter, sourceFilter),
+    queryKey: queryKeys.jobs.filtered(lifecycleFilter, sourceFilter, profileId),
     queryFn: () =>
       getJobsFeed({
         lifecycle: lifecycleFilter === 'all' ? undefined : lifecycleFilter,
@@ -273,11 +280,94 @@ export default function Dashboard() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (jobId: string) => createApplication({ jobId, status: 'saved' }),
+    mutationFn: async ({
+      jobId,
+      hasApplication,
+    }: {
+      jobId: string;
+      hasApplication: boolean;
+    }) => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      await markJobSaved(profileId, jobId);
+
+      if (!hasApplication) {
+        await createApplication({ jobId, status: 'saved' });
+      }
+    },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
       toast.success('Збережено в pipeline');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
+  const hideMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      await hideJobForProfile(profileId, jobId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      toast.success('Вакансію приховано');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
+  const badFitMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      await markJobBadFit(profileId, jobId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      toast.success('Позначено як bad fit');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
+  const companyFeedbackMutation = useMutation({
+    mutationFn: async ({
+      company,
+      currentStatus,
+      nextStatus,
+    }: {
+      company: string;
+      currentStatus?: 'whitelist' | 'blacklist';
+      nextStatus: 'whitelist' | 'blacklist';
+    }) => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      if (nextStatus === 'whitelist') {
+        if (currentStatus === 'whitelist') {
+          await removeCompanyWhitelist(profileId, company);
+        } else {
+          await addCompanyWhitelist(profileId, company);
+        }
+        return;
+      }
+
+      if (currentStatus === 'blacklist') {
+        await removeCompanyBlacklist(profileId, company);
+      } else {
+        await addCompanyBlacklist(profileId, company);
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      toast.success('Оновлено список компанії');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
   });
@@ -443,6 +533,9 @@ export default function Dashboard() {
         <section className="jobLifecycleGrid">
           {jobs.map((job) => {
             const application = applicationByJob.get(job.id);
+            const isSaved = job.feedback?.saved || !!application;
+            const isBadFit = job.feedback?.badFit;
+            const companyStatus = job.feedback?.companyStatus;
 
             return (
               <article key={job.id} className="jobLifecycleCard">
@@ -464,12 +557,19 @@ export default function Dashboard() {
                       <span className={`statusPill status-${application.status}`}>
                         {application.status}
                       </span>
+                    ) : isSaved ? (
+                      <span className="statusPill status-saved">saved</span>
                     ) : (
                       <button
                         className="ghostBtn"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 13 }}
                         disabled={saveMutation.isPending}
-                        onClick={() => saveMutation.mutate(job.id)}
+                        onClick={() =>
+                          saveMutation.mutate({
+                            jobId: job.id,
+                            hasApplication: !!application,
+                          })
+                        }
                       >
                         <Bookmark size={13} /> Зберегти
                       </button>
@@ -484,6 +584,26 @@ export default function Dashboard() {
                   {job.description.slice(0, 200)}
                   {job.description.length > 200 ? '…' : ''}
                 </p>
+
+                {(isBadFit || companyStatus) && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      flexWrap: 'wrap',
+                      marginBottom: 10,
+                    }}
+                  >
+                    {isBadFit && <span className="statusPill status-rejected">bad fit</span>}
+                    {companyStatus === 'blacklist' && (
+                      <span className="statusPill status-rejected">company blacklisted</span>
+                    )}
+                    {companyStatus === 'whitelist' && (
+                      <span className="statusPill status-saved">company whitelisted</span>
+                    )}
+                  </div>
+                )}
 
                 <div className="jobMetaRow">
                   <span className="jobMetaChip">
@@ -525,6 +645,64 @@ export default function Dashboard() {
                     <span>reactivated at</span>
                     <strong>{formatTimestamp(job.reactivatedAt)}</strong>
                   </div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    marginTop: 14,
+                  }}
+                >
+                  <button
+                    className="ghostBtn"
+                    style={{ padding: '4px 10px', fontSize: 13 }}
+                    disabled={hideMutation.isPending}
+                    onClick={() => hideMutation.mutate(job.id)}
+                  >
+                    Hide
+                  </button>
+                  <button
+                    className="ghostBtn"
+                    style={{ padding: '4px 10px', fontSize: 13 }}
+                    disabled={badFitMutation.isPending || !!isBadFit}
+                    onClick={() => badFitMutation.mutate(job.id)}
+                  >
+                    {isBadFit ? 'Bad fit' : 'Mark bad fit'}
+                  </button>
+                  <button
+                    className="ghostBtn"
+                    style={{ padding: '4px 10px', fontSize: 13 }}
+                    disabled={companyFeedbackMutation.isPending}
+                    onClick={() =>
+                      companyFeedbackMutation.mutate({
+                        company: job.company,
+                        currentStatus: companyStatus,
+                        nextStatus: 'whitelist',
+                      })
+                    }
+                  >
+                    {companyStatus === 'whitelist'
+                      ? 'Unwhitelist company'
+                      : 'Whitelist company'}
+                  </button>
+                  <button
+                    className="ghostBtn"
+                    style={{ padding: '4px 10px', fontSize: 13 }}
+                    disabled={companyFeedbackMutation.isPending}
+                    onClick={() =>
+                      companyFeedbackMutation.mutate({
+                        company: job.company,
+                        currentStatus: companyStatus,
+                        nextStatus: 'blacklist',
+                      })
+                    }
+                  >
+                    {companyStatus === 'blacklist'
+                      ? 'Unblacklist company'
+                      : 'Blacklist company'}
+                  </button>
                 </div>
               </article>
             );

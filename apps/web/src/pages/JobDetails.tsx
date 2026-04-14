@@ -4,7 +4,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type { Application } from '@job-copilot/shared';
 
-import { type FitAnalysis, analyzeFit, createApplication, getApplications, getJob } from '../api';
+import {
+  type FitAnalysis,
+  addCompanyBlacklist,
+  addCompanyWhitelist,
+  analyzeFit,
+  createApplication,
+  getApplications,
+  getJob,
+  hideJobForProfile,
+  markJobBadFit,
+  markJobSaved,
+  removeCompanyBlacklist,
+  removeCompanyWhitelist,
+} from '../api';
 import { queryKeys } from '../queryKeys';
 import { SkeletonPage } from '../components/Skeleton';
 
@@ -45,7 +58,7 @@ export default function JobDetails() {
   const queryClient = useQueryClient();
 
   const { data: job, isLoading, error } = useQuery({
-    queryKey: queryKeys.jobs.detail(id!),
+    queryKey: queryKeys.jobs.detail(id!, readProfileId()),
     queryFn: () => getJob(id!),
     enabled: !!id,
   });
@@ -66,13 +79,88 @@ export default function JobDetails() {
   });
 
   const existing = applications.find((a) => a.jobId === id);
+  const isSaved = job?.feedback?.saved || !!existing;
+  const isBadFit = job?.feedback?.badFit;
+  const companyStatus = job?.feedback?.companyStatus;
 
   const saveMutation = useMutation({
-    mutationFn: () => createApplication({ jobId: id!, status: 'saved' }),
+    mutationFn: async () => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      await markJobSaved(profileId, id!);
+
+      if (!existing) {
+        await createApplication({ jobId: id!, status: 'saved' });
+      }
+    },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
       toast.success('Збережено в pipeline');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
+  const hideMutation = useMutation({
+    mutationFn: async () => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      await hideJobForProfile(profileId, id!);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      toast.success('Вакансію приховано');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
+  const badFitMutation = useMutation({
+    mutationFn: async () => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      await markJobBadFit(profileId, id!);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      toast.success('Позначено як bad fit');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
+  const companyFeedbackMutation = useMutation({
+    mutationFn: async (nextStatus: 'whitelist' | 'blacklist') => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      if (nextStatus === 'whitelist') {
+        if (companyStatus === 'whitelist') {
+          await removeCompanyWhitelist(profileId, job!.company);
+        } else {
+          await addCompanyWhitelist(profileId, job!.company);
+        }
+        return;
+      }
+
+      if (companyStatus === 'blacklist') {
+        await removeCompanyBlacklist(profileId, job!.company);
+      } else {
+        await addCompanyBlacklist(profileId, job!.company);
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      toast.success('Оновлено список компанії');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
   });
@@ -104,6 +192,10 @@ export default function JobDetails() {
           {existing ? (
             <span className={`statusPill status-${existing.status}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <BookmarkCheck size={13} /> {existing.status}
+            </span>
+          ) : isSaved ? (
+            <span className="statusPill status-saved" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <BookmarkCheck size={13} /> saved
             </span>
           ) : (
             <button
@@ -155,6 +247,48 @@ export default function JobDetails() {
         {job.postedAt && (
           <span className="jobMetaChip">опубліковано {formatDate(job.postedAt)}</span>
         )}
+        {isBadFit && <span className="statusPill status-rejected">bad fit</span>}
+        {companyStatus === 'blacklist' && (
+          <span className="statusPill status-rejected">company blacklisted</span>
+        )}
+        {companyStatus === 'whitelist' && (
+          <span className="statusPill status-saved">company whitelisted</span>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+        <button
+          className="ghostBtn"
+          style={{ padding: '6px 12px', fontSize: 13 }}
+          disabled={hideMutation.isPending}
+          onClick={() => hideMutation.mutate()}
+        >
+          Hide
+        </button>
+        <button
+          className="ghostBtn"
+          style={{ padding: '6px 12px', fontSize: 13 }}
+          disabled={badFitMutation.isPending || !!isBadFit}
+          onClick={() => badFitMutation.mutate()}
+        >
+          {isBadFit ? 'Bad fit' : 'Mark bad fit'}
+        </button>
+        <button
+          className="ghostBtn"
+          style={{ padding: '6px 12px', fontSize: 13 }}
+          disabled={companyFeedbackMutation.isPending}
+          onClick={() => companyFeedbackMutation.mutate('whitelist')}
+        >
+          {companyStatus === 'whitelist' ? 'Unwhitelist company' : 'Whitelist company'}
+        </button>
+        <button
+          className="ghostBtn"
+          style={{ padding: '6px 12px', fontSize: 13 }}
+          disabled={companyFeedbackMutation.isPending}
+          onClick={() => companyFeedbackMutation.mutate('blacklist')}
+        >
+          {companyStatus === 'blacklist' ? 'Unblacklist company' : 'Blacklist company'}
+        </button>
       </div>
 
       {/* ML fit analysis */}
