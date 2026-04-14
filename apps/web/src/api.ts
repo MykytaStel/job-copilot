@@ -1028,6 +1028,36 @@ export async function markJobBadFit(
   return mapJobFeedbackRecord(record);
 }
 
+export async function unsaveJob(
+  profileId: string,
+  jobId: string,
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/saved`,
+    { method: 'DELETE' },
+  );
+}
+
+export async function unhideJob(
+  profileId: string,
+  jobId: string,
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/hidden`,
+    { method: 'DELETE' },
+  );
+}
+
+export async function unmarkJobBadFit(
+  profileId: string,
+  jobId: string,
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/bad-fit`,
+    { method: 'DELETE' },
+  );
+}
+
 export async function addCompanyWhitelist(
   profileId: string,
   companyName: string,

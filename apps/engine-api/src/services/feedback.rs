@@ -137,6 +137,25 @@ impl FeedbackService {
         }
     }
 
+    /// Clear specific feedback flags for a job. `flags` with `true` values are cleared.
+    /// Returns the updated record, or `None` if no feedback row existed.
+    pub async fn clear_job_feedback(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        flags: JobFeedbackFlags,
+    ) -> Result<Option<JobFeedbackRecord>, RepositoryError> {
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository.clear_job_feedback(profile_id, job_id, &flags).await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(stub) => {
+                stub.clear_job_feedback(profile_id, job_id, flags)
+            }
+        }
+    }
+
     pub async fn list_company_feedback_for_names(
         &self,
         profile_id: &str,
@@ -332,6 +351,40 @@ impl FeedbackServiceStub {
         }
 
         Ok(should_remove)
+    }
+
+    fn clear_job_feedback(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        flags: JobFeedbackFlags,
+    ) -> Result<Option<JobFeedbackRecord>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let key = (profile_id.to_string(), job_id.to_string());
+        let mut records = self
+            .job_feedback_by_key
+            .lock()
+            .expect("feedback job stub mutex should not be poisoned");
+
+        let Some(entry) = records.get_mut(&key) else {
+            return Ok(None);
+        };
+
+        if flags.saved {
+            entry.saved = false;
+        }
+        if flags.hidden {
+            entry.hidden = false;
+        }
+        if flags.bad_fit {
+            entry.bad_fit = false;
+        }
+        entry.updated_at = "2026-04-14T00:00:01+00:00".to_string();
+
+        Ok(Some(entry.clone()))
     }
 
     fn list_company_feedback(

@@ -261,6 +261,48 @@ impl FeedbackRepository {
             .collect::<Result<Vec<_>, _>>()
     }
 
+    /// Clear specific job-level feedback flags. Only updates flags that are `true` in `flags`.
+    /// Returns the updated record, or `None` if no row exists for this (profile, job) pair.
+    pub async fn clear_job_feedback(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        flags: &JobFeedbackFlags,
+    ) -> Result<Option<JobFeedbackRecord>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, JobFeedbackRow>(
+            r#"
+            UPDATE profile_job_feedback
+            SET
+                saved    = CASE WHEN $3 THEN false ELSE saved    END,
+                hidden   = CASE WHEN $4 THEN false ELSE hidden   END,
+                bad_fit  = CASE WHEN $5 THEN false ELSE bad_fit  END,
+                updated_at = NOW()
+            WHERE profile_id = $1 AND job_id = $2
+            RETURNING
+                profile_id,
+                job_id,
+                saved,
+                hidden,
+                bad_fit,
+                created_at::text AS created_at,
+                updated_at::text AS updated_at
+            "#,
+        )
+        .bind(profile_id)
+        .bind(job_id)
+        .bind(flags.saved)
+        .bind(flags.hidden)
+        .bind(flags.bad_fit)
+        .fetch_optional(pool)
+        .await?;
+
+        row.map(JobFeedbackRecord::try_from).transpose()
+    }
+
     pub async fn list_company_feedback_for_names(
         &self,
         profile_id: &str,

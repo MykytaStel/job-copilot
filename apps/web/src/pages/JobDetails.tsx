@@ -17,6 +17,9 @@ import {
   markJobSaved,
   removeCompanyBlacklist,
   removeCompanyWhitelist,
+  unhideJob,
+  unmarkJobBadFit,
+  unsaveJob,
 } from '../api';
 import { queryKeys } from '../queryKeys';
 import { SkeletonPage } from '../components/Skeleton';
@@ -80,6 +83,7 @@ export default function JobDetails() {
 
   const existing = applications.find((a) => a.jobId === id);
   const isSaved = job?.feedback?.saved || !!existing;
+  const isHidden = job?.feedback?.hidden;
   const isBadFit = job?.feedback?.badFit;
   const companyStatus = job?.feedback?.companyStatus;
 
@@ -104,6 +108,19 @@ export default function JobDetails() {
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
   });
 
+  const unsaveMutation = useMutation({
+    mutationFn: async () => {
+      if (!profileId) throw new Error('Create a profile first');
+      await unsaveJob(profileId, id!);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      toast.success('Знято з обраного');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
   const hideMutation = useMutation({
     mutationFn: async () => {
       if (!profileId) {
@@ -120,6 +137,19 @@ export default function JobDetails() {
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
   });
 
+  const unhideMutation = useMutation({
+    mutationFn: async () => {
+      if (!profileId) throw new Error('Create a profile first');
+      await unhideJob(profileId, id!);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      toast.success('Вакансію показано');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
   const badFitMutation = useMutation({
     mutationFn: async () => {
       if (!profileId) {
@@ -132,6 +162,19 @@ export default function JobDetails() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
       toast.success('Позначено як bad fit');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
+  const unmarkBadFitMutation = useMutation({
+    mutationFn: async () => {
+      if (!profileId) throw new Error('Create a profile first');
+      await unmarkJobBadFit(profileId, id!);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      toast.success('Позначку bad fit знято');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
   });
@@ -194,9 +237,16 @@ export default function JobDetails() {
               <BookmarkCheck size={13} /> {existing.status}
             </span>
           ) : isSaved ? (
-            <span className="statusPill status-saved" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <BookmarkCheck size={13} /> saved
-            </span>
+            <button
+              className="ghostBtn"
+              onClick={() => unsaveMutation.mutate()}
+              disabled={unsaveMutation.isPending}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              title="Remove from saved"
+            >
+              <BookmarkCheck size={14} />
+              {unsaveMutation.isPending ? 'Знімаємо…' : 'Unsave'}
+            </button>
           ) : (
             <button
               onClick={() => saveMutation.mutate()}
@@ -257,22 +307,44 @@ export default function JobDetails() {
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        <button
-          className="ghostBtn"
-          style={{ padding: '6px 12px', fontSize: 13 }}
-          disabled={hideMutation.isPending}
-          onClick={() => hideMutation.mutate()}
-        >
-          Hide
-        </button>
-        <button
-          className="ghostBtn"
-          style={{ padding: '6px 12px', fontSize: 13 }}
-          disabled={badFitMutation.isPending || !!isBadFit}
-          onClick={() => badFitMutation.mutate()}
-        >
-          {isBadFit ? 'Bad fit' : 'Mark bad fit'}
-        </button>
+        {isHidden ? (
+          <button
+            className="ghostBtn"
+            style={{ padding: '6px 12px', fontSize: 13 }}
+            disabled={unhideMutation.isPending}
+            onClick={() => unhideMutation.mutate()}
+          >
+            {unhideMutation.isPending ? 'Показуємо…' : 'Unhide'}
+          </button>
+        ) : (
+          <button
+            className="ghostBtn"
+            style={{ padding: '6px 12px', fontSize: 13 }}
+            disabled={hideMutation.isPending}
+            onClick={() => hideMutation.mutate()}
+          >
+            {hideMutation.isPending ? 'Ховаємо…' : 'Hide'}
+          </button>
+        )}
+        {isBadFit ? (
+          <button
+            className="ghostBtn"
+            style={{ padding: '6px 12px', fontSize: 13 }}
+            disabled={unmarkBadFitMutation.isPending}
+            onClick={() => unmarkBadFitMutation.mutate()}
+          >
+            {unmarkBadFitMutation.isPending ? 'Знімаємо…' : 'Remove bad fit'}
+          </button>
+        ) : (
+          <button
+            className="ghostBtn"
+            style={{ padding: '6px 12px', fontSize: 13 }}
+            disabled={badFitMutation.isPending}
+            onClick={() => badFitMutation.mutate()}
+          >
+            {badFitMutation.isPending ? 'Позначаємо…' : 'Mark bad fit'}
+          </button>
+        )}
         <button
           className="ghostBtn"
           style={{ padding: '6px 12px', fontSize: 13 }}
