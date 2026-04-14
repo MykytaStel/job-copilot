@@ -28,6 +28,13 @@ from app.engine_api_client import (
     engine_api_base_url,
     engine_api_timeout_seconds,
 )
+from app.interview_prep import (
+    InterviewPrepProviderError,
+    InterviewPrepRequest,
+    InterviewPrepResponse,
+    http_error_from_interview_prep_error,
+)
+from app.interview_prep_service import InterviewPrepService
 from app.job_fit_explanation import (
     JobFitExplanationProviderError,
     JobFitExplanationRequest,
@@ -38,6 +45,7 @@ from app.job_fit_explanation_service import JobFitExplanationService
 from app.llm_provider import (
     build_application_coach_provider,
     build_cover_letter_draft_provider,
+    build_interview_prep_provider,
     build_job_fit_explanation_provider,
     build_profile_insights_provider,
 )
@@ -160,6 +168,18 @@ def get_cover_letter_draft_service() -> CoverLetterDraftService:
         return build_cached_cover_letter_draft_service()
     except CoverLetterDraftProviderError as exc:
         raise http_error_from_cover_letter_draft_error(exc) from exc
+
+
+@lru_cache(maxsize=1)
+def build_cached_interview_prep_service() -> InterviewPrepService:
+    return InterviewPrepService(build_interview_prep_provider())
+
+
+def get_interview_prep_service() -> InterviewPrepService:
+    try:
+        return build_cached_interview_prep_service()
+    except InterviewPrepProviderError as exc:
+        raise http_error_from_interview_prep_error(exc) from exc
 
 
 @lru_cache(maxsize=1)
@@ -410,3 +430,15 @@ async def enrich_cover_letter_draft(
         return await service.enrich(payload)
     except CoverLetterDraftProviderError as exc:
         raise http_error_from_cover_letter_draft_error(exc) from exc
+
+
+@app.post("/v1/enrichment/interview-prep", response_model=InterviewPrepResponse)
+@app.post("/api/v1/enrichment/interview-prep", response_model=InterviewPrepResponse)
+async def enrich_interview_prep(
+    payload: InterviewPrepRequest,
+    service: InterviewPrepService = Depends(get_interview_prep_service),
+) -> InterviewPrepResponse:
+    try:
+        return await service.enrich(payload)
+    except InterviewPrepProviderError as exc:
+        raise http_error_from_interview_prep_error(exc) from exc

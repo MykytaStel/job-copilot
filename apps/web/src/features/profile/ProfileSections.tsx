@@ -6,6 +6,7 @@ import { ExternalLink, Sparkles, Upload } from 'lucide-react';
 import type {
   ApplicationCoach,
   CoverLetterDraft,
+  InterviewPrep,
   JobFitExplanation,
   LlmContext,
   RankedJobResult,
@@ -16,7 +17,12 @@ import type {
   SearchWorkMode,
   SourceCatalogItem,
 } from '../../api';
-import { getApplicationCoach, getCoverLetterDraft, getJobFitExplanation } from '../../api';
+import {
+  getApplicationCoach,
+  getCoverLetterDraft,
+  getInterviewPrep,
+  getJobFitExplanation,
+} from '../../api';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
 import { PillList } from '../../components/ui/PillList';
@@ -713,11 +719,13 @@ function SearchResultFitExplanation({
   const [explanation, setExplanation] = useState<JobFitExplanation | null>(null);
   const [coaching, setCoaching] = useState<ApplicationCoach | null>(null);
   const [coverLetterDraft, setCoverLetterDraft] = useState<CoverLetterDraft | null>(null);
+  const [interviewPrep, setInterviewPrep] = useState<InterviewPrep | null>(null);
 
   useEffect(() => {
     setExplanation(null);
     setCoaching(null);
     setCoverLetterDraft(null);
+    setInterviewPrep(null);
   }, [
     result.job.id,
     result.fit.score,
@@ -753,6 +761,7 @@ function SearchResultFitExplanation({
     onSuccess: (payload) => {
       setExplanation(payload);
       setCoverLetterDraft(null);
+      setInterviewPrep(null);
     },
   });
 
@@ -783,6 +792,7 @@ function SearchResultFitExplanation({
     onSuccess: (payload) => {
       setCoaching(payload);
       setCoverLetterDraft(null);
+      setInterviewPrep(null);
     },
   });
 
@@ -814,6 +824,39 @@ function SearchResultFitExplanation({
     },
     onSuccess: (payload) => {
       setCoverLetterDraft(payload);
+      setInterviewPrep(null);
+    },
+  });
+
+  const interviewPrepMutation = useMutation({
+    mutationFn: async () => {
+      if (!profileId) {
+        throw new Error('Profile is required before preparing interview guidance.');
+      }
+      if (!llmContext) {
+        throw new Error('Feedback-aware context is not ready yet.');
+      }
+
+      return getInterviewPrep({
+        profileId,
+        analyzedProfile,
+        searchProfile,
+        rankedJob: result.job,
+        deterministicFit: result.fit,
+        jobFitExplanation: explanation,
+        applicationCoach: coaching,
+        coverLetterDraft,
+        feedbackState: {
+          feedbackSummary: llmContext.feedbackSummary,
+          topPositiveEvidence: llmContext.topPositiveEvidence,
+          topNegativeEvidence: llmContext.topNegativeEvidence,
+          currentJobFeedback: result.job.feedback,
+        },
+        rawProfileText: rawProfileText.trim() ? rawProfileText : null,
+      });
+    },
+    onSuccess: (payload) => {
+      setInterviewPrep(payload);
     },
   });
 
@@ -944,6 +987,47 @@ function SearchResultFitExplanation({
             )}
 
             {coverLetterDraft && <CoverLetterDraftPanel draft={coverLetterDraft} />}
+          </div>
+
+          <div style={{ marginTop: coverLetterDraft ? 12 : 0 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                marginBottom:
+                  interviewPrep || interviewPrepMutation.isPending || interviewPrepMutation.error
+                    ? 10
+                    : 0,
+              }}
+            >
+              <span className="detailLabel">Interview prep pack</span>
+              <button
+                type="button"
+                className="ghostBtn ghostBtnCompact"
+                disabled={interviewPrepMutation.isPending || !profileId}
+                onClick={() => interviewPrepMutation.mutate()}
+              >
+                <Sparkles size={13} />
+                {interviewPrepMutation.isPending
+                  ? 'Preparing…'
+                  : interviewPrep
+                    ? 'Refresh prep'
+                    : 'Prepare interview'}
+              </button>
+            </div>
+
+            {interviewPrepMutation.error && (
+              <p className="error" style={{ marginBottom: 0 }}>
+                {renderErrorMessage(
+                  interviewPrepMutation.error,
+                  'Interview prep is unavailable right now.',
+                )}
+              </p>
+            )}
+
+            {interviewPrep && <InterviewPrepPanel prep={interviewPrep} />}
           </div>
         </div>
       )}
@@ -1162,6 +1246,66 @@ function CoverLetterDraftPanel({ draft }: { draft: CoverLetterDraft }) {
         label="Tone notes"
         items={draft.toneNotes}
         emptyLabel="No tone notes returned."
+      />
+    </div>
+  );
+}
+
+function InterviewPrepPanel({ prep }: { prep: InterviewPrep }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        padding: '14px 16px',
+        borderRadius: 14,
+        border: '1px solid rgba(120,223,165,0.18)',
+        background:
+          'linear-gradient(180deg, rgba(13,31,24,0.94) 0%, rgba(10,21,17,0.9) 100%)',
+      }}
+    >
+      <div>
+        <span className="detailLabel">Prep summary</span>
+        <p className="sectionText" style={{ marginBottom: 0 }}>
+          {prep.prepSummary || 'No prep summary returned.'}
+        </p>
+      </div>
+
+      <FitExplanationList
+        label="Likely topics"
+        items={prep.likelyTopics}
+        emptyLabel="No likely topics returned."
+      />
+      <FitExplanationList
+        label="Technical focus"
+        items={prep.technicalFocus}
+        emptyLabel="No technical focus returned."
+      />
+      <FitExplanationList
+        label="Behavioral focus"
+        items={prep.behavioralFocus}
+        emptyLabel="No behavioral focus returned."
+      />
+      <FitExplanationList
+        label="Stories to prepare"
+        items={prep.storiesToPrepare}
+        emptyLabel="No story prompts returned."
+      />
+      <FitExplanationList
+        label="Questions to ask"
+        items={prep.questionsToAsk}
+        emptyLabel="No questions returned."
+      />
+      <FitExplanationList
+        label="Risk areas"
+        items={prep.riskAreas}
+        emptyLabel="No risk areas returned."
+      />
+      <FitExplanationList
+        label="Follow-up plan"
+        items={prep.followUpPlan}
+        emptyLabel="No follow-up plan returned."
       />
     </div>
   );
