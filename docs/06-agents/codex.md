@@ -1,29 +1,23 @@
 # Codex Guide
 
-## Goal
-Help migrate the repository from a TypeScript monolith to:
-- React web
-- Rust engine API
-- Rust ingestion
-- Python ML service
+Use Codex for bounded implementation slices only.
 
-## Before coding
-Always read:
-1. AGENTS.md
-2. docs/01-product/vision.md
-3. docs/02-architecture/system-overview.md
-4. docs/03-domain/entities.md
+## Good Codex tasks
+- introduce canonical role catalog
+- add search profile domain/service/dto/route
+- implement source filters end-to-end
+- fix stale page refresh/query invalidation on route changes
+- add job/company list models and endpoints
+- add analytics endpoints and chart-ready DTOs
 
-## Rules
-- make small changes
-- do not rewrite unrelated modules
-- keep apps/web stable
-- treat apps/engine-api as the canonical backend
-- prefer clear names and modular code
-- document structural changes
+## Prompt pattern
+1. state exact goal
+2. list touched files/modules
+3. define acceptance criteria
+4. prohibit unrelated refactors
+5. require tests
 
-## Output
-Return:
-1. summary of changes
-2. files changed
-3. any follow-up work needed
+## Never ask Codex to
+- redesign the whole product at once
+- invent domain models without docs
+- add LLM logic without structured contracts

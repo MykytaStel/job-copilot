@@ -1,127 +1,15 @@
-# Entities
+# Core Entities
 
-## User
-Represents a user of the platform.
-
-Fields:
-- id
-- email
-- created_at
-- updated_at
-
-## SearchProfile
-Represents search preferences.
-
-Fields:
-- id
-- user_id
-- keywords
-- preferred_locations
-- remote_preference
-- seniority
-- salary_expectation
-
-## Job
-Canonical job entity.
-
-Fields:
-- id
-- title
-- company_name
-- location
-- remote_type
-- seniority
-- description_text
-- salary_min
-- salary_max
-- salary_currency
-- first_seen_at
-- posted_at
-- last_seen_at
-- is_active
-- inactivated_at
-- reactivated_at
-
-## JobVariant
-Source-specific copy of a job.
-
-Fields:
-- id
-- job_id
-- source
-- source_job_id
-- source_url
-- dedupe_key
-- raw_hash
-- raw_payload
-- fetched_at
-- last_seen_at
-- is_active
-- inactivated_at
-
-Current implementation:
-- stored in Postgres as `job_variants`
-- linked back to canonical `jobs` via `job_id`
-- upserted by `apps/ingestion` for adapter-backed inputs
-- carries a normalized `dedupe_key` that lets ingestion collapse new source copies onto an existing canonical job
-- source refresh marks missing variants inactive and can reactivate them on later refreshes
-
-## Application
-Represents a user's job application state.
-
-Fields:
-- id
-- user_id
-- job_id
-- status
-- notes
-- created_at
-- updated_at
-
-Statuses:
-- saved
-- applied
-- interview
-- rejected
-- offer
-
-## Contact
-Represents a person related to an application.
-
-Fields:
-- id
-- name
-- email
-- phone
-- linkedin_url
-- company
-- role
-- created_at
-
-## Offer
-Represents compensation and state after an application reaches offer stage.
-
-Fields:
-- id
-- application_id
-- status
-- compensation_min
-- compensation_max
-- compensation_currency
-- starts_at
-- notes
-- created_at
-- updated_at
-
-Offer statuses:
-- draft
-- received
-- accepted
-- declined
-- expired
-
-## Profile recency
-Profile skill freshness is tracked separately from generic profile updates.
-
-Fields:
-- skills_updated_at
+- CandidateProfile
+- SearchPreferences
+- SearchProfile
+- RoleId / RoleCatalog
+- Job
+- JobVariant
+- Company
+- FitScore
+- FitExplanation
+- Application
+- Activity
+- JobListEntry
+- CompanyListEntry

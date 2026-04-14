@@ -1,18 +1,8 @@
-# Job Fit Analysis
+# Job Fit Analysis Skill
 
-## Goal
-Compare a job posting to the candidate profile and base resume.
-
-## Evaluate
-- stack overlap
-- seniority match
-- domain relevance
-- English requirement
-- remote/location match
-- keyword overlap
-
-## Output
-- overall fit score
-- strengths
-- gaps
-- concrete CV tailoring recommendations
+Reason from:
+- role fit
+- skill overlap
+- seniority fit
+- source quality
+- user lists and preferences

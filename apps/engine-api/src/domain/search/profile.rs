@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::domain::role::RoleId;
+use crate::domain::source::SourceId;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -27,6 +28,7 @@ pub struct SearchPreferences {
     pub target_regions: Vec<TargetRegion>,
     pub work_modes: Vec<WorkMode>,
     pub preferred_roles: Vec<RoleId>,
+    pub allowed_sources: Vec<SourceId>,
     pub include_keywords: Vec<String>,
     pub exclude_keywords: Vec<String>,
 }
@@ -38,6 +40,7 @@ pub struct SearchProfile {
     pub seniority: String,
     pub target_regions: Vec<TargetRegion>,
     pub work_modes: Vec<WorkMode>,
+    pub allowed_sources: Vec<SourceId>,
     pub search_terms: Vec<String>,
     pub exclude_terms: Vec<String>,
 }

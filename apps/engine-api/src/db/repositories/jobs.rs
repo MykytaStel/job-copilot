@@ -157,6 +157,55 @@ impl JobsRepository {
         Ok(rows.into_iter().map(JobView::from).collect())
     }
 
+    pub async fn list_filtered_views(
+        &self,
+        limit: i64,
+        lifecycle: Option<&str>,
+        source: Option<&str>,
+    ) -> Result<Vec<JobView>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let lifecycle_cond = match lifecycle {
+            Some("inactive") => Some("jobs.is_active = FALSE"),
+            Some("reactivated") => Some(
+                "jobs.is_active = TRUE AND jobs.reactivated_at IS NOT NULL AND jobs.reactivated_at::text = jobs.last_seen_at::text",
+            ),
+            Some("active") => Some(
+                "jobs.is_active = TRUE AND NOT (jobs.reactivated_at IS NOT NULL AND jobs.reactivated_at::text = jobs.last_seen_at::text)",
+            ),
+            _ => None,
+        };
+
+        let mut builder = sqlx::QueryBuilder::new(JOB_VIEW_BASE_SELECT);
+
+        let mut has_where = false;
+
+        if let Some(cond) = lifecycle_cond {
+            builder.push("\nWHERE ");
+            builder.push(cond);
+            has_where = true;
+        }
+
+        if let Some(src) = source {
+            builder.push(if has_where { "\nAND " } else { "\nWHERE " });
+            builder.push("EXISTS (SELECT 1 FROM job_variants WHERE job_id = jobs.id AND source = ");
+            builder.push_bind(src);
+            builder.push(")");
+        }
+
+        builder.push("\nORDER BY jobs.last_seen_at DESC, jobs.posted_at DESC NULLS LAST\nLIMIT ");
+        builder.push_bind(limit);
+
+        let rows = builder
+            .build_query_as::<JobViewRow>()
+            .fetch_all(pool)
+            .await?;
+
+        Ok(rows.into_iter().map(JobView::from).collect())
+    }
+
     pub async fn feed_summary(&self) -> Result<JobFeedSummary, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
@@ -277,6 +326,46 @@ impl JobsRepository {
         Ok(rows.into_iter().map(Job::from).collect())
     }
 }
+
+const JOB_VIEW_BASE_SELECT: &str = r#"
+        SELECT
+            jobs.id,
+            jobs.title,
+            jobs.company_name,
+            jobs.remote_type,
+            jobs.seniority,
+            jobs.description_text,
+            jobs.salary_min,
+            jobs.salary_max,
+            jobs.salary_currency,
+            jobs.posted_at::text AS posted_at,
+            jobs.first_seen_at::text AS first_seen_at,
+            jobs.last_seen_at::text AS last_seen_at,
+            jobs.is_active,
+            jobs.inactivated_at::text AS inactivated_at,
+            jobs.reactivated_at::text AS reactivated_at,
+            variants.source AS variant_source,
+            variants.source_job_id AS variant_source_job_id,
+            variants.source_url AS variant_source_url,
+            variants.fetched_at::text AS variant_fetched_at,
+            variants.last_seen_at::text AS variant_last_seen_at,
+            variants.is_active AS variant_is_active,
+            variants.inactivated_at::text AS variant_inactivated_at
+        FROM jobs
+        LEFT JOIN LATERAL (
+            SELECT
+                source,
+                source_job_id,
+                source_url,
+                fetched_at,
+                last_seen_at,
+                is_active,
+                inactivated_at
+            FROM job_variants
+            WHERE job_id = jobs.id
+            ORDER BY fetched_at DESC, last_seen_at DESC, source ASC
+            LIMIT 1
+        ) AS variants ON TRUE"#;
 
 fn job_view_query(where_clause: Option<&str>, limit_clause: Option<&str>) -> String {
     format!(

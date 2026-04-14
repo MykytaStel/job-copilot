@@ -1,37 +1,14 @@
 # AGENTS.md
 
-## Project
-Job search platform with:
-- job ingestion
-- normalization
-- search and ranking
-- application tracking
-- CV/job matching
-- future ML service
+Working rule:
+- Use Claude for planning, architecture review, and code explanation.
+- Use Codex for bounded implementation slices with explicit acceptance criteria.
+- Always keep the repo's domain contracts stable.
 
-## Current architecture
-- web = React app
-- engine-api = Rust backend
-- ingestion = new Rust ingestion service
-- ml = new Python ML/LLM service
-- contracts = shared schemas and contracts
+Before starting:
+1. Read `CLAUDE.md`
+2. Read `docs/00-master-plan.md`
+3. Read `docs/05-roadmap/current-focus.md`
+4. Read the relevant subdocs for the slice
 
-## Rules
-- prefer small, incremental changes
-- do not rewrite unrelated modules
-- keep web stable
-- keep engine-api as the canonical backend
-- avoid large refactors unless requested
-- update docs when architecture changes
-
-## Read order
-1. docs/01-product/vision.md
-2. docs/02-architecture/system-overview.md
-3. docs/03-domain/entities.md
-4. docs/06-agents/codex.md
-
-## Output style for coding agents
-- concise
-- technical
-- list files changed
-- explain why changes were made
+Never batch unrelated work into one implementation pass.

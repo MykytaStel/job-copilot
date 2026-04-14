@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Activity,
   ArchiveX,
@@ -30,6 +30,7 @@ import {
   getApplications,
   getDashboardStats,
   getJobsFeed,
+  getSources,
   rerankJobs,
 } from '../api';
 import { queryKeys } from '../queryKeys';
@@ -137,19 +138,93 @@ function SourceActivityCard({
   );
 }
 
+type LifecycleFilter = 'all' | 'active' | 'inactive' | 'reactivated';
+
+const LIFECYCLE_TABS: { value: LifecycleFilter; label: string }[] = [
+  { value: 'all', label: 'Всі' },
+  { value: 'active', label: 'Активні' },
+  { value: 'inactive', label: 'Зникли' },
+  { value: 'reactivated', label: 'Повернулись' },
+];
+
+const DEFAULT_LIFECYCLE_FILTER: LifecycleFilter = 'all';
+
+function readLifecycleFilter(searchParams: URLSearchParams): LifecycleFilter {
+  const lifecycle = searchParams.get('lifecycle');
+
+  if (
+    lifecycle === 'active' ||
+    lifecycle === 'inactive' ||
+    lifecycle === 'reactivated'
+  ) {
+    return lifecycle;
+  }
+
+  return DEFAULT_LIFECYCLE_FILTER;
+}
+
+function readSourceFilter(searchParams: URLSearchParams): string | null {
+  const source = searchParams.get('source')?.trim();
+  return source ? source : null;
+}
+
 export default function Dashboard() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [sortByScore, setSortByScore] = useState(false);
-
+  const lifecycleFilter = readLifecycleFilter(searchParams);
+  const sourceFilter = readSourceFilter(searchParams);
   const profileId = readProfileId();
+
+  const updateFilters = ({
+    lifecycle,
+    source,
+  }: {
+    lifecycle?: LifecycleFilter;
+    source?: string | null;
+  }) => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+
+    if (lifecycle !== undefined) {
+      if (lifecycle === DEFAULT_LIFECYCLE_FILTER) {
+        nextSearchParams.delete('lifecycle');
+      } else {
+        nextSearchParams.set('lifecycle', lifecycle);
+      }
+    }
+
+    if (source !== undefined) {
+      if (source) {
+        nextSearchParams.set('source', source);
+      } else {
+        nextSearchParams.delete('source');
+      }
+    }
+
+    setSearchParams(nextSearchParams, { replace: true });
+  };
 
   const { data: jobsFeed, error: jobsError, isLoading: jobsLoading } = useQuery<{
     jobs: JobPosting[];
     summary: JobFeedSummary;
   }>({
-    queryKey: queryKeys.jobs.all(),
-    queryFn: getJobsFeed,
+    queryKey: queryKeys.jobs.filtered(lifecycleFilter, sourceFilter),
+    queryFn: () =>
+      getJobsFeed({
+        lifecycle: lifecycleFilter === 'all' ? undefined : lifecycleFilter,
+        source: sourceFilter ?? undefined,
+        limit: 200,
+      }),
+  });
+
+  const {
+    data: sources = [],
+    error: sourcesError,
+  } = useQuery({
+    queryKey: queryKeys.sources.all(),
+    queryFn: getSources,
+    staleTime: 5 * 60_000,
   });
 
   const allJobs = jobsFeed?.jobs ?? [];
@@ -287,6 +362,47 @@ export default function Dashboard() {
             <div className="statLabel">applications tracked</div>
           </div>
         </section>
+      )}
+
+      <div className="jobsFilters">
+        <div className="lifecycleTabs">
+          {LIFECYCLE_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              className={lifecycleFilter === tab.value ? 'btn' : 'ghostBtn'}
+              style={{ padding: '4px 12px', fontSize: 13 }}
+              onClick={() => updateFilters({ lifecycle: tab.value })}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="sourceTabs">
+          <button
+            className={sourceFilter === null ? 'btn' : 'ghostBtn'}
+            style={{ padding: '4px 12px', fontSize: 13 }}
+            onClick={() => updateFilters({ source: null })}
+          >
+            Всі джерела
+          </button>
+          {sources.map((source) => (
+            <button
+              key={source.id}
+              className={sourceFilter === source.id ? 'btn' : 'ghostBtn'}
+              style={{ padding: '4px 12px', fontSize: 13 }}
+              onClick={() => updateFilters({ source: source.id })}
+            >
+              {source.displayName}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {sourcesError && (
+        <p className="muted" style={{ marginTop: -8, marginBottom: 16, fontSize: 13 }}>
+          Не вдалося завантажити каталог джерел. Фільтр вакансій за джерелом тимчасово недоступний.
+        </p>
       )}
 
       <div className="jobsHeader">

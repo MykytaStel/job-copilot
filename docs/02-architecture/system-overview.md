@@ -1,38 +1,17 @@
 # System Overview
 
 ## Services
+- `engine-api`: Rust, canonical backend
+- `ingestion`: Rust, source ingestion
+- `ml`: Python, enrichment/analytics
+- `web`: React/Vite, UI
 
-### web
-React frontend for:
-- search
-- job details
-- saved jobs
-- applications
-- profile
-
-### engine-api
-Rust backend.
-Owns:
-- jobs API
-- profile API
-- applications API
-- ranking
-- search endpoints
-- domain logic
-
-### ingestion
-New Rust service for:
-- fetching jobs
-- storing raw snapshots
-- normalization
-- deduplication
-
-### ml
-New Python service for:
-- extraction
-- fit analysis
-- reranking
-- future LLM integration
-
-## Data
-- services use Postgres
+## Data flow
+1. ingest jobs from selected sources
+2. normalize and dedupe
+3. store canonical jobs and variants
+4. analyze candidate profile
+5. build search profile
+6. search and rank jobs
+7. explain fit and track actions
+8. enrich with ML/LLM

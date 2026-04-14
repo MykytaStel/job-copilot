@@ -1,25 +1,14 @@
 # Local Setup
 
-## Goal
-Run the project locally with minimal friction around the canonical service set.
+Use the repo root orchestration and service READMEs.
 
-## Services
-Current and planned services:
+Focus for local development:
+- `engine-api`
+- `web`
+- `ml`
+- `ingestion`
 
-- `apps/web` — React frontend
-- `apps/engine-api` — Rust core backend
-- `apps/ingestion` — new Rust ingestion workers
-- `apps/ml` — new Python ML/LLM service
-
-## Required tools
-
-### Node.js
-Used for:
-- web app
-- package scripts
-
-Check:
-```bash
-node --version
-npm --version
-pnpm --version
+When working on one slice:
+1. run only the needed services
+2. keep docs in sync
+3. verify tests for the touched area

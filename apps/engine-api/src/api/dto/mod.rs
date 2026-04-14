@@ -7,3 +7,4 @@ pub mod resumes;
 pub mod roles;
 pub mod search;
 pub mod search_profile;
+pub mod sources;
