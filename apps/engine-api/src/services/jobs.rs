@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::db::repositories::{JobsRepository, RepositoryError};
+use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 
 #[derive(Clone)]
@@ -89,6 +90,14 @@ impl JobsService {
         }
     }
 
+    pub async fn jobs_by_source(&self) -> Result<Vec<JobSourceCount>, RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => repository.jobs_by_source().await,
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.jobs_by_source(),
+        }
+    }
+
     #[cfg(test)]
     pub fn for_tests(stub: JobsServiceStub) -> Self {
         Self {
@@ -104,6 +113,7 @@ pub struct JobsServiceStub {
     recent_job_views: Vec<JobView>,
     search_jobs: Vec<Job>,
     feed_summary: JobFeedSummary,
+    source_counts: Vec<JobSourceCount>,
     database_disabled: bool,
 }
 
@@ -124,6 +134,11 @@ impl JobsServiceStub {
 
     pub fn with_feed_summary(mut self, summary: JobFeedSummary) -> Self {
         self.feed_summary = summary;
+        self
+    }
+
+    pub fn with_jobs_by_source(mut self, counts: Vec<JobSourceCount>) -> Self {
+        self.source_counts = counts;
         self
     }
 
@@ -215,6 +230,14 @@ impl JobsServiceStub {
 
         Ok(self.feed_summary.clone())
     }
+
+    fn jobs_by_source(&self) -> Result<Vec<JobSourceCount>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self.source_counts.clone())
+    }
 }
 
 #[cfg(test)]
@@ -231,6 +254,7 @@ impl Default for JobsServiceStub {
                 inactive_jobs: 0,
                 reactivated_jobs: 0,
             },
+            source_counts: Vec::new(),
             database_disabled: false,
         }
     }

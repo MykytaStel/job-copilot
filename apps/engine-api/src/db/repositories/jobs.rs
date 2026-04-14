@@ -1,6 +1,6 @@
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
-use crate::domain::analytics::model::SalaryBucket;
+use crate::domain::analytics::model::{JobSourceCount, SalaryBucket};
 use crate::domain::job::model::{
     Job, JobFeedSummary, JobLifecycleStage, JobSourceVariant, JobView,
 };
@@ -279,6 +279,39 @@ impl JobsRepository {
                 max: r.salary_max_max,
                 avg: r.salary_avg,
                 job_count: r.job_count,
+            })
+            .collect())
+    }
+
+    pub async fn jobs_by_source(&self) -> Result<Vec<JobSourceCount>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(sqlx::FromRow)]
+        struct JobSourceCountRow {
+            source: String,
+            count: i64,
+        }
+
+        let rows = sqlx::query_as::<_, JobSourceCountRow>(
+            r#"
+            SELECT
+                COALESCE(source, 'unknown') AS source,
+                COUNT(DISTINCT job_id)::bigint AS count
+            FROM job_variants
+            GROUP BY source
+            ORDER BY count DESC
+            "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| JobSourceCount {
+                source: r.source,
+                count: r.count,
             })
             .collect())
     }

@@ -87,6 +87,14 @@ pub fn router() -> Router<AppState> {
             "/api/v1/analytics/salary",
             get(analytics::get_salary_intelligence),
         )
+        .route(
+            "/api/v1/profiles/{id}/analytics/summary",
+            get(analytics::get_analytics_summary),
+        )
+        .route(
+            "/api/v1/profiles/{id}/analytics/llm-context",
+            get(analytics::get_llm_context),
+        )
         .route("/api/v1/roles", get(roles::list_roles))
         .route("/api/v1/sources", get(sources::list_sources))
         .route("/api/v1/resumes", get(resumes::list_resumes))
