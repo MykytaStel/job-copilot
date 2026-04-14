@@ -7,6 +7,13 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from app.application_coach import (
+    ApplicationCoachProviderError,
+    ApplicationCoachRequest,
+    ApplicationCoachResponse,
+    http_error_from_application_coach_error,
+)
+from app.application_coach_service import ApplicationCoachService
 from app.engine_api_client import (
     EngineApiClient,
     EngineJobLifecycle,
@@ -21,7 +28,11 @@ from app.job_fit_explanation import (
     http_error_from_job_fit_explanation_error,
 )
 from app.job_fit_explanation_service import JobFitExplanationService
-from app.llm_provider import build_job_fit_explanation_provider, build_profile_insights_provider
+from app.llm_provider import (
+    build_application_coach_provider,
+    build_job_fit_explanation_provider,
+    build_profile_insights_provider,
+)
 from app.profile_insights import (
     LlmContextRequest,
     ProfileInsightsProviderError,
@@ -117,6 +128,18 @@ def get_job_fit_explanation_service() -> JobFitExplanationService:
         return build_cached_job_fit_explanation_service()
     except JobFitExplanationProviderError as exc:
         raise http_error_from_job_fit_explanation_error(exc) from exc
+
+
+@lru_cache(maxsize=1)
+def build_cached_application_coach_service() -> ApplicationCoachService:
+    return ApplicationCoachService(build_application_coach_provider())
+
+
+def get_application_coach_service() -> ApplicationCoachService:
+    try:
+        return build_cached_application_coach_service()
+    except ApplicationCoachProviderError as exc:
+        raise http_error_from_application_coach_error(exc) from exc
 
 
 @lru_cache(maxsize=1)
@@ -343,3 +366,15 @@ async def enrich_job_fit_explanation(
         return await service.enrich(payload)
     except JobFitExplanationProviderError as exc:
         raise http_error_from_job_fit_explanation_error(exc) from exc
+
+
+@app.post("/v1/enrichment/application-coach", response_model=ApplicationCoachResponse)
+@app.post("/api/v1/enrichment/application-coach", response_model=ApplicationCoachResponse)
+async def enrich_application_coach(
+    payload: ApplicationCoachRequest,
+    service: ApplicationCoachService = Depends(get_application_coach_service),
+) -> ApplicationCoachResponse:
+    try:
+        return await service.enrich(payload)
+    except ApplicationCoachProviderError as exc:
+        raise http_error_from_application_coach_error(exc) from exc

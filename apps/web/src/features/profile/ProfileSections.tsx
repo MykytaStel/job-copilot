@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { ExternalLink, Sparkles, Upload } from 'lucide-react';
 
 import type {
+  ApplicationCoach,
   JobFitExplanation,
   LlmContext,
   RankedJobResult,
@@ -14,7 +15,7 @@ import type {
   SearchWorkMode,
   SourceCatalogItem,
 } from '../../api';
-import { getJobFitExplanation } from '../../api';
+import { getApplicationCoach, getJobFitExplanation } from '../../api';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
 import { PillList } from '../../components/ui/PillList';
@@ -698,9 +699,11 @@ function SearchResultFitExplanation({
   llmContextLoading: boolean;
 }) {
   const [explanation, setExplanation] = useState<JobFitExplanation | null>(null);
+  const [coaching, setCoaching] = useState<ApplicationCoach | null>(null);
 
   useEffect(() => {
     setExplanation(null);
+    setCoaching(null);
   }, [
     result.job.id,
     result.fit.score,
@@ -735,6 +738,35 @@ function SearchResultFitExplanation({
     },
     onSuccess: (payload) => {
       setExplanation(payload);
+    },
+  });
+
+  const coachMutation = useMutation({
+    mutationFn: async () => {
+      if (!profileId) {
+        throw new Error('Profile is required before requesting application coaching.');
+      }
+      if (!llmContext) {
+        throw new Error('Feedback-aware context is not ready yet.');
+      }
+
+      return getApplicationCoach({
+        profileId,
+        analyzedProfile,
+        searchProfile,
+        rankedJob: result.job,
+        deterministicFit: result.fit,
+        jobFitExplanation: explanation,
+        feedbackState: {
+          feedbackSummary: llmContext.feedbackSummary,
+          topPositiveEvidence: llmContext.topPositiveEvidence,
+          topNegativeEvidence: llmContext.topNegativeEvidence,
+          currentJobFeedback: result.job.feedback,
+        },
+      });
+    },
+    onSuccess: (payload) => {
+      setCoaching(payload);
     },
   });
 
@@ -790,6 +822,43 @@ function SearchResultFitExplanation({
       )}
 
       {explanation && <FitExplanationPanel explanation={explanation} />}
+
+      {!llmContextLoading && !llmContextError && llmContext && (
+        <div style={{ marginTop: explanation ? 12 : 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              marginBottom: coaching || coachMutation.isPending || coachMutation.error ? 10 : 0,
+            }}
+          >
+            <span className="detailLabel">Application coaching</span>
+            <button
+              type="button"
+              className="ghostBtn ghostBtnCompact"
+              disabled={coachMutation.isPending || !profileId}
+              onClick={() => coachMutation.mutate()}
+            >
+              <Sparkles size={13} />
+              {coachMutation.isPending
+                ? 'Coaching…'
+                : coaching
+                  ? 'Refresh coaching'
+                  : 'Coach application'}
+            </button>
+          </div>
+
+          {coachMutation.error && (
+            <p className="error" style={{ marginBottom: 0 }}>
+              {renderErrorMessage(coachMutation.error, 'Application coaching is unavailable right now.')}
+            </p>
+          )}
+
+          {coaching && <ApplicationCoachPanel coaching={coaching} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -876,6 +945,65 @@ function FitExplanationList({
           {emptyLabel}
         </p>
       )}
+    </div>
+  );
+}
+
+function ApplicationCoachPanel({ coaching }: { coaching: ApplicationCoach }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        padding: '14px 16px',
+        borderRadius: 14,
+        border: '1px solid rgba(91,180,255,0.18)',
+        background:
+          'linear-gradient(180deg, rgba(12,22,35,0.94) 0%, rgba(10,16,28,0.9) 100%)',
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: 14,
+          lineHeight: 1.6,
+          color: 'var(--color-text-primary)',
+        }}
+      >
+        {coaching.applicationSummary || 'No application summary returned.'}
+      </p>
+
+      <FitExplanationList
+        label="Resume focus points"
+        items={coaching.resumeFocusPoints}
+        emptyLabel="No resume focus points returned."
+      />
+      <FitExplanationList
+        label="Suggested bullets"
+        items={coaching.suggestedBullets}
+        emptyLabel="No suggested bullets returned."
+      />
+      <FitExplanationList
+        label="Cover letter angles"
+        items={coaching.coverLetterAngles}
+        emptyLabel="No cover letter angles returned."
+      />
+      <FitExplanationList
+        label="Interview focus"
+        items={coaching.interviewFocus}
+        emptyLabel="No interview focus returned."
+      />
+      <FitExplanationList
+        label="Gaps to address"
+        items={coaching.gapsToAddress}
+        emptyLabel="No explicit gaps returned."
+      />
+      <FitExplanationList
+        label="Red flags"
+        items={coaching.redFlags}
+        emptyLabel="No explicit red flags returned."
+      />
     </div>
   );
 }
