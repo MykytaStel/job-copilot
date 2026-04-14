@@ -1,0 +1,797 @@
+.jobDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.dashboardPage {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.dashboardHero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+  border-radius: 28px;
+  border: 1px solid var(--color-border-soft);
+  background:
+    linear-gradient(145deg, rgba(84, 104, 255, 0.18), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    rgba(14, 20, 33, 0.92);
+  box-shadow: var(--shadow-hero);
+}
+
+.dashboardHero h1 {
+  margin: 0;
+  font-size: clamp(32px, 4vw, 44px);
+  line-height: 1.05;
+  max-width: 620px;
+}
+
+.dashboardHeroText {
+  max-width: 620px;
+  margin-top: 14px;
+  line-height: 1.7;
+}
+
+.dashboardHeroActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.sourceActivityGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.sourceActivityCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--color-border-soft);
+  background: rgba(18, 25, 39, 0.85);
+}
+
+.sourceActivityIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-hover);
+}
+
+.sourceActivityValue {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-strong);
+}
+
+.sourceActivityLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+}
+
+.tone-active .sourceActivityIcon {
+  background: rgba(46, 196, 182, 0.16);
+  color: var(--color-text-success);
+}
+
+.tone-inactive .sourceActivityIcon {
+  background: rgba(255, 80, 80, 0.14);
+  color: var(--color-text-danger);
+}
+
+.tone-reactivated .sourceActivityIcon {
+  background: rgba(255, 196, 87, 0.16);
+  color: var(--color-text-warning);
+}
+
+.tone-neutral .sourceActivityIcon {
+  background: var(--color-bg-accent);
+  color: var(--color-text-accent);
+}
+
+.jobLifecycleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.jobLifecycleCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--color-border-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+    rgba(16, 23, 36, 0.92);
+}
+
+.jobLifecycleHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.jobLifecycleHeader h2 {
+  margin: 10px 0 6px;
+  font-size: 20px;
+}
+
+.jobLifecycleCompany {
+  margin: 0;
+}
+
+.jobLifecycleActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.jobStatePill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.jobState-active {
+  background: rgba(46, 196, 182, 0.16);
+  color: var(--color-text-success);
+}
+
+.jobState-inactive {
+  background: rgba(255, 80, 80, 0.14);
+  color: var(--color-text-danger);
+}
+
+.jobState-reactivated {
+  background: rgba(255, 196, 87, 0.16);
+  color: var(--color-text-warning);
+}
+
+.jobLifecycleDescription {
+  margin: 0;
+  color: #c2cede;
+  line-height: 1.7;
+}
+
+.jobMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.jobMetaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.05);
+  color: #d5def0;
+  font-size: 12px;
+}
+
+.jobMetaLink {
+  text-decoration: none;
+}
+
+.jobTimeline {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.jobTimeline div,
+.jobDetailFacts div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-card-muted);
+}
+
+.jobTimeline span,
+.jobDetailFacts span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8fa2bd;
+}
+
+.jobTimeline strong,
+.jobDetailFacts strong {
+  color: #f5f7ff;
+  font-size: 14px;
+}
+
+.jobDetailMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.jobDetailsState {
+  flex-shrink: 0;
+}
+
+.jobVariantLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--color-text-link);
+  text-decoration: none;
+}
+
+.jobDetailHighlight {
+  padding: 18px 24px;
+}
+
+.statusSelect {
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-input);
+  background: var(--color-bg-input);
+  color: var(--color-text-strong);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.matchHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.matchHeader h2 {
+  margin: 0;
+}
+
+.matchHeader button {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.matchBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.scoreCircle {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: conic-gradient(
+    #536dfe calc(var(--score, 0) * 1%),
+    rgba(255, 255, 255, 0.08) 0
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scoreNumber {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  background: var(--color-bg-app);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.matchLists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.matchLabel {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 8px;
+}
+
+.matchLabel.matched {
+  color: var(--color-text-success);
+}
+
+.matchLabel.missing {
+  color: var(--color-text-danger);
+}
+
+.skillList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.resumeCurrent {
+  margin-bottom: 20px;
+}
+
+.resumePreview {
+  white-space: pre-wrap;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 12px 0 0;
+  line-height: 1.6;
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  align-items: start;
+  overflow-x: auto;
+}
+
+.boardCol {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-xl);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 160px;
+}
+
+.colHeader {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.colCount {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-pill);
+  padding: 1px 7px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.boardCard {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+
+.boardCardTitle {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  margin-bottom: 4px;
+}
+
+.boardCardTitle:hover {
+  text-decoration: underline;
+}
+
+.boardCardCompany {
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+
+.boardCardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.moveBtn {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.moveBtn:hover {
+  background: var(--color-bg-accent-strong);
+  color: var(--color-text-accent);
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.statCard {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xl);
+  padding: 16px;
+  text-align: center;
+}
+
+.statCard .statNumber {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.statCard .statLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+.resumeVersionList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.resumeVersionItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-card-soft);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.resumeVersionItem.active {
+  border-color: rgba(80, 92, 255, 0.4);
+  background: rgba(80, 92, 255, 0.08);
+}
+
+.activeBadge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-link);
+  background: var(--color-bg-accent-strong);
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.appDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.notesList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.noteItem {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-card-soft);
+  font-size: 14px;
+}
+
+.noteTime {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-top: 6px;
+}
+
+.noteForm {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.noteForm textarea {
+  flex: 1;
+  min-height: 60px;
+}
+
+.noteForm button {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  font-size: 13px;
+}
+
+.jobsFilters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.lifecycleTabs,
+.sourceTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.jobsHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.searchBox {
+  position: relative;
+  flex: 1;
+  max-width: 420px;
+}
+
+.searchBox .searchIcon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.searchBox input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px 7px 32px;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.searchBox input:focus {
+  border-color: var(--color-border-accent);
+}
+
+.searchBox input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.pageHeaderTop {
+  align-items: flex-start;
+}
+
+.pageTitleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.backLink {
+  margin-bottom: 4px;
+}
+
+.metaDate {
+  font-size: 13px;
+}
+
+.descriptionToggle {
+  margin-top: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.applicationItemTitle {
+  margin: 0;
+}
+
+.surfaceItemTitle {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.surfaceItemMeta {
+  font-size: 12px;
+}
+
+.contactCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contactName {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.contactRoleTag {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.activityItem {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.activityType {
+  font-size: 11px;
+  padding: 3px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.taskItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-bg-card-soft);
+  border-radius: 10px;
+}
+
+.taskItem-done {
+  opacity: 0.55;
+}
+
+.taskCheckbox {
+  accent-color: #536dfe;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.taskTitle {
+  flex: 1;
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+.taskTitle-done {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+
+.fitScoreBadge {
+  flex-shrink: 0;
+}
+
+.fitReasonsList {
+  margin: 8px 0 0;
+}
+
+.searchResultCard {
+  align-items: flex-start;
+}
+
+.searchResultMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.searchResultHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.searchResultTitle {
+  font-size: 16px;
+}
+
+.fitScorePill {
+  font-weight: 600;
+}
+
+.fitScorePill-high {
+  background: var(--color-bg-positive);
+  color: #86efac;
+}
+
+.fitScorePill-medium {
+  background: var(--color-bg-accent);
+  color: var(--color-text-accent);
+}
+
+.fitScorePill-low {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fcd34d;
+}
+
+.fitScoreBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fitScoreBarTrack {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.fitScoreBarFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.fitScoreBarValue {
+  font-weight: 700;
+  font-size: 18px;
+  min-width: 42px;
+  text-align: right;
+}
+
+.profileLead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profileUploadLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.visuallyHidden {
+  display: none;
+}
+
+.sectionCardHeader h2 {
+  margin: 0 0 8px;
+}
