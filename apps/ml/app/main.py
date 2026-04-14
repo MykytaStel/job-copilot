@@ -14,6 +14,13 @@ from app.application_coach import (
     http_error_from_application_coach_error,
 )
 from app.application_coach_service import ApplicationCoachService
+from app.cover_letter_draft import (
+    CoverLetterDraftProviderError,
+    CoverLetterDraftRequest,
+    CoverLetterDraftResponse,
+    http_error_from_cover_letter_draft_error,
+)
+from app.cover_letter_draft_service import CoverLetterDraftService
 from app.engine_api_client import (
     EngineApiClient,
     EngineJobLifecycle,
@@ -30,6 +37,7 @@ from app.job_fit_explanation import (
 from app.job_fit_explanation_service import JobFitExplanationService
 from app.llm_provider import (
     build_application_coach_provider,
+    build_cover_letter_draft_provider,
     build_job_fit_explanation_provider,
     build_profile_insights_provider,
 )
@@ -140,6 +148,18 @@ def get_application_coach_service() -> ApplicationCoachService:
         return build_cached_application_coach_service()
     except ApplicationCoachProviderError as exc:
         raise http_error_from_application_coach_error(exc) from exc
+
+
+@lru_cache(maxsize=1)
+def build_cached_cover_letter_draft_service() -> CoverLetterDraftService:
+    return CoverLetterDraftService(build_cover_letter_draft_provider())
+
+
+def get_cover_letter_draft_service() -> CoverLetterDraftService:
+    try:
+        return build_cached_cover_letter_draft_service()
+    except CoverLetterDraftProviderError as exc:
+        raise http_error_from_cover_letter_draft_error(exc) from exc
 
 
 @lru_cache(maxsize=1)
@@ -378,3 +398,15 @@ async def enrich_application_coach(
         return await service.enrich(payload)
     except ApplicationCoachProviderError as exc:
         raise http_error_from_application_coach_error(exc) from exc
+
+
+@app.post("/v1/enrichment/cover-letter-draft", response_model=CoverLetterDraftResponse)
+@app.post("/api/v1/enrichment/cover-letter-draft", response_model=CoverLetterDraftResponse)
+async def enrich_cover_letter_draft(
+    payload: CoverLetterDraftRequest,
+    service: CoverLetterDraftService = Depends(get_cover_letter_draft_service),
+) -> CoverLetterDraftResponse:
+    try:
+        return await service.enrich(payload)
+    except CoverLetterDraftProviderError as exc:
+        raise http_error_from_cover_letter_draft_error(exc) from exc

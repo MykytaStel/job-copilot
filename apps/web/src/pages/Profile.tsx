@@ -108,6 +108,7 @@ export default function Profile() {
           sources={sources}
           buildResult={buildResult}
           profileId={profile?.id ?? null}
+          rawProfileText={rawText}
           llmContext={llmContext}
           llmContextError={llmContextError}
           llmContextLoading={llmContextLoading}
