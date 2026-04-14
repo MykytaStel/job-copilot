@@ -1425,6 +1425,17 @@ type EngineLlmContextResponse = {
   top_negative_evidence: EngineLlmContextEvidenceEntry[];
 };
 
+type MlProfileInsightsResponse = {
+  profile_summary: string;
+  search_strategy_summary: string;
+  strengths: string[];
+  risks: string[];
+  recommended_actions: string[];
+  top_focus_areas: string[];
+  search_term_suggestions: string[];
+  application_strategy: string[];
+};
+
 export type JobsBySourceEntry = {
   source: string;
   count: number;
@@ -1479,6 +1490,17 @@ export type LlmContext = {
   topNegativeEvidence: LlmContextEvidenceEntry[];
 };
 
+export type ProfileInsights = {
+  profileSummary: string;
+  searchStrategySummary: string;
+  strengths: string[];
+  risks: string[];
+  recommendedActions: string[];
+  topFocusAreas: string[];
+  searchTermSuggestions: string[];
+  applicationStrategy: string[];
+};
+
 function mapFeedbackSummarySection(s: EngineFeedbackSummarySection): AnalyticsFeedbackSummary {
   return {
     savedJobsCount: s.saved_jobs_count,
@@ -1531,6 +1553,58 @@ export async function getLlmContext(profileId: string): Promise<LlmContext> {
     feedbackSummary: mapFeedbackSummarySection(response.feedback_summary),
     topPositiveEvidence: response.top_positive_evidence,
     topNegativeEvidence: response.top_negative_evidence,
+  };
+}
+
+export async function getProfileInsights(context: LlmContext): Promise<ProfileInsights> {
+  const response = await mlRequest<MlProfileInsightsResponse>('/v1/enrichment/profile-insights', {
+    method: 'POST',
+    body: JSON.stringify({
+      profile_id: context.profileId,
+      analyzed_profile: context.analyzedProfile
+        ? {
+            summary: context.analyzedProfile.summary,
+            primary_role: context.analyzedProfile.primaryRole,
+            seniority: context.analyzedProfile.seniority,
+            skills: context.analyzedProfile.skills,
+            keywords: context.analyzedProfile.keywords,
+          }
+        : null,
+      profile_skills: context.profileSkills,
+      profile_keywords: context.profileKeywords,
+      jobs_feed_summary: {
+        total: context.jobsFeedSummary.total,
+        active: context.jobsFeedSummary.active,
+        inactive: context.jobsFeedSummary.inactive,
+        reactivated: context.jobsFeedSummary.reactivated,
+      },
+      feedback_summary: {
+        saved_jobs_count: context.feedbackSummary.savedJobsCount,
+        hidden_jobs_count: context.feedbackSummary.hiddenJobsCount,
+        bad_fit_jobs_count: context.feedbackSummary.badFitJobsCount,
+        whitelisted_companies_count: context.feedbackSummary.whitelistedCompaniesCount,
+        blacklisted_companies_count: context.feedbackSummary.blacklistedCompaniesCount,
+      },
+      top_positive_evidence: context.topPositiveEvidence.map((entry) => ({
+        type: entry.type,
+        label: entry.label,
+      })),
+      top_negative_evidence: context.topNegativeEvidence.map((entry) => ({
+        type: entry.type,
+        label: entry.label,
+      })),
+    }),
+  });
+
+  return {
+    profileSummary: response.profile_summary,
+    searchStrategySummary: response.search_strategy_summary,
+    strengths: response.strengths,
+    risks: response.risks,
+    recommendedActions: response.recommended_actions,
+    topFocusAreas: response.top_focus_areas,
+    searchTermSuggestions: response.search_term_suggestions,
+    applicationStrategy: response.application_strategy,
   };
 }
 

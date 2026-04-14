@@ -4,6 +4,7 @@ Python ML/LLM service for:
 - job extraction
 - fit analysis
 - reranking
+- profile enrichment
 - future adapter-based model integration
 
 ## Current slice
@@ -13,6 +14,7 @@ This service now exposes a read-only Phase 9 integration layer:
 - fetch a dedicated lifecycle-aware job payload from `engine-api`
 - compute heuristic fit analysis without writing to Postgres
 - rerank a provided list of jobs for a persisted profile
+- enrich deterministic analytics context with structured profile insights
 
 ## Runtime
 
@@ -20,6 +22,10 @@ Environment variables:
 - `PORT` default `8000`
 - `ENGINE_API_BASE_URL` default `http://localhost:8080`
 - `ENGINE_API_TIMEOUT_SECONDS` default `10`
+- `ML_LLM_PROVIDER` default `template`, or `openai` when `OPENAI_API_KEY` is present
+- `OPENAI_API_KEY` required for the OpenAI provider
+- `OPENAI_MODEL` default `gpt-5.4-mini`
+- `OPENAI_BASE_URL` optional override
 
 Install dependencies:
 
@@ -73,9 +79,47 @@ curl \
   }'
 ```
 
+Generate additive profile insights from deterministic analytics context:
+
+```bash
+curl \
+  -X POST http://localhost:8000/v1/enrichment/profile-insights \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile_id": "profile_test_001",
+    "analyzed_profile": {
+      "summary": "Senior backend engineer with Rust experience",
+      "primary_role": "backend_developer",
+      "seniority": "senior",
+      "skills": ["rust", "postgres"],
+      "keywords": ["backend", "distributed systems"]
+    },
+    "profile_skills": ["rust", "postgres"],
+    "profile_keywords": ["backend", "distributed systems"],
+    "jobs_feed_summary": {
+      "total": 120,
+      "active": 90,
+      "inactive": 20,
+      "reactivated": 10
+    },
+    "feedback_summary": {
+      "saved_jobs_count": 6,
+      "hidden_jobs_count": 2,
+      "bad_fit_jobs_count": 1,
+      "whitelisted_companies_count": 1,
+      "blacklisted_companies_count": 0
+    },
+    "top_positive_evidence": [
+      { "type": "saved_job", "label": "job_backend_rust_001" }
+    ],
+    "top_negative_evidence": []
+  }'
+```
+
 ## Rules
 
 - `ml` does not write canonical job, profile, or application data
 - `engine-api` remains the only write authority
 - this service consumes `engine-api` over HTTP as a sidecar
 - `app/engine_api_client.py` is the only place that knows the ML read-only engine-api surface
+- structured enrichment is additive only and must not invent canonical IDs

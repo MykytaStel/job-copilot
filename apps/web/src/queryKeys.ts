@@ -67,5 +67,7 @@ export const queryKeys = {
   analytics: {
     summary: (profileId: string) => ['analytics', 'summary', profileId] as const,
     llmContext: (profileId: string) => ['analytics', 'llmContext', profileId] as const,
+    profileInsights: (profileId: string, contextVersion: string) =>
+      ['analytics', 'profileInsights', profileId, contextVersion] as const,
   },
 };

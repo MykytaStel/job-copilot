@@ -13,8 +13,8 @@ import {
   Zap,
 } from 'lucide-react';
 
-import { getAnalyticsSummary, getLlmContext } from '../api';
-import type { AnalyticsSummary, LlmContext } from '../api';
+import { getAnalyticsSummary, getLlmContext, getProfileInsights } from '../api';
+import type { AnalyticsSummary, LlmContext, ProfileInsights } from '../api';
 import { queryKeys } from '../queryKeys';
 
 function readProfileId() {
@@ -197,6 +197,41 @@ function TagList({ items, color }: { items: string[]; color: string }) {
   );
 }
 
+function SimpleList({
+  items,
+  empty,
+  color,
+}: {
+  items: string[];
+  empty: string;
+  color: string;
+}) {
+  if (items.length === 0) {
+    return <p className="emptyState" style={{ margin: 0 }}>{empty}</p>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {items.map((item) => (
+        <div
+          key={item}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 8,
+            fontSize: 13,
+            color: 'var(--color-text-primary)',
+            lineHeight: 1.45,
+          }}
+        >
+          <span style={{ color, marginTop: 1 }}>-</span>
+          <span>{item}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Source distribution ──────────────────────────────────────────────────────
 
 function SourceDistribution({ summary }: { summary: AnalyticsSummary }) {
@@ -363,6 +398,64 @@ function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
   );
 }
 
+function ProfileInsightsPanel({ insights }: { insights: ProfileInsights }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Profile summary</div>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--color-text-primary)' }}>
+          {insights.profileSummary || 'No summary generated yet.'}
+        </p>
+      </div>
+
+      {insights.searchStrategySummary && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Search strategy</div>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: 'var(--color-text-secondary)' }}>
+            {insights.searchStrategySummary}
+          </p>
+        </div>
+      )}
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 16,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>Strengths</div>
+          <SimpleList items={insights.strengths} empty="No strengths highlighted yet." color="#b9fbc0" />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>Risks</div>
+          <SimpleList items={insights.risks} empty="No risks highlighted yet." color="#ffb4b4" />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+            Recommended actions
+          </div>
+          <SimpleList
+            items={insights.recommendedActions}
+            empty="No actions suggested yet."
+            color="#95a7ff"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+          Search term suggestions
+        </div>
+        <TagList items={insights.searchTermSuggestions} color="#ffd6a5" />
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Analytics() {
@@ -378,6 +471,19 @@ export default function Analytics() {
     queryKey: queryKeys.analytics.llmContext(profileId ?? ''),
     queryFn: () => getLlmContext(profileId!),
     enabled: !!profileId,
+  });
+
+  const enrichmentContextVersion = llmCtx ? JSON.stringify(llmCtx) : '';
+
+  const {
+    data: profileInsights,
+    isLoading: insightsLoading,
+    error: insightsError,
+  } = useQuery({
+    queryKey: queryKeys.analytics.profileInsights(profileId ?? '', enrichmentContextVersion),
+    queryFn: () => getProfileInsights(llmCtx!),
+    enabled: !!profileId && !!llmCtx,
+    retry: 0,
   });
 
   if (!profileId) {
@@ -495,6 +601,22 @@ export default function Analytics() {
                 Deterministic payload — ready for Python enrichment
               </div>
               <LlmContextPanel ctx={llmCtx} />
+            </Section>
+          )}
+
+          {llmCtx && (
+            <Section title="LLM Enrichment" icon={<Brain size={16} />}>
+              {insightsLoading ? (
+                <p className="emptyState" style={{ margin: 0 }}>Generating enrichment…</p>
+              ) : insightsError ? (
+                <p className="emptyState" style={{ margin: 0 }}>
+                  {(insightsError as Error).message || 'ML enrichment is unavailable right now.'}
+                </p>
+              ) : profileInsights ? (
+                <ProfileInsightsPanel insights={profileInsights} />
+              ) : (
+                <p className="emptyState" style={{ margin: 0 }}>No enrichment available yet.</p>
+              )}
             </Section>
           )}
         </>
