@@ -1,4 +1,4 @@
-mod matching;
+pub(crate) mod matching;
 mod presentation;
 pub(crate) mod rules;
 pub mod service;

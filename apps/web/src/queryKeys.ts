@@ -8,6 +8,9 @@ export const queryKeys = {
   sources: {
     all: () => ['sources'] as const,
   },
+  roles: {
+    all: () => ['roles'] as const,
+  },
   profile: {
     root: () => ['profile'] as const,
     suggestedSkills: () => ['profile', 'suggestedSkills'] as const,

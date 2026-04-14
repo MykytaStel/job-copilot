@@ -7,6 +7,7 @@ use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
 use crate::services::followup::FollowUpService;
 use crate::services::jobs::JobsService;
+use crate::services::matching::SearchMatchingService;
 use crate::services::profile::service::ProfileAnalysisService;
 use crate::services::profiles::ProfilesService;
 use crate::services::ranking::RankingService;
@@ -21,6 +22,7 @@ pub struct AppState {
     pub database: Database,
     pub profiles_service: ProfilesService,
     pub jobs_service: JobsService,
+    pub search_matching_service: SearchMatchingService,
     pub applications_service: ApplicationsService,
     pub activities_service: ActivitiesService,
     pub resumes_service: ResumesService,
@@ -50,6 +52,7 @@ impl AppState {
             database,
             profiles_service: ProfilesService::new(profiles_repository),
             jobs_service: JobsService::new(jobs_repository),
+            search_matching_service: SearchMatchingService::new(),
             applications_service: ApplicationsService::new(applications_repository),
             activities_service: ActivitiesService::new(activities_repository),
             resumes_service: ResumesService::new(resumes_repository),
@@ -82,6 +85,7 @@ impl AppState {
             database: Database::disabled(),
             profiles_service,
             jobs_service,
+            search_matching_service: SearchMatchingService::new(),
             applications_service,
             activities_service: ActivitiesService::for_tests(
                 crate::services::activities::ActivitiesServiceStub::default(),

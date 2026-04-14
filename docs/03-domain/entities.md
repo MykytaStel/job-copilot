@@ -6,6 +6,7 @@
 - RoleId / RoleCatalog
 - Job
 - JobVariant
+- JobFit
 - Company
 - FitScore
 - FitExplanation
