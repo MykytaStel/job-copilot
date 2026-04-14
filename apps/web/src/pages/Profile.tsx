@@ -15,6 +15,9 @@ export default function Profile() {
     sources,
     rolesError,
     sourcesError,
+    llmContext,
+    llmContextError,
+    llmContextLoading,
     name,
     email,
     location,
@@ -103,6 +106,11 @@ export default function Profile() {
           searchError={searchError}
           roles={roles}
           sources={sources}
+          buildResult={buildResult}
+          profileId={profile?.id ?? null}
+          llmContext={llmContext}
+          llmContextError={llmContextError}
+          llmContextLoading={llmContextLoading}
           isRunning={runMutation.isPending}
           onRunSearch={runCurrentSearch}
         />

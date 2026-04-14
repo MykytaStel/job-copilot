@@ -1,7 +1,11 @@
 import type { ChangeEventHandler, RefObject } from 'react';
-import { ExternalLink, Upload } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { ExternalLink, Sparkles, Upload } from 'lucide-react';
 
 import type {
+  JobFitExplanation,
+  LlmContext,
   RankedJobResult,
   RoleCatalogItem,
   SearchProfileBuildResult,
@@ -10,6 +14,7 @@ import type {
   SearchWorkMode,
   SourceCatalogItem,
 } from '../../api';
+import { getJobFitExplanation } from '../../api';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
 import { PillList } from '../../components/ui/PillList';
@@ -394,6 +399,11 @@ export function SearchProfileResultSection({
 export function RankedResultsSection({
   searchResult,
   searchError,
+  buildResult,
+  profileId,
+  llmContext,
+  llmContextError,
+  llmContextLoading,
   roles,
   sources,
   isRunning,
@@ -401,6 +411,11 @@ export function RankedResultsSection({
 }: {
   searchResult: SearchRunResult | null;
   searchError: string | null;
+  buildResult: SearchProfileBuildResult;
+  profileId: string | null;
+  llmContext: LlmContext | null;
+  llmContextError: unknown;
+  llmContextLoading: boolean;
   roles: RoleCatalogItem[];
   sources: SourceCatalogItem[];
   isRunning: boolean;
@@ -426,7 +441,16 @@ export function RankedResultsSection({
       {isRunning ? (
         <p className="muted sectionText">Running ranked search against active jobs…</p>
       ) : searchResult ? (
-        <SearchResultsSection result={searchResult} roles={roles} sources={sources} />
+        <SearchResultsSection
+          result={searchResult}
+          buildResult={buildResult}
+          profileId={profileId}
+          llmContext={llmContext}
+          llmContextError={llmContextError}
+          llmContextLoading={llmContextLoading}
+          roles={roles}
+          sources={sources}
+        />
       ) : (
         <p className="muted sectionText">
           Build a search profile, then run search to inspect ranked jobs and fit reasons.
@@ -464,10 +488,20 @@ export function LatestAnalysisSection({
 
 function SearchResultsSection({
   result,
+  buildResult,
+  profileId,
+  llmContext,
+  llmContextError,
+  llmContextLoading,
   roles,
   sources,
 }: {
   result: SearchRunResult;
+  buildResult: SearchProfileBuildResult;
+  profileId: string | null;
+  llmContext: LlmContext | null;
+  llmContextError: unknown;
+  llmContextLoading: boolean;
   roles: RoleCatalogItem[];
   sources: SourceCatalogItem[];
 }) {
@@ -492,6 +526,12 @@ function SearchResultsSection({
             <SearchResultCard
               key={item.job.id}
               result={item}
+              analyzedProfile={buildResult.analyzedProfile}
+              searchProfile={buildResult.searchProfile}
+              profileId={profileId}
+              llmContext={llmContext}
+              llmContextError={llmContextError}
+              llmContextLoading={llmContextLoading}
               roles={roles}
               sources={sources}
             />
@@ -504,10 +544,22 @@ function SearchResultsSection({
 
 function SearchResultCard({
   result,
+  analyzedProfile,
+  searchProfile,
+  profileId,
+  llmContext,
+  llmContextError,
+  llmContextLoading,
   roles,
   sources,
 }: {
   result: RankedJobResult;
+  analyzedProfile: SearchProfileBuildResult['analyzedProfile'];
+  searchProfile: SearchProfileBuildResult['searchProfile'];
+  profileId: string | null;
+  llmContext: LlmContext | null;
+  llmContextError: unknown;
+  llmContextLoading: boolean;
   roles: RoleCatalogItem[];
   sources: SourceCatalogItem[];
 }) {
@@ -607,6 +659,16 @@ function SearchResultCard({
             </div>
           </div>
         )}
+
+        <SearchResultFitExplanation
+          analyzedProfile={analyzedProfile}
+          searchProfile={searchProfile}
+          result={result}
+          profileId={profileId}
+          llmContext={llmContext}
+          llmContextError={llmContextError}
+          llmContextLoading={llmContextLoading}
+        />
       </div>
 
       <div className="fitScoreBadge">
@@ -615,6 +677,206 @@ function SearchResultCard({
         </span>
       </div>
     </article>
+  );
+}
+
+function SearchResultFitExplanation({
+  analyzedProfile,
+  searchProfile,
+  result,
+  profileId,
+  llmContext,
+  llmContextError,
+  llmContextLoading,
+}: {
+  analyzedProfile: SearchProfileBuildResult['analyzedProfile'];
+  searchProfile: SearchProfileBuildResult['searchProfile'];
+  result: RankedJobResult;
+  profileId: string | null;
+  llmContext: LlmContext | null;
+  llmContextError: unknown;
+  llmContextLoading: boolean;
+}) {
+  const [explanation, setExplanation] = useState<JobFitExplanation | null>(null);
+
+  useEffect(() => {
+    setExplanation(null);
+  }, [
+    result.job.id,
+    result.fit.score,
+    searchProfile.primaryRole,
+    searchProfile.searchTerms.join('|'),
+    searchProfile.excludeTerms.join('|'),
+    searchProfile.allowedSources.join('|'),
+  ]);
+
+  const explainMutation = useMutation({
+    mutationFn: async () => {
+      if (!profileId) {
+        throw new Error('Profile is required before requesting fit explanation.');
+      }
+      if (!llmContext) {
+        throw new Error('Feedback-aware context is not ready yet.');
+      }
+
+      return getJobFitExplanation({
+        profileId,
+        analyzedProfile,
+        searchProfile,
+        rankedJob: result.job,
+        deterministicFit: result.fit,
+        feedbackState: {
+          feedbackSummary: llmContext.feedbackSummary,
+          topPositiveEvidence: llmContext.topPositiveEvidence,
+          topNegativeEvidence: llmContext.topNegativeEvidence,
+          currentJobFeedback: result.job.feedback,
+        },
+      });
+    },
+    onSuccess: (payload) => {
+      setExplanation(payload);
+    },
+  });
+
+  return (
+    <div className="resultSection" style={{ marginTop: 12 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: explanation || explainMutation.isPending || explainMutation.error ? 10 : 0,
+        }}
+      >
+        <span className="detailLabel">LLM fit explanation</span>
+        <button
+          type="button"
+          className="ghostBtn ghostBtnCompact"
+          disabled={
+            explainMutation.isPending ||
+            !profileId ||
+            llmContextLoading ||
+            !!llmContextError ||
+            !llmContext
+          }
+          onClick={() => explainMutation.mutate()}
+        >
+          <Sparkles size={13} />
+          {explainMutation.isPending
+            ? 'Explaining…'
+            : explanation
+              ? 'Refresh explanation'
+              : 'Explain fit'}
+        </button>
+      </div>
+
+      {llmContextLoading && (
+        <p className="muted sectionText" style={{ margin: 0 }}>
+          Feedback-aware context is loading. Fit explanation will be available once it is ready.
+        </p>
+      )}
+
+      {!llmContextLoading && Boolean(llmContextError) && (
+        <p className="error" style={{ marginBottom: 0 }}>
+          {renderErrorMessage(llmContextError, 'Feedback-aware context is unavailable right now.')}
+        </p>
+      )}
+
+      {explainMutation.error && (
+        <p className="error" style={{ marginBottom: 0 }}>
+          {renderErrorMessage(explainMutation.error, 'Fit explanation is unavailable right now.')}
+        </p>
+      )}
+
+      {explanation && <FitExplanationPanel explanation={explanation} />}
+    </div>
+  );
+}
+
+function FitExplanationPanel({ explanation }: { explanation: JobFitExplanation }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        padding: '14px 16px',
+        borderRadius: 14,
+        border: '1px solid rgba(149,167,255,0.18)',
+        background:
+          'linear-gradient(180deg, rgba(18,26,40,0.92) 0%, rgba(13,19,31,0.88) 100%)',
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: 14,
+          lineHeight: 1.6,
+          color: 'var(--color-text-primary)',
+        }}
+      >
+        {explanation.fitSummary || 'No summary returned.'}
+      </p>
+
+      <FitExplanationList
+        label="Why it matches"
+        items={explanation.whyItMatches}
+        emptyLabel="No supporting signals returned."
+      />
+      <FitExplanationList
+        label="Risks"
+        items={explanation.risks}
+        emptyLabel="No explicit risks returned."
+      />
+      <FitExplanationList
+        label="Missing signals"
+        items={explanation.missingSignals}
+        emptyLabel="No missing signals returned."
+      />
+
+      <div className="detailGrid">
+        <div>
+          <span className="detailLabel">Recommended next step</span>
+          <p className="sectionText" style={{ marginBottom: 0 }}>
+            {explanation.recommendedNextStep || 'No next step returned.'}
+          </p>
+        </div>
+        <div>
+          <span className="detailLabel">Application angle</span>
+          <p className="sectionText" style={{ marginBottom: 0 }}>
+            {explanation.applicationAngle || 'No application angle returned.'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FitExplanationList({
+  label,
+  items,
+  emptyLabel,
+}: {
+  label: string;
+  items: string[];
+  emptyLabel: string;
+}) {
+  return (
+    <div>
+      <span className="detailLabel">{label}</span>
+      {items.length > 0 ? (
+        <ul className="textList fitReasonsList" style={{ marginTop: 8 }}>
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted sectionText" style={{ marginBottom: 0 }}>
+          {emptyLabel}
+        </p>
+      )}
+    </div>
   );
 }
 
