@@ -141,7 +141,9 @@ impl UserEventsServiceStub {
             .expect("user events stub mutex should not be poisoned");
 
         Ok(UserEventSummary::from_events(
-            records.iter().filter(|record| record.profile_id == profile_id),
+            records
+                .iter()
+                .filter(|record| record.profile_id == profile_id),
         ))
     }
 }

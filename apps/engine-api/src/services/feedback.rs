@@ -147,7 +147,9 @@ impl FeedbackService {
     ) -> Result<Option<JobFeedbackRecord>, RepositoryError> {
         match &self.backend {
             FeedbackServiceBackend::Repository(repository) => {
-                repository.clear_job_feedback(profile_id, job_id, &flags).await
+                repository
+                    .clear_job_feedback(profile_id, job_id, &flags)
+                    .await
             }
             #[cfg(test)]
             FeedbackServiceBackend::Stub(stub) => {

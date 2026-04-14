@@ -1,5 +1,6 @@
 pub mod analytics;
 pub mod applications;
+pub mod behavior;
 pub mod events;
 pub mod feedback;
 pub mod health;
@@ -50,6 +51,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/contacts",
             get(applications::list_contacts).post(applications::create_contact),
+        )
+        .route(
+            "/api/v1/profiles/{id}/behavior-summary",
+            get(behavior::get_behavior_summary),
         )
         .route(
             "/api/v1/profiles/{id}/feedback",

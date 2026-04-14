@@ -24,6 +24,9 @@ pub async fn log_user_event(
         if event.source.is_none() {
             event.source = metadata.source;
         }
+        if event.role_family.is_none() {
+            event.role_family = metadata.role_family;
+        }
     }
 
     let event = state
@@ -59,6 +62,7 @@ pub async fn get_user_event_summary(
 pub(crate) struct JobEventMetadata {
     pub company_name: Option<String>,
     pub source: Option<String>,
+    pub role_family: Option<String>,
 }
 
 pub(crate) async fn load_job_event_metadata(
@@ -72,9 +76,16 @@ pub(crate) async fn load_job_event_metadata(
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
 
     if let Some(job_view) = maybe_job_view {
+        let source = job_view
+            .primary_variant
+            .as_ref()
+            .map(|variant| variant.source.clone());
+        let role_family = state.search_matching_service.infer_role_family(&job_view);
+
         return Ok(JobEventMetadata {
             company_name: Some(job_view.job.company_name),
-            source: job_view.primary_variant.map(|variant| variant.source),
+            source,
+            role_family,
         });
     }
 
@@ -90,9 +101,14 @@ pub(crate) async fn load_job_event_metadata(
         ));
     };
 
+    let role_family = state
+        .search_matching_service
+        .infer_role_family_for_job(&job);
+
     Ok(JobEventMetadata {
         company_name: Some(job.company_name),
         source: None,
+        role_family,
     })
 }
 
@@ -110,8 +126,8 @@ pub(crate) async fn log_user_event_softly(state: &AppState, event: CreateUserEve
 
 #[cfg(test)]
 mod tests {
-    use axum::extract::{Path, State};
     use axum::Json;
+    use axum::extract::{Path, State};
     use serde_json::json;
 
     use crate::api::dto::events::LogUserEventRequest;

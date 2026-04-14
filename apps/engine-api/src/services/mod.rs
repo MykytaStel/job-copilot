@@ -1,5 +1,6 @@
 pub mod activities;
 pub mod applications;
+pub mod behavior;
 pub mod feedback;
 pub mod followup;
 pub mod jobs;

@@ -1,12 +1,12 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 
-use crate::api::routes::events::{load_job_event_metadata, log_user_event_softly};
 use crate::api::dto::feedback::{
     CompanyFeedbackResponse, FeedbackOverviewResponse, FeedbackSummary, JobFeedbackResponse,
     UpdateCompanyFeedbackRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
+use crate::api::routes::events::{load_job_event_metadata, log_user_event_softly};
 use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackFlags};
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::feedback::FeedbackService;
@@ -177,7 +177,7 @@ async fn clear_job_feedback_flags(
             job_id: Some(job_id),
             company_name: metadata.company_name,
             source: metadata.source,
-            role_family: None,
+            role_family: metadata.role_family,
             payload_json: None,
         },
     )
@@ -242,7 +242,7 @@ async fn update_job_feedback(
             job_id: Some(job_id),
             company_name: metadata.company_name,
             source: metadata.source,
-            role_family: None,
+            role_family: metadata.role_family,
             payload_json: None,
         },
     )
@@ -350,8 +350,8 @@ mod tests {
     use crate::state::AppState;
 
     use super::{
-        add_company_blacklist, hide_job, list_feedback, mark_job_bad_fit, save_job,
-        unhide_job, unmark_job_bad_fit, unsave_job,
+        add_company_blacklist, hide_job, list_feedback, mark_job_bad_fit, save_job, unhide_job,
+        unmark_job_bad_fit, unsave_job,
     };
 
     fn sample_profile() -> Profile {
@@ -544,7 +544,10 @@ mod tests {
             .expect("listing feedback should succeed");
 
         assert_eq!(overview.jobs.len(), 1);
-        assert!(!overview.jobs[0].saved, "saved should be cleared after unsave");
+        assert!(
+            !overview.jobs[0].saved,
+            "saved should be cleared after unsave"
+        );
     }
 
     #[tokio::test]
@@ -573,7 +576,10 @@ mod tests {
             .expect("listing feedback should succeed");
 
         assert_eq!(overview.jobs.len(), 1);
-        assert!(!overview.jobs[0].hidden, "hidden should be cleared after unhide");
+        assert!(
+            !overview.jobs[0].hidden,
+            "hidden should be cleared after unhide"
+        );
     }
 
     #[tokio::test]
@@ -602,7 +608,10 @@ mod tests {
             .expect("listing feedback should succeed");
 
         assert_eq!(overview.jobs.len(), 1);
-        assert!(!overview.jobs[0].bad_fit, "bad_fit should be cleared after unmark");
+        assert!(
+            !overview.jobs[0].bad_fit,
+            "bad_fit should be cleared after unmark"
+        );
     }
 
     #[tokio::test]
@@ -616,7 +625,10 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_ok(), "unsave on a job with no feedback should succeed");
+        assert!(
+            result.is_ok(),
+            "unsave on a job with no feedback should succeed"
+        );
     }
 
     #[tokio::test]
@@ -653,35 +665,34 @@ mod tests {
     #[tokio::test]
     async fn feedback_overview_summary_counts_are_correct() {
         // Set up: one job that is saved + bad_fit, one whitelisted company, one blacklisted.
-        let state = test_state()
-            .with_feedback_service(FeedbackService::for_tests(
-                FeedbackServiceStub::default()
-                    .with_job_feedback(JobFeedbackRecord {
-                        profile_id: "profile-1".to_string(),
-                        job_id: "job-1".to_string(),
-                        saved: true,
-                        hidden: false,
-                        bad_fit: true,
-                        created_at: "2026-04-14T00:00:00Z".to_string(),
-                        updated_at: "2026-04-14T00:00:00Z".to_string(),
-                    })
-                    .with_company_feedback(CompanyFeedbackRecord {
-                        profile_id: "profile-1".to_string(),
-                        company_name: "GoodCorp".to_string(),
-                        normalized_company_name: "goodcorp".to_string(),
-                        status: CompanyFeedbackStatus::Whitelist,
-                        created_at: "2026-04-14T00:00:00Z".to_string(),
-                        updated_at: "2026-04-14T00:00:00Z".to_string(),
-                    })
-                    .with_company_feedback(CompanyFeedbackRecord {
-                        profile_id: "profile-1".to_string(),
-                        company_name: "BadCorp".to_string(),
-                        normalized_company_name: "badcorp".to_string(),
-                        status: CompanyFeedbackStatus::Blacklist,
-                        created_at: "2026-04-14T00:00:00Z".to_string(),
-                        updated_at: "2026-04-14T00:00:00Z".to_string(),
-                    }),
-            ));
+        let state = test_state().with_feedback_service(FeedbackService::for_tests(
+            FeedbackServiceStub::default()
+                .with_job_feedback(JobFeedbackRecord {
+                    profile_id: "profile-1".to_string(),
+                    job_id: "job-1".to_string(),
+                    saved: true,
+                    hidden: false,
+                    bad_fit: true,
+                    created_at: "2026-04-14T00:00:00Z".to_string(),
+                    updated_at: "2026-04-14T00:00:00Z".to_string(),
+                })
+                .with_company_feedback(CompanyFeedbackRecord {
+                    profile_id: "profile-1".to_string(),
+                    company_name: "GoodCorp".to_string(),
+                    normalized_company_name: "goodcorp".to_string(),
+                    status: CompanyFeedbackStatus::Whitelist,
+                    created_at: "2026-04-14T00:00:00Z".to_string(),
+                    updated_at: "2026-04-14T00:00:00Z".to_string(),
+                })
+                .with_company_feedback(CompanyFeedbackRecord {
+                    profile_id: "profile-1".to_string(),
+                    company_name: "BadCorp".to_string(),
+                    normalized_company_name: "badcorp".to_string(),
+                    status: CompanyFeedbackStatus::Blacklist,
+                    created_at: "2026-04-14T00:00:00Z".to_string(),
+                    updated_at: "2026-04-14T00:00:00Z".to_string(),
+                }),
+        ));
 
         let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
             .await
@@ -740,7 +751,8 @@ mod tests {
             .list_by_profile("profile-1")
             .await
             .expect("events should be queryable");
-        let event_types: Vec<UserEventType> = events.into_iter().map(|event| event.event_type).collect();
+        let event_types: Vec<UserEventType> =
+            events.into_iter().map(|event| event.event_type).collect();
 
         assert!(event_types.contains(&UserEventType::JobSaved));
         assert!(event_types.contains(&UserEventType::JobUnsaved));
@@ -790,6 +802,9 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_ok(), "feedback write should not fail when event logging is unavailable");
+        assert!(
+            result.is_ok(),
+            "feedback write should not fail when event logging is unavailable"
+        );
     }
 }

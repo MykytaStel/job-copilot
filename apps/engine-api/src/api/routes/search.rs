@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use axum::extract::{Query, State};
 use serde::Deserialize;
 use serde_json::json;
+use tracing::warn;
 
 use crate::api::dto::search::{RunSearchRequest, RunSearchResponse, SearchResponse};
 use crate::api::error::{ApiError, ApiJson};
@@ -10,6 +11,7 @@ use crate::api::routes::events::log_user_event_softly;
 use crate::api::routes::jobs::load_feedback_state;
 use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackState};
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
+use crate::services::behavior::{BehaviorService, ProfileBehaviorAggregates};
 use crate::services::matching::RankedJob;
 use crate::state::AppState;
 
@@ -71,6 +73,7 @@ pub async fn run_search(
         .await
         .map_err(|error| ApiError::from_repository(error, "search_run_failed"))?;
     let total_candidates = candidate_jobs.len();
+    let behavior_aggregates = load_behavior_aggregates(&state, input.profile_id.as_deref()).await;
     let feedback_states =
         load_feedback_state(&state, input.profile_id.as_deref(), &candidate_jobs).await?;
     let mut filtered_out_hidden = 0usize;
@@ -101,15 +104,17 @@ pub async fn run_search(
         })
         .collect::<Vec<_>>();
 
-    let result = state.search_matching_service.run(
-        &input.search_profile,
-        ranked_candidates,
-    );
+    let result = state
+        .search_matching_service
+        .run(&input.search_profile, ranked_candidates);
     // Apply feedback-aware score adjustments, re-sort, then truncate.
     // Truncation happens here (after feedback) so that a whitelisted job ranked
     // just outside the limit by pure score can still be promoted into the result
     // set, and a bad-fit job with a high initial score can be demoted out of it.
     let mut adjusted_jobs = apply_feedback_scoring(result.ranked_jobs, &feedback_by_job_id);
+    if let Some(aggregates) = behavior_aggregates.as_ref() {
+        adjusted_jobs = apply_behavior_scoring(&state, adjusted_jobs, aggregates);
+    }
     adjusted_jobs.truncate(input.limit as usize);
     let ranked_jobs: Vec<crate::api::dto::search::RankedJobResponse> = adjusted_jobs
         .into_iter()
@@ -249,6 +254,62 @@ fn apply_feedback_scoring(
     ranked_jobs
 }
 
+async fn load_behavior_aggregates(
+    state: &AppState,
+    profile_id: Option<&str>,
+) -> Option<ProfileBehaviorAggregates> {
+    let profile_id = profile_id?;
+    let events = match state.user_events_service.list_by_profile(profile_id).await {
+        Ok(events) => events,
+        Err(error) => {
+            warn!(
+                error = %error,
+                profile_id,
+                "failed to load behavior aggregates; continuing without personalization"
+            );
+            return None;
+        }
+    };
+
+    Some(BehaviorService::new().build_aggregates(events.iter()))
+}
+
+fn apply_behavior_scoring(
+    state: &AppState,
+    mut ranked_jobs: Vec<RankedJob>,
+    aggregates: &ProfileBehaviorAggregates,
+) -> Vec<RankedJob> {
+    let behavior_service = BehaviorService::new();
+
+    for ranked in &mut ranked_jobs {
+        let source = ranked
+            .job
+            .primary_variant
+            .as_ref()
+            .map(|variant| variant.source.as_str());
+        let role_family = state.search_matching_service.infer_role_family(&ranked.job);
+        let adjustment = behavior_service.score_job(aggregates, source, role_family.as_deref());
+
+        if adjustment.score_delta == 0 {
+            continue;
+        }
+
+        ranked.fit.score = (ranked.fit.score as i16 + adjustment.score_delta).clamp(0, 100) as u8;
+        ranked.fit.reasons.extend(adjustment.reasons);
+    }
+
+    ranked_jobs.sort_by(|left, right| {
+        right
+            .fit
+            .score
+            .cmp(&left.fit.score)
+            .then_with(|| right.job.job.last_seen_at.cmp(&left.job.job.last_seen_at))
+            .then_with(|| left.job.job.id.cmp(&right.job.job.id))
+    });
+
+    ranked_jobs
+}
+
 #[cfg(test)]
 mod tests {
     use axum::extract::{Query, State};
@@ -264,7 +325,7 @@ mod tests {
     use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
     use crate::domain::profile::model::Profile;
     use crate::domain::search::profile::{TargetRegion, WorkMode};
-    use crate::domain::user_event::model::UserEventType;
+    use crate::domain::user_event::model::{UserEventRecord, UserEventType};
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::feedback::{FeedbackService, FeedbackServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
@@ -451,15 +512,13 @@ mod tests {
             ProfilesService::for_tests(
                 ProfilesServiceStub::default().with_profile(sample_profile()),
             ),
-            JobsService::for_tests(
-                JobsServiceStub::default().with_job_view(sample_job_view(
-                    "job-1",
-                    "Senior Backend Developer",
-                    "Rust and Postgres",
-                    Some("remote"),
-                    "djinni",
-                )),
-            ),
+            JobsService::for_tests(JobsServiceStub::default().with_job_view(sample_job_view(
+                "job-1",
+                "Senior Backend Developer",
+                "Rust and Postgres",
+                Some("remote"),
+                "djinni",
+            ))),
             ApplicationsService::for_tests(ApplicationsServiceStub::default()),
             ResumesService::for_tests(ResumesServiceStub::default()),
         );
@@ -509,15 +568,13 @@ mod tests {
             ProfilesService::for_tests(
                 ProfilesServiceStub::default().with_profile(sample_profile()),
             ),
-            JobsService::for_tests(
-                JobsServiceStub::default().with_job_view(sample_job_view(
-                    "job-1",
-                    "Senior Backend Developer",
-                    "Rust and Postgres",
-                    Some("remote"),
-                    "djinni",
-                )),
-            ),
+            JobsService::for_tests(JobsServiceStub::default().with_job_view(sample_job_view(
+                "job-1",
+                "Senior Backend Developer",
+                "Rust and Postgres",
+                Some("remote"),
+                "djinni",
+            ))),
             ApplicationsService::for_tests(ApplicationsServiceStub::default()),
             ResumesService::for_tests(ResumesServiceStub::default()),
         )
@@ -548,7 +605,10 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_ok(), "search should not fail when event logging is unavailable");
+        assert!(
+            result.is_ok(),
+            "search should not fail when event logging is unavailable"
+        );
     }
 
     #[tokio::test]
@@ -868,9 +928,7 @@ mod tests {
                 .as_array()
                 .expect("reasons should be an array")
                 .iter()
-                .any(|r| r
-                    .as_str()
-                    .is_some_and(|s| s.contains("whitelisted"))),
+                .any(|r| r.as_str().is_some_and(|s| s.contains("whitelisted"))),
             "whitelist reason should appear in fit reasons"
         );
 
@@ -881,7 +939,10 @@ mod tests {
         let score_2 = payload["results"][1]["fit"]["score"]
             .as_u64()
             .expect("score should be a number");
-        assert!(score_1 > score_2, "whitelist bonus must raise job-1 score above job-2");
+        assert!(
+            score_1 > score_2,
+            "whitelist bonus must raise job-1 score above job-2"
+        );
     }
 
     #[tokio::test]
@@ -1155,5 +1216,482 @@ mod tests {
             json!("job-2"),
             "bad-fit job-1 must be demoted out of results before truncation"
         );
+    }
+
+    #[tokio::test]
+    async fn positive_source_history_gives_small_boost() {
+        let shared_desc = "Remote EU role working with Rust and Postgres backend systems";
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "work_ua",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default()
+                .with_event(UserEventRecord {
+                    id: "evt-1".to_string(),
+                    profile_id: "profile-1".to_string(),
+                    event_type: UserEventType::JobSaved,
+                    job_id: Some("saved-1".to_string()),
+                    company_name: Some("NovaLedger".to_string()),
+                    source: Some("djinni".to_string()),
+                    role_family: Some("engineering".to_string()),
+                    payload_json: None,
+                    created_at: "2026-04-15T00:00:00Z".to_string(),
+                })
+                .with_event(UserEventRecord {
+                    id: "evt-2".to_string(),
+                    profile_id: "profile-1".to_string(),
+                    event_type: UserEventType::JobSaved,
+                    job_id: Some("saved-2".to_string()),
+                    company_name: Some("NovaLedger".to_string()),
+                    source: Some("djinni".to_string()),
+                    role_family: Some("engineering".to_string()),
+                    payload_json: None,
+                    created_at: "2026-04-15T00:00:01Z".to_string(),
+                }),
+        ));
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string(), "work_ua".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(payload["results"][0]["job"]["id"], json!("job-1"));
+        assert!(
+            payload["results"][0]["fit"]["reasons"]
+                .as_array()
+                .expect("reasons should be an array")
+                .iter()
+                .any(|reason| {
+                    reason.as_str().is_some_and(|value| {
+                        value.contains("Source has positive interaction history")
+                    })
+                }),
+            "positive source reason should appear in fit reasons"
+        );
+    }
+
+    #[tokio::test]
+    async fn negative_source_history_gives_small_penalty() {
+        let shared_desc = "Remote EU role working with Rust and Postgres backend systems";
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "work_ua",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default()
+                .with_event(UserEventRecord {
+                    id: "evt-1".to_string(),
+                    profile_id: "profile-1".to_string(),
+                    event_type: UserEventType::JobHidden,
+                    job_id: Some("hidden-1".to_string()),
+                    company_name: Some("NovaLedger".to_string()),
+                    source: Some("djinni".to_string()),
+                    role_family: Some("engineering".to_string()),
+                    payload_json: None,
+                    created_at: "2026-04-15T00:00:00Z".to_string(),
+                })
+                .with_event(UserEventRecord {
+                    id: "evt-2".to_string(),
+                    profile_id: "profile-1".to_string(),
+                    event_type: UserEventType::JobBadFit,
+                    job_id: Some("bad-1".to_string()),
+                    company_name: Some("NovaLedger".to_string()),
+                    source: Some("djinni".to_string()),
+                    role_family: Some("engineering".to_string()),
+                    payload_json: None,
+                    created_at: "2026-04-15T00:00:01Z".to_string(),
+                }),
+        ));
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string(), "work_ua".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(payload["results"][0]["job"]["id"], json!("job-2"));
+        let penalized_job = payload["results"]
+            .as_array()
+            .expect("results should be an array")
+            .iter()
+            .find(|result| result["job"]["id"] == json!("job-1"))
+            .expect("penalized job should be present");
+        assert!(
+            penalized_job["fit"]["reasons"]
+                .as_array()
+                .expect("reasons should be an array")
+                .iter()
+                .any(|reason| reason
+                    .as_str()
+                    .is_some_and(|value| value.contains("Source has repeated hide/bad-fit"))),
+            "negative source reason should appear in fit reasons"
+        );
+    }
+
+    #[tokio::test]
+    async fn positive_role_family_history_gives_small_boost() {
+        let shared_desc = "Remote collaboration role with product planning and team execution";
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Product Manager",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default()
+                .with_event(UserEventRecord {
+                    id: "evt-1".to_string(),
+                    profile_id: "profile-1".to_string(),
+                    event_type: UserEventType::JobSaved,
+                    job_id: Some("saved-1".to_string()),
+                    company_name: Some("NovaLedger".to_string()),
+                    source: Some("djinni".to_string()),
+                    role_family: Some("product".to_string()),
+                    payload_json: None,
+                    created_at: "2026-04-15T00:00:00Z".to_string(),
+                })
+                .with_event(UserEventRecord {
+                    id: "evt-2".to_string(),
+                    profile_id: "profile-1".to_string(),
+                    event_type: UserEventType::ApplicationCreated,
+                    job_id: Some("applied-1".to_string()),
+                    company_name: Some("NovaLedger".to_string()),
+                    source: Some("djinni".to_string()),
+                    role_family: Some("product".to_string()),
+                    payload_json: None,
+                    created_at: "2026-04-15T00:00:01Z".to_string(),
+                }),
+        ));
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "generalist".to_string(),
+                    primary_role_confidence: Some(50),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec![],
+                    profile_keywords: vec![],
+                    search_terms: vec![],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(payload["results"][0]["job"]["id"], json!("job-1"));
+        assert!(
+            payload["results"][0]["fit"]["reasons"]
+                .as_array()
+                .expect("reasons should be an array")
+                .iter()
+                .any(|reason| reason.as_str().is_some_and(
+                    |value| value.contains("Role family has positive interaction history")
+                )),
+            "positive role family reason should appear in fit reasons"
+        );
+    }
+
+    #[tokio::test]
+    async fn negative_role_family_history_gives_small_penalty() {
+        let shared_desc = "Remote collaboration role with product planning and team execution";
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Product Manager",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default()
+                .with_event(UserEventRecord {
+                    id: "evt-1".to_string(),
+                    profile_id: "profile-1".to_string(),
+                    event_type: UserEventType::JobHidden,
+                    job_id: Some("hidden-1".to_string()),
+                    company_name: Some("NovaLedger".to_string()),
+                    source: Some("djinni".to_string()),
+                    role_family: Some("product".to_string()),
+                    payload_json: None,
+                    created_at: "2026-04-15T00:00:00Z".to_string(),
+                })
+                .with_event(UserEventRecord {
+                    id: "evt-2".to_string(),
+                    profile_id: "profile-1".to_string(),
+                    event_type: UserEventType::JobBadFit,
+                    job_id: Some("bad-1".to_string()),
+                    company_name: Some("NovaLedger".to_string()),
+                    source: Some("djinni".to_string()),
+                    role_family: Some("product".to_string()),
+                    payload_json: None,
+                    created_at: "2026-04-15T00:00:01Z".to_string(),
+                }),
+        ));
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "generalist".to_string(),
+                    primary_role_confidence: Some(50),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec![],
+                    profile_keywords: vec![],
+                    search_terms: vec![],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(payload["results"][0]["job"]["id"], json!("job-2"));
+        let penalized_job = payload["results"]
+            .as_array()
+            .expect("results should be an array")
+            .iter()
+            .find(|result| result["job"]["id"] == json!("job-1"))
+            .expect("penalized job should be present");
+        assert!(
+            penalized_job["fit"]["reasons"]
+                .as_array()
+                .expect("reasons should be an array")
+                .iter()
+                .any(|reason| reason
+                    .as_str()
+                    .is_some_and(|value| value
+                        .contains("Role family has repeated negative interaction history"))),
+            "negative role family reason should appear in fit reasons"
+        );
+    }
+
+    #[tokio::test]
+    async fn deterministic_base_score_still_dominates_when_behavior_evidence_is_weak() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        "Remote EU role working with Rust and Postgres backend systems",
+                        Some("remote"),
+                        "work_ua",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Project Manager",
+                        "Remote coordination role for delivery planning and status tracking",
+                        Some("remote"),
+                        "djinni",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default().with_event(UserEventRecord {
+                id: "evt-1".to_string(),
+                profile_id: "profile-1".to_string(),
+                event_type: UserEventType::JobSaved,
+                job_id: Some("saved-1".to_string()),
+                company_name: Some("NovaLedger".to_string()),
+                source: Some("djinni".to_string()),
+                role_family: Some("operations".to_string()),
+                payload_json: None,
+                created_at: "2026-04-15T00:00:00Z".to_string(),
+            }),
+        ));
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string(), "work_ua".to_string()],
+                    profile_skills: vec!["rust".to_string(), "postgres".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string(), "backend".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(payload["results"][0]["job"]["id"], json!("job-1"));
     }
 }

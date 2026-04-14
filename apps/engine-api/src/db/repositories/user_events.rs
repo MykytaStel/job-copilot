@@ -4,7 +4,9 @@ use uuid::Uuid;
 
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
-use crate::domain::user_event::model::{CreateUserEvent, UserEventRecord, UserEventSummary, UserEventType};
+use crate::domain::user_event::model::{
+    CreateUserEvent, UserEventRecord, UserEventSummary, UserEventType,
+};
 
 #[derive(Clone)]
 pub struct UserEventsRepository {
@@ -41,7 +43,10 @@ impl UserEventsRepository {
         Self { database }
     }
 
-    pub async fn create(&self, event: &CreateUserEvent) -> Result<UserEventRecord, RepositoryError> {
+    pub async fn create(
+        &self,
+        event: &CreateUserEvent,
+    ) -> Result<UserEventRecord, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
@@ -164,11 +169,10 @@ impl TryFrom<UserEventRow> for UserEventRecord {
     type Error = RepositoryError;
 
     fn try_from(row: UserEventRow) -> Result<Self, Self::Error> {
-        let event_type = UserEventType::parse(&row.event_type).ok_or_else(|| {
-            RepositoryError::InvalidData {
+        let event_type =
+            UserEventType::parse(&row.event_type).ok_or_else(|| RepositoryError::InvalidData {
                 message: format!("unknown user event type '{}'", row.event_type),
-            }
-        })?;
+            })?;
 
         Ok(Self {
             id: row.id,
