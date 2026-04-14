@@ -1,8 +1,9 @@
 import asyncio
 import re
+from functools import lru_cache
 
 import httpx
-from fastapi import FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -13,6 +14,14 @@ from app.engine_api_client import (
     engine_api_base_url,
     engine_api_timeout_seconds,
 )
+from app.llm_provider import build_profile_insights_provider
+from app.profile_insights import (
+    LlmContextRequest,
+    ProfileInsightsProviderError,
+    ProfileInsightsResponse,
+    http_error_from_provider_error,
+)
+from app.profile_insights_service import ProfileInsightsService
 
 
 TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -89,6 +98,18 @@ class RerankedJob(BaseModel):
 class RerankResponse(BaseModel):
     profile_id: str
     jobs: list[RerankedJob]
+
+
+@lru_cache(maxsize=1)
+def build_cached_profile_insights_service() -> ProfileInsightsService:
+    return ProfileInsightsService(build_profile_insights_provider())
+
+
+def get_profile_insights_service() -> ProfileInsightsService:
+    try:
+        return build_cached_profile_insights_service()
+    except ProfileInsightsProviderError as exc:
+        raise http_error_from_provider_error(exc) from exc
 
 
 def normalize_text(value: str) -> str:
@@ -279,3 +300,15 @@ async def rerank_jobs(payload: RerankRequest) -> RerankResponse:
 
     ranked_jobs.sort(key=lambda item: (-item.score, item.title.lower(), item.job_id))
     return RerankResponse(profile_id=payload.profile_id, jobs=ranked_jobs)
+
+
+@app.post("/v1/enrichment/profile-insights", response_model=ProfileInsightsResponse)
+@app.post("/api/v1/enrichment/profile-insights", response_model=ProfileInsightsResponse)
+async def enrich_profile_insights(
+    payload: LlmContextRequest,
+    service: ProfileInsightsService = Depends(get_profile_insights_service),
+) -> ProfileInsightsResponse:
+    try:
+        return await service.enrich(payload)
+    except ProfileInsightsProviderError as exc:
+        raise http_error_from_provider_error(exc) from exc
