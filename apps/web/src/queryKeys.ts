@@ -49,4 +49,8 @@ export const queryKeys = {
   search: {
     results: (q: string) => ['search', q] as const,
   },
+  ml: {
+    rerank: (profileId: string) => ['ml', 'rerank', profileId] as const,
+    fit: (profileId: string, jobId: string) => ['ml', 'fit', profileId, jobId] as const,
+  },
 };

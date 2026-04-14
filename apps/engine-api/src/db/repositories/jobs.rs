@@ -111,6 +111,7 @@ impl JobsRepository {
         Ok(row.map(JobView::from))
     }
 
+    #[allow(dead_code)]
     pub async fn list_recent(&self, limit: i64) -> Result<Vec<Job>, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);

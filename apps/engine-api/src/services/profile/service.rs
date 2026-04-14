@@ -26,7 +26,7 @@ impl ProfileAnalysisService {
 
         let primary_role = role_candidates
             .first()
-            .map(|candidate| candidate.role.clone())
+            .map(|candidate| candidate.role)
             .unwrap_or_else(RoleId::fallback);
 
         let suggested_search_terms = build_search_terms(&role_candidates, &skills, &seniority);

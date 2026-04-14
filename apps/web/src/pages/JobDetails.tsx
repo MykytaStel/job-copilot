@@ -1,12 +1,28 @@
 import { useParams } from 'react-router-dom';
-import { Bookmark, BookmarkCheck, Briefcase, ExternalLink, MapPin, Wifi } from 'lucide-react';
+import { Bookmark, BookmarkCheck, Briefcase, ExternalLink, MapPin, Sparkles, Wifi } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type { Application } from '@job-copilot/shared';
 
-import { createApplication, getApplications, getJob } from '../api';
+import { type FitAnalysis, analyzeFit, createApplication, getApplications, getJob } from '../api';
 import { queryKeys } from '../queryKeys';
 import { SkeletonPage } from '../components/Skeleton';
+
+function readProfileId() {
+  return window.localStorage.getItem('engine_api_profile_id');
+}
+
+function FitScoreBar({ score }: { score: number }) {
+  const color = score >= 60 ? '#22c55e' : score >= 35 ? '#f59e0b' : '#ef4444';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ flex: 1, height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.4s ease' }} />
+      </div>
+      <span style={{ fontWeight: 700, fontSize: 18, color, minWidth: 42, textAlign: 'right' }}>{score}%</span>
+    </div>
+  );
+}
 
 function formatSalary(min?: number, max?: number, currency?: string) {
   if (!min && !max) return null;
@@ -37,6 +53,16 @@ export default function JobDetails() {
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: queryKeys.applications.all(),
     queryFn: getApplications,
+  });
+
+  const profileId = readProfileId();
+
+  const { data: fit } = useQuery<FitAnalysis>({
+    queryKey: queryKeys.ml.fit(profileId ?? '', id!),
+    queryFn: () => analyzeFit(profileId!, id!),
+    enabled: !!profileId && !!id,
+    staleTime: 10 * 60_000,
+    retry: false,
   });
 
   const existing = applications.find((a) => a.jobId === id);
@@ -130,6 +156,41 @@ export default function JobDetails() {
           <span className="jobMetaChip">опубліковано {formatDate(job.postedAt)}</span>
         )}
       </div>
+
+      {/* ML fit analysis */}
+      {profileId && (
+        <section className="card" style={{ marginBottom: 16 }}>
+          <p className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Sparkles size={13} /> Відповідність профілю
+          </p>
+          {fit ? (
+            <>
+              <FitScoreBar score={fit.score} />
+              {fit.evidence.length > 0 && (
+                <ul style={{ margin: '10px 0 0', paddingLeft: 18, fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>
+                  {fit.evidence.map((e) => <li key={e}>{e}</li>)}
+                </ul>
+              )}
+              {fit.matchedTerms.length > 0 && (
+                <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {fit.matchedTerms.map((t) => (
+                    <span key={t} className="pill" style={{ background: 'rgba(34,197,94,0.12)', color: '#86efac', borderColor: 'rgba(34,197,94,0.25)' }}>{t}</span>
+                  ))}
+                </div>
+              )}
+              {fit.missingTerms.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {fit.missingTerms.map((t) => (
+                    <span key={t} className="pill" style={{ background: 'rgba(239,68,68,0.1)', color: '#fca5a5', borderColor: 'rgba(239,68,68,0.2)' }}>{t}</span>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="muted" style={{ margin: 0, fontSize: 13 }}>Аналізуємо…</p>
+          )}
+        </section>
+      )}
 
       {/* Description */}
       <section className="card" style={{ marginBottom: 16 }}>

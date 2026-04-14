@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  SortAsc,
   XCircle,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,8 +24,44 @@ import type {
   JobPosting,
 } from '@job-copilot/shared';
 
-import { createApplication, getApplications, getDashboardStats, getJobsFeed } from '../api';
+import {
+  type RankedJob,
+  createApplication,
+  getApplications,
+  getDashboardStats,
+  getJobsFeed,
+  rerankJobs,
+} from '../api';
 import { queryKeys } from '../queryKeys';
+
+function readProfileId() {
+  return window.localStorage.getItem('engine_api_profile_id');
+}
+
+function ScoreBadge({ score }: { score: number }) {
+  const color =
+    score >= 60 ? '#22c55e' : score >= 35 ? '#f59e0b' : '#6b7280';
+  return (
+    <span
+      title={`ML fit score: ${score}/100`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
+        fontSize: 12,
+        fontWeight: 600,
+        color,
+        background: `${color}1a`,
+        border: `1px solid ${color}40`,
+        borderRadius: 6,
+        padding: '2px 7px',
+        flexShrink: 0,
+      }}
+    >
+      {score}%
+    </span>
+  );
+}
 
 const STATUS_COLUMNS: ApplicationStatus[] = [
   'saved',
@@ -103,6 +140,9 @@ function SourceActivityCard({
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [sortByScore, setSortByScore] = useState(false);
+
+  const profileId = readProfileId();
 
   const { data: jobsFeed, error: jobsError, isLoading: jobsLoading } = useQuery<{
     jobs: JobPosting[];
@@ -115,16 +155,37 @@ export default function Dashboard() {
   const allJobs = jobsFeed?.jobs ?? [];
   const jobSummary = jobsFeed?.summary;
 
+  // ML rerank — fires once jobs are loaded and profile exists.
+  const { data: rankData } = useQuery<RankedJob[]>({
+    queryKey: queryKeys.ml.rerank(profileId ?? ''),
+    queryFn: () => rerankJobs(profileId!, allJobs.map((j) => j.id)),
+    enabled: !!profileId && allJobs.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
+  const scoreById = useMemo(() => {
+    const map = new Map<string, number>();
+    rankData?.forEach((r) => map.set(r.jobId, r.score));
+    return map;
+  }, [rankData]);
+
   const jobs = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return allJobs;
-    return allJobs.filter(
-      (j) =>
-        j.title.toLowerCase().includes(q) ||
-        j.company.toLowerCase().includes(q) ||
-        j.description.toLowerCase().includes(q),
-    );
-  }, [allJobs, search]);
+    let list = q
+      ? allJobs.filter(
+          (j) =>
+            j.title.toLowerCase().includes(q) ||
+            j.company.toLowerCase().includes(q) ||
+            j.description.toLowerCase().includes(q),
+        )
+      : [...allJobs];
+
+    if (sortByScore && scoreById.size > 0) {
+      list.sort((a, b) => (scoreById.get(b.id) ?? 0) - (scoreById.get(a.id) ?? 0));
+    }
+    return list;
+  }, [allJobs, search, sortByScore, scoreById]);
 
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: queryKeys.applications.all(),
@@ -238,9 +299,22 @@ export default function Dashboard() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
+        {rankData && rankData.length > 0 && (
+          <button
+            className={sortByScore ? 'btn' : 'ghostBtn'}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '6px 12px', flexShrink: 0 }}
+            onClick={() => setSortByScore((v) => !v)}
+            title="Сортувати за ML-релевантністю"
+          >
+            <SortAsc size={14} />
+            {sortByScore ? 'За score' : 'За score'}
+          </button>
+        )}
+
         {search && (
-          <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-            {jobs.length} з {allJobs.length} вакансій
+          <p className="muted" style={{ margin: 0, fontSize: 13, flexShrink: 0 }}>
+            {jobs.length} з {allJobs.length}
           </p>
         )}
       </div>
@@ -258,8 +332,13 @@ export default function Dashboard() {
               <article key={job.id} className="jobLifecycleCard">
                 <div className="jobLifecycleHeader">
                   <div>
-                    <div className={`jobStatePill ${lifecycleClass(job)}`}>
-                      {lifecycleLabel(job)}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <div className={`jobStatePill ${lifecycleClass(job)}`}>
+                        {lifecycleLabel(job)}
+                      </div>
+                      {scoreById.has(job.id) && (
+                        <ScoreBadge score={scoreById.get(job.id)!} />
+                      )}
                     </div>
                     <h2>{job.title}</h2>
                     <p className="muted jobLifecycleCompany">{job.company}</p>
