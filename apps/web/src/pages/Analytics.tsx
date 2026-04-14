@@ -4,6 +4,7 @@ import {
   Bookmark,
   Brain,
   Building2,
+  Eye,
   EyeOff,
   Hash,
   Layers,
@@ -13,8 +14,8 @@ import {
   Zap,
 } from 'lucide-react';
 
-import { getAnalyticsSummary, getLlmContext, getProfileInsights } from '../api';
-import type { AnalyticsSummary, LlmContext, ProfileInsights } from '../api';
+import { getAnalyticsSummary, getFunnelSummary, getLlmContext, getProfileInsights } from '../api';
+import type { AnalyticsSummary, FunnelSummary, LlmContext, ProfileInsights } from '../api';
 import { queryKeys } from '../queryKeys';
 
 function readProfileId() {
@@ -232,6 +233,72 @@ function SimpleList({
   );
 }
 
+function formatPercent(rate: number) {
+  return `${Math.round(rate * 100)}%`;
+}
+
+function ConversionCard({
+  label,
+  rate,
+  numerator,
+  denominator,
+  color,
+}: {
+  label: string;
+  rate: number;
+  numerator: number;
+  denominator: number;
+  color: string;
+}) {
+  const width = `${Math.max(0, Math.min(rate, 1)) * 100}%`;
+
+  return (
+    <div
+      style={{
+        padding: '14px 16px',
+        borderRadius: 16,
+        border: '1px solid var(--color-border-soft)',
+        background: 'rgba(18, 25, 39, 0.65)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: 10,
+        }}
+      >
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{label}</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color }}>{formatPercent(rate)}</div>
+      </div>
+      <div
+        style={{
+          height: 8,
+          borderRadius: 999,
+          background: 'var(--color-bg-hover)',
+          overflow: 'hidden',
+          marginBottom: 8,
+        }}
+      >
+        <div
+          style={{
+            width,
+            height: '100%',
+            background: color,
+            borderRadius: 999,
+            transition: 'width 0.3s ease',
+          }}
+        />
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+        {numerator} / {denominator}
+      </div>
+    </div>
+  );
+}
+
 // ─── Source distribution ──────────────────────────────────────────────────────
 
 function SourceDistribution({ summary }: { summary: AnalyticsSummary }) {
@@ -277,6 +344,55 @@ function LifecycleDistribution({ summary }: { summary: AnalyticsSummary }) {
       >
         Total indexed: <strong style={{ color: 'var(--color-text-primary)' }}>{lc.total}</strong>
       </div>
+    </div>
+  );
+}
+
+function FunnelSourceBreakdown({ summary }: { summary: FunnelSummary }) {
+  const rows = Array.from(
+    new Set([
+      ...summary.impressionsBySource.map((entry) => entry.source),
+      ...summary.opensBySource.map((entry) => entry.source),
+      ...summary.savesBySource.map((entry) => entry.source),
+      ...summary.applicationsBySource.map((entry) => entry.source),
+    ]),
+  ).map((source) => ({
+    source,
+    impressions:
+      summary.impressionsBySource.find((entry) => entry.source === source)?.count ?? 0,
+    opens: summary.opensBySource.find((entry) => entry.source === source)?.count ?? 0,
+    saves: summary.savesBySource.find((entry) => entry.source === source)?.count ?? 0,
+    applications:
+      summary.applicationsBySource.find((entry) => entry.source === source)?.count ?? 0,
+  }));
+
+  if (rows.length === 0) {
+    return <p className="emptyState" style={{ margin: 0 }}>No source funnel data yet.</p>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {rows.map((row) => (
+        <div
+          key={row.source}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(120px, 1.3fr) repeat(4, minmax(0, 1fr))',
+            gap: 12,
+            padding: '12px 14px',
+            borderRadius: 14,
+            border: '1px solid var(--color-border-soft)',
+            background: 'rgba(18, 25, 39, 0.55)',
+            fontSize: 12,
+          }}
+        >
+          <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{row.source}</div>
+          <div style={{ color: 'var(--color-text-secondary)' }}>Impr. {row.impressions}</div>
+          <div style={{ color: 'var(--color-text-secondary)' }}>Open {row.opens}</div>
+          <div style={{ color: 'var(--color-text-secondary)' }}>Save {row.saves}</div>
+          <div style={{ color: 'var(--color-text-secondary)' }}>Apply {row.applications}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -467,6 +583,12 @@ export default function Analytics() {
     enabled: !!profileId,
   });
 
+  const { data: funnel, isLoading: funnelLoading } = useQuery({
+    queryKey: queryKeys.analytics.funnel(profileId ?? ''),
+    queryFn: () => getFunnelSummary(profileId!),
+    enabled: !!profileId,
+  });
+
   const { data: llmCtx, isLoading: ctxLoading } = useQuery({
     queryKey: queryKeys.analytics.llmContext(profileId ?? ''),
     queryFn: () => getLlmContext(profileId!),
@@ -494,7 +616,7 @@ export default function Analytics() {
     );
   }
 
-  const isLoading = summaryLoading || ctxLoading;
+  const isLoading = summaryLoading || funnelLoading || ctxLoading;
 
   return (
     <div className="jobDetails">
@@ -558,6 +680,120 @@ export default function Analytics() {
               gap: 16,
             }}
           >
+            {funnel && (
+              <Section title="Job Funnel" icon={<Eye size={16} />}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                    gap: 10,
+                    marginBottom: 16,
+                  }}
+                >
+                  <SummaryCard
+                    label="Impressions"
+                    count={funnel.impressionCount}
+                    icon={<Eye size={18} />}
+                    color="#95a7ff"
+                  />
+                  <SummaryCard
+                    label="Opens"
+                    count={funnel.openCount}
+                    icon={<BarChart2 size={18} />}
+                    color="#c9fff8"
+                  />
+                  <SummaryCard
+                    label="Saves"
+                    count={funnel.saveCount}
+                    icon={<Bookmark size={18} />}
+                    color="#ffd6a5"
+                  />
+                  <SummaryCard
+                    label="Applications"
+                    count={funnel.applicationCreatedCount}
+                    icon={<Zap size={18} />}
+                    color="#b9fbc0"
+                  />
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: 12,
+                    marginBottom: 16,
+                  }}
+                >
+                  <ConversionCard
+                    label="Open from impressions"
+                    rate={funnel.conversionRates.openRateFromImpressions}
+                    numerator={funnel.openCount}
+                    denominator={funnel.impressionCount}
+                    color="#95a7ff"
+                  />
+                  <ConversionCard
+                    label="Save from opens"
+                    rate={funnel.conversionRates.saveRateFromOpens}
+                    numerator={funnel.saveCount}
+                    denominator={funnel.openCount}
+                    color="#ffd6a5"
+                  />
+                  <ConversionCard
+                    label="Apply from saves"
+                    rate={funnel.conversionRates.applicationRateFromSaves}
+                    numerator={funnel.applicationCreatedCount}
+                    denominator={funnel.saveCount}
+                    color="#b9fbc0"
+                  />
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                    gap: 10,
+                  }}
+                >
+                  <SummaryCard
+                    label="Hidden"
+                    count={funnel.hideCount}
+                    icon={<EyeOff size={18} />}
+                    color="#9aa8bc"
+                  />
+                  <SummaryCard
+                    label="Bad Fit"
+                    count={funnel.badFitCount}
+                    icon={<ThumbsDown size={18} />}
+                    color="#ffb4b4"
+                  />
+                  <SummaryCard
+                    label="Fit Explainers"
+                    count={funnel.fitExplanationRequestedCount}
+                    icon={<Brain size={18} />}
+                    color="#95a7ff"
+                  />
+                  <SummaryCard
+                    label="Coach"
+                    count={funnel.applicationCoachRequestedCount}
+                    icon={<Brain size={18} />}
+                    color="#c9fff8"
+                  />
+                  <SummaryCard
+                    label="Cover Letters"
+                    count={funnel.coverLetterDraftRequestedCount}
+                    icon={<Layers size={18} />}
+                    color="#ffd6a5"
+                  />
+                  <SummaryCard
+                    label="Interview Prep"
+                    count={funnel.interviewPrepRequestedCount}
+                    icon={<Zap size={18} />}
+                    color="#b9fbc0"
+                  />
+                </div>
+              </Section>
+            )}
+
             <Section title="Jobs by Source" icon={<BarChart2 size={16} />}>
               <SourceDistribution summary={summary} />
             </Section>
@@ -574,6 +810,12 @@ export default function Analytics() {
               gap: 16,
             }}
           >
+            {funnel && (
+              <Section title="Funnel by Source" icon={<BarChart2 size={16} />}>
+                <FunnelSourceBreakdown summary={funnel} />
+              </Section>
+            )}
+
             <Section title="Top Matched Roles" icon={<Building2 size={16} />}>
               <TagList items={summary.topMatchedRoles} color="#95a7ff" />
             </Section>

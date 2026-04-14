@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use crate::domain::analytics::model::SalaryBucket;
+use crate::services::funnel::{FunnelSourceCount, ProfileFunnelSummary};
 
 #[derive(Debug, Serialize)]
 pub struct SalaryBucketResponse {
@@ -64,6 +65,91 @@ pub struct AnalyticsSummaryResponse {
     pub top_matched_roles: Vec<String>,
     pub top_matched_skills: Vec<String>,
     pub top_matched_keywords: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FunnelSourceCountEntry {
+    pub source: String,
+    pub count: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FunnelConversionRatesResponse {
+    pub open_rate_from_impressions: f64,
+    pub save_rate_from_opens: f64,
+    pub application_rate_from_saves: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FunnelSummaryResponse {
+    pub profile_id: String,
+    pub impression_count: usize,
+    pub open_count: usize,
+    pub save_count: usize,
+    pub hide_count: usize,
+    pub bad_fit_count: usize,
+    pub application_created_count: usize,
+    pub fit_explanation_requested_count: usize,
+    pub application_coach_requested_count: usize,
+    pub cover_letter_draft_requested_count: usize,
+    pub interview_prep_requested_count: usize,
+    pub conversion_rates: FunnelConversionRatesResponse,
+    pub impressions_by_source: Vec<FunnelSourceCountEntry>,
+    pub opens_by_source: Vec<FunnelSourceCountEntry>,
+    pub saves_by_source: Vec<FunnelSourceCountEntry>,
+    pub applications_by_source: Vec<FunnelSourceCountEntry>,
+}
+
+impl FunnelSummaryResponse {
+    pub fn from_summary(profile_id: String, summary: ProfileFunnelSummary) -> Self {
+        Self {
+            profile_id,
+            impression_count: summary.impression_count,
+            open_count: summary.open_count,
+            save_count: summary.save_count,
+            hide_count: summary.hide_count,
+            bad_fit_count: summary.bad_fit_count,
+            application_created_count: summary.application_created_count,
+            fit_explanation_requested_count: summary.fit_explanation_requested_count,
+            application_coach_requested_count: summary.application_coach_requested_count,
+            cover_letter_draft_requested_count: summary.cover_letter_draft_requested_count,
+            interview_prep_requested_count: summary.interview_prep_requested_count,
+            conversion_rates: FunnelConversionRatesResponse {
+                open_rate_from_impressions: summary.conversion_rates.open_rate_from_impressions,
+                save_rate_from_opens: summary.conversion_rates.save_rate_from_opens,
+                application_rate_from_saves: summary.conversion_rates.application_rate_from_saves,
+            },
+            impressions_by_source: summary
+                .impressions_by_source
+                .into_iter()
+                .map(FunnelSourceCountEntry::from)
+                .collect(),
+            opens_by_source: summary
+                .opens_by_source
+                .into_iter()
+                .map(FunnelSourceCountEntry::from)
+                .collect(),
+            saves_by_source: summary
+                .saves_by_source
+                .into_iter()
+                .map(FunnelSourceCountEntry::from)
+                .collect(),
+            applications_by_source: summary
+                .applications_by_source
+                .into_iter()
+                .map(FunnelSourceCountEntry::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<FunnelSourceCount> for FunnelSourceCountEntry {
+    fn from(value: FunnelSourceCount) -> Self {
+        Self {
+            source: value.source,
+            count: value.count,
+        }
+    }
 }
 
 // ─── LLM-readiness context ───────────────────────────────────────────────────

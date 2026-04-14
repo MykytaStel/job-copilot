@@ -26,6 +26,7 @@ import {
 import { EmptyState } from '../../components/ui/EmptyState';
 import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
 import { PillList } from '../../components/ui/PillList';
+import { logJobImpressionsOnce } from '../events/jobImpressions';
 import { formatFallbackLabel } from '../../lib/format';
 import { TARGET_REGION_OPTIONS, WORK_MODE_OPTIONS } from './profile.constants';
 import { getFitScoreTone, resolveRoleLabel, resolveSourceLabel } from './profile.utils';
@@ -523,6 +524,14 @@ function SearchResultsSection({
     result.meta.filteredOutBySource > 0
       ? ` ${result.meta.filteredOutBySource} filtered out by source.`
       : '';
+
+  useEffect(() => {
+    void logJobImpressionsOnce({
+      profileId,
+      jobs: result.results.map((item) => item.job),
+      surface: 'ranked_search_results',
+    });
+  }, [profileId, result.results]);
 
   return (
     <div className="resultSection">

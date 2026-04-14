@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Activity,
@@ -41,6 +41,7 @@ import {
   rerankJobs,
   unmarkJobBadFit,
 } from '../api';
+import { logJobImpressionsOnce } from '../features/events/jobImpressions';
 import { queryKeys } from '../queryKeys';
 
 function readProfileId() {
@@ -396,6 +397,14 @@ export default function Dashboard() {
   const applicationByJob = new Map(applications.map((item) => [item.jobId, item]));
   const error =
     jobsError instanceof Error ? jobsError.message : jobsError ? 'Error' : null;
+
+  useEffect(() => {
+    void logJobImpressionsOnce({
+      profileId,
+      jobs,
+      surface: 'dashboard_recent_jobs',
+    });
+  }, [jobs, profileId]);
 
   return (
     <div className="dashboardPage">

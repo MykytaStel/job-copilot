@@ -1449,6 +1449,17 @@ type EngineFeedbackSummarySection = {
   blacklisted_companies_count: number;
 };
 
+type EngineFunnelSourceCountEntry = {
+  source: string;
+  count: number;
+};
+
+type EngineFunnelConversionRates = {
+  open_rate_from_impressions: number;
+  save_rate_from_opens: number;
+  application_rate_from_saves: number;
+};
+
 type EngineAnalyticsSummaryResponse = {
   profile_id: string;
   feedback: EngineFeedbackSummarySection;
@@ -1457,6 +1468,25 @@ type EngineAnalyticsSummaryResponse = {
   top_matched_roles: string[];
   top_matched_skills: string[];
   top_matched_keywords: string[];
+};
+
+type EngineFunnelSummaryResponse = {
+  profile_id: string;
+  impression_count: number;
+  open_count: number;
+  save_count: number;
+  hide_count: number;
+  bad_fit_count: number;
+  application_created_count: number;
+  fit_explanation_requested_count: number;
+  application_coach_requested_count: number;
+  cover_letter_draft_requested_count: number;
+  interview_prep_requested_count: number;
+  conversion_rates: EngineFunnelConversionRates;
+  impressions_by_source: EngineFunnelSourceCountEntry[];
+  opens_by_source: EngineFunnelSourceCountEntry[];
+  saves_by_source: EngineFunnelSourceCountEntry[];
+  applications_by_source: EngineFunnelSourceCountEntry[];
 };
 
 type EngineLlmContextAnalyzedProfile = {
@@ -1562,6 +1592,36 @@ export type AnalyticsSummary = {
   topMatchedRoles: string[];
   topMatchedSkills: string[];
   topMatchedKeywords: string[];
+};
+
+export type FunnelSourceCountEntry = {
+  source: string;
+  count: number;
+};
+
+export type FunnelConversionRates = {
+  openRateFromImpressions: number;
+  saveRateFromOpens: number;
+  applicationRateFromSaves: number;
+};
+
+export type FunnelSummary = {
+  profileId: string;
+  impressionCount: number;
+  openCount: number;
+  saveCount: number;
+  hideCount: number;
+  badFitCount: number;
+  applicationCreatedCount: number;
+  fitExplanationRequestedCount: number;
+  applicationCoachRequestedCount: number;
+  coverLetterDraftRequestedCount: number;
+  interviewPrepRequestedCount: number;
+  conversionRates: FunnelConversionRates;
+  impressionsBySource: FunnelSourceCountEntry[];
+  opensBySource: FunnelSourceCountEntry[];
+  savesBySource: FunnelSourceCountEntry[];
+  applicationsBySource: FunnelSourceCountEntry[];
 };
 
 export type LlmContextEvidenceEntry = {
@@ -1731,6 +1791,35 @@ export async function getAnalyticsSummary(profileId: string): Promise<AnalyticsS
     topMatchedRoles: response.top_matched_roles,
     topMatchedSkills: response.top_matched_skills,
     topMatchedKeywords: response.top_matched_keywords,
+  };
+}
+
+export async function getFunnelSummary(profileId: string): Promise<FunnelSummary> {
+  const response = await request<EngineFunnelSummaryResponse>(
+    `/api/v1/profiles/${profileId}/funnel-summary`,
+  );
+
+  return {
+    profileId: response.profile_id,
+    impressionCount: response.impression_count,
+    openCount: response.open_count,
+    saveCount: response.save_count,
+    hideCount: response.hide_count,
+    badFitCount: response.bad_fit_count,
+    applicationCreatedCount: response.application_created_count,
+    fitExplanationRequestedCount: response.fit_explanation_requested_count,
+    applicationCoachRequestedCount: response.application_coach_requested_count,
+    coverLetterDraftRequestedCount: response.cover_letter_draft_requested_count,
+    interviewPrepRequestedCount: response.interview_prep_requested_count,
+    conversionRates: {
+      openRateFromImpressions: response.conversion_rates.open_rate_from_impressions,
+      saveRateFromOpens: response.conversion_rates.save_rate_from_opens,
+      applicationRateFromSaves: response.conversion_rates.application_rate_from_saves,
+    },
+    impressionsBySource: response.impressions_by_source,
+    opensBySource: response.opens_by_source,
+    savesBySource: response.saves_by_source,
+    applicationsBySource: response.applications_by_source,
   };
 }
 
