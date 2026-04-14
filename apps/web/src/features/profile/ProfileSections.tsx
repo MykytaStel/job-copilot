@@ -5,6 +5,7 @@ import { ExternalLink, Sparkles, Upload } from 'lucide-react';
 
 import type {
   ApplicationCoach,
+  CoverLetterDraft,
   JobFitExplanation,
   LlmContext,
   RankedJobResult,
@@ -15,7 +16,7 @@ import type {
   SearchWorkMode,
   SourceCatalogItem,
 } from '../../api';
-import { getApplicationCoach, getJobFitExplanation } from '../../api';
+import { getApplicationCoach, getCoverLetterDraft, getJobFitExplanation } from '../../api';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
 import { PillList } from '../../components/ui/PillList';
@@ -402,6 +403,7 @@ export function RankedResultsSection({
   searchError,
   buildResult,
   profileId,
+  rawProfileText,
   llmContext,
   llmContextError,
   llmContextLoading,
@@ -414,6 +416,7 @@ export function RankedResultsSection({
   searchError: string | null;
   buildResult: SearchProfileBuildResult;
   profileId: string | null;
+  rawProfileText: string;
   llmContext: LlmContext | null;
   llmContextError: unknown;
   llmContextLoading: boolean;
@@ -446,6 +449,7 @@ export function RankedResultsSection({
           result={searchResult}
           buildResult={buildResult}
           profileId={profileId}
+          rawProfileText={rawProfileText}
           llmContext={llmContext}
           llmContextError={llmContextError}
           llmContextLoading={llmContextLoading}
@@ -491,6 +495,7 @@ function SearchResultsSection({
   result,
   buildResult,
   profileId,
+  rawProfileText,
   llmContext,
   llmContextError,
   llmContextLoading,
@@ -500,6 +505,7 @@ function SearchResultsSection({
   result: SearchRunResult;
   buildResult: SearchProfileBuildResult;
   profileId: string | null;
+  rawProfileText: string;
   llmContext: LlmContext | null;
   llmContextError: unknown;
   llmContextLoading: boolean;
@@ -530,6 +536,7 @@ function SearchResultsSection({
               analyzedProfile={buildResult.analyzedProfile}
               searchProfile={buildResult.searchProfile}
               profileId={profileId}
+              rawProfileText={rawProfileText}
               llmContext={llmContext}
               llmContextError={llmContextError}
               llmContextLoading={llmContextLoading}
@@ -548,6 +555,7 @@ function SearchResultCard({
   analyzedProfile,
   searchProfile,
   profileId,
+  rawProfileText,
   llmContext,
   llmContextError,
   llmContextLoading,
@@ -558,6 +566,7 @@ function SearchResultCard({
   analyzedProfile: SearchProfileBuildResult['analyzedProfile'];
   searchProfile: SearchProfileBuildResult['searchProfile'];
   profileId: string | null;
+  rawProfileText: string;
   llmContext: LlmContext | null;
   llmContextError: unknown;
   llmContextLoading: boolean;
@@ -666,6 +675,7 @@ function SearchResultCard({
           searchProfile={searchProfile}
           result={result}
           profileId={profileId}
+          rawProfileText={rawProfileText}
           llmContext={llmContext}
           llmContextError={llmContextError}
           llmContextLoading={llmContextLoading}
@@ -686,6 +696,7 @@ function SearchResultFitExplanation({
   searchProfile,
   result,
   profileId,
+  rawProfileText,
   llmContext,
   llmContextError,
   llmContextLoading,
@@ -694,16 +705,19 @@ function SearchResultFitExplanation({
   searchProfile: SearchProfileBuildResult['searchProfile'];
   result: RankedJobResult;
   profileId: string | null;
+  rawProfileText: string;
   llmContext: LlmContext | null;
   llmContextError: unknown;
   llmContextLoading: boolean;
 }) {
   const [explanation, setExplanation] = useState<JobFitExplanation | null>(null);
   const [coaching, setCoaching] = useState<ApplicationCoach | null>(null);
+  const [coverLetterDraft, setCoverLetterDraft] = useState<CoverLetterDraft | null>(null);
 
   useEffect(() => {
     setExplanation(null);
     setCoaching(null);
+    setCoverLetterDraft(null);
   }, [
     result.job.id,
     result.fit.score,
@@ -738,6 +752,7 @@ function SearchResultFitExplanation({
     },
     onSuccess: (payload) => {
       setExplanation(payload);
+      setCoverLetterDraft(null);
     },
   });
 
@@ -767,6 +782,38 @@ function SearchResultFitExplanation({
     },
     onSuccess: (payload) => {
       setCoaching(payload);
+      setCoverLetterDraft(null);
+    },
+  });
+
+  const coverLetterMutation = useMutation({
+    mutationFn: async () => {
+      if (!profileId) {
+        throw new Error('Profile is required before drafting a cover letter.');
+      }
+      if (!llmContext) {
+        throw new Error('Feedback-aware context is not ready yet.');
+      }
+
+      return getCoverLetterDraft({
+        profileId,
+        analyzedProfile,
+        searchProfile,
+        rankedJob: result.job,
+        deterministicFit: result.fit,
+        jobFitExplanation: explanation,
+        applicationCoach: coaching,
+        feedbackState: {
+          feedbackSummary: llmContext.feedbackSummary,
+          topPositiveEvidence: llmContext.topPositiveEvidence,
+          topNegativeEvidence: llmContext.topNegativeEvidence,
+          currentJobFeedback: result.job.feedback,
+        },
+        rawProfileText: rawProfileText.trim() ? rawProfileText : null,
+      });
+    },
+    onSuccess: (payload) => {
+      setCoverLetterDraft(payload);
     },
   });
 
@@ -857,6 +904,47 @@ function SearchResultFitExplanation({
           )}
 
           {coaching && <ApplicationCoachPanel coaching={coaching} />}
+
+          <div style={{ marginTop: coaching ? 12 : 0 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                marginBottom:
+                  coverLetterDraft || coverLetterMutation.isPending || coverLetterMutation.error
+                    ? 10
+                    : 0,
+              }}
+            >
+              <span className="detailLabel">Cover letter draft</span>
+              <button
+                type="button"
+                className="ghostBtn ghostBtnCompact"
+                disabled={coverLetterMutation.isPending || !profileId}
+                onClick={() => coverLetterMutation.mutate()}
+              >
+                <Sparkles size={13} />
+                {coverLetterMutation.isPending
+                  ? 'Drafting…'
+                  : coverLetterDraft
+                    ? 'Refresh draft'
+                    : 'Draft cover letter'}
+              </button>
+            </div>
+
+            {coverLetterMutation.error && (
+              <p className="error" style={{ marginBottom: 0 }}>
+                {renderErrorMessage(
+                  coverLetterMutation.error,
+                  'Cover letter drafting is unavailable right now.',
+                )}
+              </p>
+            )}
+
+            {coverLetterDraft && <CoverLetterDraftPanel draft={coverLetterDraft} />}
+          </div>
         </div>
       )}
     </div>
@@ -1003,6 +1091,77 @@ function ApplicationCoachPanel({ coaching }: { coaching: ApplicationCoach }) {
         label="Red flags"
         items={coaching.redFlags}
         emptyLabel="No explicit red flags returned."
+      />
+    </div>
+  );
+}
+
+function CoverLetterDraftPanel({ draft }: { draft: CoverLetterDraft }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        padding: '14px 16px',
+        borderRadius: 14,
+        border: '1px solid rgba(255,197,113,0.2)',
+        background:
+          'linear-gradient(180deg, rgba(36,26,15,0.92) 0%, rgba(24,18,12,0.9) 100%)',
+      }}
+    >
+      <div>
+        <span className="detailLabel">Draft summary</span>
+        <p className="sectionText" style={{ marginBottom: 0 }}>
+          {draft.draftSummary || 'No draft summary returned.'}
+        </p>
+      </div>
+
+      <div>
+        <span className="detailLabel">Opening paragraph</span>
+        <p className="sectionText" style={{ marginBottom: 0 }}>
+          {draft.openingParagraph || 'No opening paragraph returned.'}
+        </p>
+      </div>
+
+      <div>
+        <span className="detailLabel">Body paragraphs</span>
+        {draft.bodyParagraphs.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+            {draft.bodyParagraphs.map((paragraph, index) => (
+              <p key={`${index}-${paragraph}`} className="sectionText" style={{ marginBottom: 0 }}>
+                {paragraph}
+              </p>
+            ))}
+          </div>
+        ) : (
+          <p className="muted sectionText" style={{ marginBottom: 0 }}>
+            No body paragraphs returned.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <span className="detailLabel">Closing paragraph</span>
+        <p className="sectionText" style={{ marginBottom: 0 }}>
+          {draft.closingParagraph || 'No closing paragraph returned.'}
+        </p>
+      </div>
+
+      <FitExplanationList
+        label="Key claims used"
+        items={draft.keyClaimsUsed}
+        emptyLabel="No grounded claims returned."
+      />
+      <FitExplanationList
+        label="Evidence gaps"
+        items={draft.evidenceGaps}
+        emptyLabel="No evidence gaps returned."
+      />
+      <FitExplanationList
+        label="Tone notes"
+        items={draft.toneNotes}
+        emptyLabel="No tone notes returned."
       />
     </div>
   );

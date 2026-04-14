@@ -1455,6 +1455,16 @@ type MlApplicationCoachResponse = {
   red_flags: string[];
 };
 
+type MlCoverLetterDraftResponse = {
+  draft_summary: string;
+  opening_paragraph: string;
+  body_paragraphs: string[];
+  closing_paragraph: string;
+  key_claims_used: string[];
+  evidence_gaps: string[];
+  tone_notes: string[];
+};
+
 export type JobsBySourceEntry = {
   source: string;
   count: number;
@@ -1539,6 +1549,16 @@ export type ApplicationCoach = {
   redFlags: string[];
 };
 
+export type CoverLetterDraft = {
+  draftSummary: string;
+  openingParagraph: string;
+  bodyParagraphs: string[];
+  closingParagraph: string;
+  keyClaimsUsed: string[];
+  evidenceGaps: string[];
+  toneNotes: string[];
+};
+
 export type JobFitExplanationRequest = {
   profileId: string;
   analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
@@ -1560,6 +1580,23 @@ export type ApplicationCoachRequest = {
   rankedJob: JobPosting;
   deterministicFit: FitExplanation;
   jobFitExplanation?: JobFitExplanation | null;
+  feedbackState?: {
+    feedbackSummary: AnalyticsFeedbackSummary;
+    topPositiveEvidence: LlmContextEvidenceEntry[];
+    topNegativeEvidence: LlmContextEvidenceEntry[];
+    currentJobFeedback?: JobFeedbackState;
+  } | null;
+  rawProfileText?: string | null;
+};
+
+export type CoverLetterDraftRequest = {
+  profileId: string;
+  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
+  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
+  rankedJob: JobPosting;
+  deterministicFit: FitExplanation;
+  jobFitExplanation?: JobFitExplanation | null;
+  applicationCoach?: ApplicationCoach | null;
   feedbackState?: {
     feedbackSummary: AnalyticsFeedbackSummary;
     topPositiveEvidence: LlmContextEvidenceEntry[];
@@ -1889,6 +1926,131 @@ export async function getApplicationCoach(
     interviewFocus: response.interview_focus,
     gapsToAddress: response.gaps_to_address,
     redFlags: response.red_flags,
+  };
+}
+
+export async function getCoverLetterDraft(
+  payload: CoverLetterDraftRequest,
+): Promise<CoverLetterDraft> {
+  const response = await mlRequest<MlCoverLetterDraftResponse>('/v1/enrichment/cover-letter-draft', {
+    method: 'POST',
+    body: JSON.stringify({
+      profile_id: payload.profileId,
+      analyzed_profile: payload.analyzedProfile
+        ? {
+            summary: payload.analyzedProfile.summary,
+            primary_role: payload.analyzedProfile.primaryRole,
+            seniority: payload.analyzedProfile.seniority,
+            skills: payload.analyzedProfile.skills,
+            keywords: payload.analyzedProfile.keywords,
+          }
+        : null,
+      search_profile: payload.searchProfile
+        ? {
+            primary_role: payload.searchProfile.primaryRole,
+            primary_role_confidence: payload.searchProfile.primaryRoleConfidence,
+            target_roles: payload.searchProfile.targetRoles,
+            role_candidates: payload.searchProfile.roleCandidates,
+            seniority: payload.searchProfile.seniority,
+            target_regions: payload.searchProfile.targetRegions,
+            work_modes: payload.searchProfile.workModes,
+            allowed_sources: payload.searchProfile.allowedSources,
+            profile_skills: payload.searchProfile.profileSkills,
+            profile_keywords: payload.searchProfile.profileKeywords,
+            search_terms: payload.searchProfile.searchTerms,
+            exclude_terms: payload.searchProfile.excludeTerms,
+          }
+        : null,
+      ranked_job: {
+        id: payload.rankedJob.id,
+        title: payload.rankedJob.title,
+        company_name: payload.rankedJob.company,
+        description_text: payload.rankedJob.description,
+        summary: payload.rankedJob.presentation?.summary,
+        source: payload.rankedJob.primaryVariant?.source,
+        source_job_id: payload.rankedJob.primaryVariant?.sourceJobId,
+        source_url: payload.rankedJob.primaryVariant?.sourceUrl ?? payload.rankedJob.url,
+        remote_type: payload.rankedJob.remoteType,
+        seniority: payload.rankedJob.seniority,
+        salary_label: payload.rankedJob.presentation?.salaryLabel,
+        location_label: payload.rankedJob.presentation?.locationLabel,
+        work_mode_label: payload.rankedJob.presentation?.workModeLabel,
+        freshness_label: payload.rankedJob.presentation?.freshnessLabel,
+        badges: payload.rankedJob.presentation?.badges ?? [],
+      },
+      deterministic_fit: {
+        job_id: payload.deterministicFit.jobId,
+        score: payload.deterministicFit.score,
+        matched_roles: payload.deterministicFit.matchedRoles,
+        matched_skills: payload.deterministicFit.matchedSkills,
+        matched_keywords: payload.deterministicFit.matchedKeywords,
+        source_match: payload.deterministicFit.sourceMatch,
+        work_mode_match: payload.deterministicFit.workModeMatch,
+        region_match: payload.deterministicFit.regionMatch,
+        reasons: payload.deterministicFit.reasons,
+      },
+      job_fit_explanation: payload.jobFitExplanation
+        ? {
+            fit_summary: payload.jobFitExplanation.fitSummary,
+            why_it_matches: payload.jobFitExplanation.whyItMatches,
+            risks: payload.jobFitExplanation.risks,
+            missing_signals: payload.jobFitExplanation.missingSignals,
+            recommended_next_step: payload.jobFitExplanation.recommendedNextStep,
+            application_angle: payload.jobFitExplanation.applicationAngle,
+          }
+        : null,
+      application_coach: payload.applicationCoach
+        ? {
+            application_summary: payload.applicationCoach.applicationSummary,
+            resume_focus_points: payload.applicationCoach.resumeFocusPoints,
+            suggested_bullets: payload.applicationCoach.suggestedBullets,
+            cover_letter_angles: payload.applicationCoach.coverLetterAngles,
+            interview_focus: payload.applicationCoach.interviewFocus,
+            gaps_to_address: payload.applicationCoach.gapsToAddress,
+            red_flags: payload.applicationCoach.redFlags,
+          }
+        : null,
+      feedback_state: payload.feedbackState
+        ? {
+            summary: {
+              saved_jobs_count: payload.feedbackState.feedbackSummary.savedJobsCount,
+              hidden_jobs_count: payload.feedbackState.feedbackSummary.hiddenJobsCount,
+              bad_fit_jobs_count: payload.feedbackState.feedbackSummary.badFitJobsCount,
+              whitelisted_companies_count:
+                payload.feedbackState.feedbackSummary.whitelistedCompaniesCount,
+              blacklisted_companies_count:
+                payload.feedbackState.feedbackSummary.blacklistedCompaniesCount,
+            },
+            top_positive_evidence: payload.feedbackState.topPositiveEvidence.map((entry) => ({
+              type: entry.type,
+              label: entry.label,
+            })),
+            top_negative_evidence: payload.feedbackState.topNegativeEvidence.map((entry) => ({
+              type: entry.type,
+              label: entry.label,
+            })),
+            current_job_feedback: payload.feedbackState.currentJobFeedback
+              ? {
+                  saved: payload.feedbackState.currentJobFeedback.saved,
+                  hidden: payload.feedbackState.currentJobFeedback.hidden,
+                  bad_fit: payload.feedbackState.currentJobFeedback.badFit,
+                  company_status: payload.feedbackState.currentJobFeedback.companyStatus,
+                }
+              : null,
+          }
+        : null,
+      raw_profile_text: payload.rawProfileText ?? null,
+    }),
+  });
+
+  return {
+    draftSummary: response.draft_summary,
+    openingParagraph: response.opening_paragraph,
+    bodyParagraphs: response.body_paragraphs,
+    closingParagraph: response.closing_paragraph,
+    keyClaimsUsed: response.key_claims_used,
+    evidenceGaps: response.evidence_gaps,
+    toneNotes: response.tone_notes,
   };
 }
 
