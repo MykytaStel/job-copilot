@@ -266,11 +266,24 @@ mod tests {
             ApiJson(RunSearchRequest {
                 search_profile: SearchProfileRequest {
                     primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(95),
                     target_roles: vec!["devops_engineer".to_string()],
+                    role_candidates: vec![
+                        crate::api::dto::search::SearchRoleCandidateRequest {
+                            role: "backend_developer".to_string(),
+                            confidence: 95,
+                        },
+                        crate::api::dto::search::SearchRoleCandidateRequest {
+                            role: "devops_engineer".to_string(),
+                            confidence: 66,
+                        },
+                    ],
                     seniority: "senior".to_string(),
                     target_regions: vec![TargetRegion::EuRemote],
                     work_modes: vec![WorkMode::Remote],
                     allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string(), "postgres".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
                     search_terms: vec!["rust".to_string(), "postgres".to_string()],
                     exclude_terms: vec![],
                 },

@@ -33,14 +33,24 @@ pub struct SearchPreferences {
     pub exclude_keywords: Vec<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SearchRoleCandidate {
+    pub role: RoleId,
+    pub confidence: u8,
+}
+
 #[derive(Clone, Debug)]
 pub struct SearchProfile {
     pub primary_role: RoleId,
+    pub primary_role_confidence: Option<u8>,
     pub target_roles: Vec<RoleId>,
+    pub role_candidates: Vec<SearchRoleCandidate>,
     pub seniority: String,
     pub target_regions: Vec<TargetRegion>,
     pub work_modes: Vec<WorkMode>,
     pub allowed_sources: Vec<SourceId>,
+    pub profile_skills: Vec<String>,
+    pub profile_keywords: Vec<String>,
     pub search_terms: Vec<String>,
     pub exclude_terms: Vec<String>,
 }

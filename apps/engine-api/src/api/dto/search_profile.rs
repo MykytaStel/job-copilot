@@ -4,7 +4,9 @@ use serde_json::json;
 use crate::api::error::ApiError;
 use crate::domain::role::RoleId;
 use crate::domain::role::catalog::ROLE_CATALOG;
-use crate::domain::search::profile::{SearchPreferences, SearchProfile, TargetRegion, WorkMode};
+use crate::domain::search::profile::{
+    SearchPreferences, SearchProfile, SearchRoleCandidate, TargetRegion, WorkMode,
+};
 use crate::domain::source::SOURCE_CATALOG;
 use crate::domain::source::SourceId;
 
@@ -45,14 +47,24 @@ pub struct BuildSearchProfileInput {
     pub preferences: SearchPreferences,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SearchRoleCandidatePayload {
+    pub role: String,
+    pub confidence: u8,
+}
+
 #[derive(Serialize)]
 pub struct SearchProfileResponse {
     pub primary_role: String,
+    pub primary_role_confidence: Option<u8>,
     pub target_roles: Vec<String>,
+    pub role_candidates: Vec<SearchRoleCandidatePayload>,
     pub seniority: String,
     pub target_regions: Vec<TargetRegion>,
     pub work_modes: Vec<WorkMode>,
     pub allowed_sources: Vec<String>,
+    pub profile_skills: Vec<String>,
+    pub profile_keywords: Vec<String>,
     pub search_terms: Vec<String>,
     pub exclude_terms: Vec<String>,
 }
@@ -138,20 +150,29 @@ impl From<SearchProfile> for SearchProfileResponse {
     fn from(search_profile: SearchProfile) -> Self {
         let SearchProfile {
             primary_role,
+            primary_role_confidence,
             target_roles,
+            role_candidates,
             seniority,
             target_regions,
             work_modes,
             allowed_sources,
+            profile_skills,
+            profile_keywords,
             search_terms,
             exclude_terms,
         } = search_profile;
 
         Self {
             primary_role: primary_role.to_string(),
+            primary_role_confidence,
             target_roles: target_roles
                 .into_iter()
                 .map(|role| role.to_string())
+                .collect(),
+            role_candidates: role_candidates
+                .into_iter()
+                .map(SearchRoleCandidatePayload::from)
                 .collect(),
             seniority,
             target_regions,
@@ -160,8 +181,19 @@ impl From<SearchProfile> for SearchProfileResponse {
                 .into_iter()
                 .map(|source| source.canonical_key().to_string())
                 .collect(),
+            profile_skills,
+            profile_keywords,
             search_terms,
             exclude_terms,
+        }
+    }
+}
+
+impl From<SearchRoleCandidate> for SearchRoleCandidatePayload {
+    fn from(value: SearchRoleCandidate) -> Self {
+        Self {
+            role: value.role.to_string(),
+            confidence: value.confidence,
         }
     }
 }
@@ -211,7 +243,7 @@ mod tests {
     use serde_json::json;
 
     use crate::domain::role::RoleId;
-    use crate::domain::search::profile::SearchProfile;
+    use crate::domain::search::profile::{SearchProfile, SearchRoleCandidate};
     use crate::domain::source::SourceId;
 
     use super::{
@@ -364,20 +396,29 @@ mod tests {
     fn serializes_search_profile_roles_as_snake_case_strings() {
         let response = super::SearchProfileResponse::from(SearchProfile {
             primary_role: RoleId::ReactNativeDeveloper,
+            primary_role_confidence: Some(96),
             target_roles: vec![RoleId::ReactNativeDeveloper, RoleId::FrontendDeveloper],
+            role_candidates: vec![SearchRoleCandidate {
+                role: RoleId::ReactNativeDeveloper,
+                confidence: 96,
+            }],
             seniority: "senior".to_string(),
             target_regions: vec![TargetRegion::Ua],
             work_modes: vec![WorkMode::Remote],
             allowed_sources: vec![SourceId::Djinni, SourceId::RobotaUa],
+            profile_skills: vec!["react native".to_string()],
+            profile_keywords: vec!["mobile".to_string()],
             search_terms: vec!["react native developer".to_string()],
             exclude_terms: vec!["gambling".to_string()],
         });
 
         assert_eq!(response.primary_role, "react_native_developer");
+        assert_eq!(response.primary_role_confidence, Some(96));
         assert_eq!(
             response.target_roles,
             vec!["react_native_developer", "frontend_developer"]
         );
+        assert_eq!(response.role_candidates[0].role, "react_native_developer");
         assert_eq!(response.allowed_sources, vec!["djinni", "robota_ua"]);
     }
 }

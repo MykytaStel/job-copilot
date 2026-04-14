@@ -1,6 +1,8 @@
 use crate::domain::candidate::profile::{CandidateProfile, RoleScore};
 use crate::domain::role::RoleId;
-use crate::domain::search::profile::{SearchPreferences, TargetRegion, WorkMode};
+use crate::domain::search::profile::{
+    SearchPreferences, SearchRoleCandidate, TargetRegion, WorkMode,
+};
 use crate::domain::source::SourceId;
 
 use super::service::SearchProfileService;
@@ -21,6 +23,7 @@ fn builds_search_profile_from_profile_and_preferences() {
     let search_profile = service.build(&analyzed_profile, &preferences);
 
     assert_eq!(search_profile.primary_role, RoleId::ReactNativeDeveloper);
+    assert_eq!(search_profile.primary_role_confidence, Some(100));
     assert_eq!(search_profile.seniority, "senior");
     assert_eq!(
         search_profile.target_roles,
@@ -42,6 +45,24 @@ fn builds_search_profile_from_profile_and_preferences() {
         search_profile.allowed_sources,
         vec![SourceId::Djinni, SourceId::WorkUa]
     );
+    assert_eq!(
+        search_profile.role_candidates,
+        vec![
+            SearchRoleCandidate {
+                role: RoleId::ReactNativeDeveloper,
+                confidence: 100,
+            },
+            SearchRoleCandidate {
+                role: RoleId::MobileDeveloper,
+                confidence: 72,
+            },
+        ]
+    );
+    assert_eq!(
+        search_profile.profile_skills,
+        vec!["react native", "typescript"]
+    );
+    assert_eq!(search_profile.profile_keywords, vec!["mobile"]);
     assert_eq!(
         search_profile.search_terms,
         vec![
@@ -136,6 +157,7 @@ fn works_when_preferences_are_mostly_empty() {
     assert_eq!(search_profile.target_regions, Vec::<TargetRegion>::new());
     assert_eq!(search_profile.work_modes, Vec::<WorkMode>::new());
     assert_eq!(search_profile.allowed_sources, Vec::<SourceId>::new());
+    assert_eq!(search_profile.primary_role_confidence, Some(100));
     assert_eq!(
         search_profile.target_roles,
         vec![RoleId::ReactNativeDeveloper, RoleId::MobileDeveloper]

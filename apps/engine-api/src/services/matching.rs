@@ -1,17 +1,26 @@
 use crate::domain::job::model::JobView;
 use crate::domain::matching::JobFit;
 use crate::domain::role::RoleId;
-use crate::domain::search::profile::{SearchProfile, TargetRegion, WorkMode};
+use crate::domain::role::catalog::ROLE_CATALOG;
+use crate::domain::search::profile::{SearchProfile, SearchRoleCandidate, TargetRegion, WorkMode};
 use crate::domain::source::SourceId;
 use crate::services::profile::matching::{PreparedText, normalize_text};
-use crate::services::profile::rules::KNOWN_SKILLS;
 
-const ROLE_WEIGHT: f32 = 45.0;
-const SEARCH_TERM_WEIGHT: f32 = 30.0;
-const SOURCE_WEIGHT: f32 = 10.0;
-const WORK_MODE_WEIGHT: f32 = 10.0;
-const REGION_WEIGHT: f32 = 5.0;
-const EXCLUDE_PENALTY_WEIGHT: f32 = 20.0;
+const PRIMARY_ROLE_WEIGHT: f32 = 22.0;
+const TARGET_ROLE_WEIGHT: f32 = 12.0;
+const ROLE_CANDIDATE_WEIGHT: f32 = 10.0;
+const PROFILE_SKILL_WEIGHT: f32 = 20.0;
+const PROFILE_KEYWORD_WEIGHT: f32 = 8.0;
+const SEARCH_TERM_WEIGHT: f32 = 8.0;
+const SOURCE_WEIGHT: f32 = 4.0;
+const WORK_MODE_WEIGHT: f32 = 6.0;
+const REGION_WEIGHT: f32 = 4.0;
+const SENIORITY_WEIGHT: f32 = 6.0;
+const EXCLUDE_PENALTY_WEIGHT: f32 = 18.0;
+const ROLE_MISMATCH_PENALTY_WEIGHT: f32 = 18.0;
+const WORK_MODE_MISMATCH_PENALTY_WEIGHT: f32 = 8.0;
+const SENIORITY_MISMATCH_PENALTY_WEIGHT: f32 = 8.0;
+const PARTIAL_ROLE_MATCH_THRESHOLD: f32 = 0.30;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RankedJob {
@@ -28,6 +37,25 @@ pub struct SearchRunResult {
 
 #[derive(Clone, Default)]
 pub struct SearchMatchingService;
+
+#[derive(Clone, Debug)]
+struct RoleAlignment {
+    matched_roles: Vec<RoleId>,
+    job_roles: Vec<RoleId>,
+    primary_overlap: f32,
+    best_target_overlap: f32,
+    best_partial_match: Option<(RoleId, RoleId, f32)>,
+    candidate_overlap: f32,
+    mismatch_penalty: f32,
+}
+
+#[derive(Clone, Debug)]
+struct SeniorityAlignment {
+    normalized_profile: Option<String>,
+    normalized_job: Option<String>,
+    score: f32,
+    penalty: f32,
+}
 
 impl SearchMatchingService {
     pub fn new() -> Self {
@@ -74,77 +102,114 @@ impl SearchMatchingService {
     pub fn score_job(&self, search_profile: &SearchProfile, job: &JobView) -> JobFit {
         let prepared_text = PreparedText::new(&build_searchable_text(job));
         let target_roles = collect_target_roles(search_profile);
-        let matched_roles = collect_matched_roles(&prepared_text, &target_roles);
+        let role_alignment = analyze_role_alignment(search_profile, &prepared_text, &target_roles);
         let role_terms = collect_role_terms(&target_roles);
-        let matched_search_terms =
-            collect_matched_terms(&prepared_text, &search_profile.search_terms, &role_terms);
+        let matched_profile_skills =
+            collect_matched_terms(&prepared_text, &search_profile.profile_skills, &Vec::new());
+        let matched_profile_keywords = collect_matched_terms(
+            &prepared_text,
+            &search_profile.profile_keywords,
+            &role_terms,
+        );
+        let ignored_search_terms = ignored_search_terms(search_profile, &role_terms);
+        let matched_search_terms = collect_matched_terms(
+            &prepared_text,
+            &search_profile.search_terms,
+            &ignored_search_terms,
+        );
         let searchable_terms = normalized_terms(&search_profile.search_terms)
             .into_iter()
-            .filter(|term| !role_terms.contains(term))
+            .filter(|term| !ignored_search_terms.contains(term))
             .collect::<Vec<_>>();
-        let matched_skills = matched_search_terms
-            .iter()
-            .filter(|term| is_known_skill(term))
-            .cloned()
-            .collect::<Vec<_>>();
-        let matched_keywords = matched_search_terms
-            .iter()
-            .filter(|term| !is_known_skill(term))
-            .cloned()
-            .collect::<Vec<_>>();
+        let matched_keywords = merge_terms(&matched_profile_keywords, &matched_search_terms);
         let source_match = compute_source_match(search_profile, job);
         let work_mode_match = compute_work_mode_match(search_profile, job);
         let region_match = compute_region_match(search_profile, &prepared_text, job);
+        let seniority_alignment = compute_seniority_alignment(search_profile, job, &prepared_text);
         let matched_exclude_terms =
             collect_matched_terms(&prepared_text, &search_profile.exclude_terms, &Vec::new());
 
-        let role_score = overlap_ratio(matched_roles.len(), target_roles.len()) * ROLE_WEIGHT;
+        let primary_role_score = role_alignment.primary_overlap
+            * PRIMARY_ROLE_WEIGHT
+            * confidence_factor(search_profile.primary_role_confidence);
+        let target_role_score = role_alignment.best_target_overlap * TARGET_ROLE_WEIGHT;
+        let role_candidate_score = role_alignment.candidate_overlap * ROLE_CANDIDATE_WEIGHT;
+        let profile_skill_score = overlap_ratio(
+            matched_profile_skills.len(),
+            normalized_terms(&search_profile.profile_skills).len(),
+        ) * PROFILE_SKILL_WEIGHT;
+        let profile_keyword_score = overlap_ratio(
+            matched_profile_keywords.len(),
+            normalized_terms(&search_profile.profile_keywords)
+                .into_iter()
+                .filter(|term| !role_terms.contains(term))
+                .collect::<Vec<_>>()
+                .len(),
+        ) * PROFILE_KEYWORD_WEIGHT;
         let search_term_score =
             overlap_ratio(matched_search_terms.len(), searchable_terms.len()) * SEARCH_TERM_WEIGHT;
-        let source_score = if source_match { SOURCE_WEIGHT } else { 0.0 };
-        let work_mode_score = match work_mode_match {
-            Some(true) => WORK_MODE_WEIGHT,
-            Some(false) => 0.0,
-            None if search_profile.work_modes.is_empty() => WORK_MODE_WEIGHT / 2.0,
-            None => WORK_MODE_WEIGHT / 4.0,
+        let source_score = if source_match && !search_profile.allowed_sources.is_empty() {
+            SOURCE_WEIGHT
+        } else {
+            0.0
         };
+        let work_mode_score = matches!(work_mode_match, Some(true))
+            .then_some(WORK_MODE_WEIGHT)
+            .unwrap_or(0.0);
         let region_score = match region_match {
             Some(true) => REGION_WEIGHT,
             Some(false) => 0.0,
-            None if search_profile.target_regions.is_empty() => REGION_WEIGHT / 2.0,
-            None => REGION_WEIGHT / 4.0,
+            None => 0.0,
         };
+        let seniority_score = seniority_alignment.score;
         let exclude_penalty = overlap_ratio(
             matched_exclude_terms.len(),
             normalized_terms(&search_profile.exclude_terms).len(),
         ) * EXCLUDE_PENALTY_WEIGHT;
+        let work_mode_penalty = matches!(work_mode_match, Some(false))
+            .then_some(WORK_MODE_MISMATCH_PENALTY_WEIGHT)
+            .unwrap_or(0.0);
+        let seniority_penalty = seniority_alignment.penalty;
 
-        let score = (role_score + search_term_score + source_score + work_mode_score + region_score
-            - exclude_penalty)
+        let score = (primary_role_score
+            + target_role_score
+            + role_candidate_score
+            + profile_skill_score
+            + profile_keyword_score
+            + search_term_score
+            + source_score
+            + work_mode_score
+            + region_score
+            + seniority_score
+            - exclude_penalty
+            - role_alignment.mismatch_penalty
+            - work_mode_penalty
+            - seniority_penalty)
             .clamp(0.0, 100.0)
             .round() as u8;
+        let reasons = build_reasons(
+            search_profile,
+            job,
+            &role_alignment,
+            &matched_profile_skills,
+            &matched_profile_keywords,
+            &matched_search_terms,
+            &matched_exclude_terms,
+            work_mode_match,
+            region_match,
+            &seniority_alignment,
+        );
 
         JobFit {
             job_id: job.job.id.clone(),
             score,
-            matched_roles,
-            matched_skills,
+            matched_roles: role_alignment.matched_roles,
+            matched_skills: matched_profile_skills.clone(),
             matched_keywords,
             source_match,
             work_mode_match,
             region_match,
-            reasons: build_reasons(
-                &target_roles,
-                &search_profile.search_terms,
-                &search_profile.allowed_sources,
-                &search_profile.work_modes,
-                &search_profile.target_regions,
-                job,
-                &matched_search_terms,
-                &matched_exclude_terms,
-                work_mode_match,
-                region_match,
-            ),
+            reasons,
         }
     }
 }
@@ -182,18 +247,6 @@ fn collect_target_roles(search_profile: &SearchProfile) -> Vec<RoleId> {
     roles
 }
 
-fn collect_matched_roles(prepared_text: &PreparedText, target_roles: &[RoleId]) -> Vec<RoleId> {
-    let mut matched_roles = Vec::new();
-
-    for role in target_roles {
-        if role_matches(prepared_text, *role) {
-            push_unique_role(&mut matched_roles, *role);
-        }
-    }
-
-    matched_roles
-}
-
 fn role_matches(prepared_text: &PreparedText, role: RoleId) -> bool {
     if prepared_text.matches_signal(&role.search_label()) {
         return true;
@@ -221,6 +274,20 @@ fn collect_role_terms(target_roles: &[RoleId]) -> Vec<String> {
     }
 
     terms
+}
+
+fn ignored_search_terms(search_profile: &SearchProfile, role_terms: &[String]) -> Vec<String> {
+    let mut ignored = role_terms.to_vec();
+
+    for term in &search_profile.profile_skills {
+        push_unique_string(&mut ignored, normalize_text(term));
+    }
+
+    for term in &search_profile.profile_keywords {
+        push_unique_string(&mut ignored, normalize_text(term));
+    }
+
+    ignored
 }
 
 fn collect_matched_terms(
@@ -261,10 +328,147 @@ fn normalized_terms(terms: &[String]) -> Vec<String> {
     normalized_terms
 }
 
-fn is_known_skill(term: &str) -> bool {
-    KNOWN_SKILLS
+fn merge_terms(left: &[String], right: &[String]) -> Vec<String> {
+    let mut merged = Vec::new();
+
+    for term in left {
+        push_unique_string(&mut merged, term.clone());
+    }
+
+    for term in right {
+        push_unique_string(&mut merged, term.clone());
+    }
+
+    merged
+}
+
+fn analyze_role_alignment(
+    search_profile: &SearchProfile,
+    prepared_text: &PreparedText,
+    target_roles: &[RoleId],
+) -> RoleAlignment {
+    let job_roles = collect_job_roles(prepared_text);
+    let matched_roles = target_roles
         .iter()
-        .any(|skill| normalize_text(skill) == normalize_text(term))
+        .copied()
+        .filter(|role| role_matches(prepared_text, *role))
+        .collect::<Vec<_>>();
+    let primary_overlap = best_role_overlap(search_profile.primary_role, &job_roles);
+    let best_partial_match = best_role_pair(target_roles, &job_roles);
+    let best_target_overlap = best_partial_match
+        .map(|(_, _, overlap)| overlap)
+        .unwrap_or(0.0);
+    let candidate_overlap =
+        weighted_role_candidate_overlap(&search_profile.role_candidates, &job_roles);
+    let mismatch_penalty =
+        compute_role_mismatch_penalty(target_roles, &job_roles, best_target_overlap);
+
+    RoleAlignment {
+        matched_roles,
+        job_roles,
+        primary_overlap,
+        best_target_overlap,
+        best_partial_match,
+        candidate_overlap,
+        mismatch_penalty,
+    }
+}
+
+fn collect_job_roles(prepared_text: &PreparedText) -> Vec<RoleId> {
+    ROLE_CATALOG
+        .iter()
+        .filter(|metadata| !metadata.is_fallback && role_matches(prepared_text, metadata.id))
+        .map(|metadata| metadata.id)
+        .collect()
+}
+
+fn weighted_role_candidate_overlap(
+    role_candidates: &[SearchRoleCandidate],
+    job_roles: &[RoleId],
+) -> f32 {
+    let total_weight = role_candidates
+        .iter()
+        .map(|candidate| candidate.confidence as f32)
+        .sum::<f32>();
+
+    if total_weight <= 0.0 || job_roles.is_empty() {
+        return 0.0;
+    }
+
+    let weighted_overlap = role_candidates
+        .iter()
+        .map(|candidate| best_role_overlap(candidate.role, job_roles) * candidate.confidence as f32)
+        .sum::<f32>();
+
+    (weighted_overlap / total_weight).min(1.0)
+}
+
+fn best_role_overlap(target_role: RoleId, job_roles: &[RoleId]) -> f32 {
+    job_roles
+        .iter()
+        .map(|job_role| role_family_overlap(target_role, *job_role))
+        .fold(0.0, f32::max)
+}
+
+fn best_role_pair(target_roles: &[RoleId], job_roles: &[RoleId]) -> Option<(RoleId, RoleId, f32)> {
+    let mut best_match = None;
+
+    for target_role in target_roles {
+        for job_role in job_roles {
+            let overlap = role_family_overlap(*target_role, *job_role);
+
+            if best_match
+                .as_ref()
+                .map(|(_, _, best_overlap)| overlap > *best_overlap)
+                .unwrap_or(true)
+            {
+                best_match = Some((*target_role, *job_role, overlap));
+            }
+        }
+    }
+
+    best_match
+}
+
+fn role_family_overlap(left: RoleId, right: RoleId) -> f32 {
+    if left == right {
+        return 1.0;
+    }
+
+    match (left, right) {
+        (RoleId::ReactNativeDeveloper, RoleId::MobileDeveloper)
+        | (RoleId::MobileDeveloper, RoleId::ReactNativeDeveloper) => 0.85,
+        (RoleId::ReactNativeDeveloper, RoleId::FrontendDeveloper)
+        | (RoleId::FrontendDeveloper, RoleId::ReactNativeDeveloper) => 0.65,
+        (RoleId::FrontendDeveloper, RoleId::FullstackDeveloper)
+        | (RoleId::FullstackDeveloper, RoleId::FrontendDeveloper) => 0.70,
+        (RoleId::BackendDeveloper, RoleId::FullstackDeveloper)
+        | (RoleId::FullstackDeveloper, RoleId::BackendDeveloper) => 0.70,
+        (RoleId::BackendDeveloper, RoleId::DevopsEngineer)
+        | (RoleId::DevopsEngineer, RoleId::BackendDeveloper) => 0.35,
+        (RoleId::MobileDeveloper, RoleId::FrontendDeveloper)
+        | (RoleId::FrontendDeveloper, RoleId::MobileDeveloper) => 0.40,
+        (RoleId::FullstackDeveloper, RoleId::DevopsEngineer)
+        | (RoleId::DevopsEngineer, RoleId::FullstackDeveloper) => 0.30,
+        _ if left.is_fallback() || right.is_fallback() => 0.0,
+        _ if left.family().is_some() && left.family() == right.family() => 0.15,
+        _ => 0.0,
+    }
+}
+
+fn compute_role_mismatch_penalty(
+    target_roles: &[RoleId],
+    job_roles: &[RoleId],
+    best_target_overlap: f32,
+) -> f32 {
+    if job_roles.is_empty()
+        || target_roles.iter().all(|role| role.is_fallback())
+        || best_target_overlap >= PARTIAL_ROLE_MATCH_THRESHOLD
+    {
+        return 0.0;
+    }
+
+    ROLE_MISMATCH_PENALTY_WEIGHT * (1.0 - best_target_overlap)
 }
 
 fn compute_source_match(search_profile: &SearchProfile, job: &JobView) -> bool {
@@ -403,30 +607,147 @@ fn matches_any(prepared_text: &PreparedText, signals: &[&str]) -> bool {
         .any(|signal| prepared_text.matches_signal(signal))
 }
 
-fn build_reasons(
-    target_roles: &[RoleId],
-    search_terms: &[String],
-    allowed_sources: &[SourceId],
-    work_modes: &[WorkMode],
-    target_regions: &[TargetRegion],
+fn compute_seniority_alignment(
+    search_profile: &SearchProfile,
     job: &JobView,
+    prepared_text: &PreparedText,
+) -> SeniorityAlignment {
+    let normalized_profile = normalize_seniority(Some(search_profile.seniority.as_str()));
+    let normalized_job = normalize_seniority(job.job.seniority.as_deref())
+        .or_else(|| infer_seniority_from_text(prepared_text));
+
+    let (Some(profile_seniority), Some(job_seniority)) =
+        (normalized_profile.clone(), normalized_job.clone())
+    else {
+        return SeniorityAlignment {
+            normalized_profile,
+            normalized_job,
+            score: 0.0,
+            penalty: 0.0,
+        };
+    };
+
+    let Some(profile_level) = seniority_ordinal(&profile_seniority) else {
+        return SeniorityAlignment {
+            normalized_profile,
+            normalized_job,
+            score: 0.0,
+            penalty: 0.0,
+        };
+    };
+    let Some(job_level) = seniority_ordinal(&job_seniority) else {
+        return SeniorityAlignment {
+            normalized_profile,
+            normalized_job,
+            score: 0.0,
+            penalty: 0.0,
+        };
+    };
+
+    if profile_level == job_level {
+        return SeniorityAlignment {
+            normalized_profile,
+            normalized_job,
+            score: SENIORITY_WEIGHT,
+            penalty: 0.0,
+        };
+    }
+
+    let gap = (profile_level - job_level).unsigned_abs() as f32;
+    let direction_multiplier = if profile_level > job_level { 1.0 } else { 0.75 };
+
+    SeniorityAlignment {
+        normalized_profile,
+        normalized_job,
+        score: 0.0,
+        penalty: (gap / 2.0).min(1.0) * SENIORITY_MISMATCH_PENALTY_WEIGHT * direction_multiplier,
+    }
+}
+
+fn normalize_seniority(value: Option<&str>) -> Option<String> {
+    match normalize_text(value?).as_str() {
+        "intern" => Some("intern".to_string()),
+        "junior" | "jr" => Some("junior".to_string()),
+        "middle" | "mid" | "mid level" | "midlevel" => Some("middle".to_string()),
+        "senior" | "sr" => Some("senior".to_string()),
+        "lead" => Some("lead".to_string()),
+        "staff" => Some("staff".to_string()),
+        "principal" | "head" | "director" => Some("principal".to_string()),
+        _ => None,
+    }
+}
+
+fn infer_seniority_from_text(prepared_text: &PreparedText) -> Option<String> {
+    if prepared_text.matches_signal("principal") || prepared_text.matches_signal("director") {
+        Some("principal".to_string())
+    } else if prepared_text.matches_signal("staff") {
+        Some("staff".to_string())
+    } else if prepared_text.matches_signal("lead") {
+        Some("lead".to_string())
+    } else if prepared_text.matches_signal("senior") {
+        Some("senior".to_string())
+    } else if prepared_text.matches_signal("middle")
+        || prepared_text.matches_signal("mid-level")
+        || prepared_text.matches_signal("mid level")
+        || prepared_text.matches_signal("mid")
+    {
+        Some("middle".to_string())
+    } else if prepared_text.matches_signal("junior") {
+        Some("junior".to_string())
+    } else if prepared_text.matches_signal("intern") {
+        Some("intern".to_string())
+    } else {
+        None
+    }
+}
+
+fn seniority_ordinal(value: &str) -> Option<i32> {
+    match value {
+        "intern" => Some(0),
+        "junior" => Some(1),
+        "middle" => Some(2),
+        "senior" => Some(3),
+        "lead" => Some(4),
+        "staff" => Some(5),
+        "principal" => Some(6),
+        _ => None,
+    }
+}
+
+fn build_reasons(
+    search_profile: &SearchProfile,
+    job: &JobView,
+    role_alignment: &RoleAlignment,
+    matched_profile_skills: &[String],
+    matched_profile_keywords: &[String],
     matched_search_terms: &[String],
     matched_exclude_terms: &[String],
     work_mode_match: Option<bool>,
     region_match: Option<bool>,
+    seniority_alignment: &SeniorityAlignment,
 ) -> Vec<String> {
     let mut reasons = Vec::new();
-    let matched_roles = collect_matched_roles(
-        &PreparedText::new(&build_searchable_text(job)),
-        target_roles,
-    );
 
-    if matched_roles.is_empty() {
-        reasons.push("No target role signals matched the job title or description".to_string());
+    if role_alignment.matched_roles.is_empty() {
+        if let Some((target_role, job_role, overlap)) = role_alignment.best_partial_match {
+            if overlap >= PARTIAL_ROLE_MATCH_THRESHOLD {
+                reasons.push(format!(
+                    "Role family overlap matched {} with {}",
+                    target_role, job_role
+                ));
+            } else {
+                reasons.push(
+                    "No target role signals matched the job title or description".to_string(),
+                );
+            }
+        } else {
+            reasons.push("No target role signals matched the job title or description".to_string());
+        }
     } else {
         reasons.push(format!(
             "Matched target roles: {}",
-            matched_roles
+            role_alignment
+                .matched_roles
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>()
@@ -434,20 +755,35 @@ fn build_reasons(
         ));
     }
 
-    if search_terms.is_empty() {
-        reasons.push(
-            "Search profile has no search terms; score leans on roles and filters".to_string(),
-        );
-    } else if matched_search_terms.is_empty() {
-        reasons.push("No non-role search terms matched the job text".to_string());
-    } else {
+    if let Some(confidence) = search_profile.primary_role_confidence {
+        reasons.push(format!(
+            "Primary role confidence carried into ranking: {}% for {}",
+            confidence, search_profile.primary_role
+        ));
+    }
+
+    if !matched_profile_skills.is_empty() {
+        reasons.push(format!(
+            "Matched profile skills: {}",
+            matched_profile_skills.join(", ")
+        ));
+    }
+
+    if !matched_profile_keywords.is_empty() {
+        reasons.push(format!(
+            "Matched profile keywords: {}",
+            matched_profile_keywords.join(", ")
+        ));
+    }
+
+    if !matched_search_terms.is_empty() {
         reasons.push(format!(
             "Matched search terms: {}",
             matched_search_terms.join(", ")
         ));
     }
 
-    if allowed_sources.is_empty() {
+    if search_profile.allowed_sources.is_empty() {
         reasons.push("All sources are allowed".to_string());
     } else if let Some(source) = job_source(job) {
         reasons.push(format!(
@@ -458,15 +794,15 @@ fn build_reasons(
         reasons.push("Job source was unavailable".to_string());
     }
 
-    if !work_modes.is_empty() {
+    if !search_profile.work_modes.is_empty() {
         match work_mode_match {
             Some(true) => reasons.push("Work mode matched the search profile".to_string()),
-            Some(false) => reasons.push("Work mode did not match the search profile".to_string()),
+            Some(false) => reasons.push("Work mode mismatch penalty applied".to_string()),
             None => reasons.push("Work mode could not be inferred from the job".to_string()),
         }
     }
 
-    if !target_regions.is_empty() {
+    if !search_profile.target_regions.is_empty() {
         match region_match {
             Some(true) => reasons.push("Target region matched the job text".to_string()),
             Some(false) => reasons.push("Target region did not match the job text".to_string()),
@@ -474,14 +810,56 @@ fn build_reasons(
         }
     }
 
+    match (
+        seniority_alignment.normalized_profile.as_deref(),
+        seniority_alignment.normalized_job.as_deref(),
+    ) {
+        (Some(profile_seniority), Some(job_seniority)) if profile_seniority == job_seniority => {
+            reasons.push(format!("Matched seniority: {}", profile_seniority));
+        }
+        (Some(profile_seniority), Some(job_seniority)) => reasons.push(format!(
+            "Seniority mismatch penalty applied: profile {} vs job {}",
+            profile_seniority, job_seniority
+        )),
+        _ => {}
+    }
+
     if !matched_exclude_terms.is_empty() {
         reasons.push(format!(
-            "Matched exclude terms: {}",
+            "Exclude term penalty applied: {}",
             matched_exclude_terms.join(", ")
         ));
     }
 
+    if role_alignment.mismatch_penalty > 0.0 && !role_alignment.job_roles.is_empty() {
+        reasons.push(format!(
+            "Role mismatch penalty applied: strongest job roles {}",
+            role_alignment
+                .job_roles
+                .iter()
+                .take(3)
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+
+    if matched_profile_skills.is_empty()
+        && !search_profile.profile_skills.is_empty()
+        && role_alignment.matched_roles.is_empty()
+        && matched_search_terms.is_empty()
+    {
+        reasons.push("No strong profile evidence matched the job text".to_string());
+    }
+
     reasons
+}
+
+fn confidence_factor(confidence: Option<u8>) -> f32 {
+    match confidence {
+        Some(value) => (0.45 + (value as f32 / 100.0) * 0.55).min(1.0),
+        None => 0.60,
+    }
 }
 
 fn overlap_ratio(matched: usize, total: usize) -> f32 {
@@ -516,7 +894,9 @@ fn push_unique_string(target: &mut Vec<String>, value: String) {
 mod tests {
     use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
     use crate::domain::role::RoleId;
-    use crate::domain::search::profile::{SearchProfile, TargetRegion, WorkMode};
+    use crate::domain::search::profile::{
+        SearchProfile, SearchRoleCandidate, TargetRegion, WorkMode,
+    };
     use crate::domain::source::SourceId;
 
     use super::SearchMatchingService;
@@ -524,15 +904,58 @@ mod tests {
     fn search_profile() -> SearchProfile {
         SearchProfile {
             primary_role: RoleId::BackendDeveloper,
+            primary_role_confidence: Some(94),
             target_roles: vec![RoleId::BackendDeveloper, RoleId::DevopsEngineer],
+            role_candidates: vec![
+                SearchRoleCandidate {
+                    role: RoleId::BackendDeveloper,
+                    confidence: 94,
+                },
+                SearchRoleCandidate {
+                    role: RoleId::DevopsEngineer,
+                    confidence: 62,
+                },
+            ],
             seniority: "senior".to_string(),
             target_regions: vec![TargetRegion::EuRemote],
             work_modes: vec![WorkMode::Remote],
             allowed_sources: vec![SourceId::Djinni],
+            profile_skills: vec!["rust".to_string(), "postgres".to_string()],
+            profile_keywords: vec!["backend".to_string(), "platform".to_string()],
             search_terms: vec![
                 "rust".to_string(),
                 "postgres".to_string(),
                 "distributed systems".to_string(),
+            ],
+            exclude_terms: vec!["gambling".to_string()],
+        }
+    }
+
+    fn mobile_profile() -> SearchProfile {
+        SearchProfile {
+            primary_role: RoleId::ReactNativeDeveloper,
+            primary_role_confidence: Some(97),
+            target_roles: vec![RoleId::ReactNativeDeveloper, RoleId::FrontendDeveloper],
+            role_candidates: vec![
+                SearchRoleCandidate {
+                    role: RoleId::ReactNativeDeveloper,
+                    confidence: 97,
+                },
+                SearchRoleCandidate {
+                    role: RoleId::FrontendDeveloper,
+                    confidence: 68,
+                },
+            ],
+            seniority: "senior".to_string(),
+            target_regions: vec![TargetRegion::EuRemote],
+            work_modes: vec![WorkMode::Remote],
+            allowed_sources: vec![SourceId::Djinni],
+            profile_skills: vec!["react native".to_string(), "typescript".to_string()],
+            profile_keywords: vec!["mobile".to_string(), "frontend".to_string()],
+            search_terms: vec![
+                "react native".to_string(),
+                "typescript".to_string(),
+                "mobile product".to_string(),
             ],
             exclude_terms: vec!["gambling".to_string()],
         }
@@ -606,7 +1029,7 @@ mod tests {
                 .matched_roles
                 .contains(&RoleId::BackendDeveloper)
         );
-        assert!(matching_fit.matched_keywords.contains(&"rust".to_string()));
+        assert!(matching_fit.matched_skills.contains(&"rust".to_string()));
     }
 
     #[test]
@@ -703,28 +1126,191 @@ mod tests {
     }
 
     #[test]
-    fn explanations_are_included_in_fit_result() {
+    fn seniority_mismatch_lowers_score() {
         let service = SearchMatchingService::new();
         let profile = search_profile();
-        let job = job_view(
+        let matching_job = job_view(
             "job-1",
+            "Senior Backend Developer",
+            "Remote EU role with Rust and Postgres",
+            Some("remote"),
+            "djinni",
+        );
+        let junior_job = JobView {
+            job: Job {
+                seniority: Some("junior".to_string()),
+                ..matching_job.job.clone()
+            },
+            ..matching_job.clone()
+        };
+
+        let matching_fit = service.score_job(&profile, &matching_job);
+        let junior_fit = service.score_job(&profile, &junior_job);
+
+        assert!(matching_fit.score > junior_fit.score);
+        assert!(
+            junior_fit
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("Seniority mismatch penalty applied"))
+        );
+    }
+
+    #[test]
+    fn role_family_overlap_gives_partial_credit() {
+        let service = SearchMatchingService::new();
+        let profile = mobile_profile();
+        let exact_job = job_view(
+            "job-1",
+            "Senior React Native Developer",
+            "Remote EU role building React Native apps with TypeScript",
+            Some("remote"),
+            "djinni",
+        );
+        let partial_job = job_view(
+            "job-2",
+            "Senior Fullstack Developer",
+            "Remote EU product role with React, TypeScript, and backend APIs",
+            Some("remote"),
+            "djinni",
+        );
+        let unrelated_job = job_view(
+            "job-3",
+            "Senior Backend Developer",
+            "Remote EU role with Rust and distributed systems",
+            Some("remote"),
+            "djinni",
+        );
+
+        let exact_fit = service.score_job(&profile, &exact_job);
+        let partial_fit = service.score_job(&profile, &partial_job);
+        let unrelated_fit = service.score_job(&profile, &unrelated_job);
+
+        assert!(exact_fit.score > partial_fit.score);
+        assert!(partial_fit.score > unrelated_fit.score);
+        assert!(
+            partial_fit
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("Role family overlap"))
+        );
+    }
+
+    #[test]
+    fn exclude_terms_lower_score() {
+        let service = SearchMatchingService::new();
+        let profile = search_profile();
+        let clean_job = job_view(
+            "job-1",
+            "Senior Backend Developer",
+            "Remote EU role with Rust and Postgres for a product platform",
+            Some("remote"),
+            "djinni",
+        );
+        let excluded_job = job_view(
+            "job-2",
             "Senior Backend Developer",
             "Remote EU role with Rust and Postgres for a gambling platform",
             Some("remote"),
             "djinni",
         );
 
+        let clean_fit = service.score_job(&profile, &clean_job);
+        let excluded_fit = service.score_job(&profile, &excluded_job);
+
+        assert!(clean_fit.score > excluded_fit.score);
+        assert!(
+            excluded_fit
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("Exclude term penalty applied"))
+        );
+    }
+
+    #[test]
+    fn explanations_include_positive_and_negative_reasons() {
+        let service = SearchMatchingService::new();
+        let profile = search_profile();
+        let job = JobView {
+            job: Job {
+                seniority: Some("junior".to_string()),
+                ..job_view(
+                    "job-1",
+                    "Backend Platform Engineer",
+                    "Hybrid EU role with Rust and Postgres for a gambling platform",
+                    Some("hybrid"),
+                    "djinni",
+                )
+                .job
+            },
+            ..job_view(
+                "job-1",
+                "Backend Platform Engineer",
+                "Hybrid EU role with Rust and Postgres for a gambling platform",
+                Some("hybrid"),
+                "djinni",
+            )
+        };
+
         let fit = service.score_job(&profile, &job);
 
         assert!(
             fit.reasons
                 .iter()
-                .any(|reason| reason.contains("Matched target roles"))
+                .any(|reason| reason.contains("Matched profile skills"))
         );
         assert!(
             fit.reasons
                 .iter()
-                .any(|reason| reason.contains("Matched exclude terms"))
+                .any(|reason| reason.contains("Exclude term penalty applied"))
         );
+        assert!(
+            fit.reasons
+                .iter()
+                .any(|reason| reason.contains("Work mode mismatch penalty applied"))
+        );
+        assert!(
+            fit.reasons
+                .iter()
+                .any(|reason| reason.contains("Seniority mismatch penalty applied"))
+        );
+    }
+
+    #[test]
+    fn profile_aligned_jobs_rank_above_weakly_related_jobs() {
+        let service = SearchMatchingService::new();
+        let profile = search_profile();
+
+        let exact_backend = job_view(
+            "job-1",
+            "Senior Backend Developer",
+            "Remote EU role with Rust, Postgres, and backend platform work",
+            Some("remote"),
+            "djinni",
+        );
+        let partial_devops = job_view(
+            "job-2",
+            "Senior DevOps Engineer",
+            "Remote EU platform role with AWS, docker, kubernetes, and backend API ownership",
+            Some("remote"),
+            "djinni",
+        );
+        let weak_match = job_view(
+            "job-3",
+            "Senior Product Manager",
+            "Remote EU product strategy role with roadmap ownership",
+            Some("remote"),
+            "djinni",
+        );
+
+        let result = service.run(
+            &profile,
+            vec![weak_match, partial_devops, exact_backend],
+            10,
+        );
+
+        assert_eq!(result.ranked_jobs[0].job.job.id, "job-1");
+        assert_eq!(result.ranked_jobs[1].job.job.id, "job-2");
+        assert_eq!(result.ranked_jobs[2].job.job.id, "job-3");
     }
 }
