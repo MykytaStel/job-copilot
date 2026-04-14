@@ -101,10 +101,13 @@ pub async fn run_search(
     let result = state.search_matching_service.run(
         &input.search_profile,
         ranked_candidates,
-        input.limit as usize,
     );
-    // Apply feedback-aware score adjustments and re-sort within the returned set.
-    let adjusted_jobs = apply_feedback_scoring(result.ranked_jobs, &feedback_by_job_id);
+    // Apply feedback-aware score adjustments, re-sort, then truncate.
+    // Truncation happens here (after feedback) so that a whitelisted job ranked
+    // just outside the limit by pure score can still be promoted into the result
+    // set, and a bad-fit job with a high initial score can be demoted out of it.
+    let mut adjusted_jobs = apply_feedback_scoring(result.ranked_jobs, &feedback_by_job_id);
+    adjusted_jobs.truncate(input.limit as usize);
     let ranked_jobs: Vec<crate::api::dto::search::RankedJobResponse> = adjusted_jobs
         .into_iter()
         .map(|ranked| {
@@ -805,6 +808,185 @@ mod tests {
                 .iter()
                 .any(|r| r.as_str().is_some_and(|s| s.contains("bad fit"))),
             "bad fit reason should appear in fit reasons"
+        );
+    }
+
+    /// Whitelist bonus must be applied before truncation so a job ranked just
+    /// outside the limit by pure score can be promoted into the result set.
+    ///
+    /// Setup: limit=1, job-1 has identical content to job-2 but belongs to a
+    /// whitelisted company.  Pure scoring gives job-2 an earlier id tiebreak
+    /// edge (job-1 < job-2 but that sorts job-1 first by id; both have the
+    /// same score so the id tiebreak puts job-1 first without feedback).
+    /// We need a scenario where the feedback bonus actually matters for ordering.
+    ///
+    /// Simpler: two identical jobs, limit=1.  job-2 is whitelisted.
+    /// Without the fix, job-1 would be the sole result (id tiebreak).
+    /// After the fix, job-2 should win because its whitelist bonus is applied
+    /// before truncation.
+    #[tokio::test]
+    async fn whitelist_bonus_promotes_job_before_truncation() {
+        let shared_desc = "Remote EU role working with Rust and Postgres backend systems";
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    ))
+                    .with_job_view({
+                        let mut jv = sample_job_view(
+                            "job-2",
+                            "Senior Backend Developer",
+                            shared_desc,
+                            Some("remote"),
+                            "djinni",
+                        );
+                        jv.job.company_name = "FavoriteCorp".to_string();
+                        jv
+                    }),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_feedback_service(FeedbackService::for_tests(
+            FeedbackServiceStub::default().with_company_feedback(CompanyFeedbackRecord {
+                profile_id: "profile-1".to_string(),
+                company_name: "FavoriteCorp".to_string(),
+                normalized_company_name: "favoritecorp".to_string(),
+                status: CompanyFeedbackStatus::Whitelist,
+                created_at: "2026-04-14T00:00:00Z".to_string(),
+                updated_at: "2026-04-14T00:00:00Z".to_string(),
+            }),
+        ));
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(1),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        // limit=1: only one job returned; it must be the whitelisted one.
+        assert_eq!(payload["results"].as_array().map(Vec::len), Some(1));
+        assert_eq!(
+            payload["results"][0]["job"]["id"],
+            json!("job-2"),
+            "whitelisted job-2 must be promoted before truncation"
+        );
+    }
+
+    /// Bad-fit penalty must push a job out of the result set when limit is tight.
+    ///
+    /// Setup: limit=1, two identical jobs, job-1 is marked bad fit.
+    /// Before the fix, job-1 could still win the id tiebreak and appear in results.
+    /// After the fix, the -30 penalty is applied before truncation, so job-2 wins.
+    #[tokio::test]
+    async fn bad_fit_penalty_demotes_job_before_truncation() {
+        let shared_desc = "Remote EU role working with Rust and Postgres backend systems";
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_feedback_service(FeedbackService::for_tests(
+            FeedbackServiceStub::default().with_job_feedback(JobFeedbackRecord {
+                profile_id: "profile-1".to_string(),
+                job_id: "job-1".to_string(),
+                saved: false,
+                hidden: false,
+                bad_fit: true,
+                created_at: "2026-04-14T00:00:00Z".to_string(),
+                updated_at: "2026-04-14T00:00:00Z".to_string(),
+            }),
+        ));
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(1),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        // limit=1: only one job returned; bad-fit job-1 must be excluded.
+        assert_eq!(payload["results"].as_array().map(Vec::len), Some(1));
+        assert_eq!(
+            payload["results"][0]["job"]["id"],
+            json!("job-2"),
+            "bad-fit job-1 must be demoted out of results before truncation"
         );
     }
 }

@@ -2,7 +2,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 
 use crate::api::dto::feedback::{
-    CompanyFeedbackResponse, FeedbackOverviewResponse, JobFeedbackResponse,
+    CompanyFeedbackResponse, FeedbackOverviewResponse, FeedbackSummary, JobFeedbackResponse,
     UpdateCompanyFeedbackRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
@@ -27,13 +27,25 @@ pub async fn list_feedback(
         .await
         .map_err(|error| ApiError::from_repository(error, "feedback_query_failed"))?;
 
+    let jobs: Vec<JobFeedbackResponse> = jobs.into_iter().map(JobFeedbackResponse::from).collect();
+    let companies: Vec<CompanyFeedbackResponse> = companies
+        .into_iter()
+        .map(CompanyFeedbackResponse::from)
+        .collect();
+
+    let summary = FeedbackSummary {
+        saved_jobs_count: jobs.iter().filter(|j| j.saved).count(),
+        hidden_jobs_count: jobs.iter().filter(|j| j.hidden).count(),
+        bad_fit_jobs_count: jobs.iter().filter(|j| j.bad_fit).count(),
+        whitelisted_companies_count: companies.iter().filter(|c| c.status == "whitelist").count(),
+        blacklisted_companies_count: companies.iter().filter(|c| c.status == "blacklist").count(),
+    };
+
     Ok(axum::Json(FeedbackOverviewResponse {
         profile_id,
-        jobs: jobs.into_iter().map(JobFeedbackResponse::from).collect(),
-        companies: companies
-            .into_iter()
-            .map(CompanyFeedbackResponse::from)
-            .collect(),
+        jobs,
+        companies,
+        summary,
     }))
 }
 
@@ -571,5 +583,49 @@ mod tests {
         assert!(!overview.jobs[0].saved, "saved should be cleared");
         assert!(overview.jobs[0].hidden, "hidden should be untouched");
         assert!(overview.jobs[0].bad_fit, "bad_fit should be untouched");
+    }
+
+    #[tokio::test]
+    async fn feedback_overview_summary_counts_are_correct() {
+        // Set up: one job that is saved + bad_fit, one whitelisted company, one blacklisted.
+        let state = test_state()
+            .with_feedback_service(FeedbackService::for_tests(
+                FeedbackServiceStub::default()
+                    .with_job_feedback(JobFeedbackRecord {
+                        profile_id: "profile-1".to_string(),
+                        job_id: "job-1".to_string(),
+                        saved: true,
+                        hidden: false,
+                        bad_fit: true,
+                        created_at: "2026-04-14T00:00:00Z".to_string(),
+                        updated_at: "2026-04-14T00:00:00Z".to_string(),
+                    })
+                    .with_company_feedback(CompanyFeedbackRecord {
+                        profile_id: "profile-1".to_string(),
+                        company_name: "GoodCorp".to_string(),
+                        normalized_company_name: "goodcorp".to_string(),
+                        status: CompanyFeedbackStatus::Whitelist,
+                        created_at: "2026-04-14T00:00:00Z".to_string(),
+                        updated_at: "2026-04-14T00:00:00Z".to_string(),
+                    })
+                    .with_company_feedback(CompanyFeedbackRecord {
+                        profile_id: "profile-1".to_string(),
+                        company_name: "BadCorp".to_string(),
+                        normalized_company_name: "badcorp".to_string(),
+                        status: CompanyFeedbackStatus::Blacklist,
+                        created_at: "2026-04-14T00:00:00Z".to_string(),
+                        updated_at: "2026-04-14T00:00:00Z".to_string(),
+                    }),
+            ));
+
+        let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
+            .await
+            .expect("listing feedback should succeed");
+
+        assert_eq!(overview.summary.saved_jobs_count, 1);
+        assert_eq!(overview.summary.hidden_jobs_count, 0);
+        assert_eq!(overview.summary.bad_fit_jobs_count, 1);
+        assert_eq!(overview.summary.whitelisted_companies_count, 1);
+        assert_eq!(overview.summary.blacklisted_companies_count, 1);
     }
 }

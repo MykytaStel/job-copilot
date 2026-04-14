@@ -37,10 +37,20 @@ pub struct JobFeedbackStateResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct FeedbackSummary {
+    pub saved_jobs_count: usize,
+    pub hidden_jobs_count: usize,
+    pub bad_fit_jobs_count: usize,
+    pub whitelisted_companies_count: usize,
+    pub blacklisted_companies_count: usize,
+}
+
+#[derive(Debug, Serialize)]
 pub struct FeedbackOverviewResponse {
     pub profile_id: String,
     pub jobs: Vec<JobFeedbackResponse>,
     pub companies: Vec<CompanyFeedbackResponse>,
+    pub summary: FeedbackSummary,
 }
 
 impl UpdateCompanyFeedbackRequest {

@@ -64,11 +64,16 @@ impl SearchMatchingService {
         Self
     }
 
+    /// Score and rank all jobs against the given search profile.
+    ///
+    /// Jobs that are not allowed by the source filter are excluded.
+    /// The result is sorted by descending score, then by recency, then by job id.
+    /// No truncation is applied here — callers must truncate after any
+    /// post-ranking adjustments (e.g. feedback scoring).
     pub fn run(
         &self,
         search_profile: &SearchProfile,
         jobs: Vec<JobView>,
-        limit: usize,
     ) -> SearchRunResult {
         let total_candidates = jobs.len();
         let mut filtered_out_by_source = 0usize;
@@ -92,7 +97,6 @@ impl SearchMatchingService {
                 .then_with(|| right.job.job.last_seen_at.cmp(&left.job.job.last_seen_at))
                 .then_with(|| left.job.job.id.cmp(&right.job.job.id))
         });
-        ranked_jobs.truncate(limit);
 
         SearchRunResult {
             ranked_jobs,
@@ -1059,7 +1063,6 @@ mod tests {
                     "work_ua",
                 ),
             ],
-            10,
         );
 
         assert_eq!(results.filtered_out_by_source, 1);
@@ -1091,7 +1094,6 @@ mod tests {
                     "work_ua",
                 ),
             ],
-            10,
         );
 
         assert_eq!(results.filtered_out_by_source, 0);
@@ -1310,7 +1312,6 @@ mod tests {
         let result = service.run(
             &profile,
             vec![weak_match, partial_devops, exact_backend],
-            10,
         );
 
         assert_eq!(result.ranked_jobs[0].job.job.id, "job-1");

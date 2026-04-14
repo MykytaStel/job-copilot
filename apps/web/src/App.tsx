@@ -6,6 +6,7 @@ import JobDetails from './pages/JobDetails';
 import ApplicationBoard from './pages/ApplicationBoard';
 import ApplicationDetail from './pages/ApplicationDetail';
 import Profile from './pages/Profile';
+import FeedbackCenter from './pages/FeedbackCenter';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="applications" element={<ApplicationBoard />} />
           <Route path="applications/:id" element={<ApplicationDetail />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="feedback" element={<FeedbackCenter />} />
         </Route>
       </Routes>
     </BrowserRouter>
