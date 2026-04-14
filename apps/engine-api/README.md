@@ -96,6 +96,25 @@ curl \
   -X POST http://localhost:8080/api/v1/profiles/$PROFILE_ID/analyze
 ```
 
+Build a search profile directly from raw text:
+
+```bash
+curl \
+  -X POST http://localhost:8080/api/v1/search-profile/build \
+  -H "Content-Type: application/json" \
+  -d '{
+    "raw_text": "Senior React Native developer with product experience",
+    "preferences": {
+      "target_regions": ["ua", "eu_remote"],
+      "work_modes": ["remote"],
+      "preferred_roles": ["frontend_developer"],
+      "allowed_sources": ["djinni", "work_ua"],
+      "include_keywords": ["product company"],
+      "exclude_keywords": ["gambling"]
+    }
+  }'
+```
+
 Build a search profile from a persisted profile:
 
 ```bash
@@ -107,6 +126,7 @@ curl \
       "target_regions": ["ua", "eu_remote"],
       "work_modes": ["remote"],
       "preferred_roles": ["frontend_developer"],
+      "allowed_sources": ["djinni", "work_ua"],
       "include_keywords": ["product company"],
       "exclude_keywords": ["gambling"]
     }

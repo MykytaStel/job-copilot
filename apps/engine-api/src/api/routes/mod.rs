@@ -6,6 +6,7 @@ pub mod profile;
 pub mod resumes;
 pub mod roles;
 pub mod search;
+pub mod search_profile;
 pub mod sources;
 
 use axum::{Router, routing::get, routing::patch, routing::post, routing::put};
@@ -71,6 +72,11 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/v1/resume/upload", post(resumes::upload_resume))
         .route("/api/v1/search", get(search::search))
+        .route("/api/v1/search/run", post(search::run_search))
+        .route(
+            "/api/v1/search-profile/build",
+            post(search_profile::build_search_profile),
+        )
         .route("/api/v1/profiles", post(profile::create_profile))
         .route("/api/v1/profiles/{id}", get(profile::get_profile_by_id))
         .route("/api/v1/profiles/{id}", patch(profile::update_profile))

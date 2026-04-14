@@ -379,6 +379,7 @@ export type EngineTargetRegion =
   | 'us';
 
 export type EngineWorkMode = 'remote' | 'hybrid' | 'onsite';
+export type EngineSourceId = 'djinni' | 'work_ua' | 'robota_ua';
 
 export interface EngineRoleCatalogItemResponse {
   id: EngineRoleId;
@@ -417,6 +418,7 @@ export interface EngineSearchPreferencesRequest {
   target_regions?: EngineTargetRegion[];
   work_modes?: EngineWorkMode[];
   preferred_roles?: string[];
+  allowed_sources?: string[];
   include_keywords?: string[];
   exclude_keywords?: string[];
 }
@@ -432,6 +434,7 @@ export interface EngineSearchProfileResponse {
   seniority: string;
   target_regions: EngineTargetRegion[];
   work_modes: EngineWorkMode[];
+  allowed_sources: EngineSourceId[];
   search_terms: string[];
   exclude_terms: string[];
 }
@@ -455,10 +458,10 @@ export interface EngineBuildSearchProfileResponse {
 }
 
 export interface EngineSearchProfileValidationErrorResponse {
-  code: 'invalid_preferred_roles';
-  field: 'preferred_roles';
-  error: 'invalid_preferred_roles';
+  code: 'invalid_preferred_roles' | 'invalid_allowed_sources';
+  field: 'preferred_roles' | 'allowed_sources';
+  error: 'invalid_preferred_roles' | 'invalid_allowed_sources';
   message: string;
   invalid_values: string[];
-  allowed_values: EngineRoleId[];
+  allowed_values: Array<EngineRoleId | EngineSourceId>;
 }

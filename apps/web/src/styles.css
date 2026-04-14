@@ -184,6 +184,17 @@ textarea {
   font-size: 14px;
 }
 
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fieldLabel {
+  font-size: 14px;
+  font-weight: 500;
+}
+
 input,
 textarea {
   width: 100%;
@@ -236,6 +247,68 @@ button:disabled {
 .error {
   color: #ffb4b4;
   margin: 0;
+}
+
+.optionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.optionCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.optionCard input {
+  width: auto;
+  margin: 0;
+}
+
+.pillWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.detailLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9aa8bc;
+}
+
+.resultSection {
+  margin-top: 18px;
+}
+
+.stackList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stackListItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* ─── Page header ────────────────────────────────────────────────────────────── */

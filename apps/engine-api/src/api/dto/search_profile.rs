@@ -27,9 +27,22 @@ pub struct SearchPreferencesRequest {
 }
 
 #[derive(Default, Deserialize)]
-pub struct BuildSearchProfileRequest {
+pub struct BuildStoredSearchProfileRequest {
     #[serde(default)]
     pub preferences: SearchPreferencesRequest,
+}
+
+#[derive(Deserialize)]
+pub struct BuildSearchProfileRequest {
+    pub raw_text: String,
+    #[serde(default)]
+    pub preferences: SearchPreferencesRequest,
+}
+
+#[derive(Debug)]
+pub struct BuildSearchProfileInput {
+    pub raw_text: String,
+    pub preferences: SearchPreferences,
 }
 
 #[derive(Serialize)]
@@ -48,6 +61,15 @@ pub struct SearchProfileResponse {
 pub struct BuildSearchProfileResponse {
     pub analyzed_profile: AnalyzeProfileResponse,
     pub search_profile: SearchProfileResponse,
+}
+
+impl BuildSearchProfileRequest {
+    pub fn validate(self) -> Result<BuildSearchProfileInput, ApiError> {
+        Ok(BuildSearchProfileInput {
+            raw_text: validate_required_string("raw_text", self.raw_text, 20_000)?,
+            preferences: self.preferences.validate()?,
+        })
+    }
 }
 
 impl SearchPreferencesRequest {
@@ -153,6 +175,36 @@ where
     }
 }
 
+fn validate_required_string(
+    field: &'static str,
+    value: String,
+    max_len: usize,
+) -> Result<String, ApiError> {
+    let value = value.trim().to_string();
+
+    if value.is_empty() {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_search_profile_input",
+            format!("Field '{field}' must not be empty"),
+            json!({ "field": field }),
+        ));
+    }
+
+    if value.len() > max_len {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_search_profile_input",
+            format!("Field '{field}' must be at most {max_len} characters"),
+            json!({
+                "field": field,
+                "max_length": max_len,
+                "received_length": value.len(),
+            }),
+        ));
+    }
+
+    Ok(value)
+}
+
 #[cfg(test)]
 mod tests {
     use axum::response::IntoResponse;
@@ -162,7 +214,10 @@ mod tests {
     use crate::domain::search::profile::SearchProfile;
     use crate::domain::source::SourceId;
 
-    use super::{BuildSearchProfileRequest, SearchPreferencesRequest, TargetRegion, WorkMode};
+    use super::{
+        BuildSearchProfileRequest, BuildStoredSearchProfileRequest, SearchPreferencesRequest,
+        TargetRegion, WorkMode,
+    };
 
     #[test]
     fn deserializes_valid_enum_preferences() {
@@ -177,7 +232,7 @@ mod tests {
             }
         });
 
-        let request: BuildSearchProfileRequest =
+        let request: BuildStoredSearchProfileRequest =
             serde_json::from_value(payload).expect("request should deserialize");
 
         assert_eq!(
@@ -203,7 +258,7 @@ mod tests {
             }
         });
 
-        let result = serde_json::from_value::<BuildSearchProfileRequest>(payload);
+        let result = serde_json::from_value::<BuildStoredSearchProfileRequest>(payload);
 
         assert!(result.is_err());
     }
@@ -264,6 +319,43 @@ mod tests {
         }
         .validate()
         .expect_err("conversion should fail for unknown sources");
+
+        assert_eq!(error.into_response().status(), 400);
+    }
+
+    #[test]
+    fn validates_raw_text_request_successfully() {
+        let request = BuildSearchProfileRequest {
+            raw_text: " Senior frontend engineer ".to_string(),
+            preferences: SearchPreferencesRequest {
+                preferred_roles: vec!["frontend_developer".to_string()],
+                allowed_sources: vec!["djinni".to_string()],
+                ..SearchPreferencesRequest::default()
+            },
+        }
+        .validate()
+        .expect("request should validate successfully");
+
+        assert_eq!(request.raw_text, "Senior frontend engineer");
+        assert_eq!(
+            request.preferences.preferred_roles,
+            vec![RoleId::FrontendDeveloper]
+        );
+        assert_eq!(request.preferences.allowed_sources, vec![SourceId::Djinni]);
+    }
+
+    #[test]
+    fn rejects_blank_raw_text() {
+        let result = BuildSearchProfileRequest {
+            raw_text: "   ".to_string(),
+            preferences: SearchPreferencesRequest::default(),
+        }
+        .validate();
+
+        let error = match result {
+            Ok(_) => panic!("blank raw_text should fail validation"),
+            Err(error) => error,
+        };
 
         assert_eq!(error.into_response().status(), 400);
     }

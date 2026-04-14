@@ -5,7 +5,7 @@ use crate::api::dto::profile::{
     AnalyzeProfileResponse, CreateProfileRequest, ProfileResponse, UpdateProfileRequest,
 };
 use crate::api::dto::search_profile::{
-    BuildSearchProfileRequest, BuildSearchProfileResponse, SearchProfileResponse,
+    BuildSearchProfileResponse, BuildStoredSearchProfileRequest, SearchProfileResponse,
 };
 use crate::api::error::{ApiError, ApiJson};
 use crate::domain::profile::model::ProfileAnalysis;
@@ -96,7 +96,7 @@ pub async fn analyze_profile(
 pub async fn build_search_profile(
     State(state): State<AppState>,
     Path(profile_id): Path<String>,
-    ApiJson(payload): ApiJson<BuildSearchProfileRequest>,
+    ApiJson(payload): ApiJson<BuildStoredSearchProfileRequest>,
 ) -> Result<axum::Json<BuildSearchProfileResponse>, ApiError> {
     let Some(profile) = state
         .profiles_service
@@ -135,7 +135,7 @@ mod tests {
     use serde_json::{Value, json};
 
     use crate::api::dto::profile::CreateProfileRequest;
-    use crate::api::dto::search_profile::BuildSearchProfileRequest;
+    use crate::api::dto::search_profile::BuildStoredSearchProfileRequest;
     use crate::api::error::ApiJson;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
@@ -245,7 +245,7 @@ mod tests {
         let response = build_search_profile(
             State(state),
             Path("profile_test_001".to_string()),
-            ApiJson(BuildSearchProfileRequest {
+            ApiJson(BuildStoredSearchProfileRequest {
                 preferences: crate::api::dto::search_profile::SearchPreferencesRequest {
                     preferred_roles: vec!["frontend_developer".to_string()],
                     ..Default::default()

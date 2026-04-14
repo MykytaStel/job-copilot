@@ -1,8 +1,8 @@
 use axum::extract::{Query, State};
 use serde::Deserialize;
 
-use crate::api::dto::search::SearchResponse;
-use crate::api::error::ApiError;
+use crate::api::dto::search::{RunSearchRequest, RunSearchResponse, SearchResponse};
+use crate::api::error::{ApiError, ApiJson};
 use crate::state::AppState;
 
 #[derive(Deserialize)]
@@ -44,20 +44,44 @@ pub async fn search(
     )))
 }
 
+pub async fn run_search(
+    State(state): State<AppState>,
+    ApiJson(payload): ApiJson<RunSearchRequest>,
+) -> Result<axum::Json<RunSearchResponse>, ApiError> {
+    let input = payload.validate()?;
+    let fetch_limit = (input.limit * 5).clamp(50, 200);
+
+    let jobs = state
+        .jobs_service
+        .list_filtered_views(fetch_limit, Some("active"), None)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "search_run_failed"))?;
+    let result =
+        state
+            .search_matching_service
+            .run(&input.search_profile, jobs, input.limit as usize);
+
+    Ok(axum::Json(RunSearchResponse::from_result(result)))
+}
+
 #[cfg(test)]
 mod tests {
     use axum::extract::{Query, State};
     use axum::response::IntoResponse;
     use axum::{Json, body};
-    use serde_json::Value;
+    use serde_json::{Value, json};
 
+    use crate::api::dto::search::{RunSearchRequest, SearchProfileRequest};
+    use crate::api::error::ApiJson;
+    use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
+    use crate::domain::search::profile::{TargetRegion, WorkMode};
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
     use crate::state::AppState;
 
-    use super::{SearchQuery, search};
+    use super::{SearchQuery, run_search, search};
 
     fn sample_job(id: &str, title: &str) -> crate::domain::job::model::Job {
         crate::domain::job::model::Job {
@@ -73,6 +97,44 @@ mod tests {
             posted_at: None,
             last_seen_at: "2026-04-11T00:00:00Z".to_string(),
             is_active: true,
+        }
+    }
+
+    fn sample_job_view(
+        id: &str,
+        title: &str,
+        description_text: &str,
+        remote_type: Option<&str>,
+        source: &str,
+    ) -> JobView {
+        JobView {
+            job: Job {
+                id: id.to_string(),
+                title: title.to_string(),
+                company_name: "NovaLedger".to_string(),
+                remote_type: remote_type.map(str::to_string),
+                seniority: Some("senior".to_string()),
+                description_text: description_text.to_string(),
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                posted_at: Some("2026-04-12T09:00:00Z".to_string()),
+                last_seen_at: "2026-04-14T09:00:00Z".to_string(),
+                is_active: true,
+            },
+            first_seen_at: "2026-04-12T09:00:00Z".to_string(),
+            inactivated_at: None,
+            reactivated_at: None,
+            lifecycle_stage: JobLifecycleStage::Active,
+            primary_variant: Some(JobSourceVariant {
+                source: source.to_string(),
+                source_job_id: format!("{id}-source"),
+                source_url: format!("https://example.com/{id}"),
+                fetched_at: "2026-04-14T09:00:00Z".to_string(),
+                last_seen_at: "2026-04-14T09:00:00Z".to_string(),
+                is_active: true,
+                inactivated_at: None,
+            }),
         }
     }
 
@@ -164,5 +226,70 @@ mod tests {
         assert_eq!(payload["jobs"].as_array().map(Vec::len), Some(1));
         assert_eq!(payload["page"].as_i64(), Some(2));
         assert_eq!(payload["has_more"].as_bool(), Some(false));
+    }
+
+    #[tokio::test]
+    async fn run_search_returns_ranked_jobs_with_fit_reasons() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(ProfilesServiceStub::default()),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        "Remote EU role working with Rust and Postgres",
+                        Some("remote"),
+                        "djinni",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Project Manager",
+                        "Hybrid delivery coordination role in Warsaw",
+                        Some("hybrid"),
+                        "work_ua",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        );
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    target_roles: vec!["devops_engineer".to_string()],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    search_terms: vec!["rust".to_string(), "postgres".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(payload["meta"]["filtered_out_by_source"], json!(1));
+        assert_eq!(payload["results"].as_array().map(Vec::len), Some(1));
+        assert_eq!(payload["results"][0]["job"]["id"], json!("job-1"));
+        assert!(
+            payload["results"][0]["fit"]["reasons"]
+                .as_array()
+                .expect("reasons should be an array")
+                .iter()
+                .any(|reason| reason
+                    .as_str()
+                    .is_some_and(|reason| reason.contains("Matched target roles")))
+        );
     }
 }

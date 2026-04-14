@@ -73,9 +73,21 @@ type EngineSourceCatalogResponse = {
   sources: EngineSourceCatalogItem[];
 };
 
+type EngineRoleCatalogResponse = {
+  roles: EngineRoleCatalogItem[];
+};
+
 type EngineSourceCatalogItem = {
   id: string;
   display_name: string;
+};
+
+type EngineRoleCatalogItem = {
+  id: string;
+  display_name: string;
+  deprecated_api_ids: string[];
+  family?: string;
+  is_fallback: boolean;
 };
 
 type EngineRecentApplicationsResponse = {
@@ -242,6 +254,31 @@ type EngineAnalyzeProfile = {
   seniority: string;
   skills: string[];
   keywords: string[];
+  role_candidates?: EngineRoleCandidate[];
+  suggested_search_terms?: string[];
+};
+
+type EngineRoleCandidate = {
+  role: string;
+  score: number;
+  confidence: number;
+  matched_signals: string[];
+};
+
+type EngineSearchProfile = {
+  primary_role: string;
+  target_roles: string[];
+  seniority: string;
+  target_regions: SearchTargetRegion[];
+  work_modes: SearchWorkMode[];
+  allowed_sources: string[];
+  search_terms: string[];
+  exclude_terms: string[];
+};
+
+type EngineBuildSearchProfileResponse = {
+  analyzed_profile: EngineAnalyzeProfile;
+  search_profile: EngineSearchProfile;
 };
 
 const API_URL =
@@ -271,6 +308,59 @@ export type FitAnalysis = {
 export type SourceCatalogItem = {
   id: string;
   displayName: string;
+};
+
+export type RoleCatalogItem = {
+  id: string;
+  displayName: string;
+  family?: string;
+  deprecatedApiIds: string[];
+  isFallback: boolean;
+};
+
+export type SearchTargetRegion =
+  | 'ua'
+  | 'eu'
+  | 'eu_remote'
+  | 'poland'
+  | 'germany'
+  | 'uk'
+  | 'us';
+
+export type SearchWorkMode = 'remote' | 'hybrid' | 'onsite';
+
+export type SearchProfileBuildRequest = {
+  rawText: string;
+  preferences?: {
+    targetRegions?: SearchTargetRegion[];
+    workModes?: SearchWorkMode[];
+    preferredRoles?: string[];
+    allowedSources?: string[];
+    includeKeywords?: string[];
+    excludeKeywords?: string[];
+  };
+};
+
+export type SearchProfileBuildResult = {
+  analyzedProfile: {
+    summary: string;
+    primaryRole: string;
+    seniority: string;
+    skills: string[];
+    keywords: string[];
+    roleCandidates: EngineRoleCandidate[];
+    suggestedSearchTerms: string[];
+  };
+  searchProfile: {
+    primaryRole: string;
+    targetRoles: string[];
+    seniority: string;
+    targetRegions: SearchTargetRegion[];
+    workModes: SearchWorkMode[];
+    allowedSources: string[];
+    searchTerms: string[];
+    excludeTerms: string[];
+  };
 };
 
 async function mlRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -591,6 +681,58 @@ export async function getSources(): Promise<SourceCatalogItem[]> {
     id: source.id,
     displayName: source.display_name,
   }));
+}
+
+export async function getRoles(): Promise<RoleCatalogItem[]> {
+  const response = await request<EngineRoleCatalogResponse>('/api/v1/roles');
+  return response.roles.map((role) => ({
+    id: role.id,
+    displayName: role.display_name,
+    family: role.family,
+    deprecatedApiIds: role.deprecated_api_ids,
+    isFallback: role.is_fallback,
+  }));
+}
+
+export async function buildSearchProfile(
+  payload: SearchProfileBuildRequest,
+): Promise<SearchProfileBuildResult> {
+  const response = await request<EngineBuildSearchProfileResponse>(
+    '/api/v1/search-profile/build',
+    json('POST', {
+      raw_text: payload.rawText,
+      preferences: {
+        target_regions: payload.preferences?.targetRegions ?? [],
+        work_modes: payload.preferences?.workModes ?? [],
+        preferred_roles: payload.preferences?.preferredRoles ?? [],
+        allowed_sources: payload.preferences?.allowedSources ?? [],
+        include_keywords: payload.preferences?.includeKeywords ?? [],
+        exclude_keywords: payload.preferences?.excludeKeywords ?? [],
+      },
+    }),
+  );
+
+  return {
+    analyzedProfile: {
+      summary: response.analyzed_profile.summary,
+      primaryRole: response.analyzed_profile.primary_role,
+      seniority: response.analyzed_profile.seniority,
+      skills: response.analyzed_profile.skills,
+      keywords: response.analyzed_profile.keywords,
+      roleCandidates: response.analyzed_profile.role_candidates ?? [],
+      suggestedSearchTerms: response.analyzed_profile.suggested_search_terms ?? [],
+    },
+    searchProfile: {
+      primaryRole: response.search_profile.primary_role,
+      targetRoles: response.search_profile.target_roles,
+      seniority: response.search_profile.seniority,
+      targetRegions: response.search_profile.target_regions,
+      workModes: response.search_profile.work_modes,
+      allowedSources: response.search_profile.allowed_sources,
+      searchTerms: response.search_profile.search_terms,
+      excludeTerms: response.search_profile.exclude_terms,
+    },
+  };
 }
 
 export async function getJob(id: string): Promise<JobPosting> {
