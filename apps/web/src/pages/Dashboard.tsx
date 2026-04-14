@@ -39,6 +39,7 @@ import {
   removeCompanyWhitelist,
   getSources,
   rerankJobs,
+  unmarkJobBadFit,
 } from '../api';
 import { queryKeys } from '../queryKeys';
 
@@ -332,6 +333,21 @@ export default function Dashboard() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
       toast.success('Позначено як bad fit');
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
+  });
+
+  const unmarkBadFitMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      await unmarkJobBadFit(profileId, jobId);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      toast.success('Позначку bad fit знято');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
   });
@@ -663,14 +679,25 @@ export default function Dashboard() {
                   >
                     Hide
                   </button>
-                  <button
-                    className="ghostBtn"
-                    style={{ padding: '4px 10px', fontSize: 13 }}
-                    disabled={badFitMutation.isPending || !!isBadFit}
-                    onClick={() => badFitMutation.mutate(job.id)}
-                  >
-                    {isBadFit ? 'Bad fit' : 'Mark bad fit'}
-                  </button>
+                  {isBadFit ? (
+                    <button
+                      className="ghostBtn"
+                      style={{ padding: '4px 10px', fontSize: 13 }}
+                      disabled={unmarkBadFitMutation.isPending}
+                      onClick={() => unmarkBadFitMutation.mutate(job.id)}
+                    >
+                      {unmarkBadFitMutation.isPending ? '…' : 'Remove bad fit'}
+                    </button>
+                  ) : (
+                    <button
+                      className="ghostBtn"
+                      style={{ padding: '4px 10px', fontSize: 13 }}
+                      disabled={badFitMutation.isPending}
+                      onClick={() => badFitMutation.mutate(job.id)}
+                    >
+                      {badFitMutation.isPending ? '…' : 'Mark bad fit'}
+                    </button>
+                  )}
                   <button
                     className="ghostBtn"
                     style={{ padding: '4px 10px', fontSize: 13 }}

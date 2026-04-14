@@ -56,15 +56,15 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/api/v1/profiles/{id}/jobs/{job_id}/saved",
-            put(feedback::save_job),
+            put(feedback::save_job).delete(feedback::unsave_job),
         )
         .route(
             "/api/v1/profiles/{id}/jobs/{job_id}/hidden",
-            put(feedback::hide_job),
+            put(feedback::hide_job).delete(feedback::unhide_job),
         )
         .route(
             "/api/v1/profiles/{id}/jobs/{job_id}/bad-fit",
-            put(feedback::mark_job_bad_fit),
+            put(feedback::mark_job_bad_fit).delete(feedback::unmark_job_bad_fit),
         )
         .route(
             "/api/v1/profiles/{id}/companies/whitelist",

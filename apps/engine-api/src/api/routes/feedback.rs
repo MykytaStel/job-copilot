@@ -85,6 +85,71 @@ pub async fn mark_job_bad_fit(
     .await
 }
 
+pub async fn unsave_job(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    clear_job_feedback_flags(
+        state,
+        profile_id,
+        job_id,
+        JobFeedbackFlags {
+            saved: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+pub async fn unhide_job(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    clear_job_feedback_flags(
+        state,
+        profile_id,
+        job_id,
+        JobFeedbackFlags {
+            hidden: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+pub async fn unmark_job_bad_fit(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    clear_job_feedback_flags(
+        state,
+        profile_id,
+        job_id,
+        JobFeedbackFlags {
+            bad_fit: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+async fn clear_job_feedback_flags(
+    state: AppState,
+    profile_id: String,
+    job_id: String,
+    flags: JobFeedbackFlags,
+) -> Result<StatusCode, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+
+    state
+        .feedback_service
+        .clear_job_feedback(&profile_id, &job_id, flags)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn add_company_whitelist(
     State(state): State<AppState>,
     Path(profile_id): Path<String>,
@@ -229,7 +294,10 @@ mod tests {
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
     use crate::state::AppState;
 
-    use super::{add_company_blacklist, list_feedback, mark_job_bad_fit, save_job};
+    use super::{
+        add_company_blacklist, list_feedback, mark_job_bad_fit, save_job, unmark_job_bad_fit,
+        unhide_job, unsave_job,
+    };
 
     fn sample_profile() -> Profile {
         Profile {
@@ -371,5 +439,137 @@ mod tests {
         assert_eq!(response.companies.len(), 1);
         assert!(response.jobs[0].saved);
         assert_eq!(response.companies[0].status, "blacklist");
+    }
+
+    #[tokio::test]
+    async fn unsave_job_clears_saved_flag() {
+        let state = test_state().with_feedback_service(FeedbackService::for_tests(
+            FeedbackServiceStub::default().with_job_feedback(JobFeedbackRecord {
+                profile_id: "profile-1".to_string(),
+                job_id: "job-1".to_string(),
+                saved: true,
+                hidden: false,
+                bad_fit: false,
+                created_at: "2026-04-14T00:00:00Z".to_string(),
+                updated_at: "2026-04-14T00:00:00Z".to_string(),
+            }),
+        ));
+
+        unsave_job(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await
+        .expect("unsave should succeed");
+
+        let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
+            .await
+            .expect("listing feedback should succeed");
+
+        assert_eq!(overview.jobs.len(), 1);
+        assert!(!overview.jobs[0].saved, "saved should be cleared after unsave");
+    }
+
+    #[tokio::test]
+    async fn unhide_job_clears_hidden_flag() {
+        let state = test_state().with_feedback_service(FeedbackService::for_tests(
+            FeedbackServiceStub::default().with_job_feedback(JobFeedbackRecord {
+                profile_id: "profile-1".to_string(),
+                job_id: "job-1".to_string(),
+                saved: false,
+                hidden: true,
+                bad_fit: false,
+                created_at: "2026-04-14T00:00:00Z".to_string(),
+                updated_at: "2026-04-14T00:00:00Z".to_string(),
+            }),
+        ));
+
+        unhide_job(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await
+        .expect("unhide should succeed");
+
+        let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
+            .await
+            .expect("listing feedback should succeed");
+
+        assert_eq!(overview.jobs.len(), 1);
+        assert!(!overview.jobs[0].hidden, "hidden should be cleared after unhide");
+    }
+
+    #[tokio::test]
+    async fn unmark_bad_fit_clears_bad_fit_flag() {
+        let state = test_state().with_feedback_service(FeedbackService::for_tests(
+            FeedbackServiceStub::default().with_job_feedback(JobFeedbackRecord {
+                profile_id: "profile-1".to_string(),
+                job_id: "job-1".to_string(),
+                saved: false,
+                hidden: false,
+                bad_fit: true,
+                created_at: "2026-04-14T00:00:00Z".to_string(),
+                updated_at: "2026-04-14T00:00:00Z".to_string(),
+            }),
+        ));
+
+        unmark_job_bad_fit(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await
+        .expect("unmark bad fit should succeed");
+
+        let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
+            .await
+            .expect("listing feedback should succeed");
+
+        assert_eq!(overview.jobs.len(), 1);
+        assert!(!overview.jobs[0].bad_fit, "bad_fit should be cleared after unmark");
+    }
+
+    #[tokio::test]
+    async fn undo_on_nonexistent_feedback_succeeds_idempotently() {
+        // Clearing a flag when no feedback row exists should return 204, not an error.
+        let state = test_state();
+
+        let result = unsave_job(
+            State(state),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await;
+
+        assert!(result.is_ok(), "unsave on a job with no feedback should succeed");
+    }
+
+    #[tokio::test]
+    async fn undo_preserves_other_flags() {
+        // Unsaving should not clear hidden or bad_fit flags.
+        let state = test_state().with_feedback_service(FeedbackService::for_tests(
+            FeedbackServiceStub::default().with_job_feedback(JobFeedbackRecord {
+                profile_id: "profile-1".to_string(),
+                job_id: "job-1".to_string(),
+                saved: true,
+                hidden: true,
+                bad_fit: true,
+                created_at: "2026-04-14T00:00:00Z".to_string(),
+                updated_at: "2026-04-14T00:00:00Z".to_string(),
+            }),
+        ));
+
+        unsave_job(
+            State(state.clone()),
+            Path(("profile-1".to_string(), "job-1".to_string())),
+        )
+        .await
+        .expect("unsave should succeed");
+
+        let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
+            .await
+            .expect("listing feedback should succeed");
+
+        assert!(!overview.jobs[0].saved, "saved should be cleared");
+        assert!(overview.jobs[0].hidden, "hidden should be untouched");
+        assert!(overview.jobs[0].bad_fit, "bad_fit should be untouched");
     }
 }
