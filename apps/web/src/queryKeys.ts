@@ -66,9 +66,12 @@ export const queryKeys = {
   },
   analytics: {
     summary: (profileId: string) => ['analytics', 'summary', profileId] as const,
+    behavior: (profileId: string) => ['analytics', 'behavior', profileId] as const,
     funnel: (profileId: string) => ['analytics', 'funnel', profileId] as const,
     llmContext: (profileId: string) => ['analytics', 'llmContext', profileId] as const,
     profileInsights: (profileId: string, contextVersion: string) =>
       ['analytics', 'profileInsights', profileId, contextVersion] as const,
+    weeklyGuidance: (profileId: string, contextVersion: string) =>
+      ['analytics', 'weeklyGuidance', profileId, contextVersion] as const,
   },
 };

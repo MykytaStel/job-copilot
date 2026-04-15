@@ -14,8 +14,21 @@ import {
   Zap,
 } from 'lucide-react';
 
-import { getAnalyticsSummary, getFunnelSummary, getLlmContext, getProfileInsights } from '../api';
-import type { AnalyticsSummary, FunnelSummary, LlmContext, ProfileInsights } from '../api';
+import {
+  getAnalyticsSummary,
+  getBehaviorSummary,
+  getFunnelSummary,
+  getLlmContext,
+  getProfileInsights,
+  getWeeklyGuidance,
+} from '../api';
+import type {
+  AnalyticsSummary,
+  FunnelSummary,
+  LlmContext,
+  ProfileInsights,
+  WeeklyGuidance,
+} from '../api';
 import { queryKeys } from '../queryKeys';
 
 function readProfileId() {
@@ -572,6 +585,108 @@ function ProfileInsightsPanel({ insights }: { insights: ProfileInsights }) {
   );
 }
 
+function WeeklyGuidancePanel({ guidance }: { guidance: WeeklyGuidance }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Weekly summary</div>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--color-text-primary)' }}>
+          {guidance.weeklySummary || 'No weekly guidance generated yet.'}
+        </p>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 16,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+            What is working
+          </div>
+          <SimpleList
+            items={guidance.whatIsWorking}
+            empty="No positive patterns identified yet."
+            color="#b9fbc0"
+          />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+            What is not working
+          </div>
+          <SimpleList
+            items={guidance.whatIsNotWorking}
+            empty="No major weak signals identified yet."
+            color="#ffb4b4"
+          />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+            Funnel bottlenecks
+          </div>
+          <SimpleList
+            items={guidance.funnelBottlenecks}
+            empty="No funnel bottlenecks highlighted yet."
+            color="#ffd6a5"
+          />
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 16,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+            Search adjustments
+          </div>
+          <SimpleList
+            items={guidance.recommendedSearchAdjustments}
+            empty="No search changes suggested yet."
+            color="#95a7ff"
+          />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+            Source moves
+          </div>
+          <SimpleList
+            items={guidance.recommendedSourceMoves}
+            empty="No source shifts suggested yet."
+            color="#c9fff8"
+          />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+            Role focus
+          </div>
+          <SimpleList
+            items={guidance.recommendedRoleFocus}
+            empty="No role focus changes suggested yet."
+            color="#ffd6a5"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+          Next week plan
+        </div>
+        <SimpleList items={guidance.nextWeekPlan} empty="No plan generated yet." color="#95a7ff" />
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Analytics() {
@@ -580,6 +695,12 @@ export default function Analytics() {
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: queryKeys.analytics.summary(profileId ?? ''),
     queryFn: () => getAnalyticsSummary(profileId!),
+    enabled: !!profileId,
+  });
+
+  const { data: behavior, isLoading: behaviorLoading } = useQuery({
+    queryKey: queryKeys.analytics.behavior(profileId ?? ''),
+    queryFn: () => getBehaviorSummary(profileId!),
     enabled: !!profileId,
   });
 
@@ -608,6 +729,34 @@ export default function Analytics() {
     retry: 0,
   });
 
+  const weeklyGuidanceContextVersion =
+    summary && behavior && funnel && llmCtx
+      ? JSON.stringify({
+          summary,
+          behavior,
+          funnel,
+          llmCtx,
+        })
+      : '';
+
+  const {
+    data: weeklyGuidance,
+    isLoading: weeklyGuidanceLoading,
+    error: weeklyGuidanceError,
+  } = useQuery({
+    queryKey: queryKeys.analytics.weeklyGuidance(profileId ?? '', weeklyGuidanceContextVersion),
+    queryFn: () =>
+      getWeeklyGuidance({
+        profileId: profileId!,
+        analyticsSummary: summary!,
+        behaviorSummary: behavior!,
+        funnelSummary: funnel!,
+        llmContext: llmCtx!,
+      }),
+    enabled: !!profileId && !!summary && !!behavior && !!funnel && !!llmCtx,
+    retry: 0,
+  });
+
   if (!profileId) {
     return (
       <div className="jobDetails">
@@ -616,7 +765,7 @@ export default function Analytics() {
     );
   }
 
-  const isLoading = summaryLoading || funnelLoading || ctxLoading;
+  const isLoading = summaryLoading || behaviorLoading || funnelLoading || ctxLoading;
 
   return (
     <div className="jobDetails">
@@ -843,6 +992,22 @@ export default function Analytics() {
                 Deterministic payload — ready for Python enrichment
               </div>
               <LlmContextPanel ctx={llmCtx} />
+            </Section>
+          )}
+
+          {llmCtx && (
+            <Section title="Weekly Guidance" icon={<Brain size={16} />}>
+              {weeklyGuidanceLoading ? (
+                <p className="emptyState" style={{ margin: 0 }}>Generating weekly guidance…</p>
+              ) : weeklyGuidanceError ? (
+                <p className="emptyState" style={{ margin: 0 }}>
+                  {(weeklyGuidanceError as Error).message || 'Weekly guidance is unavailable right now.'}
+                </p>
+              ) : weeklyGuidance ? (
+                <WeeklyGuidancePanel guidance={weeklyGuidance} />
+              ) : (
+                <p className="emptyState" style={{ margin: 0 }}>No weekly guidance available yet.</p>
+              )}
             </Section>
           )}
 

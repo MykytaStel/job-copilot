@@ -48,6 +48,7 @@ from app.llm_provider import (
     build_interview_prep_provider,
     build_job_fit_explanation_provider,
     build_profile_insights_provider,
+    build_weekly_guidance_provider,
 )
 from app.profile_insights import (
     LlmContextRequest,
@@ -56,6 +57,13 @@ from app.profile_insights import (
     http_error_from_provider_error,
 )
 from app.profile_insights_service import ProfileInsightsService
+from app.weekly_guidance import (
+    WeeklyGuidanceProviderError,
+    WeeklyGuidanceRequest,
+    WeeklyGuidanceResponse,
+    http_error_from_weekly_guidance_error,
+)
+from app.weekly_guidance_service import WeeklyGuidanceService
 
 
 TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -192,6 +200,18 @@ def get_profile_insights_service() -> ProfileInsightsService:
         return build_cached_profile_insights_service()
     except ProfileInsightsProviderError as exc:
         raise http_error_from_provider_error(exc) from exc
+
+
+@lru_cache(maxsize=1)
+def build_cached_weekly_guidance_service() -> WeeklyGuidanceService:
+    return WeeklyGuidanceService(build_weekly_guidance_provider())
+
+
+def get_weekly_guidance_service() -> WeeklyGuidanceService:
+    try:
+        return build_cached_weekly_guidance_service()
+    except WeeklyGuidanceProviderError as exc:
+        raise http_error_from_weekly_guidance_error(exc) from exc
 
 
 def normalize_text(value: str) -> str:
@@ -442,3 +462,15 @@ async def enrich_interview_prep(
         return await service.enrich(payload)
     except InterviewPrepProviderError as exc:
         raise http_error_from_interview_prep_error(exc) from exc
+
+
+@app.post("/v1/enrichment/weekly-guidance", response_model=WeeklyGuidanceResponse)
+@app.post("/api/v1/enrichment/weekly-guidance", response_model=WeeklyGuidanceResponse)
+async def enrich_weekly_guidance(
+    payload: WeeklyGuidanceRequest,
+    service: WeeklyGuidanceService = Depends(get_weekly_guidance_service),
+) -> WeeklyGuidanceResponse:
+    try:
+        return await service.enrich(payload)
+    except WeeklyGuidanceProviderError as exc:
+        raise http_error_from_weekly_guidance_error(exc) from exc

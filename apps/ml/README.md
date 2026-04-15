@@ -15,6 +15,7 @@ This service now exposes a read-only Phase 9 integration layer:
 - compute heuristic fit analysis without writing to Postgres
 - rerank a provided list of jobs for a persisted profile
 - enrich deterministic analytics context with structured profile insights
+- generate structured weekly guidance grounded in deterministic analytics, behavior, and funnel summaries
 - generate structured application coaching for a deterministically ranked job
 - generate structured first-pass cover letter drafts grounded in deterministic job/profile context
 - generate structured interview prep packs grounded in deterministic job/profile context
@@ -116,6 +117,107 @@ curl \
       { "type": "saved_job", "label": "job_backend_rust_001" }
     ],
     "top_negative_evidence": []
+  }'
+```
+
+Generate additive weekly guidance from deterministic analytics, behavior, and funnel summaries:
+
+```bash
+curl \
+  -X POST http://localhost:8000/v1/enrichment/weekly-guidance \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile_id": "profile_test_001",
+    "analytics_summary": {
+      "feedback": {
+        "saved_jobs_count": 6,
+        "hidden_jobs_count": 2,
+        "bad_fit_jobs_count": 1,
+        "whitelisted_companies_count": 1,
+        "blacklisted_companies_count": 0
+      },
+      "jobs_by_source": [
+        { "source": "djinni", "count": 42 }
+      ],
+      "jobs_by_lifecycle": {
+        "total": 120,
+        "active": 90,
+        "inactive": 20,
+        "reactivated": 10
+      },
+      "top_matched_roles": ["backend_developer"],
+      "top_matched_skills": ["rust", "postgres"],
+      "top_matched_keywords": ["backend", "distributed systems"]
+    },
+    "behavior_summary": {
+      "search_run_count": 5,
+      "top_positive_sources": [
+        {
+          "key": "djinni",
+          "save_count": 4,
+          "hide_count": 0,
+          "bad_fit_count": 0,
+          "application_created_count": 1,
+          "positive_count": 5,
+          "negative_count": 0,
+          "net_score": 6
+        }
+      ],
+      "top_negative_sources": [],
+      "top_positive_role_families": [],
+      "top_negative_role_families": [],
+      "source_signal_counts": [],
+      "role_family_signal_counts": []
+    },
+    "funnel_summary": {
+      "impression_count": 30,
+      "open_count": 12,
+      "save_count": 4,
+      "hide_count": 2,
+      "bad_fit_count": 1,
+      "application_created_count": 1,
+      "fit_explanation_requested_count": 3,
+      "application_coach_requested_count": 2,
+      "cover_letter_draft_requested_count": 1,
+      "interview_prep_requested_count": 1,
+      "conversion_rates": {
+        "open_rate_from_impressions": 0.4,
+        "save_rate_from_opens": 0.333,
+        "application_rate_from_saves": 0.25
+      },
+      "impressions_by_source": [{ "source": "djinni", "count": 20 }],
+      "opens_by_source": [{ "source": "djinni", "count": 10 }],
+      "saves_by_source": [{ "source": "djinni", "count": 4 }],
+      "applications_by_source": [{ "source": "djinni", "count": 1 }]
+    },
+    "llm_context": {
+      "analyzed_profile": {
+        "summary": "Senior backend engineer with Rust experience",
+        "primary_role": "backend_developer",
+        "seniority": "senior",
+        "skills": ["rust", "postgres"],
+        "keywords": ["backend", "distributed systems"]
+      },
+      "profile_skills": ["rust", "postgres"],
+      "profile_keywords": ["backend", "distributed systems"],
+      "jobs_feed_summary": {
+        "total": 120,
+        "active": 90,
+        "inactive": 20,
+        "reactivated": 10
+      },
+      "feedback_summary": {
+        "saved_jobs_count": 6,
+        "hidden_jobs_count": 2,
+        "bad_fit_jobs_count": 1,
+        "whitelisted_companies_count": 1,
+        "blacklisted_companies_count": 0
+      },
+      "top_positive_evidence": [
+        { "type": "saved_job", "label": "job_backend_rust_001" }
+      ],
+      "top_negative_evidence": []
+    }
   }'
 ```
 
