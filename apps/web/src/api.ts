@@ -1489,6 +1489,28 @@ type EngineFunnelSummaryResponse = {
   applications_by_source: EngineFunnelSourceCountEntry[];
 };
 
+type EngineBehaviorSignalCountResponse = {
+  key: string;
+  save_count: number;
+  hide_count: number;
+  bad_fit_count: number;
+  application_created_count: number;
+  positive_count: number;
+  negative_count: number;
+  net_score: number;
+};
+
+type EngineBehaviorSummaryResponse = {
+  profile_id: string;
+  search_run_count: number;
+  top_positive_sources: EngineBehaviorSignalCountResponse[];
+  top_negative_sources: EngineBehaviorSignalCountResponse[];
+  top_positive_role_families: EngineBehaviorSignalCountResponse[];
+  top_negative_role_families: EngineBehaviorSignalCountResponse[];
+  source_signal_counts: EngineBehaviorSignalCountResponse[];
+  role_family_signal_counts: EngineBehaviorSignalCountResponse[];
+};
+
 type EngineLlmContextAnalyzedProfile = {
   summary: string;
   primary_role: string;
@@ -1564,6 +1586,17 @@ type MlInterviewPrepResponse = {
   follow_up_plan: string[];
 };
 
+type MlWeeklyGuidanceResponse = {
+  weekly_summary: string;
+  what_is_working: string[];
+  what_is_not_working: string[];
+  recommended_search_adjustments: string[];
+  recommended_source_moves: string[];
+  recommended_role_focus: string[];
+  funnel_bottlenecks: string[];
+  next_week_plan: string[];
+};
+
 export type JobsBySourceEntry = {
   source: string;
   count: number;
@@ -1592,6 +1625,28 @@ export type AnalyticsSummary = {
   topMatchedRoles: string[];
   topMatchedSkills: string[];
   topMatchedKeywords: string[];
+};
+
+export type BehaviorSignalCount = {
+  key: string;
+  saveCount: number;
+  hideCount: number;
+  badFitCount: number;
+  applicationCreatedCount: number;
+  positiveCount: number;
+  negativeCount: number;
+  netScore: number;
+};
+
+export type BehaviorSummary = {
+  profileId: string;
+  searchRunCount: number;
+  topPositiveSources: BehaviorSignalCount[];
+  topNegativeSources: BehaviorSignalCount[];
+  topPositiveRoleFamilies: BehaviorSignalCount[];
+  topNegativeRoleFamilies: BehaviorSignalCount[];
+  sourceSignalCounts: BehaviorSignalCount[];
+  roleFamilySignalCounts: BehaviorSignalCount[];
 };
 
 export type FunnelSourceCountEntry = {
@@ -1699,6 +1754,25 @@ export type InterviewPrep = {
   followUpPlan: string[];
 };
 
+export type WeeklyGuidance = {
+  weeklySummary: string;
+  whatIsWorking: string[];
+  whatIsNotWorking: string[];
+  recommendedSearchAdjustments: string[];
+  recommendedSourceMoves: string[];
+  recommendedRoleFocus: string[];
+  funnelBottlenecks: string[];
+  nextWeekPlan: string[];
+};
+
+export type WeeklyGuidanceRequest = {
+  profileId: string;
+  analyticsSummary: AnalyticsSummary;
+  behaviorSummary: BehaviorSummary;
+  funnelSummary: FunnelSummary;
+  llmContext: LlmContext;
+};
+
 export type JobFitExplanationRequest = {
   profileId: string;
   analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
@@ -1778,6 +1852,21 @@ function mapJobsByLifecycle(l: EngineJobsByLifecycle): JobsByLifecycle {
   return { total: l.total, active: l.active, inactive: l.inactive, reactivated: l.reactivated };
 }
 
+function mapBehaviorSignalCount(
+  signal: EngineBehaviorSignalCountResponse,
+): BehaviorSignalCount {
+  return {
+    key: signal.key,
+    saveCount: signal.save_count,
+    hideCount: signal.hide_count,
+    badFitCount: signal.bad_fit_count,
+    applicationCreatedCount: signal.application_created_count,
+    positiveCount: signal.positive_count,
+    negativeCount: signal.negative_count,
+    netScore: signal.net_score,
+  };
+}
+
 export async function getAnalyticsSummary(profileId: string): Promise<AnalyticsSummary> {
   const response = await request<EngineAnalyticsSummaryResponse>(
     `/api/v1/profiles/${profileId}/analytics/summary`,
@@ -1791,6 +1880,23 @@ export async function getAnalyticsSummary(profileId: string): Promise<AnalyticsS
     topMatchedRoles: response.top_matched_roles,
     topMatchedSkills: response.top_matched_skills,
     topMatchedKeywords: response.top_matched_keywords,
+  };
+}
+
+export async function getBehaviorSummary(profileId: string): Promise<BehaviorSummary> {
+  const response = await request<EngineBehaviorSummaryResponse>(
+    `/api/v1/profiles/${profileId}/behavior-summary`,
+  );
+
+  return {
+    profileId: response.profile_id,
+    searchRunCount: response.search_run_count,
+    topPositiveSources: response.top_positive_sources.map(mapBehaviorSignalCount),
+    topNegativeSources: response.top_negative_sources.map(mapBehaviorSignalCount),
+    topPositiveRoleFamilies: response.top_positive_role_families.map(mapBehaviorSignalCount),
+    topNegativeRoleFamilies: response.top_negative_role_families.map(mapBehaviorSignalCount),
+    sourceSignalCounts: response.source_signal_counts.map(mapBehaviorSignalCount),
+    roleFamilySignalCounts: response.role_family_signal_counts.map(mapBehaviorSignalCount),
   };
 }
 
@@ -1897,6 +2003,180 @@ export async function getProfileInsights(context: LlmContext): Promise<ProfileIn
     topFocusAreas: response.top_focus_areas,
     searchTermSuggestions: response.search_term_suggestions,
     applicationStrategy: response.application_strategy,
+  };
+}
+
+export async function getWeeklyGuidance(
+  payload: WeeklyGuidanceRequest,
+): Promise<WeeklyGuidance> {
+  const response = await mlRequest<MlWeeklyGuidanceResponse>('/v1/enrichment/weekly-guidance', {
+    method: 'POST',
+    body: JSON.stringify({
+      profile_id: payload.profileId,
+      analytics_summary: {
+        feedback: {
+          saved_jobs_count: payload.analyticsSummary.feedback.savedJobsCount,
+          hidden_jobs_count: payload.analyticsSummary.feedback.hiddenJobsCount,
+          bad_fit_jobs_count: payload.analyticsSummary.feedback.badFitJobsCount,
+          whitelisted_companies_count: payload.analyticsSummary.feedback.whitelistedCompaniesCount,
+          blacklisted_companies_count: payload.analyticsSummary.feedback.blacklistedCompaniesCount,
+        },
+        jobs_by_source: payload.analyticsSummary.jobsBySource.map((entry) => ({
+          source: entry.source,
+          count: entry.count,
+        })),
+        jobs_by_lifecycle: {
+          total: payload.analyticsSummary.jobsByLifecycle.total,
+          active: payload.analyticsSummary.jobsByLifecycle.active,
+          inactive: payload.analyticsSummary.jobsByLifecycle.inactive,
+          reactivated: payload.analyticsSummary.jobsByLifecycle.reactivated,
+        },
+        top_matched_roles: payload.analyticsSummary.topMatchedRoles,
+        top_matched_skills: payload.analyticsSummary.topMatchedSkills,
+        top_matched_keywords: payload.analyticsSummary.topMatchedKeywords,
+      },
+      behavior_summary: {
+        search_run_count: payload.behaviorSummary.searchRunCount,
+        top_positive_sources: payload.behaviorSummary.topPositiveSources.map((signal) => ({
+          key: signal.key,
+          save_count: signal.saveCount,
+          hide_count: signal.hideCount,
+          bad_fit_count: signal.badFitCount,
+          application_created_count: signal.applicationCreatedCount,
+          positive_count: signal.positiveCount,
+          negative_count: signal.negativeCount,
+          net_score: signal.netScore,
+        })),
+        top_negative_sources: payload.behaviorSummary.topNegativeSources.map((signal) => ({
+          key: signal.key,
+          save_count: signal.saveCount,
+          hide_count: signal.hideCount,
+          bad_fit_count: signal.badFitCount,
+          application_created_count: signal.applicationCreatedCount,
+          positive_count: signal.positiveCount,
+          negative_count: signal.negativeCount,
+          net_score: signal.netScore,
+        })),
+        top_positive_role_families: payload.behaviorSummary.topPositiveRoleFamilies.map((signal) => ({
+          key: signal.key,
+          save_count: signal.saveCount,
+          hide_count: signal.hideCount,
+          bad_fit_count: signal.badFitCount,
+          application_created_count: signal.applicationCreatedCount,
+          positive_count: signal.positiveCount,
+          negative_count: signal.negativeCount,
+          net_score: signal.netScore,
+        })),
+        top_negative_role_families: payload.behaviorSummary.topNegativeRoleFamilies.map((signal) => ({
+          key: signal.key,
+          save_count: signal.saveCount,
+          hide_count: signal.hideCount,
+          bad_fit_count: signal.badFitCount,
+          application_created_count: signal.applicationCreatedCount,
+          positive_count: signal.positiveCount,
+          negative_count: signal.negativeCount,
+          net_score: signal.netScore,
+        })),
+        source_signal_counts: payload.behaviorSummary.sourceSignalCounts.map((signal) => ({
+          key: signal.key,
+          save_count: signal.saveCount,
+          hide_count: signal.hideCount,
+          bad_fit_count: signal.badFitCount,
+          application_created_count: signal.applicationCreatedCount,
+          positive_count: signal.positiveCount,
+          negative_count: signal.negativeCount,
+          net_score: signal.netScore,
+        })),
+        role_family_signal_counts: payload.behaviorSummary.roleFamilySignalCounts.map((signal) => ({
+          key: signal.key,
+          save_count: signal.saveCount,
+          hide_count: signal.hideCount,
+          bad_fit_count: signal.badFitCount,
+          application_created_count: signal.applicationCreatedCount,
+          positive_count: signal.positiveCount,
+          negative_count: signal.negativeCount,
+          net_score: signal.netScore,
+        })),
+      },
+      funnel_summary: {
+        impression_count: payload.funnelSummary.impressionCount,
+        open_count: payload.funnelSummary.openCount,
+        save_count: payload.funnelSummary.saveCount,
+        hide_count: payload.funnelSummary.hideCount,
+        bad_fit_count: payload.funnelSummary.badFitCount,
+        application_created_count: payload.funnelSummary.applicationCreatedCount,
+        fit_explanation_requested_count: payload.funnelSummary.fitExplanationRequestedCount,
+        application_coach_requested_count: payload.funnelSummary.applicationCoachRequestedCount,
+        cover_letter_draft_requested_count: payload.funnelSummary.coverLetterDraftRequestedCount,
+        interview_prep_requested_count: payload.funnelSummary.interviewPrepRequestedCount,
+        conversion_rates: {
+          open_rate_from_impressions: payload.funnelSummary.conversionRates.openRateFromImpressions,
+          save_rate_from_opens: payload.funnelSummary.conversionRates.saveRateFromOpens,
+          application_rate_from_saves: payload.funnelSummary.conversionRates.applicationRateFromSaves,
+        },
+        impressions_by_source: payload.funnelSummary.impressionsBySource.map((entry) => ({
+          source: entry.source,
+          count: entry.count,
+        })),
+        opens_by_source: payload.funnelSummary.opensBySource.map((entry) => ({
+          source: entry.source,
+          count: entry.count,
+        })),
+        saves_by_source: payload.funnelSummary.savesBySource.map((entry) => ({
+          source: entry.source,
+          count: entry.count,
+        })),
+        applications_by_source: payload.funnelSummary.applicationsBySource.map((entry) => ({
+          source: entry.source,
+          count: entry.count,
+        })),
+      },
+      llm_context: {
+        analyzed_profile: payload.llmContext.analyzedProfile
+          ? {
+              summary: payload.llmContext.analyzedProfile.summary,
+              primary_role: payload.llmContext.analyzedProfile.primaryRole,
+              seniority: payload.llmContext.analyzedProfile.seniority,
+              skills: payload.llmContext.analyzedProfile.skills,
+              keywords: payload.llmContext.analyzedProfile.keywords,
+            }
+          : null,
+        profile_skills: payload.llmContext.profileSkills,
+        profile_keywords: payload.llmContext.profileKeywords,
+        jobs_feed_summary: {
+          total: payload.llmContext.jobsFeedSummary.total,
+          active: payload.llmContext.jobsFeedSummary.active,
+          inactive: payload.llmContext.jobsFeedSummary.inactive,
+          reactivated: payload.llmContext.jobsFeedSummary.reactivated,
+        },
+        feedback_summary: {
+          saved_jobs_count: payload.llmContext.feedbackSummary.savedJobsCount,
+          hidden_jobs_count: payload.llmContext.feedbackSummary.hiddenJobsCount,
+          bad_fit_jobs_count: payload.llmContext.feedbackSummary.badFitJobsCount,
+          whitelisted_companies_count: payload.llmContext.feedbackSummary.whitelistedCompaniesCount,
+          blacklisted_companies_count: payload.llmContext.feedbackSummary.blacklistedCompaniesCount,
+        },
+        top_positive_evidence: payload.llmContext.topPositiveEvidence.map((entry) => ({
+          type: entry.type,
+          label: entry.label,
+        })),
+        top_negative_evidence: payload.llmContext.topNegativeEvidence.map((entry) => ({
+          type: entry.type,
+          label: entry.label,
+        })),
+      },
+    }),
+  });
+
+  return {
+    weeklySummary: response.weekly_summary,
+    whatIsWorking: response.what_is_working,
+    whatIsNotWorking: response.what_is_not_working,
+    recommendedSearchAdjustments: response.recommended_search_adjustments,
+    recommendedSourceMoves: response.recommended_source_moves,
+    recommendedRoleFocus: response.recommended_role_focus,
+    funnelBottlenecks: response.funnel_bottlenecks,
+    nextWeekPlan: response.next_week_plan,
   };
 }
 
