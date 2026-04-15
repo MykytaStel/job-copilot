@@ -19,7 +19,7 @@ async fn main() {
     let database = Database::from_config(&config)
         .await
         .expect("Failed to initialize Postgres foundation");
-    let state = AppState::new(database);
+    let state = AppState::new_with_config(database, &config);
     let app = api::build_router(state);
 
     let address = format!("0.0.0.0:{}", config.port);

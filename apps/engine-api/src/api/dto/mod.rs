@@ -6,6 +6,7 @@ pub mod feedback;
 pub mod jobs;
 pub mod profile;
 pub mod ranking;
+pub mod reranker_dataset;
 pub mod resumes;
 pub mod roles;
 pub mod search;

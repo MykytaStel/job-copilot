@@ -6,6 +6,7 @@ pub mod feedback;
 pub mod health;
 pub mod jobs;
 pub mod profile;
+pub mod reranker_dataset;
 pub mod resumes;
 pub mod roles;
 pub mod search;
@@ -59,6 +60,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/profiles/{id}/feedback",
             get(feedback::list_feedback),
+        )
+        .route(
+            "/api/v1/profiles/{id}/reranker-dataset",
+            get(reranker_dataset::get_reranker_dataset),
         )
         .route("/api/v1/profiles/{id}/events", post(events::log_user_event))
         .route(

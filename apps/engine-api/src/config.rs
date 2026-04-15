@@ -3,6 +3,7 @@ pub struct Config {
     pub database_url: Option<String>,
     pub database_max_connections: u32,
     pub run_db_migrations: bool,
+    pub learned_reranker_enabled: bool,
 }
 
 impl Config {
@@ -24,12 +25,18 @@ impl Config {
             .as_deref()
             .map(parse_bool)
             .unwrap_or(true);
+        let learned_reranker_enabled = std::env::var("LEARNED_RERANKER_ENABLED")
+            .ok()
+            .as_deref()
+            .map(parse_bool)
+            .unwrap_or(true);
 
         Self {
             port,
             database_url,
             database_max_connections,
             run_db_migrations,
+            learned_reranker_enabled,
         }
     }
 }

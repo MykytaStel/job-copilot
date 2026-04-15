@@ -19,6 +19,7 @@ This service now exposes a read-only Phase 9 integration layer:
 - generate structured application coaching for a deterministically ranked job
 - generate structured first-pass cover letter drafts grounded in deterministic job/profile context
 - generate structured interview prep packs grounded in deterministic job/profile context
+- evaluate exported reranker outcome datasets offline without training or loading a model
 
 ## Runtime
 
@@ -81,6 +82,12 @@ curl \
       "job_frontend_react_001"
     ]
   }'
+```
+
+Evaluate a reranker outcome dataset exported by `engine-api`:
+
+```bash
+python -m app.reranker_evaluation /path/to/reranker-dataset.json --top-n 10
 ```
 
 Generate additive profile insights from deterministic analytics context:
