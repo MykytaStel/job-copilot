@@ -1,5 +1,6 @@
 use axum::extract::{Path, Query, State};
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::api::dto::applications::{
     ActivityResponse, ApplicationContactResponse, ApplicationDetailResponse, ApplicationResponse,
@@ -8,6 +9,9 @@ use crate::api::dto::applications::{
     RecentApplicationsResponse, UpdateApplicationRequest, UpsertOfferRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
+use crate::api::routes::events::{load_job_event_metadata, log_user_event_softly};
+use crate::api::routes::feedback::ensure_profile_exists;
+use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -63,22 +67,33 @@ pub async fn create_application(
     ApiJson(payload): ApiJson<CreateApplicationRequest>,
 ) -> Result<(axum::http::StatusCode, axum::Json<ApplicationResponse>), ApiError> {
     let payload = payload.validate()?;
+    let profile_id = payload.profile_id.clone();
 
     let Some(_) = state
         .jobs_service
-        .get_by_id(&payload.job_id)
+        .get_by_id(&payload.application.job_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "applications_query_failed"))?
     else {
         return Err(ApiError::not_found(
             "job_not_found",
-            format!("Job '{}' was not found", payload.job_id),
+            format!("Job '{}' was not found", payload.application.job_id),
         ));
+    };
+
+    if let Some(profile_id) = profile_id.as_deref() {
+        ensure_profile_exists(&state, profile_id).await?;
+    }
+
+    let event_metadata = if profile_id.is_some() {
+        Some(load_job_event_metadata(&state, &payload.application.job_id).await?)
+    } else {
+        None
     };
 
     let mut application = state
         .applications_service
-        .create(payload)
+        .create(payload.application)
         .await
         .map_err(|error| ApiError::from_repository(error, "applications_query_failed"))?;
 
@@ -94,6 +109,26 @@ pub async fn create_application(
             .map_err(|error| ApiError::from_repository(error, "applications_query_failed"))?
     {
         application = updated;
+    }
+
+    if let Some(profile_id) = profile_id {
+        let metadata = event_metadata.unwrap_or_default();
+        log_user_event_softly(
+            &state,
+            CreateUserEvent {
+                profile_id,
+                event_type: UserEventType::ApplicationCreated,
+                job_id: Some(application.job_id.clone()),
+                company_name: metadata.company_name,
+                source: metadata.source,
+                role_family: metadata.role_family,
+                payload_json: Some(json!({
+                    "application_id": application.id,
+                    "status": application.status,
+                })),
+            },
+        )
+        .await;
     }
 
     Ok((
@@ -319,10 +354,13 @@ mod tests {
     use crate::api::error::ApiJson;
     use crate::domain::application::model::{Application, Contact};
     use crate::domain::job::model::Job;
+    use crate::domain::profile::model::Profile;
+    use crate::domain::user_event::model::UserEventType;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
+    use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
     use crate::state::AppState;
 
     use super::{
@@ -357,6 +395,23 @@ mod tests {
             applied_at: None,
             due_date: None,
             updated_at: "2026-04-11T00:00:00Z".to_string(),
+        }
+    }
+
+    fn sample_profile() -> Profile {
+        Profile {
+            id: "profile-1".to_string(),
+            name: "Jane Doe".to_string(),
+            email: "jane@example.com".to_string(),
+            location: Some("Kyiv".to_string()),
+            raw_text: "Senior backend engineer with Rust".to_string(),
+            analysis: None,
+            salary_min_usd: None,
+            salary_max_usd: None,
+            preferred_work_mode: None,
+            created_at: "2026-04-11T00:00:00Z".to_string(),
+            updated_at: "2026-04-11T00:00:00Z".to_string(),
+            skills_updated_at: None,
         }
     }
 
@@ -468,12 +523,59 @@ mod tests {
                 job_id: "job-1".to_string(),
                 status: "saved".to_string(),
                 applied_at: None,
+                profile_id: None,
             }),
         )
         .await
         .expect("handler should create application");
 
         assert_eq!(result.0, StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn creates_profile_scoped_application_event_when_profile_id_is_provided() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(JobsServiceStub::default().with_job(sample_job())),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default(),
+        ));
+
+        let (status, Json(application)) = create_application(
+            State(state.clone()),
+            ApiJson(crate::api::dto::applications::CreateApplicationRequest {
+                job_id: "job-1".to_string(),
+                status: "saved".to_string(),
+                applied_at: None,
+                profile_id: Some("profile-1".to_string()),
+            }),
+        )
+        .await
+        .expect("handler should create application");
+
+        assert_eq!(status, StatusCode::CREATED);
+
+        let events = state
+            .user_events_service
+            .list_by_profile("profile-1")
+            .await
+            .expect("event query should succeed");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, UserEventType::ApplicationCreated);
+        assert_eq!(events[0].job_id.as_deref(), Some("job-1"));
+        assert_eq!(
+            events[0]
+                .payload_json
+                .as_ref()
+                .and_then(|payload| payload.get("application_id"))
+                .and_then(|value| value.as_str()),
+            Some(application.id.as_str())
+        );
     }
 
     #[tokio::test]

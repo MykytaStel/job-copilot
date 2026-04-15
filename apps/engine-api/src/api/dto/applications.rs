@@ -15,6 +15,8 @@ pub struct CreateApplicationRequest {
     pub job_id: String,
     pub status: String,
     pub applied_at: Option<String>,
+    #[serde(default)]
+    pub profile_id: Option<String>,
 }
 
 #[derive(Default, Deserialize)]
@@ -166,12 +168,20 @@ pub struct ContactsResponse {
     pub contacts: Vec<ContactResponse>,
 }
 
+pub struct ValidatedCreateApplicationRequest {
+    pub application: CreateApplication,
+    pub profile_id: Option<String>,
+}
+
 impl CreateApplicationRequest {
-    pub fn validate(self) -> Result<CreateApplication, ApiError> {
-        Ok(CreateApplication {
-            job_id: validate_required("job_id", self.job_id)?,
-            status: validate_status(self.status)?,
-            applied_at: self.applied_at,
+    pub fn validate(self) -> Result<ValidatedCreateApplicationRequest, ApiError> {
+        Ok(ValidatedCreateApplicationRequest {
+            application: CreateApplication {
+                job_id: validate_required("job_id", self.job_id)?,
+                status: validate_status(self.status)?,
+                applied_at: self.applied_at,
+            },
+            profile_id: validate_optional_trimmed(self.profile_id),
         })
     }
 }

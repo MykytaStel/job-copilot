@@ -51,6 +51,13 @@ Jobs without one of these signals are not exported as labeled examples.
 
 The policy intentionally treats application creation as the strongest positive outcome. Negative feedback outranks save-only feedback when a job has both saved and hidden/bad-fit history, because explicit rejection is a stronger training signal than prior interest.
 
+An export with `"examples": []` is valid when a profile has no labelable job outcomes yet.
+It can be evaluated defensively, but it cannot train `trained_reranker_v2`.
+
+Application records are not global training labels. `POST /api/v1/applications` emits the
+`application_created` outcome only when the request includes `profile_id`, preserving the
+profile-scoped dataset contract.
+
 ## Offline evaluation
 
 `apps/ml/app/reranker_evaluation.py` evaluates an exported dataset without calling an LLM or training a model.
@@ -107,6 +114,22 @@ python -m app.trained_reranker \
   --output ./models/profile-1-trained-reranker-v2.json \
   --top-n 10
 ```
+
+Repo automation:
+
+```bash
+PROFILE_ID=<profile-id> pnpm train:reranker:v2
+```
+
+This exports the profile dataset, validates label counts, trains a candidate artifact, evaluates
+it, then promotes `apps/ml/models/trained-reranker-v2.json`. For Docker:
+
+```bash
+PROFILE_ID=<profile-id> pnpm train:reranker:v2:docker
+```
+
+The Docker command restarts `engine-api` with `TRAINED_RERANKER_ENABLED=true` and the promoted
+artifact mounted at `/app/models/trained-reranker-v2.json`.
 
 ## Optional live integration
 

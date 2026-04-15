@@ -100,6 +100,46 @@ python -m app.trained_reranker \
   --top-n 10
 ```
 
+Training requires at least one labeled example in the export. A dataset with `"examples": []`
+is valid for evaluation, but it cannot train a model. Create profile/job outcome signals first
+by saving a job, hiding a job, marking a job bad-fit, or creating an application, then export
+`GET /api/v1/profiles/:id/reranker-dataset` again.
+
+Automated local training loop from the repo root:
+
+```bash
+PROFILE_ID=<profile-id> pnpm train:reranker:v2
+```
+
+The script:
+- exports `apps/ml/reranker-dataset.json`
+- validates minimum label counts
+- trains a candidate model
+- evaluates it with the trained ordering enabled
+- promotes it to `apps/ml/models/trained-reranker-v2.json`
+- writes reports under `apps/ml/reports/`
+
+Useful knobs:
+
+```bash
+PROFILE_ID=<profile-id> \
+MIN_EXAMPLES=20 \
+MIN_POSITIVE=3 \
+MIN_MEDIUM=3 \
+MIN_NEGATIVE=5 \
+TOP_N=10 \
+pnpm train:reranker:v2
+```
+
+For a local Docker stack, train and restart `engine-api` with the promoted model enabled:
+
+```bash
+PROFILE_ID=<profile-id> pnpm train:reranker:v2:docker
+```
+
+The Docker stack mounts `apps/ml/models` into `engine-api` at `/app/models`. The trained
+reranker layer remains disabled by default unless `TRAINED_RERANKER_ENABLED=true` is set.
+
 Evaluate an exported dataset with the trained model as an additional ordering:
 
 ```bash

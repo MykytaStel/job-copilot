@@ -9,6 +9,7 @@ INSERT INTO jobs (
     salary_max,
     salary_currency,
     posted_at,
+    first_seen_at,
     last_seen_at,
     is_active
 )
@@ -24,6 +25,7 @@ VALUES
         7200,
         'USD',
         '2026-04-02T09:00:00Z',
+        '2026-04-02T09:00:00Z',
         '2026-04-10T08:30:00Z',
         TRUE
     ),
@@ -38,6 +40,7 @@ VALUES
         4300,
         'USD',
         '2026-04-04T10:15:00Z',
+        '2026-04-04T10:15:00Z',
         '2026-04-09T14:20:00Z',
         TRUE
     ),
@@ -51,6 +54,7 @@ VALUES
         4500,
         6000,
         'USD',
+        '2026-04-01T07:45:00Z',
         '2026-04-01T07:45:00Z',
         '2026-04-08T16:00:00Z',
         TRUE

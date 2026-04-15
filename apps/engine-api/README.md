@@ -169,7 +169,8 @@ curl \
   -H "Content-Type: application/json" \
   -d '{
     "job_id": "job_backend_rust_001",
-    "status": "saved"
+    "status": "saved",
+    "profile_id": "'$PROFILE_ID'"
   }'
 
 export APPLICATION_ID=<application-id>
@@ -184,6 +185,10 @@ curl \
 
 curl http://localhost:8080/api/v1/applications/$APPLICATION_ID
 ```
+
+`profile_id` is optional for application persistence. When provided, application creation also
+emits a profile-scoped `application_created` user event, which makes the job eligible for
+`GET /api/v1/profiles/:id/reranker-dataset` as a positive training example.
 
 Resume and match flows:
 
@@ -226,7 +231,7 @@ pnpm verify:phase8:db
 ```
 
 What the script does:
-- starts local Postgres via `infra/docker-compose.postgres.yml`
+- starts an isolated local Postgres container for the verification run
 - runs `engine-api` with migrations enabled
 - seeds demo data
 - verifies `search_vector` backfill and trigger updates directly in Postgres
@@ -234,6 +239,8 @@ What the script does:
 
 Useful flags:
 - `KEEP_POSTGRES=1 pnpm verify:phase8:db` keeps the Postgres container running after verification
+- by default the verification script uses `PGPORT=15432` to avoid collisions with the local app stack
+- `PGPORT=15433 pnpm verify:phase8:db` runs the verification Postgres on a different local port
 - by default the verification script uses `PORT=18080` to avoid collisions with local dev servers
 - `PORT=18081 pnpm verify:phase8:db` runs `engine-api` on a different local port
 
