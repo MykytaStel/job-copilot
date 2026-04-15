@@ -124,6 +124,8 @@ pub struct SearchRunMetaResponse {
     pub returned_jobs: usize,
     pub learned_reranker_enabled: bool,
     pub learned_reranker_adjusted_jobs: usize,
+    pub trained_reranker_enabled: bool,
+    pub trained_reranker_adjusted_jobs: usize,
 }
 
 impl RunSearchRequest {
@@ -214,6 +216,8 @@ impl RunSearchResponse {
                 returned_jobs,
                 learned_reranker_enabled: false,
                 learned_reranker_adjusted_jobs: 0,
+                trained_reranker_enabled: false,
+                trained_reranker_adjusted_jobs: 0,
             },
         }
     }

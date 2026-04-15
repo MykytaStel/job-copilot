@@ -4,6 +4,8 @@ pub struct Config {
     pub database_max_connections: u32,
     pub run_db_migrations: bool,
     pub learned_reranker_enabled: bool,
+    pub trained_reranker_enabled: bool,
+    pub trained_reranker_model_path: Option<String>,
 }
 
 impl Config {
@@ -30,6 +32,15 @@ impl Config {
             .as_deref()
             .map(parse_bool)
             .unwrap_or(true);
+        let trained_reranker_enabled = std::env::var("TRAINED_RERANKER_ENABLED")
+            .ok()
+            .as_deref()
+            .map(parse_bool)
+            .unwrap_or(false);
+        let trained_reranker_model_path = std::env::var("TRAINED_RERANKER_MODEL_PATH")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
 
         Self {
             port,
@@ -37,6 +48,8 @@ impl Config {
             database_max_connections,
             run_db_migrations,
             learned_reranker_enabled,
+            trained_reranker_enabled,
+            trained_reranker_model_path,
         }
     }
 }

@@ -155,6 +155,22 @@ The layer is gated by `LEARNED_RERANKER_ENABLED` and defaults to enabled. `/api/
 - `learned_reranker_enabled`
 - `learned_reranker_adjusted_jobs`
 
+## Trained reranker v2
+
+`engine-api` can optionally apply a trained reranker v2 JSON artifact after learned reranker v1.
+This is an experimental additive layer only: deterministic ranking, explicit feedback scoring,
+behavior scoring, and learned reranker v1 remain intact.
+
+The layer is gated separately and defaults to disabled:
+
+- `TRAINED_RERANKER_ENABLED=false`
+- `TRAINED_RERANKER_MODEL_PATH=/path/to/trained-reranker-v2.json`
+
+When enabled and loaded, `/api/v1/search/run` meta includes:
+
+- `trained_reranker_enabled`
+- `trained_reranker_adjusted_jobs`
+
 ## Outcome dataset + offline evaluation v1
 
 `GET /api/v1/profiles/:id/reranker-dataset` exports profile-scoped labeled examples for future reranker evaluation and training. It is read-only and does not change live ranking.

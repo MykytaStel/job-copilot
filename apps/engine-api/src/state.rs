@@ -16,7 +16,9 @@ use crate::services::ranking::RankingService;
 use crate::services::resumes::ResumesService;
 use crate::services::salary::SalaryService;
 use crate::services::search_profile::service::SearchProfileService;
+use crate::services::trained_reranker::TrainedRerankerModel;
 use crate::services::user_events::UserEventsService;
+use tracing::warn;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -38,18 +40,36 @@ pub struct AppState {
     pub salary_service: SalaryService,
     pub user_events_service: UserEventsService,
     pub learned_reranker_enabled: bool,
+    pub trained_reranker_enabled: bool,
+    pub trained_reranker_model: Option<TrainedRerankerModel>,
 }
 
 impl AppState {
     pub fn new(database: Database) -> Self {
-        Self::new_with_learned_reranker(database, learned_reranker_enabled_from_env())
+        Self::new_with_config(database, &Config::from_env())
     }
 
     pub fn new_with_config(database: Database, config: &Config) -> Self {
-        Self::new_with_learned_reranker(database, config.learned_reranker_enabled)
+        let trained_reranker_model = if config.trained_reranker_enabled {
+            load_trained_reranker_model(config.trained_reranker_model_path.as_deref())
+        } else {
+            None
+        };
+
+        Self::new_with_rerankers(
+            database,
+            config.learned_reranker_enabled,
+            config.trained_reranker_enabled,
+            trained_reranker_model,
+        )
     }
 
-    fn new_with_learned_reranker(database: Database, learned_reranker_enabled: bool) -> Self {
+    fn new_with_rerankers(
+        database: Database,
+        learned_reranker_enabled: bool,
+        trained_reranker_enabled: bool,
+        trained_reranker_model: Option<TrainedRerankerModel>,
+    ) -> Self {
         let profiles_repository = ProfilesRepository::new(database.clone());
         let jobs_repository = JobsRepository::new(database.clone());
         let salary_jobs_repository = JobsRepository::new(database.clone());
@@ -81,6 +101,8 @@ impl AppState {
             salary_service: SalaryService::new(salary_jobs_repository),
             user_events_service: UserEventsService::new(user_events_repository),
             learned_reranker_enabled,
+            trained_reranker_enabled,
+            trained_reranker_model,
         }
     }
 
@@ -123,6 +145,8 @@ impl AppState {
                 crate::services::user_events::UserEventsServiceStub::default(),
             ),
             learned_reranker_enabled: true,
+            trained_reranker_enabled: false,
+            trained_reranker_model: None,
         }
     }
 
@@ -143,17 +167,34 @@ impl AppState {
         self.learned_reranker_enabled = enabled;
         self
     }
+
+    #[cfg(test)]
+    pub fn with_trained_reranker(
+        mut self,
+        enabled: bool,
+        model: Option<TrainedRerankerModel>,
+    ) -> Self {
+        self.trained_reranker_enabled = enabled;
+        self.trained_reranker_model = model;
+        self
+    }
 }
 
-fn learned_reranker_enabled_from_env() -> bool {
-    std::env::var("LEARNED_RERANKER_ENABLED")
-        .ok()
-        .as_deref()
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes" | "on"
-            )
-        })
-        .unwrap_or(true)
+fn load_trained_reranker_model(path: Option<&str>) -> Option<TrainedRerankerModel> {
+    let Some(path) = path else {
+        warn!("TRAINED_RERANKER_ENABLED is set but TRAINED_RERANKER_MODEL_PATH is empty");
+        return None;
+    };
+
+    match TrainedRerankerModel::load(path) {
+        Ok(model) => Some(model),
+        Err(error) => {
+            warn!(
+                error = %error,
+                model_path = path,
+                "failed to load trained reranker artifact; continuing without v2 layer"
+            );
+            None
+        }
+    }
 }
