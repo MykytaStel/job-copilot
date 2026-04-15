@@ -135,3 +135,34 @@ Search ranking consumes these aggregates as a small additive layer:
 - repeated positive source or role-family signals can add a small boost
 - repeated hide / bad-fit source or role-family signals can add a small penalty
 - fit reasons include explicit behavior explanations when those adjustments fire
+
+## Learned reranker v1
+
+`engine-api` now applies a conservative learned reranker after deterministic ranking, explicit feedback scoring, and behavior-aware personalization, but before final search truncation.
+
+The learned layer is still deterministic and inspectable. It builds explicit features from accumulated behavior and funnel signals:
+
+- source positive / negative signal
+- role-family positive / negative signal
+- save / bad-fit / application history strength
+- source funnel quality hint
+- deterministic score bucket
+
+The final score remains the canonical Rust fit score plus a bounded learned delta, clamped to the normal score range. Learned reasons are emitted separately from deterministic and LLM explanations with `Learned reranker ...` text.
+
+The layer is gated by `LEARNED_RERANKER_ENABLED` and defaults to enabled. `/api/v1/search/run` meta includes:
+
+- `learned_reranker_enabled`
+- `learned_reranker_adjusted_jobs`
+
+## Outcome dataset + offline evaluation v1
+
+`GET /api/v1/profiles/:id/reranker-dataset` exports profile-scoped labeled examples for future reranker evaluation and training. It is read-only and does not change live ranking.
+
+Label policy is documented in `docs/03-domain/reranker-outcomes.md`:
+
+- `positive` = `application_created`
+- `medium` = saved
+- `negative` = bad-fit / hidden
+
+`apps/ml/app/reranker_evaluation.py` can compare deterministic, behavior-adjusted, and learned-reranker-adjusted score orderings with simple offline metrics.

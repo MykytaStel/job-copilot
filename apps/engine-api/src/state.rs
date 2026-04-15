@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::db::Database;
 use crate::db::repositories::{
     ActivitiesRepository, ApplicationsRepository, FeedbackRepository, FitScoresRepository,
@@ -36,10 +37,19 @@ pub struct AppState {
     pub followup_service: FollowUpService,
     pub salary_service: SalaryService,
     pub user_events_service: UserEventsService,
+    pub learned_reranker_enabled: bool,
 }
 
 impl AppState {
     pub fn new(database: Database) -> Self {
+        Self::new_with_learned_reranker(database, learned_reranker_enabled_from_env())
+    }
+
+    pub fn new_with_config(database: Database, config: &Config) -> Self {
+        Self::new_with_learned_reranker(database, config.learned_reranker_enabled)
+    }
+
+    fn new_with_learned_reranker(database: Database, learned_reranker_enabled: bool) -> Self {
         let profiles_repository = ProfilesRepository::new(database.clone());
         let jobs_repository = JobsRepository::new(database.clone());
         let salary_jobs_repository = JobsRepository::new(database.clone());
@@ -70,6 +80,7 @@ impl AppState {
             followup_service: FollowUpService::new(tasks_repository),
             salary_service: SalaryService::new(salary_jobs_repository),
             user_events_service: UserEventsService::new(user_events_repository),
+            learned_reranker_enabled,
         }
     }
 
@@ -111,6 +122,7 @@ impl AppState {
             user_events_service: UserEventsService::for_tests(
                 crate::services::user_events::UserEventsServiceStub::default(),
             ),
+            learned_reranker_enabled: true,
         }
     }
 
@@ -125,4 +137,23 @@ impl AppState {
         self.user_events_service = user_events_service;
         self
     }
+
+    #[cfg(test)]
+    pub fn with_learned_reranker_enabled(mut self, enabled: bool) -> Self {
+        self.learned_reranker_enabled = enabled;
+        self
+    }
+}
+
+fn learned_reranker_enabled_from_env() -> bool {
+    std::env::var("LEARNED_RERANKER_ENABLED")
+        .ok()
+        .as_deref()
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(true)
 }

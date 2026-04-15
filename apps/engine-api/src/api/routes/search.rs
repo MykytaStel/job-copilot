@@ -12,6 +12,8 @@ use crate::api::routes::jobs::load_feedback_state;
 use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackState};
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::behavior::{BehaviorService, ProfileBehaviorAggregates};
+use crate::services::funnel::{FunnelService, ProfileFunnelAggregates};
+use crate::services::learned_reranker::LearnedRerankerService;
 use crate::services::matching::RankedJob;
 use crate::state::AppState;
 
@@ -73,7 +75,7 @@ pub async fn run_search(
         .await
         .map_err(|error| ApiError::from_repository(error, "search_run_failed"))?;
     let total_candidates = candidate_jobs.len();
-    let behavior_aggregates = load_behavior_aggregates(&state, input.profile_id.as_deref()).await;
+    let learning_aggregates = load_learning_aggregates(&state, input.profile_id.as_deref()).await;
     let feedback_states =
         load_feedback_state(&state, input.profile_id.as_deref(), &candidate_jobs).await?;
     let mut filtered_out_hidden = 0usize;
@@ -107,13 +109,38 @@ pub async fn run_search(
     let result = state
         .search_matching_service
         .run(&input.search_profile, ranked_candidates);
-    // Apply feedback-aware score adjustments, re-sort, then truncate.
-    // Truncation happens here (after feedback) so that a whitelisted job ranked
-    // just outside the limit by pure score can still be promoted into the result
-    // set, and a bad-fit job with a high initial score can be demoted out of it.
+    let deterministic_score_by_job_id = result
+        .ranked_jobs
+        .iter()
+        .map(|ranked| (ranked.job.job.id.clone(), ranked.fit.score))
+        .collect::<HashMap<_, _>>();
+    // Ranking order is intentionally layered:
+    // 1. deterministic Rust fit score,
+    // 2. explicit feedback adjustments,
+    // 3. existing behavior-aware personalization,
+    // 4. conservative learned reranking,
+    // 5. final truncation.
+    //
+    // Truncation happens after all additive layers so jobs just outside the
+    // deterministic limit can still be promoted by profile-specific evidence.
     let mut adjusted_jobs = apply_feedback_scoring(result.ranked_jobs, &feedback_by_job_id);
-    if let Some(aggregates) = behavior_aggregates.as_ref() {
-        adjusted_jobs = apply_behavior_scoring(&state, adjusted_jobs, aggregates);
+    if let Some(aggregates) = learning_aggregates.as_ref() {
+        adjusted_jobs = apply_behavior_scoring(&state, adjusted_jobs, &aggregates.behavior);
+    }
+    let mut learned_reranker_adjusted_jobs = 0usize;
+    if state.learned_reranker_enabled {
+        if let Some(aggregates) = learning_aggregates.as_ref() {
+            let (reranked_jobs, adjusted_count) = apply_learned_reranking(
+                &state,
+                adjusted_jobs,
+                &aggregates.behavior,
+                &aggregates.funnel,
+                &feedback_by_job_id,
+                &deterministic_score_by_job_id,
+            );
+            adjusted_jobs = reranked_jobs;
+            learned_reranker_adjusted_jobs = adjusted_count;
+        }
     }
     adjusted_jobs.truncate(input.limit as usize);
     let ranked_jobs: Vec<crate::api::dto::search::RankedJobResponse> = adjusted_jobs
@@ -143,6 +170,8 @@ pub async fn run_search(
             .saturating_sub(filtered_out_hidden)
             .saturating_sub(filtered_out_company_blacklist),
         returned_jobs: ranked_jobs.len(),
+        learned_reranker_enabled: state.learned_reranker_enabled,
+        learned_reranker_adjusted_jobs,
     };
 
     if let Some(profile_id) = input.profile_id.clone() {
@@ -192,6 +221,8 @@ pub async fn run_search(
                         "filtered_out_company_blacklist": meta.filtered_out_company_blacklist,
                         "scored_jobs": meta.scored_jobs,
                         "returned_jobs": meta.returned_jobs,
+                        "learned_reranker_enabled": meta.learned_reranker_enabled,
+                        "learned_reranker_adjusted_jobs": meta.learned_reranker_adjusted_jobs,
                     }
                 })),
             },
@@ -254,10 +285,15 @@ fn apply_feedback_scoring(
     ranked_jobs
 }
 
-async fn load_behavior_aggregates(
+struct SearchLearningAggregates {
+    behavior: ProfileBehaviorAggregates,
+    funnel: ProfileFunnelAggregates,
+}
+
+async fn load_learning_aggregates(
     state: &AppState,
     profile_id: Option<&str>,
-) -> Option<ProfileBehaviorAggregates> {
+) -> Option<SearchLearningAggregates> {
     let profile_id = profile_id?;
     let events = match state.user_events_service.list_by_profile(profile_id).await {
         Ok(events) => events,
@@ -271,7 +307,10 @@ async fn load_behavior_aggregates(
         }
     };
 
-    Some(BehaviorService::new().build_aggregates(events.iter()))
+    Some(SearchLearningAggregates {
+        behavior: BehaviorService::new().build_aggregates(events.iter()),
+        funnel: FunnelService::new().build_aggregates(events.iter()),
+    })
 }
 
 fn apply_behavior_scoring(
@@ -310,8 +349,67 @@ fn apply_behavior_scoring(
     ranked_jobs
 }
 
+fn apply_learned_reranking(
+    state: &AppState,
+    mut ranked_jobs: Vec<RankedJob>,
+    behavior: &ProfileBehaviorAggregates,
+    funnel: &ProfileFunnelAggregates,
+    feedback_by_job_id: &HashMap<String, JobFeedbackState>,
+    deterministic_score_by_job_id: &HashMap<String, u8>,
+) -> (Vec<RankedJob>, usize) {
+    let learned_reranker = LearnedRerankerService::new();
+    let mut adjusted_count = 0usize;
+
+    for ranked in &mut ranked_jobs {
+        let source = ranked
+            .job
+            .primary_variant
+            .as_ref()
+            .map(|variant| variant.source.as_str());
+        let role_family = state.search_matching_service.infer_role_family(&ranked.job);
+        let feedback = feedback_by_job_id
+            .get(&ranked.job.job.id)
+            .cloned()
+            .unwrap_or_default();
+        let deterministic_score = deterministic_score_by_job_id
+            .get(&ranked.job.job.id)
+            .copied()
+            .unwrap_or(ranked.fit.score);
+        let learned_score = learned_reranker.score_job(
+            deterministic_score,
+            source,
+            role_family.as_deref(),
+            behavior,
+            funnel,
+            &feedback,
+        );
+
+        if learned_score.score_delta == 0 {
+            continue;
+        }
+
+        ranked.fit.score =
+            (ranked.fit.score as i16 + learned_score.score_delta).clamp(0, 100) as u8;
+        ranked.fit.reasons.extend(learned_score.reasons);
+        adjusted_count += 1;
+    }
+
+    ranked_jobs.sort_by(|left, right| {
+        right
+            .fit
+            .score
+            .cmp(&left.fit.score)
+            .then_with(|| right.job.job.last_seen_at.cmp(&left.job.job.last_seen_at))
+            .then_with(|| left.job.job.id.cmp(&right.job.job.id))
+    });
+
+    (ranked_jobs, adjusted_count)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use axum::extract::{Query, State};
     use axum::response::IntoResponse;
     use axum::{Json, body};
@@ -323,18 +421,22 @@ mod tests {
         CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackRecord,
     };
     use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
+    use crate::domain::matching::JobFit;
     use crate::domain::profile::model::Profile;
     use crate::domain::search::profile::{TargetRegion, WorkMode};
     use crate::domain::user_event::model::{UserEventRecord, UserEventType};
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
+    use crate::services::behavior::ProfileBehaviorAggregates;
     use crate::services::feedback::{FeedbackService, FeedbackServiceStub};
+    use crate::services::funnel::ProfileFunnelAggregates;
     use crate::services::jobs::{JobsService, JobsServiceStub};
+    use crate::services::matching::RankedJob;
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
     use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
     use crate::state::AppState;
 
-    use super::{SearchQuery, run_search, search};
+    use super::{SearchQuery, apply_learned_reranking, run_search, search};
 
     fn sample_job(id: &str, title: &str) -> crate::domain::job::model::Job {
         crate::domain::job::model::Job {
@@ -413,6 +515,25 @@ mod tests {
                 is_active: true,
                 inactivated_at: None,
             }),
+        }
+    }
+
+    fn user_event(
+        id: &str,
+        event_type: UserEventType,
+        source: Option<&str>,
+        role_family: Option<&str>,
+    ) -> UserEventRecord {
+        UserEventRecord {
+            id: id.to_string(),
+            profile_id: "profile-1".to_string(),
+            event_type,
+            job_id: Some(format!("job-{id}")),
+            company_name: Some("NovaLedger".to_string()),
+            source: source.map(str::to_string),
+            role_family: role_family.map(str::to_string),
+            payload_json: None,
+            created_at: "2026-04-15T00:00:00Z".to_string(),
         }
     }
 
@@ -1693,5 +1814,187 @@ mod tests {
             serde_json::from_slice(&body).expect("response body should be valid JSON");
 
         assert_eq!(payload["results"][0]["job"]["id"], json!("job-1"));
+    }
+
+    #[test]
+    fn learned_rerank_happens_before_final_truncation() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(ProfilesServiceStub::default()),
+            JobsService::for_tests(JobsServiceStub::default()),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        );
+        let mut behavior = ProfileBehaviorAggregates::default();
+        behavior
+            .save_count_by_source
+            .insert("djinni".to_string(), 5);
+        behavior
+            .application_created_count_by_source
+            .insert("djinni".to_string(), 1);
+        let jobs = vec![
+            RankedJob {
+                job: sample_job_view(
+                    "job-1",
+                    "Senior Backend Developer",
+                    "Rust and Postgres",
+                    Some("remote"),
+                    "work_ua",
+                ),
+                fit: JobFit {
+                    job_id: "job-1".to_string(),
+                    score: 70,
+                    matched_roles: Vec::new(),
+                    matched_skills: Vec::new(),
+                    matched_keywords: Vec::new(),
+                    source_match: true,
+                    work_mode_match: Some(true),
+                    region_match: Some(true),
+                    reasons: Vec::new(),
+                },
+            },
+            RankedJob {
+                job: sample_job_view(
+                    "job-2",
+                    "Senior Backend Developer",
+                    "Rust and Postgres",
+                    Some("remote"),
+                    "djinni",
+                ),
+                fit: JobFit {
+                    job_id: "job-2".to_string(),
+                    score: 69,
+                    matched_roles: Vec::new(),
+                    matched_skills: Vec::new(),
+                    matched_keywords: Vec::new(),
+                    source_match: true,
+                    work_mode_match: Some(true),
+                    region_match: Some(true),
+                    reasons: Vec::new(),
+                },
+            },
+        ];
+        let deterministic_scores =
+            HashMap::from([("job-1".to_string(), 70_u8), ("job-2".to_string(), 69_u8)]);
+
+        let (mut reranked, adjusted_count) = apply_learned_reranking(
+            &state,
+            jobs,
+            &behavior,
+            &ProfileFunnelAggregates::default(),
+            &HashMap::new(),
+            &deterministic_scores,
+        );
+        reranked.truncate(1);
+
+        assert_eq!(adjusted_count, 1);
+        assert_eq!(reranked[0].job.job.id, "job-2");
+        assert!(
+            reranked[0]
+                .fit
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("Learned reranker boosted this source"))
+        );
+    }
+
+    #[tokio::test]
+    async fn learned_reranker_feature_flag_disables_layer_cleanly() {
+        let shared_desc = "Remote EU role working with Rust and Postgres backend systems";
+        let events = UserEventsServiceStub::default()
+            .with_event(user_event(
+                "evt-1",
+                UserEventType::JobSaved,
+                Some("djinni"),
+                Some("engineering"),
+            ))
+            .with_event(user_event(
+                "evt-2",
+                UserEventType::JobSaved,
+                Some("djinni"),
+                Some("engineering"),
+            ))
+            .with_event(user_event(
+                "evt-3",
+                UserEventType::JobSaved,
+                Some("djinni"),
+                Some("engineering"),
+            ))
+            .with_event(user_event(
+                "evt-4",
+                UserEventType::ApplicationCreated,
+                Some("djinni"),
+                Some("engineering"),
+            ));
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "work_ua",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_user_events_service(UserEventsService::for_tests(events))
+        .with_learned_reranker_enabled(false);
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_developer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string(), "work_ua".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(payload["meta"]["learned_reranker_enabled"], json!(false));
+        assert_eq!(payload["meta"]["learned_reranker_adjusted_jobs"], json!(0));
+        assert!(
+            payload["results"]
+                .as_array()
+                .expect("results should be an array")
+                .iter()
+                .flat_map(|result| result["fit"]["reasons"].as_array().into_iter().flatten())
+                .all(|reason| !reason
+                    .as_str()
+                    .is_some_and(|value| value.contains("Learned reranker"))),
+            "learned reranker reasons should not appear when disabled"
+        );
     }
 }

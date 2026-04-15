@@ -122,6 +122,8 @@ pub struct SearchRunMetaResponse {
     pub filtered_out_company_blacklist: usize,
     pub scored_jobs: usize,
     pub returned_jobs: usize,
+    pub learned_reranker_enabled: bool,
+    pub learned_reranker_adjusted_jobs: usize,
 }
 
 impl RunSearchRequest {
@@ -210,6 +212,8 @@ impl RunSearchResponse {
                 filtered_out_company_blacklist: result.filtered_out_company_blacklist,
                 scored_jobs,
                 returned_jobs,
+                learned_reranker_enabled: false,
+                learned_reranker_adjusted_jobs: 0,
             },
         }
     }
