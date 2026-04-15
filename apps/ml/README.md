@@ -20,6 +20,7 @@ This service now exposes a read-only Phase 9 integration layer:
 - generate structured first-pass cover letter drafts grounded in deterministic job/profile context
 - generate structured interview prep packs grounded in deterministic job/profile context
 - evaluate exported reranker outcome datasets offline without training or loading a model
+- train and evaluate an inspectable logistic-regression reranker from exported outcome datasets
 
 ## Runtime
 
@@ -89,6 +90,27 @@ Evaluate a reranker outcome dataset exported by `engine-api`:
 ```bash
 python -m app.reranker_evaluation /path/to/reranker-dataset.json --top-n 10
 ```
+
+Train an inspectable reranker v2 artifact from one or more exported datasets:
+
+```bash
+python -m app.trained_reranker \
+  /path/to/reranker-dataset.json \
+  --output /path/to/trained-reranker-v2.json \
+  --top-n 10
+```
+
+Evaluate an exported dataset with the trained model as an additional ordering:
+
+```bash
+python -m app.reranker_evaluation \
+  /path/to/reranker-dataset.json \
+  --trained-model /path/to/trained-reranker-v2.json \
+  --top-n 10
+```
+
+The artifact is JSON and includes `feature_names`, fixed feature transforms, weights, intercept,
+training counts, loss, and the bounded `max_score_delta` used by optional engine integration.
 
 Generate additive profile insights from deterministic analytics context:
 

@@ -9,6 +9,9 @@ Environment variables:
 - `DATABASE_URL` optional Postgres connection string
 - `DATABASE_MAX_CONNECTIONS` default `5`
 - `RUN_DB_MIGRATIONS` default `true`
+- `LEARNED_RERANKER_ENABLED` default `true`
+- `TRAINED_RERANKER_ENABLED` default `false`
+- `TRAINED_RERANKER_MODEL_PATH` optional JSON artifact path for trained reranker v2
 
 Behavior:
 - if `DATABASE_URL` is not set, `engine-api` still starts and reports database status as `disabled`

@@ -61,6 +61,10 @@ It compares three orderings:
 - deterministic + behavior score
 - deterministic + behavior + learned reranker score
 
+When passed a trained reranker v2 JSON artifact, the evaluator also compares:
+
+- trained reranker prediction ordering
+
 Metrics are defensive and deterministic:
 
 - top-k positives
@@ -68,3 +72,53 @@ Metrics are defensive and deterministic:
 - positive hit rate over all positive examples
 
 Empty datasets and datasets with no positives return zero-valued metrics instead of failing.
+
+## Trained reranker v2
+
+`apps/ml/app/trained_reranker.py` trains the first inspectable trained reranker prototype from
+one or more exported outcome datasets. It intentionally uses a dependency-light logistic
+regression implemented in Python instead of a black-box model.
+
+Feature inputs are explicit numeric or boolean fields already present in the export:
+
+- deterministic score
+- behavior score delta and behavior score
+- learned reranker v1 score delta and score
+- matched role, skill, and keyword counts
+- source presence
+- role family presence
+
+The model does not use text embeddings and does not call an LLM.
+
+The saved artifact is JSON and includes:
+
+- `artifact_version = trained_reranker_v2`
+- `model_type = logistic_regression`
+- feature names and feature transforms
+- feature weights and intercept
+- training counts and loss
+- `max_score_delta` for bounded optional live use
+
+Example:
+
+```bash
+python -m app.trained_reranker \
+  ./exports/profile-1-reranker-dataset.json \
+  --output ./models/profile-1-trained-reranker-v2.json \
+  --top-n 10
+```
+
+## Optional live integration
+
+`engine-api` can load the trained reranker v2 artifact as a separate experimental additive layer
+after deterministic ranking, explicit feedback scoring, behavior personalization, and learned
+reranker v1.
+
+The layer is disabled by default:
+
+- `TRAINED_RERANKER_ENABLED=false`
+- `TRAINED_RERANKER_MODEL_PATH=/path/to/trained-reranker-v2.json`
+
+When enabled and loaded, the model applies only a bounded additive score delta and appends a
+reason containing `Trained reranker v2`. It does not replace deterministic ranking and does not
+remove learned reranker v1.

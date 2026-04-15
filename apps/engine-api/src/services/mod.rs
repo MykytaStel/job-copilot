@@ -14,4 +14,5 @@ pub mod ranking;
 pub mod resumes;
 pub mod salary;
 pub mod search_profile;
+pub mod trained_reranker;
 pub mod user_events;
