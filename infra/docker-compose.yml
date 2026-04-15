@@ -29,6 +29,10 @@ services:
       DATABASE_URL: postgres://jobcopilot:jobcopilot@postgres:5432/jobcopilot
       RUN_DB_MIGRATIONS: "true"
       PORT: "8080"
+      TRAINED_RERANKER_ENABLED: "${TRAINED_RERANKER_ENABLED:-false}"
+      TRAINED_RERANKER_MODEL_PATH: "${TRAINED_RERANKER_MODEL_PATH:-/app/models/trained-reranker-v2.json}"
+    volumes:
+      - ../apps/ml/models:/app/models:ro
     ports:
       - "8080:8080"
     depends_on:

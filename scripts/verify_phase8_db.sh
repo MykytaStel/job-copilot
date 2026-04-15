@@ -3,13 +3,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="$ROOT_DIR/infra/docker-compose.postgres.yml"
 TMP_DIR="$ROOT_DIR/.tmp"
 ENGINE_LOG="$TMP_DIR/engine-api-phase8-db.log"
 
 PORT="${PORT:-18080}"
 PGHOST="${PGHOST:-127.0.0.1}"
-PGPORT="${PGPORT:-5432}"
+PGPORT="${PGPORT:-15432}"
 PGUSER="${PGUSER:-jobcopilot}"
 PGPASSWORD="${PGPASSWORD:-jobcopilot}"
 PGDATABASE="${PGDATABASE:-jobcopilot}"
@@ -21,6 +20,7 @@ TEST_JOB_ID="job_phase8_verify_${RUN_ID}"
 TEST_CONTACT_EMAIL="phase8.${RUN_ID}@example.com"
 BEFORE_TERM="beforetoken${RUN_ID}"
 AFTER_TERM="aftertoken${RUN_ID}"
+POSTGRES_CONTAINER="job-copilot-phase8-postgres-${RUN_ID}"
 
 ENGINE_PID=""
 
@@ -31,21 +31,6 @@ require_command() {
   fi
 }
 
-compose_cmd() {
-  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-    docker compose -f "$COMPOSE_FILE" "$@"
-    return
-  fi
-
-  if command -v docker-compose >/dev/null 2>&1; then
-    docker-compose -f "$COMPOSE_FILE" "$@"
-    return
-  fi
-
-  echo "Docker Compose is required. Install Docker Desktop or docker-compose first." >&2
-  exit 1
-}
-
 cleanup() {
   if [[ -n "$ENGINE_PID" ]] && kill -0 "$ENGINE_PID" >/dev/null 2>&1; then
     kill "$ENGINE_PID" >/dev/null 2>&1 || true
@@ -53,7 +38,7 @@ cleanup() {
   fi
 
   if [[ "$KEEP_POSTGRES" != "1" ]]; then
-    compose_cmd down -v >/dev/null 2>&1 || true
+    docker rm -f "$POSTGRES_CONTAINER" >/dev/null 2>&1 || true
   fi
 }
 
@@ -114,7 +99,7 @@ api_request() {
 
 psql_query() {
   local sql="$1"
-  compose_cmd exec -T postgres psql -U "$PGUSER" -d "$PGDATABASE" -tA -c "$sql"
+  docker exec -i "$POSTGRES_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -tA -c "$sql"
 }
 
 wait_for_engine() {
@@ -133,7 +118,7 @@ wait_for_engine() {
 
 wait_for_postgres() {
   local attempts=0
-  until compose_cmd exec -T postgres pg_isready -U "$PGUSER" -d "$PGDATABASE" >/dev/null 2>&1; do
+  until docker exec "$POSTGRES_CONTAINER" pg_isready -U "$PGUSER" -d "$PGDATABASE" >/dev/null 2>&1; do
     attempts=$((attempts + 1))
     if [[ "$attempts" -ge 60 ]]; then
       fail "postgres container did not become ready in time"
@@ -149,8 +134,9 @@ require_command curl
 require_command jq
 require_command bash
 require_command lsof
-if ! command -v docker >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
-  echo "Docker is required for DB-backed verification. Install Docker Desktop first." >&2
+require_command docker
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker is required for DB-backed verification. Start Docker Desktop first." >&2
   exit 1
 fi
 
@@ -159,10 +145,21 @@ if lsof -iTCP:"$PORT" -sTCP:LISTEN -n -P >/dev/null 2>&1; then
   exit 1
 fi
 
+if lsof -iTCP:"$PGPORT" -sTCP:LISTEN -n -P >/dev/null 2>&1; then
+  echo "Postgres port $PGPORT is already in use. Stop the existing process or run with a different PGPORT, for example: PGPORT=15433 pnpm verify:phase8:db" >&2
+  exit 1
+fi
+
 mkdir -p "$TMP_DIR"
 
 echo "Starting Postgres container..."
-compose_cmd up -d
+docker run -d \
+  --name "$POSTGRES_CONTAINER" \
+  -e POSTGRES_USER="$PGUSER" \
+  -e POSTGRES_PASSWORD="$PGPASSWORD" \
+  -e POSTGRES_DB="$PGDATABASE" \
+  -p "${PGHOST}:${PGPORT}:5432" \
+  postgres:16 >/dev/null
 wait_for_postgres
 
 echo "Starting engine-api with DATABASE_URL=$DATABASE_URL"
@@ -182,7 +179,7 @@ assert_json \
   '.status == "ok" and .database.status == "ok" and .database.configured == true and .database.migrations_enabled_on_startup == true'
 
 echo "Seeding demo data..."
-compose_cmd exec -T postgres psql -U "$PGUSER" -d "$PGDATABASE" < "$ROOT_DIR/apps/engine-api/seeds/dev.sql"
+docker exec -i "$POSTGRES_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" < "$ROOT_DIR/apps/engine-api/seeds/dev.sql"
 
 null_backfill_count="$(psql_query "SELECT COUNT(*) FROM jobs WHERE search_vector IS NULL;")"
 [[ "$null_backfill_count" == "0" ]] || fail "search_vector backfill left NULL values in jobs"
@@ -198,6 +195,7 @@ INSERT INTO jobs (
   seniority,
   description_text,
   posted_at,
+  first_seen_at,
   last_seen_at,
   is_active
 ) VALUES (
@@ -208,6 +206,7 @@ INSERT INTO jobs (
   'remote',
   'senior',
   'search vector insert verification ${BEFORE_TERM}',
+  NOW(),
   NOW(),
   NOW(),
   TRUE
@@ -302,5 +301,5 @@ echo ""
 echo "Phase 8 DB verification passed."
 echo "Engine log: $ENGINE_LOG"
 if [[ "$KEEP_POSTGRES" == "1" ]]; then
-  echo "Postgres is still running because KEEP_POSTGRES=1."
+  echo "Postgres is still running because KEEP_POSTGRES=1: $POSTGRES_CONTAINER on ${PGHOST}:${PGPORT}."
 fi

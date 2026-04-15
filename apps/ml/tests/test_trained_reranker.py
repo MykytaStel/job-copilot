@@ -1,5 +1,8 @@
 import json
 
+import pytest
+from pydantic import BaseModel
+
 from app.reranker_evaluation import evaluate_dataset
 from app.trained_reranker import TrainedRerankerModel, load_dataset, train_model
 
@@ -104,7 +107,7 @@ def metrics_by_variant(summary):
 
 def test_training_pipeline_runs_and_artifact_round_trips(tmp_path):
     model = train_model([dataset_payload()], epochs=300, learning_rate=0.12)
-    output = tmp_path / "trained-reranker.json"
+    output = tmp_path / "models" / "trained-reranker.json"
 
     model.save(output)
     loaded = TrainedRerankerModel.load(output)
@@ -116,6 +119,44 @@ def test_training_pipeline_runs_and_artifact_round_trips(tmp_path):
     assert loaded.predict_probability(dataset_payload()["examples"][0]) > loaded.predict_probability(
         dataset_payload()["examples"][3]
     )
+
+
+def test_training_requires_labeled_examples():
+    with pytest.raises(ValueError, match="profile/job outcome signals"):
+        train_model(
+            [
+                {
+                    "profile_id": "profile-1",
+                    "label_policy_version": "outcome_label_v1",
+                    "examples": [],
+                }
+            ]
+        )
+
+
+def test_trained_model_accepts_equivalent_pydantic_example_instance():
+    class EquivalentRanking(BaseModel):
+        deterministic_score: int
+        behavior_score_delta: int = 0
+        behavior_score: int
+        learned_reranker_score_delta: int = 0
+        learned_reranker_score: int
+        matched_role_count: int = 0
+        matched_skill_count: int = 0
+        matched_keyword_count: int = 0
+
+    class EquivalentExample(BaseModel):
+        job_id: str
+        source: str | None = None
+        role_family: str | None = None
+        label: str
+        label_score: int
+        ranking: EquivalentRanking
+
+    model = train_model([dataset_payload()], epochs=20)
+    example = EquivalentExample.model_validate(dataset_payload()["examples"][0])
+
+    assert model.predict_probability(example) > 0
 
 
 def test_load_dataset_validates_export_shape(tmp_path):

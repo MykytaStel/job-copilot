@@ -24,6 +24,9 @@ venv/
 .coverage
 *.log
 .tmp/
+apps/ml/reranker-dataset.json
+apps/ml/models/
+apps/ml/reports/
 
 .DS_Store
 __MACOSX/

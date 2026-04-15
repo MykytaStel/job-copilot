@@ -1,6 +1,7 @@
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -80,16 +81,19 @@ class TrainedRerankerModel:
         return cls(TrainedRerankerArtifact.model_validate(payload))
 
     def save(self, path: str | Path) -> None:
-        with open(path, "w", encoding="utf-8") as handle:
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as handle:
             handle.write(self.artifact.model_dump_json(indent=2))
             handle.write("\n")
 
     def feature_vector(self, example: OutcomeExample | dict[str, Any]) -> dict[str, float]:
-        parsed = (
-            example
-            if isinstance(example, OutcomeExample)
-            else OutcomeExample.model_validate(example)
-        )
+        if isinstance(example, OutcomeExample):
+            parsed = example
+        elif isinstance(example, BaseModel):
+            parsed = OutcomeExample.model_validate(example.model_dump())
+        else:
+            parsed = OutcomeExample.model_validate(example)
         all_features = extract_features(parsed)
         return {name: all_features[name] for name in self.artifact.feature_names}
 
@@ -153,7 +157,11 @@ def train_model(
         examples.extend(parsed.examples)
 
     if not examples:
-        raise ValueError("cannot train a reranker without labeled examples")
+        raise ValueError(
+            "cannot train a reranker without labeled examples. "
+            "Export a dataset after creating profile/job outcome signals: "
+            "save a job, hide a job, mark a job bad-fit, or create an application."
+        )
 
     safe_epochs = max(1, epochs)
     safe_learning_rate = max(0.0001, learning_rate)
@@ -270,15 +278,19 @@ def main() -> None:
     parser.add_argument("--max-score-delta", type=int, default=8)
     args = parser.parse_args()
 
-    datasets = [load_dataset(path) for path in args.dataset_json]
-    model = train_model(
-        datasets,
-        epochs=args.epochs,
-        learning_rate=args.learning_rate,
-        l2=args.l2,
-        max_score_delta=args.max_score_delta,
-    )
-    model.save(args.output)
+    try:
+        datasets = [load_dataset(path) for path in args.dataset_json]
+        model = train_model(
+            datasets,
+            epochs=args.epochs,
+            learning_rate=args.learning_rate,
+            l2=args.l2,
+            max_score_delta=args.max_score_delta,
+        )
+        model.save(args.output)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        raise SystemExit(1) from error
 
     merged = OutcomeDataset(
         profile_id="multiple" if len(datasets) > 1 else datasets[0].profile_id,
