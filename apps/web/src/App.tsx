@@ -1,6 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
-import Layout from './Layout';
+import Layout from './AppShellNew';
 import Dashboard from './pages/Dashboard';
 import JobDetails from './pages/JobDetails';
 import ApplicationBoard from './pages/ApplicationBoard';

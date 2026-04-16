@@ -15,6 +15,9 @@ import {
   SortAsc,
   XCircle,
 } from 'lucide-react';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { SectionHeader } from '../components/ui/SectionHeader';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type {
@@ -49,27 +52,16 @@ function readProfileId() {
 }
 
 function ScoreBadge({ score }: { score: number }) {
-  const color =
-    score >= 60 ? '#22c55e' : score >= 35 ? '#f59e0b' : '#6b7280';
+  const variant: 'success' | 'warning' | 'muted' =
+    score >= 60 ? 'success' : score >= 35 ? 'warning' : 'muted';
   return (
-    <span
+    <Badge
+      variant={variant}
+      className="text-xs px-2 py-0.5 rounded-md font-semibold"
       title={`ML fit score: ${score}/100`}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 3,
-        fontSize: 12,
-        fontWeight: 600,
-        color,
-        background: `${color}1a`,
-        border: `1px solid ${color}40`,
-        borderRadius: 6,
-        padding: '2px 7px',
-        flexShrink: 0,
-      }}
     >
       {score}%
-    </span>
+    </Badge>
   );
 }
 
@@ -487,34 +479,34 @@ export default function Dashboard() {
       <div className="jobsFilters">
         <div className="lifecycleTabs">
           {LIFECYCLE_TABS.map((tab) => (
-            <button
+            <Button
               key={tab.value}
-              className={lifecycleFilter === tab.value ? 'btn' : 'ghostBtn'}
-              style={{ padding: '4px 12px', fontSize: 13 }}
+              variant={lifecycleFilter === tab.value ? 'default' : 'ghost'}
+              size="sm"
               onClick={() => updateFilters({ lifecycle: tab.value })}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
 
         <div className="sourceTabs">
-          <button
-            className={sourceFilter === null ? 'btn' : 'ghostBtn'}
-            style={{ padding: '4px 12px', fontSize: 13 }}
+          <Button
+            variant={sourceFilter === null ? 'default' : 'ghost'}
+            size="sm"
             onClick={() => updateFilters({ source: null })}
           >
             Всі джерела
-          </button>
+          </Button>
           {sources.map((source) => (
-            <button
+            <Button
               key={source.id}
-              className={sourceFilter === source.id ? 'btn' : 'ghostBtn'}
-              style={{ padding: '4px 12px', fontSize: 13 }}
+              variant={sourceFilter === source.id ? 'default' : 'ghost'}
+              size="sm"
               onClick={() => updateFilters({ source: source.id })}
             >
               {source.displayName}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -537,15 +529,16 @@ export default function Dashboard() {
         </div>
 
         {rankData && rankData.length > 0 && (
-          <button
-            className={sortByScore ? 'btn' : 'ghostBtn'}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '6px 12px', flexShrink: 0 }}
+          <Button
+            variant={sortByScore ? 'default' : 'ghost'}
+            size="sm"
+            style={{ flexShrink: 0 }}
             onClick={() => setSortByScore((v) => !v)}
             title="Сортувати за ML-релевантністю"
           >
             <SortAsc size={14} />
-            {sortByScore ? 'За score' : 'За score'}
-          </button>
+            За score
+          </Button>
         )}
 
         {search && (
@@ -554,6 +547,8 @@ export default function Dashboard() {
           </p>
         )}
       </div>
+
+      <SectionHeader title={`Вакансії ${jobs.length > 0 ? `(${jobs.length})` : ''}`} />
 
       {jobsLoading ? (
         <p className="muted">Завантаження вакансій…</p>
@@ -590,9 +585,9 @@ export default function Dashboard() {
                     ) : isSaved ? (
                       <span className="statusPill status-saved">saved</span>
                     ) : (
-                      <button
-                        className="ghostBtn"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 13 }}
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         disabled={saveMutation.isPending}
                         onClick={() =>
                           saveMutation.mutate({
@@ -602,7 +597,7 @@ export default function Dashboard() {
                         }
                       >
                         <Bookmark size={13} /> Зберегти
-                      </button>
+                      </Button>
                     )}
                     <Link to={`/jobs/${job.id}`} className="linkBtn">
                       Деталі <ArrowRight size={13} />
@@ -677,44 +672,37 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                    marginTop: 14,
-                  }}
-                >
-                  <button
-                    className="ghostBtn"
-                    style={{ padding: '4px 10px', fontSize: 13 }}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     disabled={hideMutation.isPending}
                     onClick={() => hideMutation.mutate(job.id)}
                   >
                     Hide
-                  </button>
+                  </Button>
                   {isBadFit ? (
-                    <button
-                      className="ghostBtn"
-                      style={{ padding: '4px 10px', fontSize: 13 }}
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       disabled={unmarkBadFitMutation.isPending}
                       onClick={() => unmarkBadFitMutation.mutate(job.id)}
                     >
                       {unmarkBadFitMutation.isPending ? '…' : 'Remove bad fit'}
-                    </button>
+                    </Button>
                   ) : (
-                    <button
-                      className="ghostBtn"
-                      style={{ padding: '4px 10px', fontSize: 13 }}
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       disabled={badFitMutation.isPending}
                       onClick={() => badFitMutation.mutate(job.id)}
                     >
                       {badFitMutation.isPending ? '…' : 'Mark bad fit'}
-                    </button>
+                    </Button>
                   )}
-                  <button
-                    className="ghostBtn"
-                    style={{ padding: '4px 10px', fontSize: 13 }}
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     disabled={companyFeedbackMutation.isPending}
                     onClick={() =>
                       companyFeedbackMutation.mutate({
@@ -724,13 +712,11 @@ export default function Dashboard() {
                       })
                     }
                   >
-                    {companyStatus === 'whitelist'
-                      ? 'Unwhitelist company'
-                      : 'Whitelist company'}
-                  </button>
-                  <button
-                    className="ghostBtn"
-                    style={{ padding: '4px 10px', fontSize: 13 }}
+                    {companyStatus === 'whitelist' ? 'Unwhitelist company' : 'Whitelist company'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     disabled={companyFeedbackMutation.isPending}
                     onClick={() =>
                       companyFeedbackMutation.mutate({
@@ -740,10 +726,8 @@ export default function Dashboard() {
                       })
                     }
                   >
-                    {companyStatus === 'blacklist'
-                      ? 'Unblacklist company'
-                      : 'Blacklist company'}
-                  </button>
+                    {companyStatus === 'blacklist' ? 'Unblacklist company' : 'Blacklist company'}
+                  </Button>
                 </div>
               </article>
             );

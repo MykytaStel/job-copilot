@@ -1,0 +1,38 @@
+/*
+ * Design token bridge: tokens.css → Tailwind v4
+ *
+ * Uses @theme inline so no new :root variables are generated.
+ * All values reference existing CSS custom properties from tokens.css.
+ * This file is purely additive — nothing in tokens.css is modified.
+ *
+ * Naming convention avoids collisions with existing CSS variable names:
+ *   --color-surface-*   → bg-surface-*  / text-surface-*
+ *   --color-content-*   → text-content-*
+ *   --color-edge-*      → border-edge-*
+ */
+@theme inline {
+  /* Surfaces */
+  --color-surface: var(--color-bg-card-soft);
+  --color-surface-elevated: var(--color-bg-elevated);
+  --color-surface-hover: var(--color-bg-hover);
+  --color-surface-accent: var(--color-bg-accent);
+  --color-surface-success: var(--color-bg-success);
+  --color-surface-warning: var(--color-bg-warning);
+  --color-surface-danger: var(--color-bg-danger);
+
+  /* Content (text) */
+  --color-content: var(--color-text-primary);
+  --color-content-muted: var(--color-text-secondary);
+  --color-content-strong: var(--color-text-strong);
+  --color-content-link: var(--color-text-link);
+  --color-content-accent: var(--color-text-accent);
+  --color-content-success: var(--color-text-success);
+  --color-content-warning: var(--color-text-warning);
+  --color-content-danger: var(--color-text-danger);
+
+  /* Edges (borders) */
+  --color-edge-subtle: var(--color-border-subtle);
+  --color-edge-soft: var(--color-border-soft);
+  --color-edge-input: var(--color-border-input);
+  --color-edge-accent: var(--color-border-accent);
+}
