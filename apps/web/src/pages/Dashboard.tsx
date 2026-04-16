@@ -1,23 +1,27 @@
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Activity,
-  ArchiveX,
   ArrowRight,
   Bookmark,
   Briefcase,
   CalendarDays,
-  Clock3,
-  RefreshCw,
+  KanbanSquare,
   Search,
   Send,
   SortAsc,
+  Sparkles,
+  TrendingUp,
   XCircle,
+  Zap,
 } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Card, CardContent, CardHeader } from '../components/ui/Card';
+import { FilterChips } from '../components/ui/FilterChips';
+import { JobCard, JobCardSkeleton } from '../components/ui/JobCard';
 import { SectionHeader } from '../components/ui/SectionHeader';
+import { StatCard } from '../components/ui/StatCard';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type {
@@ -51,19 +55,6 @@ function readProfileId() {
   return window.localStorage.getItem('engine_api_profile_id');
 }
 
-function ScoreBadge({ score }: { score: number }) {
-  const variant: 'success' | 'warning' | 'muted' =
-    score >= 60 ? 'success' : score >= 35 ? 'warning' : 'muted';
-  return (
-    <Badge
-      variant={variant}
-      className="text-xs px-2 py-0.5 rounded-md font-semibold"
-      title={`ML fit score: ${score}/100`}
-    >
-      {score}%
-    </Badge>
-  );
-}
 
 const STATUS_COLUMNS: ApplicationStatus[] = [
   'saved',
@@ -80,64 +71,6 @@ const STATUS_ICONS = {
   offer: <Briefcase size={14} />,
   rejected: <XCircle size={14} />,
 } satisfies Record<ApplicationStatus, ReactElement>;
-
-function formatTimestamp(value?: string) {
-  if (!value) return 'n/a';
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat('uk-UA', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
-}
-
-function lifecycleLabel(job: JobPosting) {
-  switch (job.lifecycleStage) {
-    case 'reactivated':
-      return 'reactivated';
-    case 'inactive':
-      return 'inactive';
-    default:
-      return job.isActive === false ? 'inactive' : 'active';
-  }
-}
-
-function lifecycleClass(job: JobPosting) {
-  switch (job.lifecycleStage) {
-    case 'reactivated':
-      return 'jobState-reactivated';
-    case 'inactive':
-      return 'jobState-inactive';
-    default:
-      return 'jobState-active';
-  }
-}
-
-function SourceActivityCard({
-  label,
-  value,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: number;
-  icon: ReactNode;
-  tone: string;
-}) {
-  return (
-    <div className={`sourceActivityCard ${tone}`}>
-      <div className="sourceActivityIcon">{icon}</div>
-      <div>
-        <div className="sourceActivityValue">{value}</div>
-        <div className="sourceActivityLabel">{label}</div>
-      </div>
-    </div>
-  );
-}
 
 type LifecycleFilter = 'all' | 'active' | 'inactive' | 'reactivated';
 
@@ -398,342 +331,294 @@ export default function Dashboard() {
     });
   }, [jobs, profileId]);
 
+  // Derived filter options for FilterChips
+  const lifecycleOptions = LIFECYCLE_TABS.map((t) => ({ id: t.value, label: t.label }));
+  const sourceOptions = [
+    { id: '__all__', label: 'Всі джерела' },
+    ...sources.map((s) => ({ id: s.id, label: s.displayName })),
+  ];
+  const selectedLifecycle = [lifecycleFilter];
+  const selectedSource = sourceFilter ? [sourceFilter] : ['__all__'];
+
   return (
-    <div className="dashboardPage">
-      <section className="dashboardHero">
-        <div>
-          <p className="eyebrow">Job Copilot UA</p>
-          <h1>Відстежуйте вакансії та заявки в одному місці.</h1>
-          <p className="muted dashboardHeroText">
-            Вакансії автоматично збираються з Djinni та Work.ua. Налаштуйте профіль — і система підбере найкращі збіги.
-          </p>
-        </div>
-        <div className="dashboardHeroActions">
-          <Link to="/profile" className="btn">
-            Update Profile
-          </Link>
-          <Link to="/applications" className="ghostBtn">
-            Review Pipeline <ArrowRight size={14} />
-          </Link>
-        </div>
-      </section>
+    <div className="space-y-6">
+
+      {/* ── Hero card ─────────────────────────────────────────────────────── */}
+      <Card className="border-border bg-card overflow-hidden">
+        <CardContent className="p-0">
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-accent/5 to-transparent pointer-events-none" />
+            <div className="relative p-6">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="default" className="bg-primary/15 text-primary border-0 text-xs px-2 py-0.5">
+                      <Zap className="h-3 w-3 mr-1" />
+                      Job Copilot UA
+                    </Badge>
+                  </div>
+                  <h1 className="text-2xl font-bold text-card-foreground m-0">
+                    Відстежуйте вакансії та заявки
+                  </h1>
+                  <p className="text-muted-foreground m-0">
+                    Вакансії автоматично збираються з Djinni та Work.ua.{' '}
+                    {jobSummary && (
+                      <span className="text-primary font-medium">
+                        {jobSummary.activeJobs} активних зараз.
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link to="/profile">
+                    <Button className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4" />
+                      Update Profile
+                    </Button>
+                  </Link>
+                  <Link to="/applications">
+                    <Button variant="ghost" className="flex items-center gap-2">
+                      Review Pipeline
+                      <ArrowRight size={14} />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {error && <p className="error">{error}</p>}
 
-      {jobSummary && (
-        <section className="sourceActivityGrid">
-          <SourceActivityCard
-            label="active now"
-            value={jobSummary.activeJobs}
-            icon={<Activity size={16} />}
-            tone="tone-active"
-          />
-          <SourceActivityCard
-            label="inactive after refresh"
-            value={jobSummary.inactiveJobs}
-            icon={<ArchiveX size={16} />}
-            tone="tone-inactive"
-          />
-          <SourceActivityCard
-            label="reactivated"
-            value={jobSummary.reactivatedJobs}
-            icon={<RefreshCw size={16} />}
-            tone="tone-reactivated"
-          />
-          <SourceActivityCard
-            label="jobs tracked"
-            value={jobSummary.totalJobs}
-            icon={<Briefcase size={16} />}
-            tone="tone-neutral"
-          />
-        </section>
-      )}
+      {/* ── Stats grid ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard
+          title="Активних вакансій"
+          value={jobSummary?.activeJobs ?? allJobs.length}
+          description="зараз у базі"
+          icon={Briefcase}
+        />
+        <StatCard
+          title="Збережено"
+          value={stats?.byStatus.saved ?? 0}
+          icon={Bookmark}
+        />
+        <StatCard
+          title="Подано заявки"
+          value={stats?.byStatus.applied ?? 0}
+          icon={Send}
+        />
+        <StatCard
+          title="Інтерв'ю"
+          value={(stats?.byStatus.interview ?? 0) + (stats?.byStatus.offer ?? 0)}
+          icon={CalendarDays}
+        />
+      </div>
 
-      {stats && (
-        <section className="statsGrid">
-          {STATUS_COLUMNS.map((status) => (
-            <div key={status} className="statCard">
-              <div className="statNumber">{stats.byStatus[status] ?? 0}</div>
-              <div className="statLabel">
-                <span
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    justifyContent: 'center',
-                  }}
-                >
-                  {STATUS_ICONS[status]}
-                  {status}
-                </span>
-              </div>
-            </div>
-          ))}
-          <div className="statCard">
-            <div className="statNumber">{applications.length}</div>
-            <div className="statLabel">applications tracked</div>
+      {/* ── Main 2-col grid ───────────────────────────────────────────────── */}
+      <div className="grid lg:grid-cols-3 gap-6">
+
+        {/* Jobs column (2/3) */}
+        <div className="lg:col-span-2 space-y-4">
+
+          <SectionHeader
+            title="Вакансії"
+            description="Відсортовані за ML-скором або датою"
+            icon={Briefcase}
+          />
+
+          {/* Filters */}
+          <div className="space-y-2">
+            <FilterChips
+              options={lifecycleOptions}
+              selected={selectedLifecycle}
+              onChange={([v]) => updateFilters({ lifecycle: (v ?? 'all') as LifecycleFilter })}
+            />
+            <FilterChips
+              options={sourceOptions}
+              selected={selectedSource}
+              onChange={([v]) => updateFilters({ source: v === '__all__' || !v ? null : v })}
+            />
           </div>
-        </section>
-      )}
 
-      <div className="jobsFilters">
-        <div className="lifecycleTabs">
-          {LIFECYCLE_TABS.map((tab) => (
-            <Button
-              key={tab.value}
-              variant={lifecycleFilter === tab.value ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => updateFilters({ lifecycle: tab.value })}
-            >
-              {tab.label}
-            </Button>
-          ))}
+          {/* Search + sort row */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted pointer-events-none" />
+              <input
+                type="search"
+                placeholder="Фільтр за назвою, компанією…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ paddingLeft: 32 }}
+              />
+            </div>
+            {rankData && rankData.length > 0 && (
+              <Button
+                variant={sortByScore ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSortByScore((v) => !v)}
+                title="Сортувати за ML-релевантністю"
+              >
+                <SortAsc size={14} />
+                Score
+              </Button>
+            )}
+            {search && (
+              <span className="text-muted-foreground text-xs shrink-0">
+                {jobs.length}/{allJobs.length}
+              </span>
+            )}
+          </div>
+
+          {sourcesError && (
+            <p className="text-muted-foreground text-xs">
+              Каталог джерел недоступний — фільтр за джерелом тимчасово не працює.
+            </p>
+          )}
+
+          {/* Job list */}
+          <div className="space-y-3">
+            {jobsLoading ? (
+              <>
+                <JobCardSkeleton />
+                <JobCardSkeleton />
+                <JobCardSkeleton />
+              </>
+            ) : jobs.length === 0 ? (
+              <Card className="border-border bg-card">
+                <CardContent className="py-12 text-center">
+                  <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-base font-semibold text-card-foreground mb-2">
+                    {search ? 'Нічого не знайдено' : 'Вакансій поки немає'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {search ? 'Спробуйте змінити запит' : 'Запустіть pnpm scrape:djinni'}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              jobs.map((job) => {
+                const application = applicationByJob.get(job.id);
+                const isSaved = !!(job.feedback?.saved || application);
+                const isBadFit = !!job.feedback?.badFit;
+                const isPendingAny = saveMutation.isPending || hideMutation.isPending || badFitMutation.isPending || unmarkBadFitMutation.isPending || companyFeedbackMutation.isPending;
+
+                return (
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    score={scoreById.get(job.id)}
+                    application={application}
+                    isSaved={isSaved}
+                    isBadFit={isBadFit}
+                    isPending={isPendingAny}
+                    onSave={!isSaved && !application ? () => saveMutation.mutate({ jobId: job.id, hasApplication: false }) : undefined}
+                    onHide={() => hideMutation.mutate(job.id)}
+                    onBadFit={!isBadFit ? () => badFitMutation.mutate(job.id) : undefined}
+                    onUnmarkBadFit={isBadFit ? () => unmarkBadFitMutation.mutate(job.id) : undefined}
+                  />
+                );
+              })
+            )}
+          </div>
         </div>
 
-        <div className="sourceTabs">
-          <Button
-            variant={sourceFilter === null ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => updateFilters({ source: null })}
-          >
-            Всі джерела
-          </Button>
-          {sources.map((source) => (
-            <Button
-              key={source.id}
-              variant={sourceFilter === source.id ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => updateFilters({ source: source.id })}
-            >
-              {source.displayName}
-            </Button>
-          ))}
-        </div>
-      </div>
+        {/* Sidebar (1/3) */}
+        <div className="space-y-4">
 
-      {sourcesError && (
-        <p className="muted" style={{ marginTop: -8, marginBottom: 16, fontSize: 13 }}>
-          Не вдалося завантажити каталог джерел. Фільтр вакансій за джерелом тимчасово недоступний.
-        </p>
-      )}
+          {/* Quick actions */}
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <h2 className="text-base font-semibold text-card-foreground m-0">Quick Actions</h2>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Link to="/profile" className="no-underline block">
+                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Update Search Profile
+                </Button>
+              </Link>
+              <Link to="/feedback" className="no-underline block">
+                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
+                  <Bookmark className="h-4 w-4 text-primary" />
+                  Review Saved Jobs
+                </Button>
+              </Link>
+              <Link to="/analytics" className="no-underline block">
+                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  View Analytics
+                </Button>
+              </Link>
+              <Link to="/applications" className="no-underline block">
+                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
+                  <KanbanSquare className="h-4 w-4 text-primary" />
+                  Application Board
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-      <div className="jobsHeader">
-        <div className="searchBox">
-          <Search size={14} className="searchIcon" />
-          <input
-            type="search"
-            placeholder="Фільтр за назвою, компанією, описом…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        {rankData && rankData.length > 0 && (
-          <Button
-            variant={sortByScore ? 'default' : 'ghost'}
-            size="sm"
-            style={{ flexShrink: 0 }}
-            onClick={() => setSortByScore((v) => !v)}
-            title="Сортувати за ML-релевантністю"
-          >
-            <SortAsc size={14} />
-            За score
-          </Button>
-        )}
-
-        {search && (
-          <p className="muted" style={{ margin: 0, fontSize: 13, flexShrink: 0 }}>
-            {jobs.length} з {allJobs.length}
-          </p>
-        )}
-      </div>
-
-      <SectionHeader title={`Вакансії ${jobs.length > 0 ? `(${jobs.length})` : ''}`} />
-
-      {jobsLoading ? (
-        <p className="muted">Завантаження вакансій…</p>
-      ) : jobs.length === 0 ? (
-        <p className="muted">{search ? 'Нічого не знайдено.' : 'Вакансій поки немає — запустіть pnpm scrape:djinni'}</p>
-      ) : (
-        <section className="jobLifecycleGrid">
-          {jobs.map((job) => {
-            const application = applicationByJob.get(job.id);
-            const isSaved = job.feedback?.saved || !!application;
-            const isBadFit = job.feedback?.badFit;
-            const companyStatus = job.feedback?.companyStatus;
-
-            return (
-              <article key={job.id} className="jobLifecycleCard">
-                <div className="jobLifecycleHeader">
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <div className={`jobStatePill ${lifecycleClass(job)}`}>
-                        {lifecycleLabel(job)}
-                      </div>
-                      {scoreById.has(job.id) && (
-                        <ScoreBadge score={scoreById.get(job.id)!} />
-                      )}
-                    </div>
-                    <h2>{job.title}</h2>
-                    <p className="muted jobLifecycleCompany">{job.company}</p>
-                  </div>
-                  <div className="jobLifecycleActions">
-                    {application ? (
-                      <span className={`statusPill status-${application.status}`}>
-                        {application.status}
-                      </span>
-                    ) : isSaved ? (
-                      <span className="statusPill status-saved">saved</span>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={saveMutation.isPending}
-                        onClick={() =>
-                          saveMutation.mutate({
-                            jobId: job.id,
-                            hasApplication: !!application,
-                          })
-                        }
-                      >
-                        <Bookmark size={13} /> Зберегти
-                      </Button>
-                    )}
-                    <Link to={`/jobs/${job.id}`} className="linkBtn">
-                      Деталі <ArrowRight size={13} />
-                    </Link>
-                  </div>
-                </div>
-
-                <p className="jobLifecycleDescription">
-                  {job.description.slice(0, 200)}
-                  {job.description.length > 200 ? '…' : ''}
-                </p>
-
-                {(isBadFit || companyStatus) && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      flexWrap: 'wrap',
-                      marginBottom: 10,
-                    }}
-                  >
-                    {isBadFit && <span className="statusPill status-rejected">bad fit</span>}
-                    {companyStatus === 'blacklist' && (
-                      <span className="statusPill status-rejected">company blacklisted</span>
-                    )}
-                    {companyStatus === 'whitelist' && (
-                      <span className="statusPill status-saved">company whitelisted</span>
-                    )}
-                  </div>
-                )}
-
-                <div className="jobMetaRow">
-                  <span className="jobMetaChip">
-                    <Clock3 size={13} />
-                    seen {formatTimestamp(job.lastSeenAt)}
-                  </span>
-                  {job.primaryVariant && (
-                    <span className="jobMetaChip">
-                      <RefreshCw size={13} />
-                      {job.primaryVariant.source}
+          {/* Pipeline summary */}
+          {stats && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <h2 className="text-base font-semibold text-card-foreground m-0 flex items-center gap-2">
+                  <XCircle className="h-4 w-4 text-primary" />
+                  Pipeline
+                </h2>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {STATUS_COLUMNS.map((status) => (
+                  <div key={status} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      {STATUS_ICONS[status]}
+                      {status}
                     </span>
-                  )}
-                  {job.primaryVariant?.sourceUrl && (
-                    <a
-                      href={job.primaryVariant.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="jobMetaChip jobMetaLink"
-                    >
-                      source page
-                    </a>
-                  )}
+                    <span className="font-medium text-card-foreground">
+                      {stats.byStatus[status] ?? 0}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-sm pt-2 border-t border-border">
+                  <span className="text-muted-foreground">total tracked</span>
+                  <span className="font-medium text-card-foreground">{applications.length}</span>
                 </div>
+              </CardContent>
+            </Card>
+          )}
 
-                <div className="jobTimeline">
-                  <div>
-                    <span>first seen</span>
-                    <strong>{formatTimestamp(job.firstSeenAt)}</strong>
-                  </div>
-                  <div>
-                    <span>last refresh</span>
-                    <strong>{formatTimestamp(job.primaryVariant?.fetchedAt)}</strong>
-                  </div>
-                  <div>
-                    <span>inactive at</span>
-                    <strong>{formatTimestamp(job.inactivatedAt)}</strong>
-                  </div>
-                  <div>
-                    <span>reactivated at</span>
-                    <strong>{formatTimestamp(job.reactivatedAt)}</strong>
-                  </div>
+          {/* Feed summary */}
+          {jobSummary && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <h2 className="text-base font-semibold text-card-foreground m-0">Feed</h2>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Active</span>
+                  <span className="font-medium text-fit-excellent">{jobSummary.activeJobs}</span>
                 </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Reactivated</span>
+                  <span className="font-medium text-fit-good">{jobSummary.reactivatedJobs}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Inactive</span>
+                  <span className="font-medium text-muted-foreground">{jobSummary.inactiveJobs}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Total tracked</span>
+                  <span className="font-medium text-card-foreground">{jobSummary.totalJobs}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={hideMutation.isPending}
-                    onClick={() => hideMutation.mutate(job.id)}
-                  >
-                    Hide
-                  </Button>
-                  {isBadFit ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={unmarkBadFitMutation.isPending}
-                      onClick={() => unmarkBadFitMutation.mutate(job.id)}
-                    >
-                      {unmarkBadFitMutation.isPending ? '…' : 'Remove bad fit'}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={badFitMutation.isPending}
-                      onClick={() => badFitMutation.mutate(job.id)}
-                    >
-                      {badFitMutation.isPending ? '…' : 'Mark bad fit'}
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={companyFeedbackMutation.isPending}
-                    onClick={() =>
-                      companyFeedbackMutation.mutate({
-                        company: job.company,
-                        currentStatus: companyStatus,
-                        nextStatus: 'whitelist',
-                      })
-                    }
-                  >
-                    {companyStatus === 'whitelist' ? 'Unwhitelist company' : 'Whitelist company'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={companyFeedbackMutation.isPending}
-                    onClick={() =>
-                      companyFeedbackMutation.mutate({
-                        company: job.company,
-                        currentStatus: companyStatus,
-                        nextStatus: 'blacklist',
-                      })
-                    }
-                  >
-                    {companyStatus === 'blacklist' ? 'Unblacklist company' : 'Blacklist company'}
-                  </Button>
-                </div>
-              </article>
-            );
-          })}
-        </section>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

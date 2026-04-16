@@ -31,34 +31,14 @@ import type {
 } from '../api';
 import { queryKeys } from '../queryKeys';
 import { Card } from '../components/ui/Card';
+import { PageHeader } from '../components/ui/SectionHeader';
+import { AnalyticsCard, StatCard } from '../components/ui/StatCard';
 
 function readProfileId() {
   return window.localStorage.getItem('engine_api_profile_id');
 }
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
-
-function SummaryCard({
-  label,
-  count,
-  icon,
-  color,
-}: {
-  label: string;
-  count: number;
-  icon: React.ReactNode;
-  color: string;
-}) {
-  return (
-    <Card className="flex items-center gap-3 px-[18px] py-[14px] min-w-[140px]">
-      <span style={{ color, opacity: 0.85 }}>{icon}</span>
-      <div>
-        <div className="text-2xl font-bold text-content-strong leading-none">{count}</div>
-        <div className="text-[11px] uppercase tracking-[0.08em] text-content-muted mt-0.5">{label}</div>
-      </div>
-    </Card>
-  );
-}
 
 function Section({
   title,
@@ -68,15 +48,15 @@ function Section({
   title: string;
   icon: React.ReactNode;
   children: React.ReactNode;
-}) {
+  }) {
   return (
-    <section className="card">
+    <Card className="p-6">
       <div className="flex items-center gap-2 mb-4">
         <span className="text-content-muted">{icon}</span>
         <h2 className="m-0 text-[15px] font-semibold text-content">{title}</h2>
       </div>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -690,55 +670,27 @@ export default function Analytics() {
 
   return (
     <div className="jobDetails">
-      <div className="pageHeader">
-        <div>
-          <p className="eyebrow">Insights</p>
-          <h1 className="m-0 text-[22px] font-bold text-content-strong">Analytics</h1>
-        </div>
-      </div>
+      <PageHeader
+        title="Analytics"
+        description="Track your job search progress and feedback-driven trends."
+        breadcrumb={[
+          { label: 'Dashboard', href: '/' },
+          { label: 'Analytics' },
+        ]}
+      />
 
       {isLoading ? (
         <p className="emptyState">Loading analytics…</p>
       ) : summary ? (
         <>
           {/* Feedback summary cards */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-            <SummaryCard
-              label="Saved"
-              count={summary.feedback.savedJobsCount}
-              icon={<Bookmark size={18} />}
-              color="#95a7ff"
-            />
-            <SummaryCard
-              label="Hidden"
-              count={summary.feedback.hiddenJobsCount}
-              icon={<EyeOff size={18} />}
-              color="#9aa8bc"
-            />
-            <SummaryCard
-              label="Bad Fit"
-              count={summary.feedback.badFitJobsCount}
-              icon={<ThumbsDown size={18} />}
-              color="#ffb4b4"
-            />
-            <SummaryCard
-              label="Whitelisted"
-              count={summary.feedback.whitelistedCompaniesCount}
-              icon={<ShieldCheck size={18} />}
-              color="#c9fff8"
-            />
-            <SummaryCard
-              label="Blacklisted"
-              count={summary.feedback.blacklistedCompaniesCount}
-              icon={<ShieldOff size={18} />}
-              color="#ffb4b4"
-            />
-            <SummaryCard
-              label="Total Jobs"
-              count={summary.jobsByLifecycle.total}
-              icon={<Layers size={18} />}
-              color="#ffd6a5"
-            />
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <AnalyticsCard title="Saved" value={summary.feedback.savedJobsCount} icon={Bookmark} />
+            <AnalyticsCard title="Hidden" value={summary.feedback.hiddenJobsCount} icon={EyeOff} />
+            <AnalyticsCard title="Bad Fit" value={summary.feedback.badFitJobsCount} icon={ThumbsDown} />
+            <AnalyticsCard title="Whitelisted" value={summary.feedback.whitelistedCompaniesCount} icon={ShieldCheck} />
+            <AnalyticsCard title="Blacklisted" value={summary.feedback.blacklistedCompaniesCount} icon={ShieldOff} />
+            <AnalyticsCard title="Total Jobs" value={summary.jobsByLifecycle.total} icon={Layers} />
           </div>
 
           <div
@@ -750,38 +702,11 @@ export default function Analytics() {
           >
             {funnel && (
               <Section title="Job Funnel" icon={<Eye size={16} />}>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                    gap: 10,
-                    marginBottom: 16,
-                  }}
-                >
-                  <SummaryCard
-                    label="Impressions"
-                    count={funnel.impressionCount}
-                    icon={<Eye size={18} />}
-                    color="#95a7ff"
-                  />
-                  <SummaryCard
-                    label="Opens"
-                    count={funnel.openCount}
-                    icon={<BarChart2 size={18} />}
-                    color="#c9fff8"
-                  />
-                  <SummaryCard
-                    label="Saves"
-                    count={funnel.saveCount}
-                    icon={<Bookmark size={18} />}
-                    color="#ffd6a5"
-                  />
-                  <SummaryCard
-                    label="Applications"
-                    count={funnel.applicationCreatedCount}
-                    icon={<Zap size={18} />}
-                    color="#b9fbc0"
-                  />
+                <div className="grid grid-cols-2 gap-2.5 mb-4">
+                  <StatCard title="Impressions" value={funnel.impressionCount} icon={Eye} />
+                  <StatCard title="Opens" value={funnel.openCount} icon={BarChart2} />
+                  <StatCard title="Saves" value={funnel.saveCount} icon={Bookmark} />
+                  <StatCard title="Applications" value={funnel.applicationCreatedCount} icon={Zap} />
                 </div>
 
                 <div
@@ -815,49 +740,13 @@ export default function Analytics() {
                   />
                 </div>
 
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                    gap: 10,
-                  }}
-                >
-                  <SummaryCard
-                    label="Hidden"
-                    count={funnel.hideCount}
-                    icon={<EyeOff size={18} />}
-                    color="#9aa8bc"
-                  />
-                  <SummaryCard
-                    label="Bad Fit"
-                    count={funnel.badFitCount}
-                    icon={<ThumbsDown size={18} />}
-                    color="#ffb4b4"
-                  />
-                  <SummaryCard
-                    label="Fit Explainers"
-                    count={funnel.fitExplanationRequestedCount}
-                    icon={<Brain size={18} />}
-                    color="#95a7ff"
-                  />
-                  <SummaryCard
-                    label="Coach"
-                    count={funnel.applicationCoachRequestedCount}
-                    icon={<Brain size={18} />}
-                    color="#c9fff8"
-                  />
-                  <SummaryCard
-                    label="Cover Letters"
-                    count={funnel.coverLetterDraftRequestedCount}
-                    icon={<Layers size={18} />}
-                    color="#ffd6a5"
-                  />
-                  <SummaryCard
-                    label="Interview Prep"
-                    count={funnel.interviewPrepRequestedCount}
-                    icon={<Zap size={18} />}
-                    color="#b9fbc0"
-                  />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <StatCard title="Hidden" value={funnel.hideCount} icon={EyeOff} />
+                  <StatCard title="Bad Fit" value={funnel.badFitCount} icon={ThumbsDown} />
+                  <StatCard title="Fit Explainers" value={funnel.fitExplanationRequestedCount} icon={Brain} />
+                  <StatCard title="Coach" value={funnel.applicationCoachRequestedCount} icon={Brain} />
+                  <StatCard title="Cover Letters" value={funnel.coverLetterDraftRequestedCount} icon={Layers} />
+                  <StatCard title="Interview Prep" value={funnel.interviewPrepRequestedCount} icon={Zap} />
                 </div>
               </Section>
             )}

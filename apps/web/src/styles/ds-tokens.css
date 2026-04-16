@@ -35,4 +35,54 @@
   --color-edge-soft: var(--color-border-soft);
   --color-edge-input: var(--color-border-input);
   --color-edge-accent: var(--color-border-accent);
+
+  /* ── shadcn semantic aliases (maps reference design token names to existing values) ── */
+
+  /* Base */
+  --color-background:         var(--color-bg-app);
+  --color-foreground:         var(--color-text-primary);
+
+  /* Card */
+  --color-card:               var(--color-bg-elevated);
+  --color-card-foreground:    var(--color-text-primary);
+
+  /* Primary — blue-purple (#636bff ≈ oklch(0.65 0.15 250)) */
+  --color-primary:            #636bff;
+  --color-primary-foreground: #ffffff;
+
+  /* Secondary */
+  --color-secondary:          rgba(255, 255, 255, 0.08);
+  --color-secondary-foreground: var(--color-text-secondary);
+
+  /* Muted */
+  --color-muted:              rgba(255, 255, 255, 0.06);
+  --color-muted-foreground:   var(--color-text-secondary);
+
+  /* Accent (cyan, for interactive highlights) */
+  --color-accent:             var(--color-bg-accent);
+  --color-accent-foreground:  var(--color-text-accent);
+
+  /* Destructive */
+  --color-destructive:        var(--color-text-danger);
+  --color-destructive-foreground: #ffffff;
+
+  /* Border / input / ring */
+  --color-border:             var(--color-border-soft);
+  --color-input:              var(--color-bg-input);
+  --color-ring:               #636bff;
+
+  /* Sidebar */
+  --color-sidebar:                    #0b0f1c;
+  --color-sidebar-foreground:         var(--color-text-primary);
+  --color-sidebar-primary:            #636bff;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent:             rgba(80, 92, 255, 0.12);
+  --color-sidebar-accent-foreground:  var(--color-text-accent);
+  --color-sidebar-border:             var(--color-border-subtle);
+
+  /* Fit-score bands */
+  --color-fit-excellent: #4ade80;
+  --color-fit-good:      #2ec4b6;
+  --color-fit-fair:      #ffc457;
+  --color-fit-poor:      #ff5050;
 }

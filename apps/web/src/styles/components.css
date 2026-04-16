@@ -180,6 +180,37 @@
   text-decoration: none;
 }
 
+.btnOutline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-soft);
+  color: var(--color-text-secondary);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btnOutline:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-primary);
+}
+
+.btnOutline.btnOutline-active {
+  background: #636bff;
+  border-color: #636bff;
+  color: #ffffff;
+}
+
+.btnOutline.btnOutline-active:hover {
+  background: rgba(99, 107, 255, 0.85);
+}
+
 .ghostBtn {
   display: inline-flex;
   align-items: center;

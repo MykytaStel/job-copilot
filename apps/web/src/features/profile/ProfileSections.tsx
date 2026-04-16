@@ -36,6 +36,8 @@ function renderErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+const insightPanelBaseClass = 'flex flex-col gap-3 rounded-[14px] border px-4 py-3.5';
+
 export function ProfileFormSection({
   name,
   email,
@@ -1044,26 +1046,8 @@ function SearchResultFitExplanation({
 
 function FitExplanationPanel({ explanation }: { explanation: JobFitExplanation }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        padding: '14px 16px',
-        borderRadius: 14,
-        border: '1px solid rgba(149,167,255,0.18)',
-        background:
-          'linear-gradient(180deg, rgba(18,26,40,0.92) 0%, rgba(13,19,31,0.88) 100%)',
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          fontSize: 14,
-          lineHeight: 1.6,
-          color: 'var(--color-text-primary)',
-        }}
-      >
+    <div className={`${insightPanelBaseClass} border-edge-accent bg-surface-accent`}>
+      <p className="m-0 text-sm leading-relaxed text-content">
         {explanation.fitSummary || 'No summary returned.'}
       </p>
 
@@ -1130,26 +1114,8 @@ function FitExplanationList({
 
 function ApplicationCoachPanel({ coaching }: { coaching: ApplicationCoach }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        padding: '14px 16px',
-        borderRadius: 14,
-        border: '1px solid rgba(91,180,255,0.18)',
-        background:
-          'linear-gradient(180deg, rgba(12,22,35,0.94) 0%, rgba(10,16,28,0.9) 100%)',
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          fontSize: 14,
-          lineHeight: 1.6,
-          color: 'var(--color-text-primary)',
-        }}
-      >
+    <div className={`${insightPanelBaseClass} border-edge-accent bg-surface-accent`}>
+      <p className="m-0 text-sm leading-relaxed text-content">
         {coaching.applicationSummary || 'No application summary returned.'}
       </p>
 
@@ -1189,18 +1155,7 @@ function ApplicationCoachPanel({ coaching }: { coaching: ApplicationCoach }) {
 
 function CoverLetterDraftPanel({ draft }: { draft: CoverLetterDraft }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        padding: '14px 16px',
-        borderRadius: 14,
-        border: '1px solid rgba(255,197,113,0.2)',
-        background:
-          'linear-gradient(180deg, rgba(36,26,15,0.92) 0%, rgba(24,18,12,0.9) 100%)',
-      }}
-    >
+    <div className={`${insightPanelBaseClass} border-edge-accent bg-surface-warning`}>
       <div>
         <span className="detailLabel">Draft summary</span>
         <p className="sectionText" style={{ marginBottom: 0 }}>
@@ -1260,18 +1215,7 @@ function CoverLetterDraftPanel({ draft }: { draft: CoverLetterDraft }) {
 
 function InterviewPrepPanel({ prep }: { prep: InterviewPrep }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        padding: '14px 16px',
-        borderRadius: 14,
-        border: '1px solid rgba(120,223,165,0.18)',
-        background:
-          'linear-gradient(180deg, rgba(13,31,24,0.94) 0%, rgba(10,21,17,0.9) 100%)',
-      }}
-    >
+    <div className={`${insightPanelBaseClass} border-edge-accent bg-surface-success`}>
       <div>
         <span className="detailLabel">Prep summary</span>
         <p className="sectionText" style={{ marginBottom: 0 }}>
