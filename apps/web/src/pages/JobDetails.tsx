@@ -25,19 +25,25 @@ import {
 } from '../api';
 import { queryKeys } from '../queryKeys';
 import { SkeletonPage } from '../components/Skeleton';
+import { Button } from '../components/ui/Button';
 
 function readProfileId() {
   return window.localStorage.getItem('engine_api_profile_id');
 }
 
 function FitScoreBar({ score }: { score: number }) {
-  const color = score >= 60 ? '#22c55e' : score >= 35 ? '#f59e0b' : '#ef4444';
+  const colorVar =
+    score >= 60
+      ? 'var(--color-text-success)'
+      : score >= 35
+        ? 'var(--color-text-warning)'
+        : 'var(--color-text-danger)';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <div style={{ flex: 1, height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
-        <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.4s ease' }} />
+        <div style={{ width: `${score}%`, height: '100%', background: colorVar, borderRadius: 4, transition: 'width 0.4s ease' }} />
       </div>
-      <span style={{ fontWeight: 700, fontSize: 18, color, minWidth: 42, textAlign: 'right' }}>{score}%</span>
+      <span style={{ fontWeight: 700, fontSize: 18, color: colorVar, minWidth: 42, textAlign: 'right' }}>{score}%</span>
     </div>
   );
 }
@@ -249,25 +255,24 @@ export default function JobDetails() {
               <BookmarkCheck size={13} /> {existing.status}
             </span>
           ) : isSaved ? (
-            <button
-              className="ghostBtn"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => unsaveMutation.mutate()}
               disabled={unsaveMutation.isPending}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               title="Remove from saved"
             >
               <BookmarkCheck size={14} />
               {unsaveMutation.isPending ? 'Знімаємо…' : 'Unsave'}
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
               <Bookmark size={14} />
               {saveMutation.isPending ? 'Зберігаємо…' : 'Зберегти'}
-            </button>
+            </Button>
           )}
 
           {job.primaryVariant?.sourceUrl && (
@@ -320,59 +325,29 @@ export default function JobDetails() {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
         {isHidden ? (
-          <button
-            className="ghostBtn"
-            style={{ padding: '6px 12px', fontSize: 13 }}
-            disabled={unhideMutation.isPending}
-            onClick={() => unhideMutation.mutate()}
-          >
+          <Button variant="ghost" size="sm" disabled={unhideMutation.isPending} onClick={() => unhideMutation.mutate()}>
             {unhideMutation.isPending ? 'Показуємо…' : 'Unhide'}
-          </button>
+          </Button>
         ) : (
-          <button
-            className="ghostBtn"
-            style={{ padding: '6px 12px', fontSize: 13 }}
-            disabled={hideMutation.isPending}
-            onClick={() => hideMutation.mutate()}
-          >
+          <Button variant="ghost" size="sm" disabled={hideMutation.isPending} onClick={() => hideMutation.mutate()}>
             {hideMutation.isPending ? 'Ховаємо…' : 'Hide'}
-          </button>
+          </Button>
         )}
         {isBadFit ? (
-          <button
-            className="ghostBtn"
-            style={{ padding: '6px 12px', fontSize: 13 }}
-            disabled={unmarkBadFitMutation.isPending}
-            onClick={() => unmarkBadFitMutation.mutate()}
-          >
+          <Button variant="ghost" size="sm" disabled={unmarkBadFitMutation.isPending} onClick={() => unmarkBadFitMutation.mutate()}>
             {unmarkBadFitMutation.isPending ? 'Знімаємо…' : 'Remove bad fit'}
-          </button>
+          </Button>
         ) : (
-          <button
-            className="ghostBtn"
-            style={{ padding: '6px 12px', fontSize: 13 }}
-            disabled={badFitMutation.isPending}
-            onClick={() => badFitMutation.mutate()}
-          >
+          <Button variant="ghost" size="sm" disabled={badFitMutation.isPending} onClick={() => badFitMutation.mutate()}>
             {badFitMutation.isPending ? 'Позначаємо…' : 'Mark bad fit'}
-          </button>
+          </Button>
         )}
-        <button
-          className="ghostBtn"
-          style={{ padding: '6px 12px', fontSize: 13 }}
-          disabled={companyFeedbackMutation.isPending}
-          onClick={() => companyFeedbackMutation.mutate('whitelist')}
-        >
+        <Button variant="ghost" size="sm" disabled={companyFeedbackMutation.isPending} onClick={() => companyFeedbackMutation.mutate('whitelist')}>
           {companyStatus === 'whitelist' ? 'Unwhitelist company' : 'Whitelist company'}
-        </button>
-        <button
-          className="ghostBtn"
-          style={{ padding: '6px 12px', fontSize: 13 }}
-          disabled={companyFeedbackMutation.isPending}
-          onClick={() => companyFeedbackMutation.mutate('blacklist')}
-        >
+        </Button>
+        <Button variant="ghost" size="sm" disabled={companyFeedbackMutation.isPending} onClick={() => companyFeedbackMutation.mutate('blacklist')}>
           {companyStatus === 'blacklist' ? 'Unblacklist company' : 'Blacklist company'}
-        </button>
+        </Button>
       </div>
 
       {/* ML fit analysis */}
@@ -392,14 +367,14 @@ export default function JobDetails() {
               {fit.matchedTerms.length > 0 && (
                 <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {fit.matchedTerms.map((t) => (
-                    <span key={t} className="pill" style={{ background: 'rgba(34,197,94,0.12)', color: '#86efac', borderColor: 'rgba(34,197,94,0.25)' }}>{t}</span>
+                    <span key={t} className="pill pill-success">{t}</span>
                   ))}
                 </div>
               )}
               {fit.missingTerms.length > 0 && (
                 <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                   {fit.missingTerms.map((t) => (
-                    <span key={t} className="pill" style={{ background: 'rgba(239,68,68,0.1)', color: '#fca5a5', borderColor: 'rgba(239,68,68,0.2)' }}>{t}</span>
+                    <span key={t} className="pill pill-danger">{t}</span>
                   ))}
                 </div>
               )}

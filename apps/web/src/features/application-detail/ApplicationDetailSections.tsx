@@ -10,6 +10,7 @@ import type {
   OfferStatus,
 } from '@job-copilot/shared';
 
+import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 import { StatusBadge } from '../../components/ui/StatusBadge';
@@ -93,12 +94,12 @@ export function ApplicationFormSection({
           </label>
         </div>
         <div className="formActions formActions-between">
-          <button type="button" onClick={clearDueDate} disabled={isPending || !dueDate}>
+          <Button type="button" variant="ghost" size="sm" onClick={clearDueDate} disabled={isPending || !dueDate}>
             Clear due date
-          </button>
-          <button type="submit" disabled={isPending || !hasChanges}>
+          </Button>
+          <Button type="submit" disabled={isPending || !hasChanges}>
             {isPending ? 'Saving...' : 'Save application'}
-          </button>
+          </Button>
         </div>
       </form>
     </section>
@@ -157,9 +158,9 @@ export function NotesSection({
           placeholder="Add context from recruiter calls, takeaways, or follow-up reminders."
         />
         <div className="formActions">
-          <button type="submit" disabled={isPending || !noteContent.trim()}>
+          <Button type="submit" disabled={isPending || !noteContent.trim()}>
             {isPending ? 'Saving...' : 'Add note'}
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -262,12 +263,9 @@ export function ContactsSection({
           </div>
         )}
         <div className="formActions">
-          <button
-            type="submit"
-            disabled={linkPending || availableContacts.length === 0 || !existingContactId}
-          >
+          <Button type="submit" disabled={linkPending || availableContacts.length === 0 || !existingContactId}>
             {linkPending ? 'Linking...' : 'Link contact'}
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -347,9 +345,9 @@ export function ContactsSection({
           />
         </label>
         <div className="formActions">
-          <button type="submit" disabled={createPending || !newContact.name.trim()}>
+          <Button type="submit" disabled={createPending || !newContact.name.trim()}>
             {createPending ? 'Saving...' : 'Create contact'}
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -484,9 +482,9 @@ export function OfferSection({
           />
         </label>
         <div className="formActions">
-          <button type="submit" disabled={isPending}>
+          <Button type="submit" disabled={isPending}>
             {isPending ? 'Saving...' : detail.offer ? 'Update offer' : 'Save offer'}
-          </button>
+          </Button>
         </div>
       </form>
     </section>

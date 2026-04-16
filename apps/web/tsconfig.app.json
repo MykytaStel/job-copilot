@@ -3,7 +3,11 @@
   "compilerOptions": {
     "baseUrl": ".",
     "jsx": "react-jsx",
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@job-copilot/shared": ["../../packages/contracts/src/index.ts"]
+    }
   },
   "include": ["src"]
 }

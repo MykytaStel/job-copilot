@@ -32,3 +32,4 @@ apps/ml/reports/
 __MACOSX/
 
 .claude/settings.local.json
+design-reference/

@@ -30,6 +30,7 @@ import type {
   WeeklyGuidance,
 } from '../api';
 import { queryKeys } from '../queryKeys';
+import { Card } from '../components/ui/Card';
 
 function readProfileId() {
   return window.localStorage.getItem('engine_api_profile_id');
@@ -49,36 +50,13 @@ function SummaryCard({
   color: string;
 }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '14px 18px',
-        borderRadius: 16,
-        border: '1px solid var(--color-border-soft)',
-        background: 'rgba(18, 25, 39, 0.85)',
-        minWidth: 140,
-      }}
-    >
+    <Card className="flex items-center gap-3 px-[18px] py-[14px] min-w-[140px]">
       <span style={{ color, opacity: 0.85 }}>{icon}</span>
       <div>
-        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-text-strong)', lineHeight: 1 }}>
-          {count}
-        </div>
-        <div
-          style={{
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            color: 'var(--color-text-secondary)',
-            marginTop: 3,
-          }}
-        >
-          {label}
-        </div>
+        <div className="text-2xl font-bold text-content-strong leading-none">{count}</div>
+        <div className="text-[11px] uppercase tracking-[0.08em] text-content-muted mt-0.5">{label}</div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -92,26 +70,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section
-      style={{
-        background: 'var(--color-bg-elevated)',
-        border: '1px solid var(--color-border-soft)',
-        borderRadius: 20,
-        padding: '20px 24px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <span style={{ color: 'var(--color-text-secondary)' }}>{icon}</span>
-        <h2
-          style={{
-            margin: 0,
-            fontSize: 15,
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-          }}
-        >
-          {title}
-        </h2>
+    <section className="card">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-content-muted">{icon}</span>
+        <h2 className="m-0 text-[15px] font-semibold text-content">{title}</h2>
       </div>
       {children}
     </section>
@@ -266,49 +228,16 @@ function ConversionCard({
   const width = `${Math.max(0, Math.min(rate, 1)) * 100}%`;
 
   return (
-    <div
-      style={{
-        padding: '14px 16px',
-        borderRadius: 16,
-        border: '1px solid var(--color-border-soft)',
-        background: 'rgba(18, 25, 39, 0.65)',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          marginBottom: 10,
-        }}
-      >
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{label}</div>
+    <Card className="px-4 py-[14px]">
+      <div className="flex items-center justify-between gap-3 mb-2.5">
+        <div className="text-xs text-content-muted">{label}</div>
         <div style={{ fontSize: 18, fontWeight: 700, color }}>{formatPercent(rate)}</div>
       </div>
-      <div
-        style={{
-          height: 8,
-          borderRadius: 999,
-          background: 'var(--color-bg-hover)',
-          overflow: 'hidden',
-          marginBottom: 8,
-        }}
-      >
-        <div
-          style={{
-            width,
-            height: '100%',
-            background: color,
-            borderRadius: 999,
-            transition: 'width 0.3s ease',
-          }}
-        />
+      <div className="h-2 rounded-full overflow-hidden mb-2" style={{ background: 'var(--color-bg-hover)' }}>
+        <div style={{ width, height: '100%', background: color, borderRadius: 999, transition: 'width 0.3s ease' }} />
       </div>
-      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-        {numerator} / {denominator}
-      </div>
-    </div>
+      <div className="text-xs text-content-muted">{numerator} / {denominator}</div>
+    </Card>
   );
 }
 
@@ -386,25 +315,17 @@ function FunnelSourceBreakdown({ summary }: { summary: FunnelSummary }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {rows.map((row) => (
-        <div
+        <Card
           key={row.source}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(120px, 1.3fr) repeat(4, minmax(0, 1fr))',
-            gap: 12,
-            padding: '12px 14px',
-            borderRadius: 14,
-            border: '1px solid var(--color-border-soft)',
-            background: 'rgba(18, 25, 39, 0.55)',
-            fontSize: 12,
-          }}
+          className="text-xs"
+          style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1.3fr) repeat(4, minmax(0, 1fr))', gap: 12, padding: '12px 14px' }}
         >
-          <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{row.source}</div>
-          <div style={{ color: 'var(--color-text-secondary)' }}>Impr. {row.impressions}</div>
-          <div style={{ color: 'var(--color-text-secondary)' }}>Open {row.opens}</div>
-          <div style={{ color: 'var(--color-text-secondary)' }}>Save {row.saves}</div>
-          <div style={{ color: 'var(--color-text-secondary)' }}>Apply {row.applications}</div>
-        </div>
+          <div className="font-semibold text-content">{row.source}</div>
+          <div className="text-content-muted">Impr. {row.impressions}</div>
+          <div className="text-content-muted">Open {row.opens}</div>
+          <div className="text-content-muted">Save {row.saves}</div>
+          <div className="text-content-muted">Apply {row.applications}</div>
+        </Card>
       ))}
     </div>
   );
@@ -772,9 +693,7 @@ export default function Analytics() {
       <div className="pageHeader">
         <div>
           <p className="eyebrow">Insights</p>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--color-text-strong)' }}>
-            Analytics
-          </h1>
+          <h1 className="m-0 text-[22px] font-bold text-content-strong">Analytics</h1>
         </div>
       </div>
 

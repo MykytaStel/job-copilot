@@ -21,6 +21,9 @@ import {
   unsaveJob,
 } from '../api';
 import { queryKeys } from '../queryKeys';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
 
 function readProfileId() {
   return window.localStorage.getItem('engine_api_profile_id');
@@ -38,28 +41,13 @@ function SummaryCard({
   color: string;
 }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '14px 18px',
-        borderRadius: 16,
-        border: '1px solid var(--color-border-soft)',
-        background: 'rgba(18, 25, 39, 0.85)',
-        minWidth: 140,
-      }}
-    >
+    <Card className="flex items-center gap-3 px-[18px] py-[14px] min-w-[140px]">
       <span style={{ color, opacity: 0.85 }}>{icon}</span>
       <div>
-        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-text-strong)', lineHeight: 1 }}>
-          {count}
-        </div>
-        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-secondary)', marginTop: 3 }}>
-          {label}
-        </div>
+        <div className="text-2xl font-bold text-content-strong leading-none">{count}</div>
+        <div className="text-[11px] uppercase tracking-[0.08em] text-content-muted mt-0.5">{label}</div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -75,58 +63,20 @@ function JobRow({
   isPending: boolean;
 }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 16,
-        padding: '12px 16px',
-        borderRadius: 12,
-        background: 'var(--color-bg-card-soft)',
-        border: '1px solid var(--color-border-subtle)',
-      }}
-    >
-      <div style={{ minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 14,
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
+    <Card className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-content truncate">
           {job.presentation?.title ?? job.title}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+        <div className="text-xs text-content-muted mt-0.5">
           {job.presentation?.company ?? job.company}
         </div>
       </div>
-      <button
-        onClick={() => onAction(job.id)}
-        disabled={isPending}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 12px',
-          borderRadius: 8,
-          border: '1px solid var(--color-border-input)',
-          background: 'transparent',
-          color: 'var(--color-text-secondary)',
-          fontSize: 12,
-          cursor: isPending ? 'not-allowed' : 'pointer',
-          opacity: isPending ? 0.5 : 1,
-          flexShrink: 0,
-          whiteSpace: 'nowrap',
-        }}
-      >
+      <Button variant="ghost" size="sm" onClick={() => onAction(job.id)} disabled={isPending}>
         <Undo2 size={12} />
         {actionLabel}
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 }
 
@@ -140,47 +90,16 @@ function CompanyRow({
   isPending: boolean;
 }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 16,
-        padding: '12px 16px',
-        borderRadius: 12,
-        background: 'var(--color-bg-card-soft)',
-        border: '1px solid var(--color-border-subtle)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Building2 size={14} style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }} />
-        <span style={{ fontSize: 14, color: 'var(--color-text-primary)' }}>
-          {record.companyName}
-        </span>
+    <Card className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="flex items-center gap-2">
+        <Building2 size={14} className="text-content-muted shrink-0" />
+        <span className="text-sm text-content">{record.companyName}</span>
       </div>
-      <button
-        onClick={() => onAction(record.companyName)}
-        disabled={isPending}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 12px',
-          borderRadius: 8,
-          border: '1px solid var(--color-border-input)',
-          background: 'transparent',
-          color: 'var(--color-text-secondary)',
-          fontSize: 12,
-          cursor: isPending ? 'not-allowed' : 'pointer',
-          opacity: isPending ? 0.5 : 1,
-          flexShrink: 0,
-          whiteSpace: 'nowrap',
-        }}
-      >
+      <Button variant="ghost" size="sm" onClick={() => onAction(record.companyName)} disabled={isPending}>
         <Undo2 size={12} />
         Remove
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 }
 
@@ -196,31 +115,11 @@ function Section({
   count: number;
 }) {
   return (
-    <section
-      style={{
-        background: 'var(--color-bg-elevated)',
-        border: '1px solid var(--color-border-soft)',
-        borderRadius: 20,
-        padding: '20px 24px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <span style={{ color: 'var(--color-text-secondary)' }}>{icon}</span>
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-          {title}
-        </h2>
-        <span
-          style={{
-            marginLeft: 'auto',
-            fontSize: 12,
-            color: 'var(--color-text-secondary)',
-            background: 'var(--color-bg-hover)',
-            borderRadius: 8,
-            padding: '2px 8px',
-          }}
-        >
-          {count}
-        </span>
+    <section className="card">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-content-muted">{icon}</span>
+        <h2 className="m-0 text-[15px] font-semibold text-content">{title}</h2>
+        <Badge variant="muted" className="ml-auto text-xs px-2 py-0.5 rounded-lg">{count}</Badge>
       </div>
       {children}
     </section>
@@ -307,9 +206,7 @@ export default function FeedbackCenter() {
       <div className="pageHeader">
         <div>
           <p className="eyebrow">Personalization</p>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--color-text-strong)' }}>
-            Feedback Center
-          </h1>
+          <h1 className="m-0 text-[22px] font-bold text-content-strong">Feedback Center</h1>
         </div>
       </div>
 

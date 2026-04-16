@@ -6,6 +6,7 @@ import type { Application, ApplicationStatus, JobPosting } from '@job-copilot/sh
 
 import { getApplications, getJobs, patchApplication } from '../api';
 import { queryKeys } from '../queryKeys';
+import { Button } from '../components/ui/Button';
 
 const COLUMNS: ApplicationStatus[] = ['saved', 'applied', 'interview', 'offer', 'rejected'];
 
@@ -73,12 +74,9 @@ export default function ApplicationBoard() {
           <p className="muted">Відстежуйте вакансії від збереження до офферу.</p>
         </div>
         {applications.length > 0 && (
-          <button
-            onClick={() => exportCsv(applications, jobsById)}
-            style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-          >
+          <Button onClick={() => exportCsv(applications, jobsById)}>
             <Download size={14} /> Export CSV
-          </button>
+          </Button>
         )}
       </div>
 
@@ -118,26 +116,27 @@ export default function ApplicationBoard() {
                         )}
                       </Link>
 
-                      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                      <div className="boardCardActions" style={{ marginTop: 8 }}>
                         {next && (
-                          <button
-                            className="ghostBtn"
-                            style={{ fontSize: 12, padding: '3px 8px' }}
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             disabled={moveMutation.isPending}
                             onClick={() => moveMutation.mutate({ id: application.id, status: next })}
                           >
                             → {next}
-                          </button>
+                          </Button>
                         )}
                         {status !== 'rejected' && (
-                          <button
-                            className="ghostBtn"
-                            style={{ fontSize: 12, padding: '3px 8px', opacity: 0.6 }}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            style={{ opacity: 0.6 }}
                             disabled={moveMutation.isPending}
                             onClick={() => moveMutation.mutate({ id: application.id, status: 'rejected' })}
                           >
                             ✕
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>

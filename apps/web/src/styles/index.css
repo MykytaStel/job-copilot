@@ -3,3 +3,7 @@
 @import './layout.css';
 @import './components.css';
 @import './pages.css';
+
+/* Phase 0: additive Tailwind v4 — no preflight, no base reset */
+@import './ds-tokens.css';
+@import 'tailwindcss/utilities';

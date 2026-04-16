@@ -23,6 +23,7 @@ import {
   getInterviewPrep,
   getJobFitExplanation,
 } from '../../api';
+import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
 import { PillList } from '../../components/ui/PillList';
@@ -79,9 +80,9 @@ export function ProfileFormSection({
             Persisted in `engine-api` and used for analysis/search-profile flows.
           </p>
         </div>
-        <button type="button" onClick={onAnalyze} disabled={!profileExists || isAnalyzing}>
+        <Button type="button" onClick={onAnalyze} disabled={!profileExists || isAnalyzing}>
           {isAnalyzing ? 'Analyzing…' : 'Analyze'}
-        </button>
+        </Button>
       </div>
 
       <form
@@ -121,14 +122,10 @@ export function ProfileFormSection({
         <label>
           <span className="profileUploadLabel">
             CV / текст профілю
-            <button
-              type="button"
-              className="ghostBtn ghostBtnCompact"
-              onClick={onOpenFilePicker}
-            >
+            <Button type="button" variant="ghost" size="sm" onClick={onOpenFilePicker}>
               <Upload size={13} />
               Завантажити .pdf / .txt / .md
-            </button>
+            </Button>
           </span>
           <input
             ref={fileInputRef}
@@ -146,12 +143,9 @@ export function ProfileFormSection({
           />
         </label>
 
-        <button
-          type="submit"
-          disabled={isSaving || !name || !email || !rawText.trim()}
-        >
+        <Button type="submit" disabled={isSaving || !name || !email || !rawText.trim()}>
           {isSaving ? 'Saving…' : profileExists ? 'Update Profile' : 'Create Profile'}
-        </button>
+        </Button>
       </form>
     </>
   );
@@ -208,9 +202,9 @@ export function SearchProfileBuilderSection({
             Uses the CV text above plus explicit preferences. No persistence required.
           </p>
         </div>
-        <button type="button" onClick={onBuild} disabled={isBuilding || !canBuild}>
+        <Button type="button" onClick={onBuild} disabled={isBuilding || !canBuild}>
           {isBuilding ? 'Building…' : 'Build search profile'}
-        </button>
+        </Button>
       </div>
 
       <div className="form">
@@ -442,9 +436,9 @@ export function RankedResultsSection({
             Uses the built search profile above and returns explainable ranked jobs.
           </p>
         </div>
-        <button type="button" onClick={onRunSearch} disabled={isRunning}>
+        <Button type="button" onClick={onRunSearch} disabled={isRunning}>
           {isRunning ? 'Running…' : 'Run search'}
-        </button>
+        </Button>
       </div>
 
       {searchError && <p className="error">{searchError}</p>}
@@ -881,9 +875,10 @@ function SearchResultFitExplanation({
         }}
       >
         <span className="detailLabel">LLM fit explanation</span>
-        <button
+        <Button
           type="button"
-          className="ghostBtn ghostBtnCompact"
+          variant="ghost"
+          size="sm"
           disabled={
             explainMutation.isPending ||
             !profileId ||
@@ -899,7 +894,7 @@ function SearchResultFitExplanation({
             : explanation
               ? 'Refresh explanation'
               : 'Explain fit'}
-        </button>
+        </Button>
       </div>
 
       {llmContextLoading && (
@@ -934,9 +929,10 @@ function SearchResultFitExplanation({
             }}
           >
             <span className="detailLabel">Application coaching</span>
-            <button
+            <Button
               type="button"
-              className="ghostBtn ghostBtnCompact"
+              variant="ghost"
+              size="sm"
               disabled={coachMutation.isPending || !profileId}
               onClick={() => coachMutation.mutate()}
             >
@@ -946,7 +942,7 @@ function SearchResultFitExplanation({
                 : coaching
                   ? 'Refresh coaching'
                   : 'Coach application'}
-            </button>
+            </Button>
           </div>
 
           {coachMutation.error && (
@@ -971,9 +967,10 @@ function SearchResultFitExplanation({
               }}
             >
               <span className="detailLabel">Cover letter draft</span>
-              <button
+              <Button
                 type="button"
-                className="ghostBtn ghostBtnCompact"
+                variant="ghost"
+                size="sm"
                 disabled={coverLetterMutation.isPending || !profileId}
                 onClick={() => coverLetterMutation.mutate()}
               >
@@ -983,7 +980,7 @@ function SearchResultFitExplanation({
                   : coverLetterDraft
                     ? 'Refresh draft'
                     : 'Draft cover letter'}
-              </button>
+              </Button>
             </div>
 
             {coverLetterMutation.error && (
@@ -1012,9 +1009,10 @@ function SearchResultFitExplanation({
               }}
             >
               <span className="detailLabel">Interview prep pack</span>
-              <button
+              <Button
                 type="button"
-                className="ghostBtn ghostBtnCompact"
+                variant="ghost"
+                size="sm"
                 disabled={interviewPrepMutation.isPending || !profileId}
                 onClick={() => interviewPrepMutation.mutate()}
               >
@@ -1024,7 +1022,7 @@ function SearchResultFitExplanation({
                   : interviewPrep
                     ? 'Refresh prep'
                     : 'Prepare interview'}
-              </button>
+              </Button>
             </div>
 
             {interviewPrepMutation.error && (
