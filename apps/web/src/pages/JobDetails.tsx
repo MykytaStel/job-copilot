@@ -1,6 +1,19 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Bookmark, BookmarkCheck, Briefcase, ExternalLink, MapPin, Sparkles, Wifi } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  Bookmark,
+  BookmarkCheck,
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  Copy,
+  EyeOff,
+  ExternalLink,
+  MapPin,
+  Sparkles,
+} from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type { Application } from '@job-copilot/shared';
@@ -26,27 +39,17 @@ import {
 import { queryKeys } from '../queryKeys';
 import { SkeletonPage } from '../components/Skeleton';
 import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Card, CardContent, CardHeader } from '../components/ui/Card';
+import { FitScoreBox, FitScoreCircular } from '../components/ui/FitScoreBox';
+import { PageHeader } from '../components/ui/SectionHeader';
+import { cn } from '../lib/cn';
 
 function readProfileId() {
   return window.localStorage.getItem('engine_api_profile_id');
 }
 
-function FitScoreBar({ score }: { score: number }) {
-  const colorVar =
-    score >= 60
-      ? 'var(--color-text-success)'
-      : score >= 35
-        ? 'var(--color-text-warning)'
-        : 'var(--color-text-danger)';
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <div style={{ flex: 1, height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
-        <div style={{ width: `${score}%`, height: '100%', background: colorVar, borderRadius: 4, transition: 'width 0.4s ease' }} />
-      </div>
-      <span style={{ fontWeight: 700, fontSize: 18, color: colorVar, minWidth: 42, textAlign: 'right' }}>{score}%</span>
-    </div>
-  );
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatSalary(min?: number, max?: number, currency?: string) {
   if (!min && !max) return null;
@@ -64,9 +67,13 @@ function formatDate(value?: string) {
     : d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function JobDetails() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'overview' | 'match' | 'lifecycle'>('overview');
+  const [copied, setCopied] = useState(false);
 
   const { data: job, isLoading, error } = useQuery({
     queryKey: queryKeys.jobs.detail(id!, readProfileId()),
@@ -107,15 +114,9 @@ export default function JobDetails() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!profileId) {
-        throw new Error('Create a profile first');
-      }
-
+      if (!profileId) throw new Error('Create a profile first');
       await markJobSaved(profileId, id!);
-
-      if (!existing) {
-        await createApplication({ jobId: id!, status: 'saved' });
-      }
+      if (!existing) await createApplication({ jobId: id!, status: 'saved' });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
@@ -141,10 +142,7 @@ export default function JobDetails() {
 
   const hideMutation = useMutation({
     mutationFn: async () => {
-      if (!profileId) {
-        throw new Error('Create a profile first');
-      }
-
+      if (!profileId) throw new Error('Create a profile first');
       await hideJobForProfile(profileId, id!);
     },
     onSuccess: () => {
@@ -170,10 +168,7 @@ export default function JobDetails() {
 
   const badFitMutation = useMutation({
     mutationFn: async () => {
-      if (!profileId) {
-        throw new Error('Create a profile first');
-      }
-
+      if (!profileId) throw new Error('Create a profile first');
       await markJobBadFit(profileId, id!);
     },
     onSuccess: () => {
@@ -199,24 +194,16 @@ export default function JobDetails() {
 
   const companyFeedbackMutation = useMutation({
     mutationFn: async (nextStatus: 'whitelist' | 'blacklist') => {
-      if (!profileId) {
-        throw new Error('Create a profile first');
-      }
+      if (!profileId) throw new Error('Create a profile first');
 
       if (nextStatus === 'whitelist') {
-        if (companyStatus === 'whitelist') {
-          await removeCompanyWhitelist(profileId, job!.company);
-        } else {
-          await addCompanyWhitelist(profileId, job!.company);
-        }
+        if (companyStatus === 'whitelist') await removeCompanyWhitelist(profileId, job!.company);
+        else await addCompanyWhitelist(profileId, job!.company);
         return;
       }
 
-      if (companyStatus === 'blacklist') {
-        await removeCompanyBlacklist(profileId, job!.company);
-      } else {
-        await addCompanyBlacklist(profileId, job!.company);
-      }
+      if (companyStatus === 'blacklist') await removeCompanyBlacklist(profileId, job!.company);
+      else await addCompanyBlacklist(profileId, job!.company);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
@@ -237,177 +224,468 @@ export default function JobDetails() {
 
   const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency);
 
-  return (
-    <div className="jobDetails">
-      <div className="pageHeader">
-        <div>
-          <h1>{job.title}</h1>
-          <p className="muted" style={{ fontSize: 16, marginTop: 4 }}>{job.company}</p>
-        </div>
+  const topBadges = [
+    job.primaryVariant?.source ? job.primaryVariant.source.replace('_', '.') : null,
+    job.seniority ?? null,
+    job.remoteType ?? null,
+  ].filter(Boolean) as string[];
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div className={`jobStatePill jobDetailsState jobState-${job.lifecycleStage ?? 'active'}`}>
-            {job.lifecycleStage ?? (job.isActive === false ? 'inactive' : 'active')}
+  const skillBadges = [
+    ...(job.presentation?.badges ?? []),
+    ...(fit?.matchedTerms ?? []),
+  ].slice(0, 10);
+
+  const handleCopy = async () => {
+    if (typeof window === 'undefined' || !navigator.clipboard) return;
+
+    await navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={job.title}
+        description={job.company}
+        breadcrumb={[
+          { label: 'Dashboard', href: '/' },
+          { label: 'Jobs' },
+          { label: job.company },
+        ]}
+        actions={(
+          <>
+            {existing ? (
+              <span className={`statusPill status-${existing.status}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <BookmarkCheck size={13} /> {existing.status}
+              </span>
+            ) : isSaved ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => unsaveMutation.mutate()}
+                disabled={unsaveMutation.isPending}
+                className="bg-primary/10 border-primary/30"
+              >
+                <BookmarkCheck className="h-4 w-4 text-primary" />
+                {unsaveMutation.isPending ? 'Знімаємо…' : 'Saved'}
+              </Button>
+            ) : (
+              <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+                <Bookmark className="h-4 w-4" />
+                {saveMutation.isPending ? 'Зберігаємо…' : 'Save'}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (isHidden ? unhideMutation.mutate() : hideMutation.mutate())}
+              disabled={hideMutation.isPending || unhideMutation.isPending}
+            >
+              <EyeOff className="h-4 w-4" />
+              {isHidden ? 'Unhide' : 'Hide'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
+              {copied ? <Check className="h-4 w-4 text-fit-excellent" /> : <Copy className="h-4 w-4" />}
+              {copied ? 'Copied' : 'Share'}
+            </Button>
+          </>
+        )}
+      />
+
+      {/* Main grid: 2/3 + 1/3 */}
+      <div className="grid lg:grid-cols-3 gap-6">
+
+        {/* ── Main column ── */}
+        <div className="lg:col-span-2 space-y-4">
+
+          {/* Job header card */}
+          <Card className="border-border bg-card overflow-hidden">
+            <CardContent className="p-0">
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-accent/5" />
+                <div className="relative p-6">
+                  <div className="flex flex-col gap-6 md:flex-row md:items-start">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                      <Building2 className="h-8 w-8 text-primary" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        {topBadges.map((badge) => (
+                          <Badge key={badge} variant="muted" className="px-2.5 py-1 text-xs">
+                            {badge}
+                          </Badge>
+                        ))}
+                        <div className={`jobStatePill jobDetailsState jobState-${job.lifecycleStage ?? 'active'}`}>
+                          {job.lifecycleStage ?? (job.isActive === false ? 'inactive' : 'active')}
+                        </div>
+                        {isBadFit && <span className="statusPill status-rejected">bad fit</span>}
+                        {companyStatus === 'blacklist' && (
+                          <span className="statusPill status-rejected">company blacklisted</span>
+                        )}
+                        {companyStatus === 'whitelist' && (
+                          <span className="statusPill status-saved">company whitelisted</span>
+                        )}
+                      </div>
+
+                      <h2 className="mb-1 text-xl font-bold text-card-foreground">{job.title}</h2>
+                      <p className="mb-4 text-lg text-muted-foreground">{job.company}</p>
+
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                        {job.primaryVariant?.source && (
+                          <span className="flex items-center gap-1.5">
+                            <MapPin className="h-4 w-4" />
+                            {job.primaryVariant.source.replace('_', '.')}
+                          </span>
+                        )}
+                        {salary && (
+                          <span className="flex items-center gap-1.5">
+                            <Briefcase className="h-4 w-4" />
+                            {salary}
+                          </span>
+                        )}
+                        {job.postedAt && (
+                          <span className="text-sm text-muted-foreground">
+                            Posted {formatDate(job.postedAt)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {fit && (
+                      <div className="flex shrink-0 flex-col items-center">
+                        <FitScoreCircular score={fit.score} size="lg" showLabel />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-6 flex flex-wrap gap-2 border-t border-border pt-6">
+                    {job.primaryVariant?.sourceUrl && (
+                      <a
+                        href={job.primaryVariant.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn inline-flex items-center gap-2 no-underline"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Apply on source
+                      </a>
+                    )}
+                    {profileId && (
+                      <Button
+                        variant="outline"
+                        className="flex-1 sm:flex-none"
+                        onClick={() => setActiveTab('match')}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        AI fit details
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: 'overview', label: 'Overview' },
+              { id: 'match', label: 'Match' },
+              { id: 'lifecycle', label: 'Lifecycle' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                className={cn(
+                  'inline-flex items-center rounded-lg border px-3 py-2 text-sm transition-colors',
+                  activeTab === tab.id
+                    ? 'border-primary/40 bg-primary/10 text-primary'
+                    : 'border-border bg-surface-elevated/50 text-muted-foreground hover:bg-surface-hover hover:text-foreground',
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          {existing ? (
-            <span className={`statusPill status-${existing.status}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <BookmarkCheck size={13} /> {existing.status}
-            </span>
-          ) : isSaved ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => unsaveMutation.mutate()}
-              disabled={unsaveMutation.isPending}
-              title="Remove from saved"
-            >
-              <BookmarkCheck size={14} />
-              {unsaveMutation.isPending ? 'Знімаємо…' : 'Unsave'}
-            </Button>
-          ) : (
-            <Button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-            >
-              <Bookmark size={14} />
-              {saveMutation.isPending ? 'Зберігаємо…' : 'Зберегти'}
-            </Button>
-          )}
-
-          {job.primaryVariant?.sourceUrl && (
-            <a
-              href={job.primaryVariant.sourceUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="ghostBtn"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
-            >
-              <ExternalLink size={14} /> Джерело
-            </a>
-          )}
-        </div>
-      </div>
-
-      {/* Meta chips */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-        {salary && (
-          <span className="jobMetaChip">
-            <Briefcase size={13} /> {salary}
-          </span>
-        )}
-        {job.seniority && (
-          <span className="jobMetaChip" style={{ textTransform: 'capitalize' }}>
-            {job.seniority}
-          </span>
-        )}
-        {job.remoteType && (
-          <span className="jobMetaChip">
-            <Wifi size={13} /> {job.remoteType}
-          </span>
-        )}
-        {job.primaryVariant?.source && (
-          <span className="jobMetaChip">
-            <MapPin size={13} /> {job.primaryVariant.source.replace('_', '.')}
-          </span>
-        )}
-        {job.postedAt && (
-          <span className="jobMetaChip">опубліковано {formatDate(job.postedAt)}</span>
-        )}
-        {isBadFit && <span className="statusPill status-rejected">bad fit</span>}
-        {companyStatus === 'blacklist' && (
-          <span className="statusPill status-rejected">company blacklisted</span>
-        )}
-        {companyStatus === 'whitelist' && (
-          <span className="statusPill status-saved">company whitelisted</span>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-        {isHidden ? (
-          <Button variant="ghost" size="sm" disabled={unhideMutation.isPending} onClick={() => unhideMutation.mutate()}>
-            {unhideMutation.isPending ? 'Показуємо…' : 'Unhide'}
-          </Button>
-        ) : (
-          <Button variant="ghost" size="sm" disabled={hideMutation.isPending} onClick={() => hideMutation.mutate()}>
-            {hideMutation.isPending ? 'Ховаємо…' : 'Hide'}
-          </Button>
-        )}
-        {isBadFit ? (
-          <Button variant="ghost" size="sm" disabled={unmarkBadFitMutation.isPending} onClick={() => unmarkBadFitMutation.mutate()}>
-            {unmarkBadFitMutation.isPending ? 'Знімаємо…' : 'Remove bad fit'}
-          </Button>
-        ) : (
-          <Button variant="ghost" size="sm" disabled={badFitMutation.isPending} onClick={() => badFitMutation.mutate()}>
-            {badFitMutation.isPending ? 'Позначаємо…' : 'Mark bad fit'}
-          </Button>
-        )}
-        <Button variant="ghost" size="sm" disabled={companyFeedbackMutation.isPending} onClick={() => companyFeedbackMutation.mutate('whitelist')}>
-          {companyStatus === 'whitelist' ? 'Unwhitelist company' : 'Whitelist company'}
-        </Button>
-        <Button variant="ghost" size="sm" disabled={companyFeedbackMutation.isPending} onClick={() => companyFeedbackMutation.mutate('blacklist')}>
-          {companyStatus === 'blacklist' ? 'Unblacklist company' : 'Blacklist company'}
-        </Button>
-      </div>
-
-      {/* ML fit analysis */}
-      {profileId && (
-        <section className="card" style={{ marginBottom: 16 }}>
-          <p className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Sparkles size={13} /> Відповідність профілю
-          </p>
-          {fit ? (
+          {activeTab === 'overview' && (
             <>
-              <FitScoreBar score={fit.score} />
-              {fit.evidence.length > 0 && (
-                <ul style={{ margin: '10px 0 0', paddingLeft: 18, fontSize: 13, color: 'rgba(255,255,255,0.65)' }}>
-                  {fit.evidence.map((e) => <li key={e}>{e}</li>)}
-                </ul>
-              )}
-              {fit.matchedTerms.length > 0 && (
-                <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {fit.matchedTerms.map((t) => (
-                    <span key={t} className="pill pill-success">{t}</span>
-                  ))}
-                </div>
-              )}
-              {fit.missingTerms.length > 0 && (
-                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {fit.missingTerms.map((t) => (
-                    <span key={t} className="pill pill-danger">{t}</span>
-                  ))}
-                </div>
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <p className="eyebrow" style={{ margin: 0 }}>Job Description</p>
+                </CardHeader>
+                <CardContent>
+                  <pre className="jobDescription">{job.description}</pre>
+                </CardContent>
+              </Card>
+
+              {skillBadges.length > 0 && (
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <p className="eyebrow" style={{ margin: 0 }}>Skills & Signals</p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {skillBadges.map((item) => (
+                        <Badge key={item} variant="muted" className="px-3 py-1 text-xs">
+                          {item}
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </>
-          ) : (
-            <p className="muted" style={{ margin: 0, fontSize: 13 }}>Аналізуємо…</p>
           )}
-        </section>
-      )}
 
-      {/* Description */}
-      <section className="card" style={{ marginBottom: 16 }}>
-        <p className="eyebrow">Опис вакансії</p>
-        <pre className="jobDescription">{job.description}</pre>
-      </section>
+          {activeTab === 'match' && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <p className="eyebrow" style={{ margin: 0 }}>Match Breakdown</p>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {fit ? (
+                  <>
+                    <div className="flex items-start gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                      <FitScoreBox score={fit.score} size="md" showLabel />
+                      <p className="m-0 text-sm leading-relaxed text-muted-foreground">
+                        {fit.evidence.length > 0
+                          ? fit.evidence[0]
+                          : 'Fit analysis is based on current profile, saved jobs, and explicit job signals.'}
+                      </p>
+                    </div>
 
-      {/* Lifecycle details (collapsed, for context) */}
-      <section className="card">
-        <p className="eyebrow">Lifecycle</p>
-        <div className="jobDetailFacts">
-          <div><span>вперше побачено</span><strong>{formatDate(job.firstSeenAt) ?? 'n/a'}</strong></div>
-          <div><span>останній раз</span><strong>{formatDate(job.lastSeenAt) ?? 'n/a'}</strong></div>
-          {job.inactivatedAt && (
-            <div><span>деактивовано</span><strong>{formatDate(job.inactivatedAt)}</strong></div>
+                    <div>
+                      <p className="mb-2 flex items-center gap-2 text-sm font-medium text-content-success">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Strengths
+                      </p>
+                      {fit.evidence.length > 0 ? (
+                        <ul className="space-y-2">
+                          {fit.evidence.map((entry) => (
+                            <li key={entry} className="flex items-start gap-2 text-sm text-muted-foreground">
+                              <span className="mt-1 text-fit-excellent">•</span>
+                              {entry}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No positive signals yet.</p>
+                      )}
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <p className="mb-2 flex items-center gap-2 text-sm font-medium text-content-success">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Matched Terms
+                        </p>
+                        {fit.matchedTerms.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {fit.matchedTerms.map((term) => (
+                              <span key={term} className="pill pill-success">{term}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No matched terms returned.</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <p className="mb-2 flex items-center gap-2 text-sm font-medium text-content-warning">
+                          <AlertCircle className="h-4 w-4" />
+                          Missing Signals
+                        </p>
+                        {fit.missingTerms.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {fit.missingTerms.map((term) => (
+                              <span key={term} className="pill pill-danger">{term}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No missing signals returned.</p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Fit analysis is not ready yet.</p>
+                )}
+              </CardContent>
+            </Card>
           )}
-          {job.reactivatedAt && (
-            <div><span>реактивовано</span><strong>{formatDate(job.reactivatedAt)}</strong></div>
+
+          {activeTab === 'lifecycle' && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <p className="eyebrow" style={{ margin: 0 }}>Lifecycle</p>
+              </CardHeader>
+              <CardContent>
+                <div className="jobDetailFacts">
+                  <div><span>вперше побачено</span><strong>{formatDate(job.firstSeenAt) ?? 'n/a'}</strong></div>
+                  <div><span>останній раз</span><strong>{formatDate(job.lastSeenAt) ?? 'n/a'}</strong></div>
+                  {job.inactivatedAt && (
+                    <div><span>деактивовано</span><strong>{formatDate(job.inactivatedAt)}</strong></div>
+                  )}
+                  {job.reactivatedAt && (
+                    <div><span>реактивовано</span><strong>{formatDate(job.reactivatedAt)}</strong></div>
+                  )}
+                  {job.primaryVariant && (
+                    <div><span>source id</span><strong>{job.primaryVariant.sourceJobId}</strong></div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           )}
-          {job.primaryVariant && (
-            <div><span>source id</span><strong>{job.primaryVariant.sourceJobId}</strong></div>
-          )}
+
         </div>
-      </section>
+
+        {/* ── Sidebar ── */}
+        <div className="space-y-4">
+
+          {/* AI Fit Analysis */}
+          {profileId && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <p className="eyebrow" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Sparkles size={13} /> Відповідність профілю
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {fit ? (
+                  <>
+                    <FitScoreBox score={fit.score} size="lg" showLabel className="mx-auto mb-1" />
+
+                    {fit.evidence.length > 0 && (
+                      <div>
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-content-success mb-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Evidence
+                        </p>
+                        <ul className="space-y-1 pl-1">
+                          {fit.evidence.map((e) => (
+                            <li key={e} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                              <span className="text-content-success mt-0.5">•</span> {e}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {fit.matchedTerms.length > 0 && (
+                      <div>
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-content-success mb-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Matched
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {fit.matchedTerms.map((t) => (
+                            <span key={t} className="pill pill-success">{t}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {fit.missingTerms.length > 0 && (
+                      <div>
+                        <p className="flex items-center gap-1.5 text-xs font-medium text-content-warning mb-1.5">
+                          <AlertCircle className="h-3.5 w-3.5" /> Missing
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {fit.missingTerms.map((t) => (
+                            <span key={t} className="pill pill-danger">{t}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Аналізуємо…</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Feedback */}
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <p className="eyebrow" style={{ margin: 0 }}>Feedback</p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {isHidden ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start"
+                  disabled={unhideMutation.isPending}
+                  onClick={() => unhideMutation.mutate()}
+                >
+                  {unhideMutation.isPending ? 'Показуємо…' : 'Unhide'}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start"
+                  disabled={hideMutation.isPending}
+                  onClick={() => hideMutation.mutate()}
+                >
+                  {hideMutation.isPending ? 'Ховаємо…' : 'Hide job'}
+                </Button>
+              )}
+
+              {isBadFit ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start"
+                  disabled={unmarkBadFitMutation.isPending}
+                  onClick={() => unmarkBadFitMutation.mutate()}
+                >
+                  {unmarkBadFitMutation.isPending ? 'Знімаємо…' : 'Remove bad fit'}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-destructive hover:text-destructive"
+                  disabled={badFitMutation.isPending}
+                  onClick={() => badFitMutation.mutate()}
+                >
+                  {badFitMutation.isPending ? 'Позначаємо…' : 'Not a good fit'}
+                </Button>
+              )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  'w-full justify-start',
+                  companyStatus === 'whitelist' && 'bg-primary/10 border-primary/30',
+                )}
+                disabled={companyFeedbackMutation.isPending}
+                onClick={() => companyFeedbackMutation.mutate('whitelist')}
+              >
+                {companyStatus === 'whitelist' ? 'Unwhitelist company' : 'Whitelist company'}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  'w-full justify-start',
+                  companyStatus === 'blacklist' && 'bg-destructive/10 border-destructive/30 text-destructive',
+                )}
+                disabled={companyFeedbackMutation.isPending}
+                onClick={() => companyFeedbackMutation.mutate('blacklist')}
+              >
+                {companyStatus === 'blacklist' ? 'Unblacklist company' : 'Blacklist company'}
+              </Button>
+            </CardContent>
+          </Card>
+
+        </div>
+      </div>
     </div>
   );
 }
