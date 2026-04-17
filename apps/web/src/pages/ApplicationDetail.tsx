@@ -10,6 +10,8 @@ import {
   OfferSection,
   TasksSection,
 } from '../features/application-detail/ApplicationDetailSections';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Page } from '../components/ui/Page';
 import { useApplicationDetail } from '../features/application-detail/useApplicationDetail';
 
 export default function ApplicationDetail() {
@@ -27,20 +29,24 @@ export default function ApplicationDetail() {
     offerForm,
   } = useApplicationDetail(id);
 
-  if (!id) return <p className="error">Application not found</p>;
-  if (detailQuery.isLoading) return <p className="muted">Loading...</p>;
+  if (!id) return <Page><EmptyState message="Application not found" /></Page>;
+  if (detailQuery.isLoading) return <Page><EmptyState message="Loading..." /></Page>;
   if (detailQuery.error || !detail) {
     return (
-      <p className="error">
-        {detailQuery.error instanceof Error
-          ? detailQuery.error.message
-          : 'Application not found'}
-      </p>
+      <Page>
+        <EmptyState
+          message={
+            detailQuery.error instanceof Error
+              ? detailQuery.error.message
+              : 'Application not found'
+          }
+        />
+      </Page>
     );
   }
 
   return (
-    <div className="jobDetails">
+    <Page>
       <ApplicationHeader detail={detail} />
 
       <ApplicationFormSection
@@ -103,6 +109,6 @@ export default function ApplicationDetail() {
 
       <ActivitiesSection activities={detail.activities} />
       <TasksSection tasks={detail.tasks} />
-    </div>
+    </Page>
   );
 }

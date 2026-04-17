@@ -31,6 +31,8 @@ import { queryKeys } from '../queryKeys';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Page } from '../components/ui/Page';
 import { StatCard } from '../components/ui/StatCard';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { cn } from '../lib/cn';
@@ -232,16 +234,16 @@ export default function FeedbackCenter() {
 
   if (!profileId) {
     return (
-      <div className="jobDetails">
-        <p className="emptyState">Create a profile to view feedback.</p>
-      </div>
+      <Page>
+        <EmptyState message="Create a profile to view feedback." />
+      </Page>
     );
   }
 
   const isLoading = jobsLoading || feedbackLoading;
 
   return (
-    <div className="jobDetails">
+    <Page>
       <PageHeader
         title="Feedback Center"
         description="Manage saved jobs, hidden roles, bad fits, and company preferences."
@@ -252,7 +254,7 @@ export default function FeedbackCenter() {
       />
 
       {isLoading ? (
-        <p className="emptyState">Loading feedback…</p>
+        <EmptyState message="Loading feedback…" />
       ) : (
         <>
           {summary && (
@@ -311,9 +313,10 @@ export default function FeedbackCenter() {
             {activeTab === 'saved' && (
               <Section title="Saved Jobs" icon={<Bookmark size={16} />} count={filteredSavedJobs.length}>
                 {filteredSavedJobs.length === 0 ? (
-                  <p className="emptyState">
-                    {searchQuery ? 'No saved jobs match this query.' : 'No saved jobs.'}
-                  </p>
+                  <EmptyState
+                    message={searchQuery ? 'No saved jobs match this query.' : 'No saved jobs.'}
+                    className="px-4 py-5 text-left"
+                  />
                 ) : (
                   <div className="flex flex-col gap-3">
                     {filteredSavedJobs.map((job) => (
@@ -336,9 +339,10 @@ export default function FeedbackCenter() {
                   Hidden jobs stay out of the main feed until you restore them.
                 </p>
                 {filteredHiddenJobs.length === 0 ? (
-                  <p className="emptyState">
-                    {searchQuery ? 'No hidden jobs match this query.' : 'No hidden jobs.'}
-                  </p>
+                  <EmptyState
+                    message={searchQuery ? 'No hidden jobs match this query.' : 'No hidden jobs.'}
+                    className="px-4 py-5 text-left"
+                  />
                 ) : (
                   <div className="flex flex-col gap-3">
                     {filteredHiddenJobs.map((job) => (
@@ -361,9 +365,10 @@ export default function FeedbackCenter() {
                   Jobs marked as bad fit influence future ranking and recommendations.
                 </p>
                 {filteredBadFitJobs.length === 0 ? (
-                  <p className="emptyState">
-                    {searchQuery ? 'No bad-fit jobs match this query.' : 'No jobs marked as bad fit.'}
-                  </p>
+                  <EmptyState
+                    message={searchQuery ? 'No bad-fit jobs match this query.' : 'No jobs marked as bad fit.'}
+                    className="px-4 py-5 text-left"
+                  />
                 ) : (
                   <div className="flex flex-col gap-3">
                     {filteredBadFitJobs.map((job) => (
@@ -412,7 +417,7 @@ export default function FeedbackCenter() {
                     </Button>
                   </div>
                   {whitelistedCompanies.length === 0 ? (
-                    <p className="emptyState">No whitelisted companies.</p>
+                    <EmptyState message="No whitelisted companies." className="px-4 py-5 text-left" />
                   ) : (
                     <div className="flex flex-col gap-3">
                       {whitelistedCompanies.map((company) => (
@@ -496,7 +501,7 @@ export default function FeedbackCenter() {
                     </Button>
                   </div>
                   {blacklistedCompanies.length === 0 ? (
-                    <p className="emptyState">No blacklisted companies.</p>
+                    <EmptyState message="No blacklisted companies." className="px-4 py-5 text-left" />
                   ) : (
                     <div className="flex flex-col gap-3">
                       {blacklistedCompanies.map((company) => (
@@ -554,6 +559,6 @@ export default function FeedbackCenter() {
           </div>
         </>
       )}
-    </div>
+    </Page>
   );
 }

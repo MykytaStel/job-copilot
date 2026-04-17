@@ -75,10 +75,10 @@ export function ProfileFormSection({
 }) {
   return (
     <>
-      <div className="pageHeader">
+      <div className="flex flex-col gap-4 rounded-[28px] border border-border bg-card/85 p-6 shadow-[var(--shadow-hero)] md:flex-row md:items-center md:justify-between">
         <div>
-          <h1>Profile</h1>
-          <p className="muted">
+          <h1 className="m-0 text-2xl font-bold text-card-foreground">Profile</h1>
+          <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
             Persisted in `engine-api` and used for analysis/search-profile flows.
           </p>
         </div>
@@ -88,7 +88,7 @@ export function ProfileFormSection({
       </div>
 
       <form
-        className="card form"
+        className="flex flex-col gap-4 rounded-[24px] border border-border bg-card/85 p-6"
         onSubmit={(event) => {
           event.preventDefault();
           onSave();
@@ -114,7 +114,7 @@ export function ProfileFormSection({
           />
         </label>
         <label>
-          Location <span className="muted">(optional)</span>
+          Location <span className="text-muted-foreground">(optional)</span>
           <input
             value={location}
             onChange={(event) => setLocation(event.target.value)}
@@ -122,7 +122,7 @@ export function ProfileFormSection({
           />
         </label>
         <label>
-          <span className="profileUploadLabel">
+          <span className="flex items-center justify-between gap-3">
             CV / текст профілю
             <Button type="button" variant="ghost" size="sm" onClick={onOpenFilePicker}>
               <Upload size={13} />
@@ -133,7 +133,7 @@ export function ProfileFormSection({
             ref={fileInputRef}
             type="file"
             accept=".pdf,.txt,.md,.text"
-            className="visuallyHidden"
+            className="hidden"
             onChange={onFileChange}
           />
           <textarea
@@ -195,12 +195,12 @@ export function SearchProfileBuilderSection({
   setExcludeKeywordsInput: (value: string) => void;
 }) {
   return (
-    <section className="card">
-      <div className="sectionCardHeader">
+    <section className="rounded-[24px] border border-border bg-card/85 p-6">
+      <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="eyebrow">Search profile builder</p>
-          <h2>Build from current raw text</h2>
-          <p className="muted sectionText">
+          <h2 className="m-0 text-xl font-semibold text-card-foreground">Build from current raw text</h2>
+          <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
             Uses the CV text above plus explicit preferences. No persistence required.
           </p>
         </div>
@@ -209,7 +209,7 @@ export function SearchProfileBuilderSection({
         </Button>
       </div>
 
-      <div className="form">
+      <div className="flex flex-col gap-4">
         <div className="fieldGroup">
           <span className="fieldLabel">Target regions</span>
           <OptionCardGroup
@@ -299,10 +299,10 @@ export function SearchProfileResultSection({
   sources: SourceCatalogItem[];
 }) {
   return (
-    <div className="grid">
-      <section className="card">
+    <div className="grid gap-6 xl:grid-cols-2">
+      <section className="rounded-[24px] border border-border bg-card/85 p-6">
         <p className="eyebrow">Analyzed profile</p>
-        <p className="sectionText">{result.analyzedProfile.summary}</p>
+        <p className="m-0 leading-7 text-card-foreground">{result.analyzedProfile.summary}</p>
 
         <div className="detailGrid resultSection">
           <div>
@@ -350,7 +350,7 @@ export function SearchProfileResultSection({
         </div>
       </section>
 
-      <section className="card">
+      <section className="rounded-[24px] border border-border bg-card/85 p-6">
         <p className="eyebrow">Search profile</p>
 
         <div className="detailGrid">
@@ -429,12 +429,12 @@ export function RankedResultsSection({
   onRunSearch: () => void;
 }) {
   return (
-    <section className="card">
-      <div className="sectionCardHeader sectionCardHeader-tight">
+    <section className="rounded-[24px] border border-border bg-card/85 p-6">
+      <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="eyebrow">Ranked results</p>
-          <h2>Run deterministic search</h2>
-          <p className="muted sectionText">
+          <h2 className="m-0 text-xl font-semibold text-card-foreground">Run deterministic search</h2>
+          <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
             Uses the built search profile above and returns explainable ranked jobs.
           </p>
         </div>
@@ -446,7 +446,7 @@ export function RankedResultsSection({
       {searchError && <p className="error">{searchError}</p>}
 
       {isRunning ? (
-        <p className="muted sectionText">Running ranked search against active jobs…</p>
+        <p className="m-0 text-sm leading-6 text-muted-foreground">Running ranked search against active jobs…</p>
       ) : searchResult ? (
         <SearchResultsSection
           result={searchResult}
@@ -460,7 +460,7 @@ export function RankedResultsSection({
           sources={sources}
         />
       ) : (
-        <p className="muted sectionText">
+        <p className="m-0 text-sm leading-6 text-muted-foreground">
           Build a search profile, then run search to inspect ranked jobs and fit reasons.
         </p>
       )}
@@ -476,17 +476,17 @@ export function LatestAnalysisSection({
   skills: string[];
 }) {
   return (
-    <section className="card">
+    <section className="rounded-[24px] border border-border bg-card/85 p-6">
       <p className="eyebrow">Latest analysis</p>
       {summary ? (
         <>
-          <p className="sectionText">{summary}</p>
+          <p className="m-0 leading-7 text-card-foreground">{summary}</p>
           <div className="resultSection">
             <PillList items={skills} emptyLabel="No skills returned." />
           </div>
         </>
       ) : (
-        <p className="muted sectionText">
+        <p className="m-0 text-sm leading-6 text-muted-foreground">
           No persisted analysis yet. Save the profile, then run Analyze.
         </p>
       )}
@@ -531,7 +531,7 @@ function SearchResultsSection({
 
   return (
     <div className="resultSection">
-      <p className="muted sectionText">
+      <p className="m-0 text-sm leading-6 text-muted-foreground">
         {summary}
         {filteredSummary}
       </p>
@@ -614,7 +614,7 @@ function SearchResultCard({
           ))}
         </div>
 
-        <p className="muted sectionText">{displayCompany}</p>
+        <p className="m-0 text-sm text-muted-foreground">{displayCompany}</p>
 
         {presentation?.summary && (
           <p className="sectionText searchResultSummary">{presentation.summary}</p>
@@ -900,7 +900,7 @@ function SearchResultFitExplanation({
       </div>
 
       {llmContextLoading && (
-        <p className="muted sectionText" style={{ margin: 0 }}>
+        <p className="m-0 text-sm leading-6 text-muted-foreground">
           Feedback-aware context is loading. Fit explanation will be available once it is ready.
         </p>
       )}
@@ -1104,7 +1104,7 @@ function FitExplanationList({
           ))}
         </ul>
       ) : (
-        <p className="muted sectionText" style={{ marginBottom: 0 }}>
+        <p className="m-0 text-sm leading-6 text-muted-foreground">
           {emptyLabel}
         </p>
       )}
@@ -1181,7 +1181,7 @@ function CoverLetterDraftPanel({ draft }: { draft: CoverLetterDraft }) {
             ))}
           </div>
         ) : (
-          <p className="muted sectionText" style={{ marginBottom: 0 }}>
+          <p className="m-0 text-sm leading-6 text-muted-foreground">
             No body paragraphs returned.
           </p>
         )}

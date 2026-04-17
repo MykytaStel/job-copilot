@@ -31,6 +31,8 @@ import type {
 } from '../api';
 import { queryKeys } from '../queryKeys';
 import { Card } from '../components/ui/Card';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Page } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { AnalyticsCard, StatCard } from '../components/ui/StatCard';
 
@@ -128,7 +130,7 @@ function BarRow({
 
 function TagList({ items, color }: { items: string[]; color: string }) {
   if (items.length === 0) {
-    return <p className="emptyState" style={{ margin: 0 }}>None yet.</p>;
+    return <EmptyState message="None yet." className="px-4 py-4 text-left" />;
   }
 
   return (
@@ -163,7 +165,7 @@ function SimpleList({
   color: string;
 }) {
   if (items.length === 0) {
-    return <p className="emptyState" style={{ margin: 0 }}>{empty}</p>;
+    return <EmptyState message={empty} className="px-4 py-4 text-left" />;
   }
 
   return (
@@ -228,7 +230,7 @@ function SourceDistribution({ summary }: { summary: AnalyticsSummary }) {
   const colors = ['#95a7ff', '#c9fff8', '#ffd6a5', '#ffb4b4', '#b9fbc0'];
 
   if (summary.jobsBySource.length === 0) {
-    return <p className="emptyState" style={{ margin: 0 }}>No source data yet.</p>;
+    return <EmptyState message="No source data yet." className="px-4 py-4 text-left" />;
   }
 
   return (
@@ -289,7 +291,7 @@ function FunnelSourceBreakdown({ summary }: { summary: FunnelSummary }) {
   }));
 
   if (rows.length === 0) {
-    return <p className="emptyState" style={{ margin: 0 }}>No source funnel data yet.</p>;
+    return <EmptyState message="No source funnel data yet." className="px-4 py-4 text-left" />;
   }
 
   return (
@@ -354,7 +356,7 @@ function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
           Positive signals
         </div>
         {ctx.topPositiveEvidence.length === 0 ? (
-          <p className="emptyState" style={{ margin: 0 }}>No positive signals yet.</p>
+          <EmptyState message="No positive signals yet." className="px-4 py-4 text-left" />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {ctx.topPositiveEvidence.slice(0, 8).map((entry, i) => (
@@ -392,7 +394,7 @@ function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
           Negative signals
         </div>
         {ctx.topNegativeEvidence.length === 0 ? (
-          <p className="emptyState" style={{ margin: 0 }}>No negative signals yet.</p>
+          <EmptyState message="No negative signals yet." className="px-4 py-4 text-left" />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {ctx.topNegativeEvidence.slice(0, 8).map((entry, i) => (
@@ -660,16 +662,16 @@ export default function Analytics() {
 
   if (!profileId) {
     return (
-      <div className="jobDetails">
-        <p className="emptyState">Create a profile to view analytics.</p>
-      </div>
+      <Page>
+        <EmptyState message="Create a profile to view analytics." />
+      </Page>
     );
   }
 
   const isLoading = summaryLoading || behaviorLoading || funnelLoading || ctxLoading;
 
   return (
-    <div className="jobDetails">
+    <Page>
       <PageHeader
         title="Analytics"
         description="Track your job search progress and feedback-driven trends."
@@ -680,7 +682,7 @@ export default function Analytics() {
       />
 
       {isLoading ? (
-        <p className="emptyState">Loading analytics…</p>
+        <EmptyState message="Loading analytics…" />
       ) : summary ? (
         <>
           {/* Feedback summary cards */}
@@ -806,15 +808,16 @@ export default function Analytics() {
           {llmCtx && (
             <Section title="Weekly Guidance" icon={<Brain size={16} />}>
               {weeklyGuidanceLoading ? (
-                <p className="emptyState" style={{ margin: 0 }}>Generating weekly guidance…</p>
+                <EmptyState message="Generating weekly guidance…" className="px-4 py-4 text-left" />
               ) : weeklyGuidanceError ? (
-                <p className="emptyState" style={{ margin: 0 }}>
-                  {(weeklyGuidanceError as Error).message || 'Weekly guidance is unavailable right now.'}
-                </p>
+                <EmptyState
+                  message={(weeklyGuidanceError as Error).message || 'Weekly guidance is unavailable right now.'}
+                  className="px-4 py-4 text-left"
+                />
               ) : weeklyGuidance ? (
                 <WeeklyGuidancePanel guidance={weeklyGuidance} />
               ) : (
-                <p className="emptyState" style={{ margin: 0 }}>No weekly guidance available yet.</p>
+                <EmptyState message="No weekly guidance available yet." className="px-4 py-4 text-left" />
               )}
             </Section>
           )}
@@ -822,22 +825,23 @@ export default function Analytics() {
           {llmCtx && (
             <Section title="LLM Enrichment" icon={<Brain size={16} />}>
               {insightsLoading ? (
-                <p className="emptyState" style={{ margin: 0 }}>Generating enrichment…</p>
+                <EmptyState message="Generating enrichment…" className="px-4 py-4 text-left" />
               ) : insightsError ? (
-                <p className="emptyState" style={{ margin: 0 }}>
-                  {(insightsError as Error).message || 'ML enrichment is unavailable right now.'}
-                </p>
+                <EmptyState
+                  message={(insightsError as Error).message || 'ML enrichment is unavailable right now.'}
+                  className="px-4 py-4 text-left"
+                />
               ) : profileInsights ? (
                 <ProfileInsightsPanel insights={profileInsights} />
               ) : (
-                <p className="emptyState" style={{ margin: 0 }}>No enrichment available yet.</p>
+                <EmptyState message="No enrichment available yet." className="px-4 py-4 text-left" />
               )}
             </Section>
           )}
         </>
       ) : (
-        <p className="emptyState">No analytics data available.</p>
+        <EmptyState message="No analytics data available." />
       )}
-    </div>
+    </Page>
   );
 }
