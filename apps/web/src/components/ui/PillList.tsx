@@ -1,3 +1,6 @@
+import { cn } from '../../lib/cn';
+import { EmptyState } from './EmptyState';
+
 export function PillList({
   items,
   emptyLabel,
@@ -8,13 +11,26 @@ export function PillList({
   tone?: 'default' | 'success' | 'danger';
 }) {
   if (items.length === 0) {
-    return <p className="muted sectionText">{emptyLabel}</p>;
+    return <EmptyState message={emptyLabel} className="px-4 py-4 text-left" />;
   }
 
+  const toneClass =
+    tone === 'success'
+      ? 'bg-fit-excellent/12 text-fit-excellent border-fit-excellent/15'
+      : tone === 'danger'
+        ? 'bg-destructive/12 text-destructive border-destructive/15'
+        : 'bg-secondary/70 text-secondary-foreground border-border';
+
   return (
-    <div className="pillWrap">
+    <div className="flex flex-wrap gap-2">
       {items.map((item) => (
-        <span key={item} className={`pill ${tone !== 'default' ? `pill-${tone}` : ''}`}>
+        <span
+          key={item}
+          className={cn(
+            'inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium',
+            toneClass,
+          )}
+        >
           {item}
         </span>
       ))}

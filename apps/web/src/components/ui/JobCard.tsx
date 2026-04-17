@@ -15,6 +15,7 @@ import type { Application, JobPosting } from '@job-copilot/shared';
 import { cn } from '../../lib/cn';
 import { Badge } from './Badge';
 import { Card, CardContent } from './Card';
+import { StatusBadge } from './StatusBadge';
 
 // ── Fit score helpers ─────────────────────────────────────────────────────────
 
@@ -229,15 +230,13 @@ export function JobCard({
                   </span>
                 )}
                 {applicationStatus && (
-                  <span className={`statusPill status-${applicationStatus}`}>
-                    {applicationStatus}
-                  </span>
+                  <StatusBadge status={applicationStatus} />
                 )}
                 {!applicationStatus && isSaved && (
-                  <span className="statusPill status-saved">saved</span>
+                  <StatusBadge status="saved" />
                 )}
                 {isBadFit && (
-                  <span className="statusPill status-rejected">bad fit</span>
+                  <StatusBadge status="bad fit" />
                 )}
               </div>
 

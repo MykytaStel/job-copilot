@@ -23,20 +23,20 @@ import {
 
 export function ApplicationHeader({ detail }: { detail: ApplicationDetail }) {
   return (
-    <div className="pageHeader pageHeaderTop">
-      <div className="pageTitleBlock">
-        <Link to="/applications" className="linkBtn backLink">
+    <div className="rounded-[28px] border border-border bg-card/85 p-6 shadow-[var(--shadow-hero)]">
+      <div className="flex flex-col gap-3">
+        <Link to="/applications" className="text-sm text-primary no-underline hover:underline">
           &larr; Back to Board
         </Link>
-        <h1 className="applicationItemTitle">{detail.job.title}</h1>
-        <p className="muted sectionText">{detail.job.company}</p>
-        <div className="cluster">
+        <h1 className="m-0 text-2xl font-bold text-card-foreground">{detail.job.title}</h1>
+        <p className="m-0 text-sm text-muted-foreground">{detail.job.company}</p>
+        <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={detail.status} />
           {detail.appliedAt && (
-            <span className="muted metaDate">Applied: {formatDate(detail.appliedAt)}</span>
+            <span className="text-xs text-muted-foreground">Applied: {formatDate(detail.appliedAt)}</span>
           )}
           {detail.dueDate && (
-            <span className="muted metaDate">Due: {formatDate(detail.dueDate)}</span>
+            <span className="text-xs text-muted-foreground">Due: {formatDate(detail.dueDate)}</span>
           )}
         </div>
       </div>
@@ -64,7 +64,7 @@ export function ApplicationFormSection({
   onSubmit: () => void;
 }) {
   return (
-    <section className="card">
+    <section className="rounded-[24px] border border-border bg-card/85 p-6">
       <SectionHeader title="Application" />
       <form
         className="formStack"
@@ -110,18 +110,18 @@ export function JobDetailsSection({ detail }: { detail: ApplicationDetail }) {
   const { job } = detail;
 
   return (
-    <section className="card">
+    <section className="rounded-[24px] border border-border bg-card/85 p-6">
       <SectionHeader title="Job Details" />
-      <div className="inlineMeta">
+      <div className="flex flex-wrap items-center gap-4">
         {job.url && (
-          <span className="muted metaDate">
+          <span className="text-xs text-muted-foreground">
             Source:{' '}
-            <a href={job.url} target="_blank" rel="noopener noreferrer" className="linkBtn">
+            <a href={job.url} target="_blank" rel="noopener noreferrer" className="text-primary no-underline hover:underline">
               {job.url}
             </a>
           </span>
         )}
-        <span className="muted metaDate">Posted: {formatDate(job.createdAt)}</span>
+        <span className="text-xs text-muted-foreground">Posted: {formatDate(job.createdAt)}</span>
       </div>
       <DescriptionBlock text={job.description || 'No description available.'} />
     </section>
@@ -142,7 +142,7 @@ export function NotesSection({
   onSubmit: () => void;
 }) {
   return (
-    <section className="card">
+    <section className="rounded-[24px] border border-border bg-card/85 p-6">
       <SectionHeader title="Notes" />
       <form
         className="formStack"
@@ -171,7 +171,7 @@ export function NotesSection({
           {notes.map((note) => (
             <div key={note.id} className="surfaceItem">
               <p className="surfaceItemTitle">{note.content}</p>
-              <span className="muted surfaceItemMeta">{formatDate(note.createdAt)}</span>
+              <span className="text-xs text-muted-foreground">{formatDate(note.createdAt)}</span>
             </div>
           ))}
         </div>
@@ -214,7 +214,7 @@ export function ContactsSection({
   onCreateAndLink: () => void;
 }) {
   return (
-    <section className="card">
+    <section className="rounded-[24px] border border-border bg-card/85 p-6">
       <SectionHeader title="Contacts" />
 
       <form
@@ -224,9 +224,9 @@ export function ContactsSection({
           onLinkExisting();
         }}
       >
-        <p className="muted sectionText">Attach existing contact</p>
+        <p className="m-0 text-sm text-muted-foreground">Attach existing contact</p>
         {contactsLoading ? (
-          <p className="muted sectionText">Loading contacts...</p>
+          <p className="m-0 text-sm text-muted-foreground">Loading contacts...</p>
         ) : availableContacts.length === 0 ? (
           <EmptyState message="No unlinked contacts available yet." />
         ) : (
@@ -276,7 +276,7 @@ export function ContactsSection({
           onCreateAndLink();
         }}
       >
-        <p className="muted sectionText">Create and link new contact</p>
+        <p className="m-0 text-sm text-muted-foreground">Create and link new contact</p>
         <div className="formGrid">
           <label>
             Name
@@ -400,21 +400,21 @@ export function OfferSection({
   onSubmit: () => void;
 }) {
   return (
-    <section className="card">
+    <section className="rounded-[24px] border border-border bg-card/85 p-6">
       <SectionHeader title="Offer" />
 
       {detail.offer ? (
-        <div className="inlineMeta">
-          <span className="statusPill">{detail.offer.status}</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <StatusBadge status={detail.offer.status} />
           {compensationLabel && (
-            <span className="muted metaDate">Compensation: {compensationLabel}</span>
+            <span className="text-xs text-muted-foreground">Compensation: {compensationLabel}</span>
           )}
           {detail.offer.startsAt && (
-            <span className="muted metaDate">Start: {formatDate(detail.offer.startsAt)}</span>
+            <span className="text-xs text-muted-foreground">Start: {formatDate(detail.offer.startsAt)}</span>
           )}
         </div>
       ) : (
-        <p className="muted sectionText">No offer saved yet.</p>
+        <p className="m-0 text-sm text-muted-foreground">No offer saved yet.</p>
       )}
 
       <form
@@ -493,7 +493,7 @@ export function OfferSection({
 
 export function ActivitiesSection({ activities }: { activities: ApplicationDetail['activities'] }) {
   return (
-    <section className="card">
+    <section className="rounded-[24px] border border-border bg-card/85 p-6">
       <SectionHeader title="Activities" />
       {activities.length === 0 ? (
         <EmptyState message="No activities yet" />
@@ -504,7 +504,7 @@ export function ActivitiesSection({ activities }: { activities: ApplicationDetai
               <span className="badge activityType">{formatEnumLabel(activity.type)}</span>
               <div className="stackXs">
                 <p className="surfaceItemTitle">{activity.description}</p>
-                <span className="muted surfaceItemMeta">{formatDate(activity.happenedAt)}</span>
+                <span className="text-xs text-muted-foreground">{formatDate(activity.happenedAt)}</span>
               </div>
             </div>
           ))}
@@ -516,7 +516,7 @@ export function ActivitiesSection({ activities }: { activities: ApplicationDetai
 
 export function TasksSection({ tasks }: { tasks: ApplicationDetail['tasks'] }) {
   return (
-    <section className="card">
+    <section className="rounded-[24px] border border-border bg-card/85 p-6">
       <SectionHeader title="Tasks" />
       {tasks.length === 0 ? (
         <EmptyState message="No tasks yet" />
@@ -527,7 +527,7 @@ export function TasksSection({ tasks }: { tasks: ApplicationDetail['tasks'] }) {
               <input type="checkbox" checked={task.done} readOnly className="taskCheckbox" />
               <span className={`taskTitle ${task.done ? 'taskTitle-done' : ''}`}>{task.title}</span>
               {task.remindAt && (
-                <span className="muted surfaceItemMeta">Remind: {formatDate(task.remindAt)}</span>
+                <span className="text-xs text-muted-foreground">Remind: {formatDate(task.remindAt)}</span>
               )}
             </div>
           ))}
@@ -569,7 +569,7 @@ function ContactCard({ item }: { item: ApplicationContact }) {
         <span className="badge badge-secondary contactRoleTag">{formatEnumLabel(item.relationship)}</span>
       </div>
       {(contact.role || contact.company) && (
-        <span className="muted helperText">
+        <span className="text-xs text-muted-foreground">
           {[contact.role, contact.company].filter(Boolean).join(' at ')}
         </span>
       )}
@@ -579,7 +579,7 @@ function ContactCard({ item }: { item: ApplicationContact }) {
             {contact.email}
           </a>
         )}
-        {contact.phone && <span className="muted helperText">{contact.phone}</span>}
+        {contact.phone && <span className="text-xs text-muted-foreground">{contact.phone}</span>}
         {contact.linkedinUrl && (
           <a
             href={contact.linkedinUrl}

@@ -5,6 +5,7 @@ import {
   SearchProfileBuilderSection,
   SearchProfileResultSection,
 } from '../features/profile/ProfileSections';
+import { Page } from '../components/ui/Page';
 import { useProfilePage } from '../features/profile/useProfilePage';
 
 export default function Profile() {
@@ -54,7 +55,7 @@ export default function Profile() {
   } = useProfilePage();
 
   return (
-    <div className="jobDetails">
+    <Page>
       <ProfileFormSection
         name={name}
         email={email}
@@ -120,6 +121,6 @@ export default function Profile() {
       {profile && (
         <LatestAnalysisSection summary={profile.summary} skills={profile.skills} />
       )}
-    </div>
+    </Page>
   );
 }

@@ -41,8 +41,11 @@ import { SkeletonPage } from '../components/Skeleton';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
+import { EmptyState } from '../components/ui/EmptyState';
 import { FitScoreBox, FitScoreCircular } from '../components/ui/FitScoreBox';
+import { Page } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
+import { StatusBadge } from '../components/ui/StatusBadge';
 import { cn } from '../lib/cn';
 
 function readProfileId() {
@@ -216,9 +219,9 @@ export default function JobDetails() {
   if (isLoading) return <SkeletonPage />;
   if (!job) {
     return (
-      <p className="error">
-        {error instanceof Error ? error.message : 'Вакансія не знайдена'}
-      </p>
+      <Page>
+        <EmptyState message={error instanceof Error ? error.message : 'Вакансія не знайдена'} />
+      </Page>
     );
   }
 
@@ -244,7 +247,7 @@ export default function JobDetails() {
   };
 
   return (
-    <div className="space-y-6">
+    <Page>
       <PageHeader
         title={job.title}
         description={job.company}
@@ -256,9 +259,9 @@ export default function JobDetails() {
         actions={(
           <>
             {existing ? (
-              <span className={`statusPill status-${existing.status}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
                 <BookmarkCheck size={13} /> {existing.status}
-              </span>
+              </div>
             ) : isSaved ? (
               <Button
                 variant="outline"
@@ -317,15 +320,15 @@ export default function JobDetails() {
                             {badge}
                           </Badge>
                         ))}
-                        <div className={`jobStatePill jobDetailsState jobState-${job.lifecycleStage ?? 'active'}`}>
-                          {job.lifecycleStage ?? (job.isActive === false ? 'inactive' : 'active')}
-                        </div>
-                        {isBadFit && <span className="statusPill status-rejected">bad fit</span>}
+                        <StatusBadge
+                          status={job.lifecycleStage ?? (job.isActive === false ? 'inactive' : 'active')}
+                        />
+                        {isBadFit && <StatusBadge status="bad fit" />}
                         {companyStatus === 'blacklist' && (
-                          <span className="statusPill status-rejected">company blacklisted</span>
+                          <StatusBadge status="blacklist" label="company blacklisted" />
                         )}
                         {companyStatus === 'whitelist' && (
-                          <span className="statusPill status-saved">company whitelisted</span>
+                          <StatusBadge status="whitelist" label="company whitelisted" />
                         )}
                       </div>
 
@@ -366,7 +369,7 @@ export default function JobDetails() {
                         href={job.primaryVariant.sourceUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="btn inline-flex items-center gap-2 no-underline"
+                        className="inline-flex items-center gap-2 rounded-xl bg-[image:var(--gradient-button)] px-4 py-2.5 text-sm font-medium text-white no-underline shadow-[0_18px_40px_rgba(0,0,0,0.24)]"
                       >
                         <ExternalLink className="h-4 w-4" />
                         Apply on source
@@ -485,7 +488,9 @@ export default function JobDetails() {
                         {fit.matchedTerms.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
                             {fit.matchedTerms.map((term) => (
-                              <span key={term} className="pill pill-success">{term}</span>
+                              <Badge key={term} variant="success" className="px-3 py-1 text-xs">
+                                {term}
+                              </Badge>
                             ))}
                           </div>
                         ) : (
@@ -501,7 +506,9 @@ export default function JobDetails() {
                         {fit.missingTerms.length > 0 ? (
                           <div className="flex flex-wrap gap-2">
                             {fit.missingTerms.map((term) => (
-                              <span key={term} className="pill pill-danger">{term}</span>
+                              <Badge key={term} variant="danger" className="px-3 py-1 text-xs">
+                                {term}
+                              </Badge>
                             ))}
                           </div>
                         ) : (
@@ -574,28 +581,32 @@ export default function JobDetails() {
                     )}
 
                     {fit.matchedTerms.length > 0 && (
-                      <div>
-                        <p className="flex items-center gap-1.5 text-xs font-medium text-content-success mb-1.5">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Matched
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {fit.matchedTerms.map((t) => (
-                            <span key={t} className="pill pill-success">{t}</span>
-                          ))}
-                        </div>
+                        <div>
+                          <p className="flex items-center gap-1.5 text-xs font-medium text-content-success mb-1.5">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Matched
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {fit.matchedTerms.map((t) => (
+                              <Badge key={t} variant="success" className="px-3 py-1 text-xs">
+                                {t}
+                              </Badge>
+                            ))}
+                          </div>
                       </div>
                     )}
 
                     {fit.missingTerms.length > 0 && (
-                      <div>
-                        <p className="flex items-center gap-1.5 text-xs font-medium text-content-warning mb-1.5">
-                          <AlertCircle className="h-3.5 w-3.5" /> Missing
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {fit.missingTerms.map((t) => (
-                            <span key={t} className="pill pill-danger">{t}</span>
-                          ))}
-                        </div>
+                        <div>
+                          <p className="flex items-center gap-1.5 text-xs font-medium text-content-warning mb-1.5">
+                            <AlertCircle className="h-3.5 w-3.5" /> Missing
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {fit.missingTerms.map((t) => (
+                              <Badge key={t} variant="danger" className="px-3 py-1 text-xs">
+                                {t}
+                              </Badge>
+                            ))}
+                          </div>
                       </div>
                     )}
                   </>
@@ -686,6 +697,6 @@ export default function JobDetails() {
 
         </div>
       </div>
-    </div>
+    </Page>
   );
 }

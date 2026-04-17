@@ -18,8 +18,11 @@ import {
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
+import { AIInsightPanel } from '../components/ui/AIInsightPanel';
 import { FilterChips } from '../components/ui/FilterChips';
+import { EmptyState } from '../components/ui/EmptyState';
 import { JobCard, JobCardSkeleton } from '../components/ui/JobCard';
+import { Page } from '../components/ui/Page';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -339,9 +342,36 @@ export default function Dashboard() {
   ];
   const selectedLifecycle = [lifecycleFilter];
   const selectedSource = sourceFilter ? [sourceFilter] : ['__all__'];
+  const insights = [
+    {
+      id: 'active-feed',
+      type: 'trend' as const,
+      title: 'Feed health is stable',
+      description: jobSummary
+        ? `${jobSummary.activeJobs} active jobs are in rotation and ${jobSummary.reactivatedJobs} came back after disappearing.`
+        : 'Track active and reactivated inventory from the dashboard feed.',
+      action: { label: 'View analytics', href: '/analytics' },
+    },
+    {
+      id: 'pipeline',
+      type: 'recommendation' as const,
+      title: 'Pipeline needs frequent review',
+      description: applications.length > 0
+        ? `${applications.length} tracked applications already affect ranking and next actions. Keep statuses current to improve feedback loops.`
+        : 'Saved jobs and applications will appear here once you start tracking them.',
+      action: { label: 'Open applications', href: '/applications' },
+    },
+    {
+      id: 'profile',
+      type: 'tip' as const,
+      title: 'Search quality comes from profile quality',
+      description: 'Refresh your profile and search preferences when target roles, regions, or allowed sources change.',
+      action: { label: 'Update profile', href: '/profile' },
+    },
+  ];
 
   return (
-    <div className="space-y-6">
+    <Page>
 
       {/* ── Hero card ─────────────────────────────────────────────────────── */}
       <Card className="border-border bg-card overflow-hidden">
@@ -487,17 +517,11 @@ export default function Dashboard() {
                 <JobCardSkeleton />
               </>
             ) : jobs.length === 0 ? (
-              <Card className="border-border bg-card">
-                <CardContent className="py-12 text-center">
-                  <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-base font-semibold text-card-foreground mb-2">
-                    {search ? 'Нічого не знайдено' : 'Вакансій поки немає'}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {search ? 'Спробуйте змінити запит' : 'Запустіть pnpm scrape:djinni'}
-                  </p>
-                </CardContent>
-              </Card>
+              <EmptyState
+                message={search ? 'Нічого не знайдено' : 'Вакансій поки немає'}
+                description={search ? 'Спробуйте змінити запит.' : 'Запустіть `pnpm scrape:djinni` або оновіть feed.'}
+                icon={<Briefcase className="h-12 w-12" />}
+              />
             ) : (
               jobs.map((job) => {
                 const application = applicationByJob.get(job.id);
@@ -527,6 +551,7 @@ export default function Dashboard() {
 
         {/* Sidebar (1/3) */}
         <div className="space-y-4">
+          <AIInsightPanel insights={insights} />
 
           {/* Quick actions */}
           <Card className="border-border bg-card">
@@ -619,6 +644,6 @@ export default function Dashboard() {
 
         </div>
       </div>
-    </div>
+    </Page>
   );
 }

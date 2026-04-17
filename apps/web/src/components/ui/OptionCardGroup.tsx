@@ -1,3 +1,5 @@
+import { cn } from '../../lib/cn';
+
 type OptionCardGroupItem<T extends string> = {
   id: T;
   label: string;
@@ -13,15 +15,22 @@ export function OptionCardGroup<T extends string>({
   onToggle: (value: T) => void;
 }) {
   return (
-    <div className="optionGrid">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {options.map((option) => (
-        <label key={option.id} className="optionCard">
+        <label
+          key={option.id}
+          className={cn(
+            'flex cursor-pointer items-center gap-3 rounded-2xl border border-border bg-card/70 px-4 py-3 text-sm transition-colors',
+            value.includes(option.id) && 'border-primary/35 bg-primary/8 text-card-foreground',
+          )}
+        >
           <input
             type="checkbox"
             checked={value.includes(option.id)}
             onChange={() => onToggle(option.id)}
+            className="h-4 w-4 accent-[var(--color-primary)]"
           />
-          <span>{option.label}</span>
+          <span className="leading-6">{option.label}</span>
         </label>
       ))}
     </div>
