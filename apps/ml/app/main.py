@@ -1,5 +1,4 @@
 import asyncio
-import re
 from functools import lru_cache
 
 import httpx
@@ -57,6 +56,7 @@ from app.profile_insights import (
     http_error_from_provider_error,
 )
 from app.profile_insights_service import ProfileInsightsService
+from app.text_normalization import normalize_term_for_output, normalize_text, tokenize
 from app.weekly_guidance import (
     WeeklyGuidanceProviderError,
     WeeklyGuidanceRequest,
@@ -64,30 +64,6 @@ from app.weekly_guidance import (
     http_error_from_weekly_guidance_error,
 )
 from app.weekly_guidance_service import WeeklyGuidanceService
-
-
-TOKEN_RE = re.compile(r"[a-z0-9]+")
-STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "be",
-    "by",
-    "for",
-    "from",
-    "in",
-    "into",
-    "is",
-    "of",
-    "on",
-    "or",
-    "the",
-    "to",
-    "with",
-}
 
 app = FastAPI(
     title="job-copilot-ml",
@@ -214,30 +190,6 @@ def get_weekly_guidance_service() -> WeeklyGuidanceService:
         raise http_error_from_weekly_guidance_error(exc) from exc
 
 
-def normalize_text(value: str) -> str:
-    return (
-        value.lower()
-        .replace("c++", "cpp")
-        .replace("c#", "csharp")
-        .replace("node.js", "nodejs")
-        .replace("react.js", "react")
-        .replace("react native", "reactnative")
-    )
-
-
-def tokenize(*chunks: str | None) -> list[str]:
-    tokens: list[str] = []
-    for chunk in chunks:
-        if not chunk:
-            continue
-        normalized = normalize_text(chunk)
-        for token in TOKEN_RE.findall(normalized):
-            if len(token) < 2 or token in STOPWORDS:
-                continue
-            tokens.append(token)
-    return tokens
-
-
 def unique_preserving_order(values: list[str]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -252,13 +204,15 @@ def unique_preserving_order(values: list[str]) -> list[str]:
 def profile_terms(profile: EngineProfile) -> list[str]:
     analysis = profile.analysis
     if analysis:
-        terms = tokenize(
-            analysis.primary_role,
-            analysis.seniority,
-            " ".join(analysis.skills),
-            " ".join(analysis.keywords),
-            profile.raw_text,
-        )
+        terms = tokenize(analysis.primary_role, analysis.seniority, profile.raw_text)
+        for skill in analysis.skills:
+            normalized_skill = normalize_term_for_output(skill)
+            if normalized_skill:
+                terms.append(normalized_skill)
+        for keyword in analysis.keywords:
+            normalized_keyword = normalize_term_for_output(keyword)
+            if normalized_keyword:
+                terms.append(normalized_keyword)
     else:
         terms = tokenize(profile.raw_text)
     return unique_preserving_order(terms)[:40]

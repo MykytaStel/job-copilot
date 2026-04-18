@@ -170,21 +170,28 @@ impl DjinniSelectors {
             // Variant 1: original BEM names seen in older Djinni HTML
             item_primary: Selector::parse("li.list-jobs__item").expect("valid"),
             // Variant 2: article-based cards some sites migrate to
-            item_fallback: Selector::parse("article.job-list-item, li.job-list-item")
-                .expect("valid"),
+            item_fallback: Selector::parse(
+                "article.job-list-item, li.job-list-item, article[data-job-id]",
+            )
+            .expect("valid"),
             // Title — try both class names that have been in use
-            title_primary: Selector::parse("a.job-list-item__link, a.job-item__title-link")
-                .expect("valid"),
+            title_primary: Selector::parse(
+                "a.job-list-item__link, a.job-item__title-link, a[data-qa='job-title']",
+            )
+            .expect("valid"),
             // Fallback: any anchor whose href matches /jobs/<number>
             title_fallback: Selector::parse("a[href^='/jobs/']").expect("valid"),
             company: Selector::parse("a[href*='/company/'], .job-list-item__pic a, .company-name")
                 .expect("valid"),
             description: Selector::parse(
-                ".job-list-item__description, .job-list-item__summary, .text-default",
+                ".job-list-item__description, .job-list-item__summary, [data-qa='job-item-description'], .text-default",
             )
             .expect("valid"),
             salary: Selector::parse(".public-salary-item, .job-list-item__salary").expect("valid"),
-            location: Selector::parse(".location-text, .job-list-item__location").expect("valid"),
+            location: Selector::parse(
+                ".location-text, .job-list-item__location, [data-qa='job-location']",
+            )
+            .expect("valid"),
             time: Selector::parse("time[datetime]").expect("valid"),
         }
     }
@@ -443,8 +450,13 @@ fn parse_detail_page(
         &document,
         &[
             "#job-description",
+            "[data-testid='job-description']",
+            "[data-qa='job-description']",
             ".job-post__description",
+            ".job-post__content",
+            ".profile-page-section .mb-4",
             ".profile-page-section",
+            "article",
             "main",
         ],
     )
@@ -510,7 +522,17 @@ fn parse_detail_page(
             ),
             "detail_description_text": extract_rich_text(
                 &document,
-                &["#job-description", ".job-post__description", ".profile-page-section", "main"]
+                &[
+                    "#job-description",
+                    "[data-testid='job-description']",
+                    "[data-qa='job-description']",
+                    ".job-post__description",
+                    ".job-post__content",
+                    ".profile-page-section .mb-4",
+                    ".profile-page-section",
+                    "article",
+                    "main",
+                ]
             ),
             "detail_salary_text": salary_source,
             "detail_posted_at": extract_datetime(&document),
@@ -537,7 +559,7 @@ fn extract_first_text(document: &Html, selectors: &[&str]) -> Option<String> {
 }
 
 fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
-    let list_selector = Selector::parse("p, li").expect("valid selector");
+    let list_selector = Selector::parse("p, li, h2, h3, h4, ul, ol").expect("valid selector");
     let mut best: Option<String> = None;
 
     for raw_selector in selectors {
@@ -549,12 +571,18 @@ fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
             let parts = container
                 .select(&list_selector)
                 .map(|element| collect_text(&element))
-                .filter(|value| value.len() > 20)
+                .filter(|value| value.len() > 12)
+                .filter(|value| {
+                    !matches!(
+                        value.as_str(),
+                        "How to apply" | "Send CV" | "View vacancy" | "Jobs feed in RSS"
+                    )
+                })
                 .collect::<Vec<_>>();
             let candidate = if parts.is_empty() {
                 collect_text(&container)
             } else {
-                parts.join(" ")
+                parts.join("\n")
             };
             if candidate.len() > best.as_ref().map_or(0, String::len) {
                 best = Some(candidate);
@@ -671,5 +699,43 @@ mod tests {
                 .is_some_and(|value| value.contains("Own backend services"))
         );
         assert_eq!(detail.posted_at.as_deref(), Some("2026-04-16T00:00:00Z"));
+    }
+
+    #[test]
+    fn prefers_detail_body_when_listing_snippet_is_short() {
+        let html = include_str!("../../tests/fixtures/djinni_detail_regression.html");
+        let fallback = NormalizationResult {
+            job: NormalizedJob {
+                id: "job_djinni_321".to_string(),
+                title: "Front-end React Developer".to_string(),
+                company_name: "SignalHire".to_string(),
+                location: Some("Remote, Europe".to_string()),
+                remote_type: Some("remote".to_string()),
+                seniority: Some("senior".to_string()),
+                description_text: "React product team".to_string(),
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                posted_at: None,
+                last_seen_at: "2026-04-18T10:00:00Z".to_string(),
+                is_active: true,
+            },
+            snapshot: RawSnapshot {
+                source: "djinni".to_string(),
+                source_job_id: "321".to_string(),
+                source_url: "https://djinni.co/jobs/321-front-end-react-developer/".to_string(),
+                raw_payload: json!({}),
+                fetched_at: "2026-04-18T10:00:00Z".to_string(),
+            },
+        };
+
+        let detail = parse_detail_page(html, &fallback, "2026-04-18T10:00:00Z");
+        let description = detail
+            .description_text
+            .expect("detail description should be present");
+
+        assert!(description.contains("Own the frontend architecture"));
+        assert!(description.contains("Improve performance budgets"));
+        assert!(!description.contains("How to apply"));
     }
 }

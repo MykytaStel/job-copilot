@@ -16,7 +16,12 @@ import {
   type SearchRunResult,
 } from '../../api';
 import { queryKeys } from '../../queryKeys';
-import { extractPdfText, parseKeywordInput, toggleValue } from './profile.utils';
+import {
+  cleanupExtractedResumeText,
+  extractPdfText,
+  parseKeywordInput,
+  toggleValue,
+} from './profile.utils';
 
 export function useProfilePage() {
   const queryClient = useQueryClient();
@@ -182,8 +187,9 @@ export function useProfilePage() {
     const reader = new FileReader();
     reader.onload = (loadEvent) => {
       const text = loadEvent.target?.result;
-      if (typeof text === 'string' && text.trim()) {
-        setRawText(text);
+      const cleanedText = typeof text === 'string' ? cleanupExtractedResumeText(text) : '';
+      if (cleanedText.trim()) {
+        setRawText(cleanedText);
         toast.success(`Файл завантажено: ${file.name}`);
       } else {
         toast.error('Файл порожній або не вдалося прочитати');

@@ -203,6 +203,7 @@ fn choose_better_description(
     company_name: &str,
 ) -> String {
     let current_clean = cleanup_description_text(current, title, company_name, &[]);
+    let current_quality = score_description_quality(current, &current_clean, title, company_name);
 
     let Some(candidate_value) = candidate else {
         return if current_clean.is_empty() {
@@ -221,11 +222,14 @@ fn choose_better_description(
         };
     }
 
+    let candidate_quality =
+        score_description_quality(candidate_value, &candidate_clean, title, company_name);
+
     if current_clean.is_empty() || current_clean.eq_ignore_ascii_case(title) {
         return candidate_clean;
     }
 
-    if candidate_clean.len() > current_clean.len() + 40 {
+    if candidate_quality >= current_quality + 12 {
         return candidate_clean;
     }
 
@@ -236,6 +240,39 @@ fn choose_better_description(
     }
 
     current_clean
+}
+
+fn score_description_quality(raw: &str, cleaned: &str, title: &str, company_name: &str) -> usize {
+    if cleaned.is_empty() {
+        return 0;
+    }
+
+    let normalized_title = normalize_text(title).to_lowercase();
+    let normalized_company = normalize_text(company_name).to_lowercase();
+    let useful_length = cleaned.chars().count();
+    let block_count = raw
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.len() > 24)
+        .count()
+        .max(1);
+    let sentence_count = cleaned
+        .split(['.', '!', '?', ';', ':'])
+        .map(str::trim)
+        .filter(|segment| segment.len() > 24)
+        .count();
+    let unique_terms = cleaned
+        .split_whitespace()
+        .map(|term| {
+            term.trim_matches(|ch: char| !ch.is_alphanumeric())
+                .to_lowercase()
+        })
+        .filter(|term| term.len() > 3)
+        .filter(|term| term != &normalized_title && term != &normalized_company)
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+
+    useful_length / 20 + block_count * 4 + sentence_count * 3 + unique_terms
 }
 
 /// Parse a salary string into (min, max, currency).
@@ -353,5 +390,57 @@ mod tests {
         );
 
         assert!(merged.is_none());
+    }
+
+    #[test]
+    fn prefers_detail_description_when_it_has_substantially_richer_content() {
+        let result = NormalizationResult {
+            job: NormalizedJob {
+                id: "job-2".to_string(),
+                title: "Front-end React Developer".to_string(),
+                company_name: "SignalHire".to_string(),
+                location: None,
+                remote_type: Some("remote".to_string()),
+                seniority: Some("senior".to_string()),
+                description_text: "React product team".to_string(),
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                posted_at: None,
+                last_seen_at: "2026-04-18T10:00:00Z".to_string(),
+                is_active: true,
+            },
+            snapshot: RawSnapshot {
+                source: "djinni".to_string(),
+                source_job_id: "2".to_string(),
+                source_url: "https://example.com/jobs/2".to_string(),
+                raw_payload: json!({}),
+                fetched_at: "2026-04-18T10:00:00Z".to_string(),
+            },
+        };
+
+        let merged = merge_detail_into_result(
+            result,
+            DetailSnapshot {
+                description_text: Some(
+                    "About the role\nBuild a frontend platform with React and TypeScript.\nPartner with product and design on experiments.".to_string(),
+                ),
+                ..DetailSnapshot::default()
+            },
+        )
+        .expect("detail merge should succeed");
+
+        assert!(
+            merged
+                .job
+                .description_text
+                .contains("Build a frontend platform")
+        );
+        assert!(
+            merged
+                .job
+                .description_text
+                .contains("Partner with product and design")
+        );
     }
 }

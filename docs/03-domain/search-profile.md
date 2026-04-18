@@ -51,3 +51,5 @@ The search run stays deterministic and Rust-owned:
 - no LLM calls
 - no provider-specific logic in the scoring path
 - no frontend-owned ranking truth
+
+Matching input normalization follows [Text Normalization](./text-normalization.md) so compound terms and known phrases are canonicalized before token-level matching.
