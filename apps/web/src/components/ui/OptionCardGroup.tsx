@@ -20,8 +20,8 @@ export function OptionCardGroup<T extends string>({
         <label
           key={option.id}
           className={cn(
-            'flex cursor-pointer items-center gap-3 rounded-2xl border border-border bg-card/70 px-4 py-3 text-sm transition-colors',
-            value.includes(option.id) && 'border-primary/35 bg-primary/8 text-card-foreground',
+            'flex cursor-pointer items-center gap-3 rounded-2xl border border-border bg-card/70 px-4 py-3.5 text-sm transition-colors',
+            value.includes(option.id) && 'border-primary/35 bg-primary/8 text-card-foreground shadow-[inset_0_0_0_1px_rgba(149,167,255,0.1)]',
           )}
         >
           <input

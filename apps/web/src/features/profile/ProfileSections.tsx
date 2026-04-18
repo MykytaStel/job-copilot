@@ -75,20 +75,33 @@ export function ProfileFormSection({
 }) {
   return (
     <>
-      <div className="flex flex-col gap-4 rounded-[28px] border border-border bg-card/85 p-6 shadow-[var(--shadow-hero)] md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="m-0 text-2xl font-bold text-card-foreground">Profile</h1>
+      <div className="flex flex-col gap-5 rounded-[28px] border border-border bg-card/85 p-7 shadow-[var(--shadow-hero)] md:flex-row md:items-end md:justify-between">
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+              Persisted profile
+            </span>
+            <span className="inline-flex items-center rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {profileExists ? 'Ready for analysis' : 'Create profile first'}
+            </span>
+          </div>
+          <h2 className="m-0 text-2xl font-bold text-card-foreground">Candidate intake</h2>
           <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
             Persisted in `engine-api` and used for analysis/search-profile flows.
           </p>
         </div>
-        <Button type="button" onClick={onAnalyze} disabled={!profileExists || isAnalyzing}>
+        <Button
+          type="button"
+          onClick={onAnalyze}
+          disabled={!profileExists || isAnalyzing}
+          className="w-full md:w-auto"
+        >
           {isAnalyzing ? 'Analyzing…' : 'Analyze'}
         </Button>
       </div>
 
       <form
-        className="flex flex-col gap-4 rounded-[24px] border border-border bg-card/85 p-6"
+        className="flex flex-col gap-5 rounded-[24px] border border-border bg-card/85 p-7"
         onSubmit={(event) => {
           event.preventDefault();
           onSave();
@@ -145,7 +158,11 @@ export function ProfileFormSection({
           />
         </label>
 
-        <Button type="submit" disabled={isSaving || !name || !email || !rawText.trim()}>
+        <Button
+          type="submit"
+          disabled={isSaving || !name || !email || !rawText.trim()}
+          className="w-full md:w-auto"
+        >
           {isSaving ? 'Saving…' : profileExists ? 'Update Profile' : 'Create Profile'}
         </Button>
       </form>
@@ -195,10 +212,17 @@ export function SearchProfileBuilderSection({
   setExcludeKeywordsInput: (value: string) => void;
 }) {
   return (
-    <section className="rounded-[24px] border border-border bg-card/85 p-6">
+    <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="eyebrow">Search profile builder</p>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+              Structured search profile
+            </span>
+            <span className="inline-flex items-center rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Roles, regions, work mode, sources
+            </span>
+          </div>
           <h2 className="m-0 text-xl font-semibold text-card-foreground">Build from current raw text</h2>
           <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
             Uses the CV text above plus explicit preferences. No persistence required.
@@ -209,7 +233,7 @@ export function SearchProfileBuilderSection({
         </Button>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5">
         <div className="fieldGroup">
           <span className="fieldLabel">Target regions</span>
           <OptionCardGroup
@@ -300,8 +324,11 @@ export function SearchProfileResultSection({
 }) {
   return (
     <div className="grid gap-6 xl:grid-cols-2">
-      <section className="rounded-[24px] border border-border bg-card/85 p-6">
-        <p className="eyebrow">Analyzed profile</p>
+      <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
+        <div className="space-y-2">
+          <p className="eyebrow">Analyzed profile</p>
+          <h3 className="m-0 text-lg font-semibold text-card-foreground">Candidate summary from current text</h3>
+        </div>
         <p className="m-0 leading-7 text-card-foreground">{result.analyzedProfile.summary}</p>
 
         <div className="detailGrid resultSection">
@@ -350,8 +377,11 @@ export function SearchProfileResultSection({
         </div>
       </section>
 
-      <section className="rounded-[24px] border border-border bg-card/85 p-6">
-        <p className="eyebrow">Search profile</p>
+      <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
+        <div className="space-y-2">
+          <p className="eyebrow">Search profile</p>
+          <h3 className="m-0 text-lg font-semibold text-card-foreground">Structured preferences sent to ranking</h3>
+        </div>
 
         <div className="detailGrid">
           <div>
@@ -429,10 +459,17 @@ export function RankedResultsSection({
   onRunSearch: () => void;
 }) {
   return (
-    <section className="rounded-[24px] border border-border bg-card/85 p-6">
+    <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="eyebrow">Ranked results</p>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+              Deterministic ranking
+            </span>
+            <span className="inline-flex items-center rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Explainable fit reasons
+            </span>
+          </div>
           <h2 className="m-0 text-xl font-semibold text-card-foreground">Run deterministic search</h2>
           <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
             Uses the built search profile above and returns explainable ranked jobs.
@@ -476,8 +513,11 @@ export function LatestAnalysisSection({
   skills: string[];
 }) {
   return (
-    <section className="rounded-[24px] border border-border bg-card/85 p-6">
-      <p className="eyebrow">Latest analysis</p>
+    <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
+      <div className="space-y-2">
+        <p className="eyebrow">Latest analysis</p>
+        <h3 className="m-0 text-lg font-semibold text-card-foreground">Persisted summary and extracted skills</h3>
+      </div>
       {summary ? (
         <>
           <p className="m-0 leading-7 text-card-foreground">{summary}</p>

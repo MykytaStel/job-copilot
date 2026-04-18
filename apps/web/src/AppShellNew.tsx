@@ -32,18 +32,21 @@
  *   - User section footer: hardcoded; should wire to profile store
  */
 
-import { useState } from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Suspense, useMemo, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
   Bell,
   ChevronLeft,
+  ChevronRight,
   KanbanSquare,
   LayoutDashboard,
   Menu,
   MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Settings,
   Sparkles,
@@ -71,6 +74,33 @@ const navigation: NavItem[] = [
 
 // ── Local primitives ──────────────────────────────────────────────────────────
 
+function RouteSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="space-y-3">
+        <div className="h-4 w-40 rounded-full bg-white/[0.05]" />
+        <div className="h-10 w-96 max-w-full rounded-2xl bg-white/[0.06]" />
+        <div className="h-4 w-[42rem] max-w-full rounded-full bg-white/[0.04]" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div
+            key={index}
+            className="h-32 rounded-[24px] border border-border/70 bg-card/70 animate-pulse"
+          />
+        ))}
+      </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-6">
+          <div className="h-72 rounded-[24px] border border-border/70 bg-card/70 animate-pulse" />
+          <div className="h-56 rounded-[24px] border border-border/70 bg-card/70 animate-pulse" />
+        </div>
+        <div className="h-80 rounded-[24px] border border-border/70 bg-card/70 animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
 
 /**
  * A single sidebar nav link. Uses NavLink's render-prop API for active state
@@ -90,18 +120,26 @@ function SideNavItem({
       to={item.to}
       end={item.end}
       onClick={onClick}
+      title={collapsed ? item.name : undefined}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium no-underline transition-colors',
+          'group relative flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-sm font-medium no-underline transition-colors',
           isActive
-            ? 'bg-sidebar-accent text-sidebar-primary'
-            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+            ? 'border-sidebar-primary/20 bg-sidebar-accent text-sidebar-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'
+            : 'text-sidebar-foreground/70 hover:border-white/5 hover:bg-sidebar-accent hover:text-sidebar-foreground',
           collapsed && 'justify-center px-2',
         )
       }
     >
-      <item.icon className="h-5 w-5 shrink-0" />
-      {!collapsed && <span>{item.name}</span>}
+      {({ isActive }) => (
+        <>
+          {isActive && !collapsed && (
+            <span className="absolute left-1 top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-sidebar-primary/70" />
+          )}
+      <item.icon className="h-5 w-5 shrink-0 transition-colors group-hover:text-sidebar-foreground" />
+          {!collapsed && <span>{item.name}</span>}
+        </>
+      )}
     </NavLink>
   );
 }
@@ -111,6 +149,19 @@ function SideNavItem({
 export default function AppShellNew() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const location = useLocation();
+
+  const activeNavItem = useMemo(() => {
+    return (
+      navigation.find((item) => {
+        if (item.end) {
+          return location.pathname === item.to;
+        }
+
+        return location.pathname.startsWith(item.to);
+      }) ?? null
+    );
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -156,13 +207,20 @@ export default function AppShellNew() {
               className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent"
               onClick={() => setSidebarCollapsed(true)}
             >
-              <ChevronLeft className="h-4 w-4" />
+              <PanelLeftClose className="h-4 w-4" />
             </Button>
           )}
         </div>
 
         {/* Nav links */}
-        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
+        <div className="px-4 pt-4">
+          {!sidebarCollapsed && (
+            <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/40">
+              Workspace
+            </p>
+          )}
+        </div>
+        <nav className="flex-1 space-y-1 overflow-y-auto p-2">
           {navigation.map((item) => (
             <SideNavItem key={item.to} item={item} collapsed={sidebarCollapsed} />
           ))}
@@ -179,7 +237,7 @@ export default function AppShellNew() {
               onClick={() => setSidebarCollapsed(false)}
               className="h-10 w-full text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
             >
-              <Menu className="h-4 w-4" />
+              <PanelLeftOpen className="h-4 w-4" />
             </Button>
           </div>
         )}
@@ -216,7 +274,7 @@ export default function AppShellNew() {
           mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex h-14 flex-shrink-0 items-center border-b border-sidebar-border px-4">
+        <div className="flex h-14 flex-shrink-0 items-center justify-between border-b border-sidebar-border px-4">
           <Link
             to="/"
             className="flex items-center gap-2 no-underline"
@@ -230,6 +288,15 @@ export default function AppShellNew() {
             </div>
             <span className="text-lg font-semibold text-sidebar-foreground">Job Copilot</span>
           </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            onClick={() => setMobileNavOpen(false)}
+            title="Close menu"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
           {navigation.map((item) => (
@@ -240,6 +307,16 @@ export default function AppShellNew() {
             />
           ))}
         </nav>
+        <div className="border-t border-sidebar-border p-4">
+          <div className="rounded-2xl border border-white/5 bg-sidebar-accent/60 px-4 py-3">
+            <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/45">
+              Current view
+            </p>
+            <p className="m-0 mt-2 text-sm font-medium text-sidebar-foreground">
+              {activeNavItem?.name ?? 'Details'}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* ── Mobile: Top Header ───────────────────────────────────────────────── */}
@@ -256,15 +333,14 @@ export default function AppShellNew() {
           <Menu className="h-5 w-5" />
         </Button>
 
-        <Link to="/" className="flex items-center gap-2 no-underline">
-          <div
-            className="flex h-7 w-7 items-center justify-center rounded-lg"
-            style={{ background: 'var(--gradient-button)' }}
-          >
-            <Sparkles className="h-3.5 w-3.5 text-white" />
-          </div>
-          <span className="font-semibold text-sidebar-foreground">Job Copilot</span>
-        </Link>
+        <div className="text-center">
+          <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Job Copilot
+          </p>
+          <p className="m-0 text-sm font-semibold text-sidebar-foreground">
+            {activeNavItem?.name ?? 'Detail View'}
+          </p>
+        </div>
 
         {/* Placeholder — no notifications route */}
         <Button variant="ghost" size="icon" title="Notifications (not yet implemented)" className="h-9 w-9">
@@ -279,38 +355,64 @@ export default function AppShellNew() {
           sidebarCollapsed ? 'left-16' : 'left-64',
         )}
       >
-        {/* Global search — placeholder; no global search API exists yet */}
-        <div className="relative max-w-md flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <input
-            type="search"
-            placeholder="Search jobs, companies, skills…"
-            readOnly
-            tabIndex={-1}
-            title="Global search (not yet implemented)"
-            style={{ paddingLeft: 36 }}
-          />
+        <div className="flex min-w-0 flex-1 items-center gap-4">
+          <div className="min-w-0">
+            <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Current view
+            </p>
+            <div className="mt-1 flex items-center gap-2">
+              <p className="m-0 truncate text-sm font-semibold text-foreground">
+                {activeNavItem?.name ?? 'Detail View'}
+              </p>
+              {activeNavItem && (
+                <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+                  Active
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="relative max-w-md flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              placeholder="Global search is coming soon"
+              readOnly
+              tabIndex={-1}
+              title="Global search (not yet implemented)"
+              className="h-10 w-full rounded-xl border border-border bg-white/[0.03] pl-9 text-sm text-muted-foreground"
+            />
+          </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           {/* Placeholder — no notifications route */}
           <Button
-            variant="ghost"
+            variant="icon"
             size="icon"
             title="Notifications (not yet implemented)"
-            className="h-9 w-9 text-sidebar-foreground hover:bg-sidebar-accent"
+            className="h-9 w-9"
           >
             <Bell className="h-5 w-5" />
           </Button>
           {/* Placeholder — no settings route */}
           <Button
-            variant="ghost"
+            variant="icon"
             size="icon"
             title="Settings (not yet implemented)"
-            className="h-9 w-9 text-sidebar-foreground hover:bg-sidebar-accent"
+            className="h-9 w-9"
           >
             <Settings className="h-5 w-5" />
           </Button>
+          <div className="ml-1 flex items-center gap-3 rounded-full border border-border bg-white/[0.03] px-3 py-1.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <span className="text-xs font-semibold">JC</span>
+            </div>
+            <div className="min-w-0">
+              <p className="m-0 text-xs font-medium text-foreground">Job Copilot</p>
+              <p className="m-0 text-[11px] text-muted-foreground">operator dashboard</p>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -321,8 +423,10 @@ export default function AppShellNew() {
           sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64',
         )}
       >
-        <div className="p-4 lg:p-10">
-          <Outlet />
+        <div className="p-4 lg:p-8 xl:p-10">
+          <Suspense fallback={<RouteSkeleton />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
 
