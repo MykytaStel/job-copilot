@@ -259,23 +259,34 @@ fn parse_detail_page(
         .as_deref()
         .map(parse_salary_range)
         .unwrap_or((None, None, None));
-    let description_text = extract_rich_text(&document, &[".b-typo.vacancy-section", ".l-vacancy"])
-        .map(|value| {
-            cleanup_description_text(
-                &value,
-                title.as_deref().unwrap_or(&fallback.job.title),
-                company_name
-                    .as_deref()
-                    .unwrap_or(&fallback.job.company_name),
-                &[
-                    "Відгукнутися",
-                    "Відгукнутись",
-                    "Правила відгуків",
-                    "Схожі вакансії",
-                ],
-            )
-        })
-        .filter(|value| !value.is_empty());
+    let description_text = extract_rich_text(
+        &document,
+        &[
+            ".b-typo.vacancy-section",
+            ".l-vacancy [itemprop='description']",
+            ".l-vacancy[itemprop='description']",
+            ".l-vacancy .b-typo",
+            ".b-vacancy .b-typo",
+            ".l-vacancy",
+            "article",
+        ],
+    )
+    .map(|value| {
+        cleanup_description_text(
+            &value,
+            title.as_deref().unwrap_or(&fallback.job.title),
+            company_name
+                .as_deref()
+                .unwrap_or(&fallback.job.company_name),
+            &[
+                "Відгукнутися",
+                "Відгукнутись",
+                "Правила відгуків",
+                "Схожі вакансії",
+            ],
+        )
+    })
+    .filter(|value| !value.is_empty());
 
     let signal_text = [
         title.clone().unwrap_or_default(),
@@ -308,7 +319,15 @@ fn parse_detail_page(
             ),
             "detail_description_text": extract_rich_text(
                 &document,
-                &[".b-typo.vacancy-section", ".l-vacancy"]
+                &[
+                    ".b-typo.vacancy-section",
+                    ".l-vacancy [itemprop='description']",
+                    ".l-vacancy[itemprop='description']",
+                    ".l-vacancy .b-typo",
+                    ".b-vacancy .b-typo",
+                    ".l-vacancy",
+                    "article",
+                ]
             ),
             "detail_salary_text": salary_source,
             "detail_fetched_at": fetched_at,
@@ -334,7 +353,7 @@ fn extract_first_text(document: &Html, selectors: &[&str]) -> Option<String> {
 }
 
 fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
-    let list_selector = Selector::parse("p, li, h2, h3").expect("valid selector");
+    let list_selector = Selector::parse("p, li, h2, h3, h4, ul, ol").expect("valid selector");
     let mut best: Option<String> = None;
 
     for raw_selector in selectors {
@@ -346,12 +365,22 @@ fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
             let parts = container
                 .select(&list_selector)
                 .map(|element| collect_text(&element))
-                .filter(|value| value.len() > 8)
+                .filter(|value| value.len() > 6)
+                .filter(|value| {
+                    !matches!(
+                        value.as_str(),
+                        "Відгукнутися на вакансію"
+                            | "Відгукнутися"
+                            | "Відгукнутись"
+                            | "Правила відгуків"
+                            | "Схожі вакансії"
+                    )
+                })
                 .collect::<Vec<_>>();
             let candidate = if parts.is_empty() {
                 collect_text(&container)
             } else {
-                parts.join(" ")
+                parts.join("\n")
             };
             if candidate.len() > best.as_ref().map_or(0, String::len) {
                 best = Some(candidate);
@@ -593,5 +622,44 @@ mod tests {
                 .expect("description should be present")
                 .contains("CRM/ERP-продуктом")
         );
+    }
+
+    #[test]
+    fn prefers_real_vacancy_body_over_sidebar_noise() {
+        let html = include_str!("../../tests/fixtures/dou_ua_detail_regression.html");
+        let fallback = NormalizationResult {
+            job: NormalizedJob {
+                id: "job_dou_ua_999".to_string(),
+                title: "Front-end React Developer".to_string(),
+                company_name: "SignalHire".to_string(),
+                location: Some("віддалено".to_string()),
+                remote_type: Some("remote".to_string()),
+                seniority: Some("senior".to_string()),
+                description_text: "Short listing snippet".to_string(),
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                posted_at: Some("2026-04-18T07:00:00Z".to_string()),
+                last_seen_at: "2026-04-18T10:00:00Z".to_string(),
+                is_active: true,
+            },
+            snapshot: RawSnapshot {
+                source: "dou_ua".to_string(),
+                source_job_id: "999".to_string(),
+                source_url: "https://jobs.dou.ua/companies/signalhire/vacancies/999/".to_string(),
+                raw_payload: json!({}),
+                fetched_at: "2026-04-18T10:00:00Z".to_string(),
+            },
+        };
+
+        let detail = parse_detail_page(html, &fallback, "2026-04-18T10:00:00Z");
+        let description = detail
+            .description_text
+            .expect("detail description should be present");
+
+        assert!(description.contains("Build and evolve a frontend platform"));
+        assert!(description.contains("Collaborate closely with product"));
+        assert!(!description.contains("Схожі вакансії"));
+        assert!(!description.contains("Відгукнутися"));
     }
 }

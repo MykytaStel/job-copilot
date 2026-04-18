@@ -1,4 +1,4 @@
-use super::matching::normalize_text;
+use super::matching::{normalize_text, tokenize};
 use super::service::ProfileAnalysisService;
 use crate::domain::role::RoleId;
 
@@ -6,8 +6,38 @@ use crate::domain::role::RoleId;
 fn normalizes_punctuation_into_safe_phrase_text() {
     assert_eq!(
         normalize_text("Senior Full-Stack / React Native Engineer"),
-        "senior full stack react native engineer"
+        "senior fullstack react_native engineer"
     );
+}
+
+#[test]
+fn canonicalizes_compound_terms_and_aliases() {
+    assert_eq!(normalize_text("Front-end engineer"), "frontend engineer");
+    assert_eq!(normalize_text("Front end engineer"), "frontend engineer");
+    assert_eq!(normalize_text("Frontend engineer"), "frontend engineer");
+    assert_eq!(normalize_text("Back-end engineer"), "backend engineer");
+    assert_eq!(normalize_text("Full stack engineer"), "fullstack engineer");
+    assert_eq!(normalize_text("Node.js platform"), "nodejs platform");
+    assert_eq!(normalize_text("C++ services"), "cpp services");
+    assert_eq!(normalize_text("C# services"), "csharp services");
+    assert_eq!(
+        normalize_text("React Native and distributed systems"),
+        "react_native and distributed_systems"
+    );
+}
+
+#[test]
+fn tokenization_keeps_known_phrases_as_single_terms() {
+    let tokens = tokenize(&normalize_text(
+        "React Native distributed systems customer support quality assurance",
+    ));
+
+    assert!(tokens.iter().any(|token| token == "react_native"));
+    assert!(tokens.iter().any(|token| token == "distributed_systems"));
+    assert!(tokens.iter().any(|token| token == "customer_support"));
+    assert!(tokens.iter().any(|token| token == "quality_assurance"));
+    assert!(!tokens.iter().any(|token| token == "react"));
+    assert!(!tokens.iter().any(|token| token == "native"));
 }
 
 #[test]

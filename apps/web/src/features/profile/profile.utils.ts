@@ -26,7 +26,19 @@ export async function extractPdfText(file: File): Promise<string> {
     pages.push(pageText);
   }
 
-  return pages.join('\n\n');
+  return cleanupExtractedResumeText(pages.join('\n\n'));
+}
+
+export function cleanupExtractedResumeText(value: string): string {
+  return value
+    .replace(/\u00a0/g, ' ')
+    .replace(/([A-Za-zА-Яа-яІіЇїЄєҐґ0-9])-\s+([A-Za-zА-Яа-яІіЇїЄєҐґ0-9])/g, '$1$2')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/([a-zа-яіїєґ0-9,.)])\n(?=[a-zа-яіїєґ0-9])/gi, '$1 ')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
 }
 
 export function toggleValue<T>(current: T[], value: T): T[] {

@@ -308,7 +308,15 @@ fn parse_detail_page(
     .and_then(|value| normalize_company_name(&value));
     let description_text = extract_rich_text(
         &document,
-        &["div#job-description", "div.wordwrap", "article", "main"],
+        &[
+            "div#job-description",
+            "[data-qa='vacancy-description']",
+            "section.wordwrap",
+            "div.wordwrap",
+            ".overflow.wordwrap",
+            "article",
+            "main",
+        ],
     )
     .map(|value| {
         cleanup_description_text(
@@ -381,7 +389,15 @@ fn parse_detail_page(
             ),
             "detail_description_text": extract_rich_text(
                 &document,
-                &["div#job-description", "div.wordwrap", "article", "main"]
+                &[
+                    "div#job-description",
+                    "[data-qa='vacancy-description']",
+                    "section.wordwrap",
+                    "div.wordwrap",
+                    ".overflow.wordwrap",
+                    "article",
+                    "main",
+                ]
             ),
             "detail_salary_text": salary_source,
             "detail_fetched_at": fetched_at,
@@ -407,7 +423,7 @@ fn extract_first_text(document: &Html, selectors: &[&str]) -> Option<String> {
 }
 
 fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
-    let list_selector = Selector::parse("p, li").expect("valid selector");
+    let list_selector = Selector::parse("p, li, h2, h3, h4, ul, ol").expect("valid selector");
     let mut best: Option<String> = None;
 
     for raw_selector in selectors {
@@ -419,12 +435,21 @@ fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
             let parts = container
                 .select(&list_selector)
                 .map(|element| collect_text(&element))
-                .filter(|value| value.len() > 20)
+                .filter(|value| value.len() > 10)
+                .filter(|value| {
+                    !matches!(
+                        value.as_str(),
+                        "Схожі вакансії"
+                            | "Вакансії за категоріями"
+                            | "Відгукнутися"
+                            | "Відгукнутись"
+                    )
+                })
                 .collect::<Vec<_>>();
             let candidate = if parts.is_empty() {
                 collect_text(&container)
             } else {
-                parts.join(" ")
+                parts.join("\n")
             };
             if candidate.len() > best.as_ref().map_or(0, String::len) {
                 best = Some(candidate);
@@ -520,5 +545,43 @@ mod tests {
                 .as_deref()
                 .is_some_and(|value| value.contains("Build reliable Rust APIs"))
         );
+    }
+
+    #[test]
+    fn keeps_rich_detail_description_over_short_listing_snippet() {
+        let html = include_str!("../../tests/fixtures/work_ua_detail_regression.html");
+        let fallback = NormalizationResult {
+            job: NormalizedJob {
+                id: "job_work_ua_456".to_string(),
+                title: "Front-end React Developer".to_string(),
+                company_name: "SignalHire".to_string(),
+                location: Some("Kyiv".to_string()),
+                remote_type: Some("remote".to_string()),
+                seniority: Some("senior".to_string()),
+                description_text: "React team".to_string(),
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                posted_at: None,
+                last_seen_at: "2026-04-18T10:00:00Z".to_string(),
+                is_active: true,
+            },
+            snapshot: RawSnapshot {
+                source: "work_ua".to_string(),
+                source_job_id: "456".to_string(),
+                source_url: "https://www.work.ua/jobs/456/".to_string(),
+                raw_payload: json!({}),
+                fetched_at: "2026-04-18T10:00:00Z".to_string(),
+            },
+        };
+
+        let detail = parse_detail_page(html, &fallback, "2026-04-18T10:00:00Z");
+        let description = detail
+            .description_text
+            .expect("detail description should be present");
+
+        assert!(description.contains("Ship accessible frontend features"));
+        assert!(description.contains("Partner with product and design"));
+        assert!(!description.contains("Схожі вакансії"));
     }
 }

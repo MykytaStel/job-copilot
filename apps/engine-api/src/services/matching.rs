@@ -6,7 +6,7 @@ use crate::domain::role::RoleId;
 use crate::domain::role::catalog::ROLE_CATALOG;
 use crate::domain::search::profile::{SearchProfile, SearchRoleCandidate, TargetRegion, WorkMode};
 use crate::domain::source::SourceId;
-use crate::services::profile::matching::{PreparedText, normalize_text};
+use crate::services::profile::matching::{PreparedText, normalize_term_for_output, normalize_text};
 
 const PRIMARY_ROLE_WEIGHT: f32 = 22.0;
 const TARGET_ROLE_WEIGHT: f32 = 12.0;
@@ -343,13 +343,14 @@ fn collect_matched_terms(
 
     for term in terms {
         let normalized = normalize_text(term);
+        let output = normalize_term_for_output(term);
 
         if normalized.is_empty() || ignored_terms.contains(&normalized) {
             continue;
         }
 
         if prepared_text.matches_signal(&normalized) {
-            push_unique_string(&mut matched_terms, normalized);
+            push_unique_string(&mut matched_terms, output);
         }
     }
 
@@ -1005,6 +1006,36 @@ mod tests {
         }
     }
 
+    fn frontend_profile() -> SearchProfile {
+        SearchProfile {
+            primary_role: RoleId::FrontendDeveloper,
+            primary_role_confidence: Some(96),
+            target_roles: vec![RoleId::FrontendDeveloper, RoleId::ReactNativeDeveloper],
+            role_candidates: vec![
+                SearchRoleCandidate {
+                    role: RoleId::FrontendDeveloper,
+                    confidence: 96,
+                },
+                SearchRoleCandidate {
+                    role: RoleId::ReactNativeDeveloper,
+                    confidence: 54,
+                },
+            ],
+            seniority: "senior".to_string(),
+            target_regions: vec![TargetRegion::EuRemote],
+            work_modes: vec![WorkMode::Remote],
+            allowed_sources: vec![SourceId::Djinni],
+            profile_skills: vec!["react".to_string(), "typescript".to_string()],
+            profile_keywords: vec!["frontend".to_string(), "design system".to_string()],
+            search_terms: vec![
+                "frontend developer".to_string(),
+                "react".to_string(),
+                "typescript".to_string(),
+            ],
+            exclude_terms: vec!["gambling".to_string()],
+        }
+    }
+
     fn job_view(
         id: &str,
         title: &str,
@@ -1351,5 +1382,60 @@ mod tests {
         assert_eq!(result.ranked_jobs[0].job.job.id, "job-1");
         assert_eq!(result.ranked_jobs[1].job.job.id, "job-2");
         assert_eq!(result.ranked_jobs[2].job.job.id, "job-3");
+    }
+
+    #[test]
+    fn canonical_frontend_terms_survive_matching_and_explanations() {
+        let service = SearchMatchingService::new();
+        let profile = frontend_profile();
+        let job = job_view(
+            "job-frontend-1",
+            "Senior Front-end React Developer",
+            "Remote EU role shipping frontend design system work with React and TypeScript",
+            Some("remote"),
+            "djinni",
+        );
+
+        let fit = service.score_job(&profile, &job);
+
+        assert!(fit.score >= 70);
+        assert!(fit.matched_roles.contains(&RoleId::FrontendDeveloper));
+        assert!(fit.matched_skills.contains(&"react".to_string()));
+        assert!(fit.matched_keywords.contains(&"frontend".to_string()));
+        assert!(
+            !fit.matched_keywords
+                .iter()
+                .any(|term| term == "front" || term == "end")
+        );
+        assert!(
+            fit.reasons
+                .iter()
+                .any(|reason| reason.contains("Matched profile keywords: frontend"))
+        );
+    }
+
+    #[test]
+    fn react_native_matching_keeps_phrase_safe_internal_tokens_internal() {
+        let service = SearchMatchingService::new();
+        let profile = mobile_profile();
+        let job = job_view(
+            "job-mobile-1",
+            "Senior React-Native Developer",
+            "Remote EU role building React Native apps with TypeScript and distributed systems work",
+            Some("remote"),
+            "djinni",
+        );
+
+        let fit = service.score_job(&profile, &job);
+
+        assert!(fit.score >= 70);
+        assert!(fit.matched_roles.contains(&RoleId::ReactNativeDeveloper));
+        assert!(fit.matched_skills.contains(&"react native".to_string()));
+        assert!(!fit.matched_skills.iter().any(|term| term == "react_native"));
+        assert!(
+            fit.reasons
+                .iter()
+                .any(|reason| reason.contains("Matched profile skills: react native, typescript"))
+        );
     }
 }
