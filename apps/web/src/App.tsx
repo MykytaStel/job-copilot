@@ -1,13 +1,15 @@
+import { lazy } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
 import Layout from './AppShellNew';
-import Dashboard from './pages/Dashboard';
-import JobDetails from './pages/JobDetails';
-import ApplicationBoard from './pages/ApplicationBoard';
-import ApplicationDetail from './pages/ApplicationDetail';
-import Profile from './pages/Profile';
-import FeedbackCenter from './pages/FeedbackCenter';
-import Analytics from './pages/Analytics';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const JobDetails = lazy(() => import('./pages/JobDetails'));
+const ApplicationBoard = lazy(() => import('./pages/ApplicationBoard'));
+const ApplicationDetail = lazy(() => import('./pages/ApplicationDetail'));
+const Profile = lazy(() => import('./pages/Profile'));
+const FeedbackCenter = lazy(() => import('./pages/FeedbackCenter'));
+const Analytics = lazy(() => import('./pages/Analytics'));
 
 export default function App() {
   return (

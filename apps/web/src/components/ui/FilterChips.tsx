@@ -35,7 +35,7 @@ export function FilterChips({
   }
 
   return (
-    <div className={cn('flex flex-wrap gap-2', className)}>
+    <div className={cn('flex flex-wrap gap-2.5', className)}>
       {options.map((option) => {
         const isActive = selected.includes(option.id);
         return (
@@ -45,7 +45,12 @@ export function FilterChips({
             variant="outline"
             active={isActive}
             onClick={() => handleSelect(option.id)}
-            className="text-xs"
+            className={cn(
+              'h-9 rounded-full px-3.5 text-xs font-medium shadow-none',
+              isActive
+                ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+                : 'border-border bg-white/[0.03] text-muted-foreground hover:bg-secondary hover:text-foreground',
+            )}
           >
             {option.label}
             {option.count !== undefined && (

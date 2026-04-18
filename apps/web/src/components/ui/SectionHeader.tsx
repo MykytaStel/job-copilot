@@ -39,14 +39,14 @@ export function SectionHeader({
     >
       <div className="flex items-center gap-3">
         {Icon && (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10">
             <Icon className="h-5 w-5 text-primary" />
           </div>
         )}
         <div>
           <h2 className="m-0 text-lg font-semibold text-foreground">{title}</h2>
           {description && (
-            <p className="m-0 text-sm text-muted-foreground">{description}</p>
+            <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
           )}
         </div>
       </div>
@@ -92,7 +92,7 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('space-y-3', className)}>
       {breadcrumb && breadcrumb.length > 0 && (
         <nav className="flex items-center gap-1 text-sm text-muted-foreground">
           {breadcrumb.map((item, index) => (
@@ -109,10 +109,10 @@ export function PageHeader({
           ))}
         </nav>
       )}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="m-0 text-2xl font-bold tracking-tight text-foreground">{title}</h1>
-          {description && <p className="mt-1 mb-0 text-muted-foreground">{description}</p>}
+          {description && <p className="mt-2 mb-0 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>}
         </div>
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>

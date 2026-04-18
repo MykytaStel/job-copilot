@@ -15,16 +15,6 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
-import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { Card, CardContent, CardHeader } from '../components/ui/Card';
-import { AIInsightPanel } from '../components/ui/AIInsightPanel';
-import { FilterChips } from '../components/ui/FilterChips';
-import { EmptyState } from '../components/ui/EmptyState';
-import { JobCard, JobCardSkeleton } from '../components/ui/JobCard';
-import { Page } from '../components/ui/Page';
-import { SectionHeader } from '../components/ui/SectionHeader';
-import { StatCard } from '../components/ui/StatCard';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type {
@@ -34,6 +24,16 @@ import type {
   JobPosting,
 } from '@job-copilot/shared';
 
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Card, CardContent, CardHeader } from '../components/ui/Card';
+import { AIInsightPanel } from '../components/ui/AIInsightPanel';
+import { EmptyState } from '../components/ui/EmptyState';
+import { FilterChips } from '../components/ui/FilterChips';
+import { JobCard, JobCardSkeleton } from '../components/ui/JobCard';
+import { Page, PageGrid } from '../components/ui/Page';
+import { SectionHeader } from '../components/ui/SectionHeader';
+import { StatCard } from '../components/ui/StatCard';
 import {
   type RankedJob,
   addCompanyBlacklist,
@@ -42,12 +42,12 @@ import {
   getApplications,
   getDashboardStats,
   getJobsFeed,
+  getSources,
   hideJobForProfile,
   markJobBadFit,
   markJobSaved,
   removeCompanyBlacklist,
   removeCompanyWhitelist,
-  getSources,
   rerankJobs,
   unmarkJobBadFit,
 } from '../api';
@@ -57,7 +57,6 @@ import { queryKeys } from '../queryKeys';
 function readProfileId() {
   return window.localStorage.getItem('engine_api_profile_id');
 }
-
 
 const STATUS_COLUMNS: ApplicationStatus[] = [
   'saved',
@@ -167,7 +166,6 @@ export default function Dashboard() {
   const allJobs = jobsFeed?.jobs ?? [];
   const jobSummary = jobsFeed?.summary;
 
-  // ML rerank — fires once jobs are loaded and profile exists.
   const { data: rankData } = useQuery<RankedJob[]>({
     queryKey: queryKeys.ml.rerank(profileId ?? ''),
     queryFn: () => rerankJobs(profileId!, allJobs.map((j) => j.id)),
@@ -196,6 +194,7 @@ export default function Dashboard() {
     if (sortByScore && scoreById.size > 0) {
       list.sort((a, b) => (scoreById.get(b.id) ?? 0) - (scoreById.get(a.id) ?? 0));
     }
+
     return list;
   }, [allJobs, search, sortByScore, scoreById]);
 
@@ -231,7 +230,11 @@ export default function Dashboard() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
-      if (profileId) void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
+      if (profileId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.feedback.profile(profileId),
+        });
+      }
       toast.success('Збережено в pipeline');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -247,7 +250,11 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      if (profileId) void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
+      if (profileId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.feedback.profile(profileId),
+        });
+      }
       toast.success('Вакансію приховано');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -263,7 +270,11 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      if (profileId) void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
+      if (profileId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.feedback.profile(profileId),
+        });
+      }
       toast.success('Позначено як bad fit');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -279,7 +290,11 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      if (profileId) void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
+      if (profileId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.feedback.profile(profileId),
+        });
+      }
       toast.success('Позначку bad fit знято');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -316,7 +331,11 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      if (profileId) void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
+      if (profileId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.feedback.profile(profileId),
+        });
+      }
       toast.success('Оновлено список компанії');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -334,14 +353,22 @@ export default function Dashboard() {
     });
   }, [jobs, profileId]);
 
-  // Derived filter options for FilterChips
-  const lifecycleOptions = LIFECYCLE_TABS.map((t) => ({ id: t.value, label: t.label }));
+  const lifecycleOptions = LIFECYCLE_TABS.map((tab) => ({
+    id: tab.value,
+    label: tab.label,
+  }));
   const sourceOptions = [
     { id: '__all__', label: 'Всі джерела' },
-    ...sources.map((s) => ({ id: s.id, label: s.displayName })),
+    ...sources.map((source) => ({ id: source.id, label: source.displayName })),
   ];
   const selectedLifecycle = [lifecycleFilter];
   const selectedSource = sourceFilter ? [sourceFilter] : ['__all__'];
+  const topSource =
+    sources.find((source) => source.id === sourceFilter)?.displayName ?? 'All sources';
+  const interviewedCount =
+    (stats?.byStatus.interview ?? 0) + (stats?.byStatus.offer ?? 0);
+  const mode = sortByScore ? 'ranked' : 'recent';
+
   const insights = [
     {
       id: 'active-feed',
@@ -356,58 +383,97 @@ export default function Dashboard() {
       id: 'pipeline',
       type: 'recommendation' as const,
       title: 'Pipeline needs frequent review',
-      description: applications.length > 0
-        ? `${applications.length} tracked applications already affect ranking and next actions. Keep statuses current to improve feedback loops.`
-        : 'Saved jobs and applications will appear here once you start tracking them.',
+      description:
+        applications.length > 0
+          ? `${applications.length} tracked applications already affect ranking and next actions. Keep statuses current to improve feedback loops.`
+          : 'Saved jobs and applications will appear here once you start tracking them.',
       action: { label: 'Open applications', href: '/applications' },
     },
     {
       id: 'profile',
       type: 'tip' as const,
       title: 'Search quality comes from profile quality',
-      description: 'Refresh your profile and search preferences when target roles, regions, or allowed sources change.',
+      description:
+        'Refresh your profile and search preferences when target roles, regions, or allowed sources change.',
       action: { label: 'Update profile', href: '/profile' },
     },
   ];
 
   return (
     <Page>
-
-      {/* ── Hero card ─────────────────────────────────────────────────────── */}
-      <Card className="border-border bg-card overflow-hidden">
+      <Card className="overflow-hidden border-border bg-card">
         <CardContent className="p-0">
           <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-accent/5 to-transparent pointer-events-none" />
-            <div className="relative p-6">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="default" className="bg-primary/15 text-primary border-0 text-xs px-2 py-0.5">
-                      <Zap className="h-3 w-3 mr-1" />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-primary/8 via-accent/6 to-transparent" />
+            <div className="relative p-7 lg:p-8">
+              <div className="flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
+                <div className="max-w-3xl space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant="default"
+                      className="border-0 bg-primary/15 px-2 py-0.5 text-xs text-primary"
+                    >
+                      <Zap className="mr-1 h-3 w-3" />
                       Job Copilot UA
                     </Badge>
+                    <Badge
+                      variant="muted"
+                      className="px-2 py-0.5 text-[10px] uppercase tracking-wide"
+                    >
+                      {mode === 'ranked' ? 'Ranked mode' : 'Recent mode'}
+                    </Badge>
                   </div>
-                  <h1 className="text-2xl font-bold text-card-foreground m-0">
-                    Відстежуйте вакансії та заявки
-                  </h1>
-                  <p className="text-muted-foreground m-0">
-                    Вакансії автоматично збираються з Djinni та Work.ua.{' '}
-                    {jobSummary && (
-                      <span className="text-primary font-medium">
-                        {jobSummary.activeJobs} активних зараз.
-                      </span>
-                    )}
-                  </p>
+
+                  <div className="space-y-2">
+                    <h1 className="m-0 text-3xl font-bold leading-tight text-card-foreground lg:text-4xl">
+                      Відстежуйте вакансії, fit і pipeline в одному quiet dashboard
+                    </h1>
+                    <p className="m-0 max-w-2xl text-sm leading-7 text-muted-foreground lg:text-base">
+                      Вакансії автоматично збираються з Djinni та Work.ua, а ranking і feedback
+                      допомагають швидко знайти наступний крок.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+                      <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                        Active jobs
+                      </p>
+                      <p className="m-0 mt-2 text-2xl font-bold text-card-foreground">
+                        {jobSummary?.activeJobs ?? allJobs.length}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+                      <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                        Tracked pipeline
+                      </p>
+                      <p className="m-0 mt-2 text-2xl font-bold text-card-foreground">
+                        {applications.length}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+                      <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                        Source focus
+                      </p>
+                      <p className="m-0 mt-2 text-lg font-semibold text-card-foreground">
+                        {topSource}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
+
+                <div className="flex flex-col gap-3 xl:min-w-[240px] xl:items-end">
                   <Link to="/profile">
-                    <Button className="flex items-center gap-2">
+                    <Button className="w-full justify-center gap-2 xl:min-w-[210px]">
                       <Sparkles className="h-4 w-4" />
                       Update Profile
                     </Button>
                   </Link>
                   <Link to="/applications">
-                    <Button variant="ghost" className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-center gap-2 xl:min-w-[210px]"
+                    >
                       Review Pipeline
                       <ArrowRight size={14} />
                     </Button>
@@ -421,8 +487,7 @@ export default function Dashboard() {
 
       {error && <p className="error">{error}</p>}
 
-      {/* ── Stats grid ────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           title="Активних вакансій"
           value={jobSummary?.activeJobs ?? allJobs.length}
@@ -432,83 +497,251 @@ export default function Dashboard() {
         <StatCard
           title="Збережено"
           value={stats?.byStatus.saved ?? 0}
+          description="у pipeline"
           icon={Bookmark}
         />
         <StatCard
           title="Подано заявки"
           value={stats?.byStatus.applied ?? 0}
+          description="готові до follow-up"
           icon={Send}
         />
         <StatCard
           title="Інтерв'ю"
-          value={(stats?.byStatus.interview ?? 0) + (stats?.byStatus.offer ?? 0)}
+          value={interviewedCount}
+          description="interview + offer"
           icon={CalendarDays}
         />
       </div>
 
-      {/* ── Main 2-col grid ───────────────────────────────────────────────── */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      <PageGrid
+        aside={
+          <>
+            <AIInsightPanel insights={insights} />
 
-        {/* Jobs column (2/3) */}
-        <div className="lg:col-span-2 space-y-4">
+            <Card className="border-border bg-card">
+              <CardHeader className="gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h2 className="m-0 text-base font-semibold text-card-foreground">
+                      Quick Actions
+                    </h2>
+                    <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">
+                      Jump into the profile, feedback, analytics, or application workflow.
+                    </p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2.5">
+                <Link to="/profile" className="block no-underline">
+                  <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    Update Search Profile
+                  </Button>
+                </Link>
+                <Link to="/feedback" className="block no-underline">
+                  <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
+                    <Bookmark className="h-4 w-4 text-primary" />
+                    Review Saved Jobs
+                  </Button>
+                </Link>
+                <Link to="/analytics" className="block no-underline">
+                  <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    View Analytics
+                  </Button>
+                </Link>
+                <Link to="/applications" className="block no-underline">
+                  <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
+                    <KanbanSquare className="h-4 w-4 text-primary" />
+                    Application Board
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
 
+            {stats && (
+              <Card className="border-border bg-card">
+                <CardHeader className="gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
+                      <XCircle className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h2 className="m-0 text-base font-semibold text-card-foreground">
+                        Pipeline
+                      </h2>
+                      <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">
+                        Current distribution of tracked applications by stage.
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3.5">
+                  {STATUS_COLUMNS.map((status) => (
+                    <div key={status} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        {STATUS_ICONS[status]}
+                        {status}
+                      </span>
+                      <span className="font-medium text-card-foreground">
+                        {stats.byStatus[status] ?? 0}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between border-t border-border pt-3 text-sm">
+                    <span className="text-muted-foreground">total tracked</span>
+                    <span className="font-medium text-card-foreground">{applications.length}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {jobSummary && (
+              <Card className="border-border bg-card">
+                <CardHeader className="gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
+                      <Zap className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h2 className="m-0 text-base font-semibold text-card-foreground">Feed</h2>
+                      <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">
+                        Inventory health across active, reactivated, and inactive jobs.
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Active</span>
+                    <span className="font-medium text-fit-excellent">
+                      {jobSummary.activeJobs}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Reactivated</span>
+                    <span className="font-medium text-fit-good">
+                      {jobSummary.reactivatedJobs}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Inactive</span>
+                    <span className="font-medium text-muted-foreground">
+                      {jobSummary.inactiveJobs}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-border pt-3 text-sm">
+                    <span className="text-muted-foreground">Total tracked</span>
+                    <span className="font-medium text-card-foreground">
+                      {jobSummary.totalJobs}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        }
+      >
+        <div>
           <SectionHeader
-            title="Вакансії"
-            description="Відсортовані за ML-скором або датою"
+            title="Your Job Matches"
+            description="Jobs ranked by fit score, lifecycle, and your latest feedback."
             icon={Briefcase}
+            action={{ label: 'Open Feedback', href: '/feedback' }}
           />
 
-          {/* Filters */}
-          <div className="space-y-2">
-            <FilterChips
-              options={lifecycleOptions}
-              selected={selectedLifecycle}
-              onChange={([v]) => updateFilters({ lifecycle: (v ?? 'all') as LifecycleFilter })}
-            />
-            <FilterChips
-              options={sourceOptions}
-              selected={selectedSource}
-              onChange={([v]) => updateFilters({ source: v === '__all__' || !v ? null : v })}
-            />
-          </div>
+          <Card className="border-border bg-card">
+            <CardContent className="space-y-5 px-6 py-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-2">
+                  <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Ranking mode
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: 'ranked', label: 'Ranked', icon: TrendingUp },
+                      { id: 'recent', label: 'Recent', icon: CalendarDays },
+                    ].map((tab) => (
+                      <Button
+                        key={tab.id}
+                        type="button"
+                        variant="outline"
+                        active={mode === tab.id}
+                        size="sm"
+                        onClick={() => setSortByScore(tab.id === 'ranked')}
+                        className="rounded-full px-3.5"
+                      >
+                        <tab.icon className="h-3.5 w-3.5" />
+                        {tab.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
 
-          {/* Search + sort row */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-content-muted pointer-events-none" />
-              <input
-                type="search"
-                placeholder="Фільтр за назвою, компанією…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ paddingLeft: 32 }}
-              />
-            </div>
-            {rankData && rankData.length > 0 && (
-              <Button
-                variant={sortByScore ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setSortByScore((v) => !v)}
-                title="Сортувати за ML-релевантністю"
-              >
-                <SortAsc size={14} />
-                Score
-              </Button>
-            )}
-            {search && (
-              <span className="text-muted-foreground text-xs shrink-0">
-                {jobs.length}/{allJobs.length}
-              </span>
-            )}
-          </div>
+                {search && (
+                  <span className="shrink-0 rounded-full border border-border bg-white/[0.03] px-3 py-1.5 text-xs text-muted-foreground">
+                    {jobs.length}/{allJobs.length} visible
+                  </span>
+                )}
+              </div>
 
-          {sourcesError && (
-            <p className="text-muted-foreground text-xs">
-              Каталог джерел недоступний — фільтр за джерелом тимчасово не працює.
-            </p>
-          )}
+              <div className="space-y-2.5">
+                <FilterChips
+                  options={lifecycleOptions}
+                  selected={selectedLifecycle}
+                  onChange={([v]) =>
+                    updateFilters({ lifecycle: (v ?? 'all') as LifecycleFilter })
+                  }
+                />
+                <FilterChips
+                  options={sourceOptions}
+                  selected={selectedSource}
+                  onChange={([v]) =>
+                    updateFilters({ source: v === '__all__' || !v ? null : v })
+                  }
+                />
+              </div>
 
-          {/* Job list */}
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                <div className="relative flex-1">
+                  <Search
+                    size={14}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-content-muted"
+                  />
+                  <input
+                    type="search"
+                    placeholder="Фільтр за назвою, компанією…"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="h-11 rounded-xl border border-border bg-background/70"
+                    style={{ paddingLeft: 32 }}
+                  />
+                </div>
+                {rankData && rankData.length > 0 && (
+                  <Button
+                    variant={sortByScore ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSortByScore((value) => !value)}
+                    title="Сортувати за ML-релевантністю"
+                  >
+                    <SortAsc size={14} />
+                    Score
+                  </Button>
+                )}
+              </div>
+
+              {sourcesError && (
+                <p className="m-0 text-xs leading-6 text-muted-foreground">
+                  Каталог джерел недоступний — фільтр за джерелом тимчасово не працює.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="space-y-3">
             {jobsLoading ? (
               <>
@@ -519,7 +752,11 @@ export default function Dashboard() {
             ) : jobs.length === 0 ? (
               <EmptyState
                 message={search ? 'Нічого не знайдено' : 'Вакансій поки немає'}
-                description={search ? 'Спробуйте змінити запит.' : 'Запустіть `pnpm scrape:djinni` або оновіть feed.'}
+                description={
+                  search
+                    ? 'Спробуйте змінити запит.'
+                    : 'Запустіть `pnpm scrape:djinni` або оновіть feed.'
+                }
                 icon={<Briefcase className="h-12 w-12" />}
               />
             ) : (
@@ -527,7 +764,12 @@ export default function Dashboard() {
                 const application = applicationByJob.get(job.id);
                 const isSaved = !!(job.feedback?.saved || application);
                 const isBadFit = !!job.feedback?.badFit;
-                const isPendingAny = saveMutation.isPending || hideMutation.isPending || badFitMutation.isPending || unmarkBadFitMutation.isPending || companyFeedbackMutation.isPending;
+                const isPendingAny =
+                  saveMutation.isPending ||
+                  hideMutation.isPending ||
+                  badFitMutation.isPending ||
+                  unmarkBadFitMutation.isPending ||
+                  companyFeedbackMutation.isPending;
 
                 return (
                   <JobCard
@@ -538,112 +780,31 @@ export default function Dashboard() {
                     isSaved={isSaved}
                     isBadFit={isBadFit}
                     isPending={isPendingAny}
-                    onSave={!isSaved && !application ? () => saveMutation.mutate({ jobId: job.id, hasApplication: false }) : undefined}
+                    onSave={
+                      !isSaved && !application
+                        ? () =>
+                            saveMutation.mutate({
+                              jobId: job.id,
+                              hasApplication: false,
+                            })
+                        : undefined
+                    }
                     onHide={() => hideMutation.mutate(job.id)}
-                    onBadFit={!isBadFit ? () => badFitMutation.mutate(job.id) : undefined}
-                    onUnmarkBadFit={isBadFit ? () => unmarkBadFitMutation.mutate(job.id) : undefined}
+                    onBadFit={
+                      !isBadFit ? () => badFitMutation.mutate(job.id) : undefined
+                    }
+                    onUnmarkBadFit={
+                      isBadFit
+                        ? () => unmarkBadFitMutation.mutate(job.id)
+                        : undefined
+                    }
                   />
                 );
               })
             )}
           </div>
         </div>
-
-        {/* Sidebar (1/3) */}
-        <div className="space-y-4">
-          <AIInsightPanel insights={insights} />
-
-          {/* Quick actions */}
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <h2 className="text-base font-semibold text-card-foreground m-0">Quick Actions</h2>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Link to="/profile" className="no-underline block">
-                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  Update Search Profile
-                </Button>
-              </Link>
-              <Link to="/feedback" className="no-underline block">
-                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
-                  <Bookmark className="h-4 w-4 text-primary" />
-                  Review Saved Jobs
-                </Button>
-              </Link>
-              <Link to="/analytics" className="no-underline block">
-                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  View Analytics
-                </Button>
-              </Link>
-              <Link to="/applications" className="no-underline block">
-                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
-                  <KanbanSquare className="h-4 w-4 text-primary" />
-                  Application Board
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          {/* Pipeline summary */}
-          {stats && (
-            <Card className="border-border bg-card">
-              <CardHeader>
-                <h2 className="text-base font-semibold text-card-foreground m-0 flex items-center gap-2">
-                  <XCircle className="h-4 w-4 text-primary" />
-                  Pipeline
-                </h2>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {STATUS_COLUMNS.map((status) => (
-                  <div key={status} className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground flex items-center gap-1.5">
-                      {STATUS_ICONS[status]}
-                      {status}
-                    </span>
-                    <span className="font-medium text-card-foreground">
-                      {stats.byStatus[status] ?? 0}
-                    </span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between text-sm pt-2 border-t border-border">
-                  <span className="text-muted-foreground">total tracked</span>
-                  <span className="font-medium text-card-foreground">{applications.length}</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Feed summary */}
-          {jobSummary && (
-            <Card className="border-border bg-card">
-              <CardHeader>
-                <h2 className="text-base font-semibold text-card-foreground m-0">Feed</h2>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Active</span>
-                  <span className="font-medium text-fit-excellent">{jobSummary.activeJobs}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Reactivated</span>
-                  <span className="font-medium text-fit-good">{jobSummary.reactivatedJobs}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Inactive</span>
-                  <span className="font-medium text-muted-foreground">{jobSummary.inactiveJobs}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Total tracked</span>
-                  <span className="font-medium text-card-foreground">{jobSummary.totalJobs}</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-        </div>
-      </div>
+      </PageGrid>
     </Page>
   );
 }

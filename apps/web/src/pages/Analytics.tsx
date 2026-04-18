@@ -1,3 +1,4 @@
+import { useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart2,
@@ -8,10 +9,15 @@ import {
   EyeOff,
   Hash,
   Layers,
+  Search,
   ShieldCheck,
   ShieldOff,
+  Sparkles,
+  Target,
   ThumbsDown,
+  TrendingUp,
   Zap,
+  type LucideIcon,
 } from 'lucide-react';
 
 import {
@@ -24,174 +30,154 @@ import {
 } from '../api';
 import type {
   AnalyticsSummary,
+  BehaviorSignalCount,
   FunnelSummary,
   LlmContext,
   ProfileInsights,
   WeeklyGuidance,
 } from '../api';
-import { queryKeys } from '../queryKeys';
-import { Card } from '../components/ui/Card';
+import { AIInsightPanel, type AIInsight } from '../components/ui/AIInsightPanel';
+import { Badge } from '../components/ui/Badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Page } from '../components/ui/Page';
+import { Page, PageGrid } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { AnalyticsCard, StatCard } from '../components/ui/StatCard';
+import { cn } from '../lib/cn';
+import { queryKeys } from '../queryKeys';
 
 function readProfileId() {
   return window.localStorage.getItem('engine_api_profile_id');
 }
 
-// ─── Primitives ───────────────────────────────────────────────────────────────
+type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'muted';
+
+const toneClasses: Record<Tone, string> = {
+  primary: 'bg-primary/15 text-primary border-primary/25',
+  success: 'bg-fit-excellent/15 text-fit-excellent border-fit-excellent/25',
+  warning: 'bg-fit-fair/15 text-fit-fair border-fit-fair/25',
+  danger: 'bg-destructive/15 text-destructive border-destructive/25',
+  muted: 'bg-white/[0.05] text-muted-foreground border-border',
+};
+
+const barToneClasses: Record<Tone, string> = {
+  primary: 'bg-primary',
+  success: 'bg-fit-excellent',
+  warning: 'bg-fit-fair',
+  danger: 'bg-destructive',
+  muted: 'bg-muted-foreground',
+};
 
 function Section({
   title,
-  icon,
+  description,
+  icon: Icon,
+  eyebrow,
+  action,
   children,
+  className,
 }: {
   title: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  }) {
+  description?: string;
+  icon: LucideIcon;
+  eyebrow?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <Card className="p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-content-muted">{icon}</span>
-        <h2 className="m-0 text-[15px] font-semibold text-content">{title}</h2>
-      </div>
-      {children}
+    <Card className={cn('border-border bg-card', className)}>
+      <CardHeader className="gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
+              <Icon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              {eyebrow ? (
+                <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  {eyebrow}
+                </p>
+              ) : null}
+              <CardTitle className="mt-1 text-base font-semibold">{title}</CardTitle>
+              {description ? (
+                <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+              ) : null}
+            </div>
+          </div>
+          {action}
+        </div>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
     </Card>
   );
 }
 
-// ─── Bar chart (CSS-only, no library) ────────────────────────────────────────
-
-function BarRow({
+function HeroMetric({
   label,
   value,
-  maxValue,
-  color,
+  icon: Icon,
 }: {
   label: string;
-  value: number;
-  maxValue: number;
-  color: string;
+  value: string | number;
+  icon: LucideIcon;
 }) {
-  const pct = maxValue > 0 ? Math.round((value / maxValue) * 100) : 0;
-
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-      <div
-        style={{
-          width: 110,
-          fontSize: 12,
-          color: 'var(--color-text-secondary)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          flexShrink: 0,
-          textAlign: 'right',
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          flex: 1,
-          height: 8,
-          background: 'var(--color-bg-hover)',
-          borderRadius: 4,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            width: `${pct}%`,
-            height: '100%',
-            background: color,
-            borderRadius: 4,
-            transition: 'width 0.3s ease',
-          }}
-        />
-      </div>
-      <div
-        style={{
-          width: 32,
-          fontSize: 12,
-          fontWeight: 600,
-          color: 'var(--color-text-primary)',
-          textAlign: 'right',
-          flexShrink: 0,
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function TagList({ items, color }: { items: string[]; color: string }) {
-  if (items.length === 0) {
-    return <EmptyState message="None yet." className="px-4 py-4 text-left" />;
-  }
-
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-      {items.map((item) => (
-        <span
-          key={item}
-          style={{
-            padding: '3px 10px',
-            borderRadius: 20,
-            fontSize: 12,
-            fontWeight: 500,
-            background: 'var(--color-bg-hover)',
-            border: `1px solid ${color}33`,
-            color,
-          }}
-        >
-          {item}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function SimpleList({
-  items,
-  empty,
-  color,
-}: {
-  items: string[];
-  empty: string;
-  color: string;
-}) {
-  if (items.length === 0) {
-    return <EmptyState message={empty} className="px-4 py-4 text-left" />;
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {items.map((item) => (
-        <div
-          key={item}
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 8,
-            fontSize: 13,
-            color: 'var(--color-text-primary)',
-            lineHeight: 1.45,
-          }}
-        >
-          <span style={{ color, marginTop: 1 }}>-</span>
-          <span>{item}</span>
+    <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+          <Icon className="h-4 w-4" />
         </div>
-      ))}
+        <div>
+          <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            {label}
+          </p>
+          <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">{value}</p>
+        </div>
+      </div>
     </div>
   );
 }
 
-function formatPercent(rate: number) {
-  return `${Math.round(rate * 100)}%`;
+function BarList({
+  items,
+  emptyMessage,
+}: {
+  items: { label: string; value: number; tone?: Tone }[];
+  emptyMessage: string;
+}) {
+  const maxValue = Math.max(...items.map((item) => item.value), 1);
+
+  if (items.length === 0) {
+    return <EmptyState message={emptyMessage} className="px-4 py-4 text-left" />;
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((item) => {
+        const width = `${Math.round((item.value / maxValue) * 100)}%`;
+        const tone = item.tone ?? 'primary';
+
+        return (
+          <div key={item.label} className="grid grid-cols-[minmax(0,1fr)_56px] items-center gap-3">
+            <div className="min-w-0 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="m-0 truncate text-sm text-card-foreground">{item.label}</p>
+                <span className="text-xs text-muted-foreground">{item.value}</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                <div
+                  className={cn('h-full rounded-full transition-[width] duration-300', barToneClasses[tone])}
+                  style={{ width }}
+                />
+              </div>
+            </div>
+            <p className="m-0 text-right text-sm font-semibold text-card-foreground">{item.value}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function ConversionCard({
@@ -199,80 +185,323 @@ function ConversionCard({
   rate,
   numerator,
   denominator,
-  color,
+  tone,
 }: {
   label: string;
   rate: number;
   numerator: number;
   denominator: number;
-  color: string;
+  tone: Tone;
 }) {
   const width = `${Math.max(0, Math.min(rate, 1)) * 100}%`;
 
   return (
-    <Card className="px-4 py-[14px]">
-      <div className="flex items-center justify-between gap-3 mb-2.5">
-        <div className="text-xs text-content-muted">{label}</div>
-        <div style={{ fontSize: 18, fontWeight: 700, color }}>{formatPercent(rate)}</div>
+    <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="m-0 text-xs text-muted-foreground">{label}</p>
+        <span className={cn('text-lg font-bold', tone === 'danger' ? 'text-destructive' : tone === 'warning' ? 'text-fit-fair' : tone === 'success' ? 'text-fit-excellent' : 'text-primary')}>
+          {Math.round(rate * 100)}%
+        </span>
       </div>
-      <div className="h-2 rounded-full overflow-hidden mb-2" style={{ background: 'var(--color-bg-hover)' }}>
-        <div style={{ width, height: '100%', background: color, borderRadius: 999, transition: 'width 0.3s ease' }} />
+      <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+        <div
+          className={cn('h-full rounded-full transition-[width] duration-300', barToneClasses[tone])}
+          style={{ width }}
+        />
       </div>
-      <div className="text-xs text-content-muted">{numerator} / {denominator}</div>
-    </Card>
+      <p className="m-0 mt-2 text-xs text-muted-foreground">
+        {numerator} / {denominator || 0}
+      </p>
+    </div>
   );
 }
 
-// ─── Source distribution ──────────────────────────────────────────────────────
-
-function SourceDistribution({ summary }: { summary: AnalyticsSummary }) {
-  const max = Math.max(...summary.jobsBySource.map((s) => s.count), 1);
-  const colors = ['#95a7ff', '#c9fff8', '#ffd6a5', '#ffb4b4', '#b9fbc0'];
-
-  if (summary.jobsBySource.length === 0) {
-    return <EmptyState message="No source data yet." className="px-4 py-4 text-left" />;
+function SignalList({
+  title,
+  description,
+  items,
+  tone,
+}: {
+  title: string;
+  description: string;
+  items: BehaviorSignalCount[];
+  tone: Tone;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+        <p className="m-0 text-sm font-semibold text-card-foreground">{title}</p>
+        <p className="m-0 mt-1 text-xs leading-6 text-muted-foreground">{description}</p>
+        <EmptyState message="No signal data yet." className="px-4 py-4 text-left" />
+      </div>
+    );
   }
 
   return (
-    <div>
-      {summary.jobsBySource.map((entry, i) => (
-        <BarRow
-          key={entry.source}
-          label={entry.source}
-          value={entry.count}
-          maxValue={max}
-          color={colors[i % colors.length]}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ─── Lifecycle distribution ───────────────────────────────────────────────────
-
-function LifecycleDistribution({ summary }: { summary: AnalyticsSummary }) {
-  const lc = summary.jobsByLifecycle;
-  const max = Math.max(lc.active, lc.inactive, lc.reactivated, 1);
-
-  return (
-    <div>
-      <BarRow label="Active" value={lc.active} maxValue={max} color="#b9fbc0" />
-      <BarRow label="Inactive" value={lc.inactive} maxValue={max} color="#9aa8bc" />
-      <BarRow label="Reactivated" value={lc.reactivated} maxValue={max} color="#95a7ff" />
-      <div
-        style={{
-          marginTop: 10,
-          fontSize: 12,
-          color: 'var(--color-text-secondary)',
-        }}
-      >
-        Total indexed: <strong style={{ color: 'var(--color-text-primary)' }}>{lc.total}</strong>
+    <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+      <p className="m-0 text-sm font-semibold text-card-foreground">{title}</p>
+      <p className="m-0 mt-1 text-xs leading-6 text-muted-foreground">{description}</p>
+      <div className="mt-4 space-y-3">
+        {items.slice(0, 6).map((item) => (
+          <div
+            key={item.key}
+            className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-3"
+          >
+            <div className="min-w-0">
+              <p className="m-0 truncate text-sm font-medium text-card-foreground">{item.key}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="rounded-full border border-border bg-white/[0.04] px-2 py-1 text-[11px] text-muted-foreground">
+                  saves {item.saveCount}
+                </span>
+                <span className="rounded-full border border-border bg-white/[0.04] px-2 py-1 text-[11px] text-muted-foreground">
+                  applies {item.applicationCreatedCount}
+                </span>
+                <span className="rounded-full border border-border bg-white/[0.04] px-2 py-1 text-[11px] text-muted-foreground">
+                  bad fit {item.badFitCount}
+                </span>
+              </div>
+            </div>
+            <span className={cn('shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]', toneClasses[tone])}>
+              net {item.netScore}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function FunnelSourceBreakdown({ summary }: { summary: FunnelSummary }) {
+function PillCloud({
+  title,
+  items,
+  emptyMessage,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  emptyMessage: string;
+  tone: Tone;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+      <p className="m-0 text-sm font-semibold text-card-foreground">{title}</p>
+      {items.length === 0 ? (
+        <EmptyState message={emptyMessage} className="px-4 py-4 text-left" />
+      ) : (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {items.map((item) => (
+            <span
+              key={item}
+              className={cn(
+                'inline-flex items-center rounded-full border px-3 py-1.5 text-xs',
+                toneClasses[tone],
+              )}
+            >
+              {item}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TextList({
+  title,
+  items,
+  emptyMessage,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  emptyMessage: string;
+  tone: Tone;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+      <p className="m-0 text-sm font-semibold text-card-foreground">{title}</p>
+      {items.length === 0 ? (
+        <EmptyState message={emptyMessage} className="px-4 py-4 text-left" />
+      ) : (
+        <div className="mt-4 space-y-3">
+          {items.map((item) => (
+            <div key={item} className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-3">
+              <span className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', barToneClasses[tone])} />
+              <p className="m-0 text-sm leading-6 text-card-foreground">{item}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
+  return (
+    <div className="space-y-5">
+      {ctx.analyzedProfile ? (
+        <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Profile anchor
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/12 px-3 py-1.5 text-xs font-semibold text-primary">
+              {ctx.analyzedProfile.primaryRole}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-border bg-white/[0.05] px-3 py-1.5 text-xs text-muted-foreground">
+              {ctx.analyzedProfile.seniority}
+            </span>
+          </div>
+          <p className="m-0 mt-4 text-sm leading-7 text-card-foreground">{ctx.analyzedProfile.summary}</p>
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <TextList
+          title="Positive signals"
+          items={ctx.topPositiveEvidence.map((entry) => `${entry.type.replaceAll('_', ' ')}: ${entry.label}`)}
+          emptyMessage="No positive signals yet."
+          tone="success"
+        />
+        <TextList
+          title="Negative signals"
+          items={ctx.topNegativeEvidence.map((entry) => `${entry.type.replaceAll('_', ' ')}: ${entry.label}`)}
+          emptyMessage="No negative signals yet."
+          tone="danger"
+        />
+      </div>
+    </div>
+  );
+}
+
+function ProfileInsightsPanel({ insights }: { insights: ProfileInsights }) {
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+        <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Profile summary
+        </p>
+        <p className="m-0 mt-3 text-sm leading-7 text-card-foreground">
+          {insights.profileSummary || 'No summary generated yet.'}
+        </p>
+        {insights.searchStrategySummary ? (
+          <p className="m-0 mt-4 text-sm leading-7 text-muted-foreground">
+            {insights.searchStrategySummary}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <TextList
+          title="Strengths"
+          items={insights.strengths}
+          emptyMessage="No strengths highlighted yet."
+          tone="success"
+        />
+        <TextList
+          title="Risks"
+          items={insights.risks}
+          emptyMessage="No risks highlighted yet."
+          tone="danger"
+        />
+        <TextList
+          title="Recommended actions"
+          items={insights.recommendedActions}
+          emptyMessage="No actions suggested yet."
+          tone="primary"
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <PillCloud
+          title="Top focus areas"
+          items={insights.topFocusAreas}
+          emptyMessage="No focus areas suggested yet."
+          tone="warning"
+        />
+        <PillCloud
+          title="Search term suggestions"
+          items={insights.searchTermSuggestions}
+          emptyMessage="No search term suggestions yet."
+          tone="primary"
+        />
+      </div>
+
+      <TextList
+        title="Application strategy"
+        items={insights.applicationStrategy}
+        emptyMessage="No application strategy generated yet."
+        tone="success"
+      />
+    </div>
+  );
+}
+
+function WeeklyGuidancePanel({ guidance }: { guidance: WeeklyGuidance }) {
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+        <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Weekly summary
+        </p>
+        <p className="m-0 mt-3 text-sm leading-7 text-card-foreground">
+          {guidance.weeklySummary || 'No weekly guidance generated yet.'}
+        </p>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <TextList
+          title="What is working"
+          items={guidance.whatIsWorking}
+          emptyMessage="No positive patterns identified yet."
+          tone="success"
+        />
+        <TextList
+          title="What is not working"
+          items={guidance.whatIsNotWorking}
+          emptyMessage="No weak signals identified yet."
+          tone="danger"
+        />
+        <TextList
+          title="Funnel bottlenecks"
+          items={guidance.funnelBottlenecks}
+          emptyMessage="No funnel bottlenecks highlighted yet."
+          tone="warning"
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <TextList
+          title="Search adjustments"
+          items={guidance.recommendedSearchAdjustments}
+          emptyMessage="No search changes suggested yet."
+          tone="primary"
+        />
+        <TextList
+          title="Source moves"
+          items={guidance.recommendedSourceMoves}
+          emptyMessage="No source shifts suggested yet."
+          tone="success"
+        />
+        <TextList
+          title="Role focus"
+          items={guidance.recommendedRoleFocus}
+          emptyMessage="No role focus changes suggested yet."
+          tone="warning"
+        />
+      </div>
+
+      <TextList
+        title="Next week plan"
+        items={guidance.nextWeekPlan}
+        emptyMessage="No plan generated yet."
+        tone="primary"
+      />
+    </div>
+  );
+}
+
+function FunnelBySource({ summary }: { summary: FunnelSummary }) {
   const rows = Array.from(
     new Set([
       ...summary.impressionsBySource.map((entry) => entry.source),
@@ -295,302 +524,91 @@ function FunnelSourceBreakdown({ summary }: { summary: FunnelSummary }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div className="space-y-3">
       {rows.map((row) => (
-        <Card
+        <div
           key={row.source}
-          className="text-xs"
-          style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1.3fr) repeat(4, minmax(0, 1fr))', gap: 12, padding: '12px 14px' }}
+          className="grid grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(56px,1fr))] gap-2 rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-3 text-xs"
         >
-          <div className="font-semibold text-content">{row.source}</div>
-          <div className="text-content-muted">Impr. {row.impressions}</div>
-          <div className="text-content-muted">Open {row.opens}</div>
-          <div className="text-content-muted">Save {row.saves}</div>
-          <div className="text-content-muted">Apply {row.applications}</div>
-        </Card>
+          <span className="truncate font-semibold text-card-foreground">{row.source}</span>
+          <span className="text-muted-foreground">Impr. {row.impressions}</span>
+          <span className="text-muted-foreground">Open {row.opens}</span>
+          <span className="text-muted-foreground">Save {row.saves}</span>
+          <span className="text-muted-foreground">Apply {row.applications}</span>
+        </div>
       ))}
     </div>
   );
 }
 
-// ─── LLM context panel ────────────────────────────────────────────────────────
+function buildInsights({
+  summary,
+  funnel,
+  profileInsights,
+  weeklyGuidance,
+}: {
+  summary: AnalyticsSummary;
+  funnel: FunnelSummary | undefined;
+  profileInsights: ProfileInsights | undefined;
+  weeklyGuidance: WeeklyGuidance | undefined;
+}): AIInsight[] {
+  const insights: AIInsight[] = [];
 
-function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {ctx.analyzedProfile && (
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-            Primary role
-          </div>
-          <span
-            style={{
-              padding: '3px 12px',
-              borderRadius: 20,
-              fontSize: 13,
-              fontWeight: 600,
-              background: 'var(--color-bg-hover)',
-              color: '#95a7ff',
-              border: '1px solid #95a7ff33',
-            }}
-          >
-            {ctx.analyzedProfile.primaryRole}
-          </span>
-          <span
-            style={{
-              marginLeft: 8,
-              padding: '3px 10px',
-              borderRadius: 20,
-              fontSize: 12,
-              background: 'var(--color-bg-hover)',
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            {ctx.analyzedProfile.seniority}
-          </span>
-        </div>
-      )}
+  if (weeklyGuidance?.weeklySummary) {
+    insights.push({
+      id: 'weekly-summary',
+      type: 'trend',
+      title: 'Weekly guidance',
+      description: weeklyGuidance.weeklySummary,
+      action: { label: 'Tune search profile', href: '/profile' },
+    });
+  }
 
-      <div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-          Positive signals
-        </div>
-        {ctx.topPositiveEvidence.length === 0 ? (
-          <EmptyState message="No positive signals yet." className="px-4 py-4 text-left" />
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {ctx.topPositiveEvidence.slice(0, 8).map((entry, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 12,
-                  color: 'var(--color-text-primary)',
-                }}
-              >
-                <span
-                  style={{
-                    padding: '1px 7px',
-                    borderRadius: 8,
-                    fontSize: 10,
-                    background: '#b9fbc022',
-                    color: '#b9fbc0',
-                    flexShrink: 0,
-                  }}
-                >
-                  {entry.type === 'saved_job' ? 'saved' : 'whitelist'}
-                </span>
-                {entry.label}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+  if (weeklyGuidance?.recommendedSearchAdjustments[0]) {
+    insights.push({
+      id: 'search-adjustment',
+      type: 'recommendation',
+      title: 'Search adjustment',
+      description: weeklyGuidance.recommendedSearchAdjustments[0],
+      action: { label: 'Open profile', href: '/profile' },
+    });
+  }
 
-      <div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-          Negative signals
-        </div>
-        {ctx.topNegativeEvidence.length === 0 ? (
-          <EmptyState message="No negative signals yet." className="px-4 py-4 text-left" />
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {ctx.topNegativeEvidence.slice(0, 8).map((entry, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 12,
-                  color: 'var(--color-text-primary)',
-                }}
-              >
-                <span
-                  style={{
-                    padding: '1px 7px',
-                    borderRadius: 8,
-                    fontSize: 10,
-                    background: '#ffb4b422',
-                    color: '#ffb4b4',
-                    flexShrink: 0,
-                  }}
-                >
-                  {entry.type === 'bad_fit_job' ? 'bad fit' : 'blacklist'}
-                </span>
-                {entry.label}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  if (profileInsights?.recommendedActions[0]) {
+    insights.push({
+      id: 'profile-action',
+      type: 'recommendation',
+      title: 'Profile action',
+      description: profileInsights.recommendedActions[0],
+      action: { label: 'Review profile', href: '/profile' },
+    });
+  }
+
+  if (weeklyGuidance?.funnelBottlenecks[0]) {
+    insights.push({
+      id: 'funnel-bottleneck',
+      type: 'tip',
+      title: 'Funnel bottleneck',
+      description: weeklyGuidance.funnelBottlenecks[0],
+      action: { label: 'Review feedback', href: '/feedback' },
+    });
+  }
+
+  if (insights.length === 0) {
+    insights.push({
+      id: 'fallback',
+      type: 'tip',
+      title: 'Wait for more signal',
+      description:
+        summary.jobsByLifecycle.total > 0
+          ? 'Analytics are live, but richer guidance needs more behavior and feedback history.'
+          : 'Create activity in the system first to unlock analytics and guidance.',
+      action: { label: 'Go to dashboard', href: '/' },
+    });
+  }
+
+  return insights.slice(0, 4);
 }
-
-function ProfileInsightsPanel({ insights }: { insights: ProfileInsights }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Profile summary</div>
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--color-text-primary)' }}>
-          {insights.profileSummary || 'No summary generated yet.'}
-        </p>
-      </div>
-
-      {insights.searchStrategySummary && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Search strategy</div>
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: 'var(--color-text-secondary)' }}>
-            {insights.searchStrategySummary}
-          </p>
-        </div>
-      )}
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: 16,
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>Strengths</div>
-          <SimpleList items={insights.strengths} empty="No strengths highlighted yet." color="#b9fbc0" />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>Risks</div>
-          <SimpleList items={insights.risks} empty="No risks highlighted yet." color="#ffb4b4" />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-            Recommended actions
-          </div>
-          <SimpleList
-            items={insights.recommendedActions}
-            empty="No actions suggested yet."
-            color="#95a7ff"
-          />
-        </div>
-      </div>
-
-      <div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-          Search term suggestions
-        </div>
-        <TagList items={insights.searchTermSuggestions} color="#ffd6a5" />
-      </div>
-    </div>
-  );
-}
-
-function WeeklyGuidancePanel({ guidance }: { guidance: WeeklyGuidance }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>Weekly summary</div>
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--color-text-primary)' }}>
-          {guidance.weeklySummary || 'No weekly guidance generated yet.'}
-        </p>
-      </div>
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: 16,
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-            What is working
-          </div>
-          <SimpleList
-            items={guidance.whatIsWorking}
-            empty="No positive patterns identified yet."
-            color="#b9fbc0"
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-            What is not working
-          </div>
-          <SimpleList
-            items={guidance.whatIsNotWorking}
-            empty="No major weak signals identified yet."
-            color="#ffb4b4"
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-            Funnel bottlenecks
-          </div>
-          <SimpleList
-            items={guidance.funnelBottlenecks}
-            empty="No funnel bottlenecks highlighted yet."
-            color="#ffd6a5"
-          />
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: 16,
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-            Search adjustments
-          </div>
-          <SimpleList
-            items={guidance.recommendedSearchAdjustments}
-            empty="No search changes suggested yet."
-            color="#95a7ff"
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-            Source moves
-          </div>
-          <SimpleList
-            items={guidance.recommendedSourceMoves}
-            empty="No source shifts suggested yet."
-            color="#c9fff8"
-          />
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-            Role focus
-          </div>
-          <SimpleList
-            items={guidance.recommendedRoleFocus}
-            empty="No role focus changes suggested yet."
-            color="#ffd6a5"
-          />
-        </div>
-      </div>
-
-      <div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
-          Next week plan
-        </div>
-        <SimpleList items={guidance.nextWeekPlan} empty="No plan generated yet." color="#95a7ff" />
-      </div>
-    </div>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Analytics() {
   const profileId = readProfileId();
@@ -634,12 +652,7 @@ export default function Analytics() {
 
   const weeklyGuidanceContextVersion =
     summary && behavior && funnel && llmCtx
-      ? JSON.stringify({
-          summary,
-          behavior,
-          funnel,
-          llmCtx,
-        })
+      ? JSON.stringify({ summary, behavior, funnel, llmCtx })
       : '';
 
   const {
@@ -660,6 +673,19 @@ export default function Analytics() {
     retry: 0,
   });
 
+  const aiInsights = useMemo(
+    () =>
+      summary
+        ? buildInsights({
+            summary,
+            funnel,
+            profileInsights,
+            weeklyGuidance,
+          })
+        : [],
+    [summary, funnel, profileInsights, weeklyGuidance],
+  );
+
   if (!profileId) {
     return (
       <Page>
@@ -674,7 +700,7 @@ export default function Analytics() {
     <Page>
       <PageHeader
         title="Analytics"
-        description="Track your job search progress and feedback-driven trends."
+        description="Track job-search progress, feedback signals, conversion flow, and enrichment-ready context."
         breadcrumb={[
           { label: 'Dashboard', href: '/' },
           { label: 'Analytics' },
@@ -685,159 +711,347 @@ export default function Analytics() {
         <EmptyState message="Loading analytics…" />
       ) : summary ? (
         <>
-          {/* Feedback summary cards */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <AnalyticsCard title="Saved" value={summary.feedback.savedJobsCount} icon={Bookmark} />
-            <AnalyticsCard title="Hidden" value={summary.feedback.hiddenJobsCount} icon={EyeOff} />
-            <AnalyticsCard title="Bad Fit" value={summary.feedback.badFitJobsCount} icon={ThumbsDown} />
-            <AnalyticsCard title="Whitelisted" value={summary.feedback.whitelistedCompaniesCount} icon={ShieldCheck} />
-            <AnalyticsCard title="Blacklisted" value={summary.feedback.blacklistedCompaniesCount} icon={ShieldOff} />
-            <AnalyticsCard title="Total Jobs" value={summary.jobsByLifecycle.total} icon={Layers} />
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 16,
-            }}
-          >
-            {funnel && (
-              <Section title="Job Funnel" icon={<Eye size={16} />}>
-                <div className="grid grid-cols-2 gap-2.5 mb-4">
-                  <StatCard title="Impressions" value={funnel.impressionCount} icon={Eye} />
-                  <StatCard title="Opens" value={funnel.openCount} icon={BarChart2} />
-                  <StatCard title="Saves" value={funnel.saveCount} icon={Bookmark} />
-                  <StatCard title="Applications" value={funnel.applicationCreatedCount} icon={Zap} />
+          <Card className="overflow-hidden border-border bg-card">
+            <CardContent className="p-0">
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-primary/10 via-accent/6 to-transparent" />
+                <div className="relative flex flex-col gap-6 p-7 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="max-w-3xl space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge
+                        variant="default"
+                        className="border-0 bg-primary/15 px-2 py-0.5 text-xs text-primary"
+                      >
+                        Feedback-driven analytics
+                      </Badge>
+                      <Badge
+                        variant="muted"
+                        className="px-2 py-0.5 text-[10px] uppercase tracking-wide"
+                      >
+                        Funnel, source quality, enrichment signals
+                      </Badge>
+                    </div>
+                    <h2 className="m-0 text-2xl font-bold text-card-foreground lg:text-3xl">
+                      Measure what is actually improving ranking, engagement, and application flow
+                    </h2>
+                    <p className="m-0 text-sm leading-7 text-muted-foreground lg:text-base">
+                      Analytics combine deterministic search behavior, explicit feedback, and
+                      enrichment-ready context so you can tune the profile, sources, and follow-up
+                      actions without guessing.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[460px]">
+                    <HeroMetric
+                      label="Indexed jobs"
+                      value={summary.jobsByLifecycle.total}
+                      icon={Layers}
+                    />
+                    <HeroMetric
+                      label="Search runs"
+                      value={behavior?.searchRunCount ?? 0}
+                      icon={Search}
+                    />
+                    <HeroMetric
+                      label="Applications"
+                      value={funnel?.applicationCreatedCount ?? 0}
+                      icon={Target}
+                    />
+                  </div>
                 </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                    gap: 12,
-                    marginBottom: 16,
-                  }}
-                >
-                  <ConversionCard
-                    label="Open from impressions"
-                    rate={funnel.conversionRates.openRateFromImpressions}
-                    numerator={funnel.openCount}
-                    denominator={funnel.impressionCount}
-                    color="#95a7ff"
-                  />
-                  <ConversionCard
-                    label="Save from opens"
-                    rate={funnel.conversionRates.saveRateFromOpens}
-                    numerator={funnel.saveCount}
-                    denominator={funnel.openCount}
-                    color="#ffd6a5"
-                  />
-                  <ConversionCard
-                    label="Apply from saves"
-                    rate={funnel.conversionRates.applicationRateFromSaves}
-                    numerator={funnel.applicationCreatedCount}
-                    denominator={funnel.saveCount}
-                    color="#b9fbc0"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <StatCard title="Hidden" value={funnel.hideCount} icon={EyeOff} />
-                  <StatCard title="Bad Fit" value={funnel.badFitCount} icon={ThumbsDown} />
-                  <StatCard title="Fit Explainers" value={funnel.fitExplanationRequestedCount} icon={Brain} />
-                  <StatCard title="Coach" value={funnel.applicationCoachRequestedCount} icon={Brain} />
-                  <StatCard title="Cover Letters" value={funnel.coverLetterDraftRequestedCount} icon={Layers} />
-                  <StatCard title="Interview Prep" value={funnel.interviewPrepRequestedCount} icon={Zap} />
-                </div>
-              </Section>
-            )}
-
-            <Section title="Jobs by Source" icon={<BarChart2 size={16} />}>
-              <SourceDistribution summary={summary} />
-            </Section>
-
-            <Section title="Jobs by Lifecycle" icon={<Zap size={16} />}>
-              <LifecycleDistribution summary={summary} />
-            </Section>
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-              gap: 16,
-            }}
-          >
-            {funnel && (
-              <Section title="Funnel by Source" icon={<BarChart2 size={16} />}>
-                <FunnelSourceBreakdown summary={funnel} />
-              </Section>
-            )}
-
-            <Section title="Top Matched Roles" icon={<Building2 size={16} />}>
-              <TagList items={summary.topMatchedRoles} color="#95a7ff" />
-            </Section>
-
-            <Section title="Top Matched Skills" icon={<Zap size={16} />}>
-              <TagList items={summary.topMatchedSkills} color="#c9fff8" />
-            </Section>
-
-            <Section title="Top Keywords" icon={<Hash size={16} />}>
-              <TagList items={summary.topMatchedKeywords} color="#ffd6a5" />
-            </Section>
-          </div>
-
-          {llmCtx && (
-            <Section title="LLM Context Preview" icon={<Brain size={16} />}>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: 'var(--color-text-secondary)',
-                  marginBottom: 14,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Deterministic payload — ready for Python enrichment
               </div>
-              <LlmContextPanel ctx={llmCtx} />
-            </Section>
-          )}
+            </CardContent>
+          </Card>
 
-          {llmCtx && (
-            <Section title="Weekly Guidance" icon={<Brain size={16} />}>
-              {weeklyGuidanceLoading ? (
-                <EmptyState message="Generating weekly guidance…" className="px-4 py-4 text-left" />
-              ) : weeklyGuidanceError ? (
-                <EmptyState
-                  message={(weeklyGuidanceError as Error).message || 'Weekly guidance is unavailable right now.'}
-                  className="px-4 py-4 text-left"
-                />
-              ) : weeklyGuidance ? (
-                <WeeklyGuidancePanel guidance={weeklyGuidance} />
-              ) : (
-                <EmptyState message="No weekly guidance available yet." className="px-4 py-4 text-left" />
-              )}
-            </Section>
-          )}
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            <AnalyticsCard
+              title="Saved Jobs"
+              value={summary.feedback.savedJobsCount}
+              icon={Bookmark}
+            />
+            <AnalyticsCard
+              title="Bad Fit"
+              value={summary.feedback.badFitJobsCount}
+              icon={ThumbsDown}
+            />
+            <AnalyticsCard
+              title="Open Rate"
+              value={funnel ? `${Math.round(funnel.conversionRates.openRateFromImpressions * 100)}%` : '0%'}
+              icon={Eye}
+            />
+            <AnalyticsCard
+              title="Apply Rate"
+              value={funnel ? `${Math.round(funnel.conversionRates.applicationRateFromSaves * 100)}%` : '0%'}
+              icon={Zap}
+            />
+          </div>
 
-          {llmCtx && (
-            <Section title="LLM Enrichment" icon={<Brain size={16} />}>
-              {insightsLoading ? (
-                <EmptyState message="Generating enrichment…" className="px-4 py-4 text-left" />
-              ) : insightsError ? (
-                <EmptyState
-                  message={(insightsError as Error).message || 'ML enrichment is unavailable right now.'}
-                  className="px-4 py-4 text-left"
-                />
-              ) : profileInsights ? (
-                <ProfileInsightsPanel insights={profileInsights} />
-              ) : (
-                <EmptyState message="No enrichment available yet." className="px-4 py-4 text-left" />
-              )}
-            </Section>
-          )}
+          <PageGrid
+            aside={
+              <>
+                <AIInsightPanel insights={aiInsights} title="AI Guidance" />
+                <Section
+                  title="Match Surface"
+                  description="Top deterministic dimensions currently shaping ranked jobs."
+                  icon={Sparkles}
+                  eyebrow="Current signal"
+                >
+                  <div className="space-y-4">
+                    <PillCloud
+                      title="Matched roles"
+                      items={summary.topMatchedRoles}
+                      emptyMessage="No matched roles yet."
+                      tone="primary"
+                    />
+                    <PillCloud
+                      title="Matched skills"
+                      items={summary.topMatchedSkills}
+                      emptyMessage="No matched skills yet."
+                      tone="success"
+                    />
+                    <PillCloud
+                      title="Matched keywords"
+                      items={summary.topMatchedKeywords}
+                      emptyMessage="No matched keywords yet."
+                      tone="warning"
+                    />
+                  </div>
+                </Section>
+              </>
+            }
+          >
+            <div className="space-y-8">
+              {funnel ? (
+                <Section
+                  title="Search Funnel"
+                  description="Follow the conversion path from impressions to applications and see where the loop breaks."
+                  icon={Target}
+                  eyebrow="Conversion"
+                >
+                  <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+                    <StatCard title="Impressions" value={funnel.impressionCount} icon={Eye} />
+                    <StatCard title="Opens" value={funnel.openCount} icon={BarChart2} />
+                    <StatCard title="Saves" value={funnel.saveCount} icon={Bookmark} />
+                    <StatCard title="Applications" value={funnel.applicationCreatedCount} icon={Zap} />
+                  </div>
+
+                  <div className="mt-6 grid gap-4 xl:grid-cols-3">
+                    <ConversionCard
+                      label="Open from impressions"
+                      rate={funnel.conversionRates.openRateFromImpressions}
+                      numerator={funnel.openCount}
+                      denominator={funnel.impressionCount}
+                      tone="primary"
+                    />
+                    <ConversionCard
+                      label="Save from opens"
+                      rate={funnel.conversionRates.saveRateFromOpens}
+                      numerator={funnel.saveCount}
+                      denominator={funnel.openCount}
+                      tone="warning"
+                    />
+                    <ConversionCard
+                      label="Apply from saves"
+                      rate={funnel.conversionRates.applicationRateFromSaves}
+                      numerator={funnel.applicationCreatedCount}
+                      denominator={funnel.saveCount}
+                      tone="success"
+                    />
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-2 gap-4 xl:grid-cols-3">
+                    <StatCard title="Hidden" value={funnel.hideCount} icon={EyeOff} />
+                    <StatCard title="Bad Fit" value={funnel.badFitCount} icon={ThumbsDown} />
+                    <StatCard
+                      title="Fit Explainers"
+                      value={funnel.fitExplanationRequestedCount}
+                      icon={Brain}
+                    />
+                    <StatCard
+                      title="Coach Runs"
+                      value={funnel.applicationCoachRequestedCount}
+                      icon={Brain}
+                    />
+                    <StatCard
+                      title="Cover Letters"
+                      value={funnel.coverLetterDraftRequestedCount}
+                      icon={Layers}
+                    />
+                    <StatCard
+                      title="Interview Prep"
+                      value={funnel.interviewPrepRequestedCount}
+                      icon={Zap}
+                    />
+                  </div>
+                </Section>
+              ) : null}
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                <Section
+                  title="Jobs by Source"
+                  description="Where the indexed opportunity volume is currently coming from."
+                  icon={BarChart2}
+                  eyebrow="Supply"
+                >
+                  <BarList
+                    items={summary.jobsBySource.map((entry, index) => ({
+                      label: entry.source,
+                      value: entry.count,
+                      tone: index % 2 === 0 ? 'primary' : 'warning',
+                    }))}
+                    emptyMessage="No source data yet."
+                  />
+                </Section>
+
+                <Section
+                  title="Lifecycle Coverage"
+                  description="How much of the feed is active, inactive, or reactivated."
+                  icon={TrendingUp}
+                  eyebrow="Feed health"
+                >
+                  <BarList
+                    items={[
+                      { label: 'Active', value: summary.jobsByLifecycle.active, tone: 'success' },
+                      { label: 'Inactive', value: summary.jobsByLifecycle.inactive, tone: 'muted' },
+                      {
+                        label: 'Reactivated',
+                        value: summary.jobsByLifecycle.reactivated,
+                        tone: 'primary',
+                      },
+                    ]}
+                    emptyMessage="No lifecycle data yet."
+                  />
+                  <div className="mt-5 rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-3">
+                    <p className="m-0 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                      Total indexed
+                    </p>
+                    <p className="m-0 mt-2 text-2xl font-bold text-card-foreground">
+                      {summary.jobsByLifecycle.total}
+                    </p>
+                  </div>
+                </Section>
+              </div>
+
+              {behavior ? (
+                <Section
+                  title="Behavior Signals"
+                  description="See which sources and role families consistently produce positive or negative outcomes."
+                  icon={TrendingUp}
+                  eyebrow="Learning loop"
+                >
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <SignalList
+                      title="Positive sources"
+                      description="Sources with the strongest positive behavior history."
+                      items={behavior.topPositiveSources}
+                      tone="success"
+                    />
+                    <SignalList
+                      title="Negative sources"
+                      description="Sources associated with poor fit, hides, or low-quality outcomes."
+                      items={behavior.topNegativeSources}
+                      tone="danger"
+                    />
+                    <SignalList
+                      title="Positive role families"
+                      description="Role groups with strong saves and applications."
+                      items={behavior.topPositiveRoleFamilies}
+                      tone="success"
+                    />
+                    <SignalList
+                      title="Negative role families"
+                      description="Role groups repeatedly marked as weak or irrelevant."
+                      items={behavior.topNegativeRoleFamilies}
+                      tone="danger"
+                    />
+                  </div>
+                </Section>
+              ) : null}
+
+              {funnel ? (
+                <Section
+                  title="Funnel by Source"
+                  description="Break down the conversion path per source to see where quality actually comes from."
+                  icon={Building2}
+                  eyebrow="Source quality"
+                >
+                  <FunnelBySource summary={funnel} />
+                </Section>
+              ) : null}
+
+              {llmCtx ? (
+                <Section
+                  title="LLM Context Preview"
+                  description="Deterministic payload prepared for enrichment and coaching layers."
+                  icon={Brain}
+                  eyebrow="Enrichment context"
+                >
+                  <LlmContextPanel ctx={llmCtx} />
+                </Section>
+              ) : null}
+
+              {llmCtx ? (
+                <Section
+                  title="Weekly Guidance"
+                  description="ML-generated weekly review based on analytics, funnel behavior, and current context."
+                  icon={Brain}
+                  eyebrow="Weekly readout"
+                >
+                  {weeklyGuidanceLoading ? (
+                    <EmptyState
+                      message="Generating weekly guidance…"
+                      className="px-4 py-4 text-left"
+                    />
+                  ) : weeklyGuidanceError ? (
+                    <EmptyState
+                      message={
+                        (weeklyGuidanceError as Error).message ||
+                        'Weekly guidance is unavailable right now.'
+                      }
+                      className="px-4 py-4 text-left"
+                    />
+                  ) : weeklyGuidance ? (
+                    <WeeklyGuidancePanel guidance={weeklyGuidance} />
+                  ) : (
+                    <EmptyState
+                      message="No weekly guidance available yet."
+                      className="px-4 py-4 text-left"
+                    />
+                  )}
+                </Section>
+              ) : null}
+
+              {llmCtx ? (
+                <Section
+                  title="LLM Enrichment"
+                  description="Profile-specific strengths, risks, and action guidance produced from the current deterministic context."
+                  icon={Sparkles}
+                  eyebrow="Profile intelligence"
+                >
+                  {insightsLoading ? (
+                    <EmptyState
+                      message="Generating enrichment…"
+                      className="px-4 py-4 text-left"
+                    />
+                  ) : insightsError ? (
+                    <EmptyState
+                      message={
+                        (insightsError as Error).message ||
+                        'ML enrichment is unavailable right now.'
+                      }
+                      className="px-4 py-4 text-left"
+                    />
+                  ) : profileInsights ? (
+                    <ProfileInsightsPanel insights={profileInsights} />
+                  ) : (
+                    <EmptyState
+                      message="No enrichment available yet."
+                      className="px-4 py-4 text-left"
+                    />
+                  )}
+                </Section>
+              ) : null}
+            </div>
+          </PageGrid>
         </>
       ) : (
         <EmptyState message="No analytics data available." />
