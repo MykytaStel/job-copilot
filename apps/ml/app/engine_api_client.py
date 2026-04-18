@@ -3,7 +3,7 @@ from typing import Any
 
 import httpx
 from fastapi import HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class EngineApiError(BaseModel):
@@ -18,6 +18,14 @@ class EngineProfileAnalysis(BaseModel):
     seniority: str
     skills: list[str]
     keywords: list[str]
+
+    @field_validator("seniority", mode="before")
+    @classmethod
+    def normalize_seniority(cls, value: Any) -> str:
+        if not isinstance(value, str):
+            return ""
+        cleaned = value.strip()
+        return "" if cleaned.lower() == "unknown" else cleaned
 
 
 class EngineProfile(BaseModel):
@@ -42,10 +50,24 @@ class EngineJobLifecycleVariant(BaseModel):
     inactivated_at: str | None = None
 
 
+class EngineJobPresentation(BaseModel):
+    title: str
+    company: str
+    summary: str | None = None
+    location_label: str | None = None
+    work_mode_label: str | None = None
+    source_label: str | None = None
+    outbound_url: str | None = None
+    salary_label: str | None = None
+    freshness_label: str | None = None
+    badges: list[str]
+
+
 class EngineJobLifecycle(BaseModel):
     id: str
     title: str
     company_name: str
+    location: str | None = None
     remote_type: str | None = None
     seniority: str | None = None
     description_text: str
@@ -60,6 +82,19 @@ class EngineJobLifecycle(BaseModel):
     reactivated_at: str | None = None
     lifecycle_stage: str
     primary_variant: EngineJobLifecycleVariant | None = None
+    presentation: EngineJobPresentation
+
+    @field_validator("seniority", mode="before")
+    @classmethod
+    def normalize_job_seniority(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return None
+        cleaned = value.strip()
+        if not cleaned or cleaned.lower() == "unknown":
+            return None
+        return cleaned
 
 
 def engine_api_base_url() -> str:

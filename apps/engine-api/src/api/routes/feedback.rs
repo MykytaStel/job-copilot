@@ -376,6 +376,7 @@ mod tests {
             id: job_id.to_string(),
             title: "Senior Backend Developer".to_string(),
             company_name: company_name.to_string(),
+            location: None,
             remote_type: Some("remote".to_string()),
             seniority: Some("senior".to_string()),
             description_text: "Rust and Postgres".to_string(),

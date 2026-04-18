@@ -272,6 +272,7 @@ mod tests {
             id: "job-1".to_string(),
             title: "Engineer".to_string(),
             company_name: "Acme".to_string(),
+            location: None,
             remote_type: remote_type.map(str::to_string),
             seniority: seniority.map(str::to_string),
             description_text: skills_in_desc.to_string(),

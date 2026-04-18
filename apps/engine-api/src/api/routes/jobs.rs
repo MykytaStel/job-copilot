@@ -337,6 +337,7 @@ mod tests {
                 id: id.to_string(),
                 title: "Platform Engineer".to_string(),
                 company_name: "SignalHire".to_string(),
+                location: Some("Remote, Europe".to_string()),
                 remote_type: Some("remote".to_string()),
                 seniority: Some("senior".to_string()),
                 description_text: "Rust and Postgres".to_string(),
@@ -480,6 +481,7 @@ mod tests {
 
         assert_eq!(payload["summary"]["reactivated_jobs"], json!(1));
         assert_eq!(payload["jobs"][0]["lifecycle_stage"], json!("reactivated"));
+        assert_eq!(payload["jobs"][0]["location"], json!("Remote, Europe"));
         assert_eq!(
             payload["jobs"][0]["primary_variant"]["source"],
             json!("mock_source")
@@ -514,10 +516,12 @@ mod tests {
 
         assert_eq!(payload["id"], json!("job-123"));
         assert_eq!(payload["lifecycle_stage"], json!("reactivated"));
+        assert_eq!(payload["location"], json!("Remote, Europe"));
         assert_eq!(
             payload["primary_variant"]["source_url"],
             json!("https://mock-source.example/jobs/platform-001")
         );
+        assert_eq!(payload["presentation"]["location_label"], json!("Europe"));
     }
 
     #[test]

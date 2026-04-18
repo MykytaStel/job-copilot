@@ -1017,6 +1017,7 @@ mod tests {
                 id: id.to_string(),
                 title: title.to_string(),
                 company_name: "NovaLedger".to_string(),
+                location: None,
                 remote_type: remote_type.map(str::to_string),
                 seniority: Some("senior".to_string()),
                 description_text: description.to_string(),

@@ -38,6 +38,10 @@ function renderErrorMessage(error: unknown, fallback: string) {
 
 const insightPanelBaseClass = 'flex flex-col gap-3 rounded-[14px] border px-4 py-3.5';
 
+function formatSeniorityLabel(value: string) {
+  return value.trim() ? formatFallbackLabel(value) : 'Not specified';
+}
+
 export function ProfileFormSection({
   name,
   email,
@@ -338,7 +342,7 @@ export function SearchProfileResultSection({
           </div>
           <div>
             <span className="detailLabel">Seniority</span>
-            <strong>{formatFallbackLabel(result.analyzedProfile.seniority)}</strong>
+            <strong>{formatSeniorityLabel(result.analyzedProfile.seniority)}</strong>
           </div>
         </div>
 
@@ -390,7 +394,7 @@ export function SearchProfileResultSection({
           </div>
           <div>
             <span className="detailLabel">Seniority</span>
-            <strong>{formatFallbackLabel(result.searchProfile.seniority)}</strong>
+            <strong>{formatSeniorityLabel(result.searchProfile.seniority)}</strong>
           </div>
         </div>
 

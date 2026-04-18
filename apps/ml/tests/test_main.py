@@ -1,4 +1,9 @@
-from app.engine_api_client import EngineJobLifecycle, EngineJobLifecycleVariant, EngineProfile
+from app.engine_api_client import (
+    EngineJobLifecycle,
+    EngineJobLifecycleVariant,
+    EngineJobPresentation,
+    EngineProfile,
+)
 from app.main import score_job
 
 
@@ -26,6 +31,7 @@ def test_score_job_uses_lifecycle_payload():
             "id": "job-1",
             "title": "Senior Platform Engineer",
             "company_name": "SignalHire",
+            "location": "Remote, Europe",
             "remote_type": "remote",
             "seniority": "senior",
             "description_text": "Build Rust services and Postgres-backed ingestion flows.",
@@ -48,6 +54,20 @@ def test_score_job_uses_lifecycle_payload():
                     "last_seen_at": "2026-04-16T09:00:00Z",
                     "is_active": True,
                     "inactivated_at": None,
+                }
+            ),
+            "presentation": EngineJobPresentation.model_validate(
+                {
+                    "title": "Senior Platform Engineer",
+                    "company": "SignalHire",
+                    "summary": "Build Rust services and Postgres-backed ingestion flows.",
+                    "location_label": "Europe",
+                    "work_mode_label": "Remote",
+                    "source_label": "Mock source",
+                    "outbound_url": "https://mock-source.example/jobs/platform-001",
+                    "salary_label": "5,000-6,500 USD",
+                    "freshness_label": "Posted 2026-04-14",
+                    "badges": ["Remote", "Senior", "Reactivated"],
                 }
             ),
         }

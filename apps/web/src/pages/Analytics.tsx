@@ -337,6 +337,10 @@ function TextList({
 }
 
 function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
+  const seniorityLabel = ctx.analyzedProfile?.seniority?.trim()
+    ? ctx.analyzedProfile.seniority
+    : 'Not specified';
+
   return (
     <div className="space-y-5">
       {ctx.analyzedProfile ? (
@@ -349,7 +353,7 @@ function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
               {ctx.analyzedProfile.primaryRole}
             </span>
             <span className="inline-flex items-center rounded-full border border-border bg-white/[0.05] px-3 py-1.5 text-xs text-muted-foreground">
-              {ctx.analyzedProfile.seniority}
+              {seniorityLabel}
             </span>
           </div>
           <p className="m-0 mt-4 text-sm leading-7 text-card-foreground">{ctx.analyzedProfile.summary}</p>

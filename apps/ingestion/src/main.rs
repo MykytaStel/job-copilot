@@ -15,6 +15,7 @@ use crate::adapters::mock_source::MockSourceAdapter;
 use crate::models::{IngestionBatch, InputDocument, MockSourceInput};
 use crate::scrapers::ScraperConfig;
 use crate::scrapers::djinni::DjinniScraper;
+use crate::scrapers::dou_ua::DouUaScraper;
 use crate::scrapers::robota_ua::RobotaUaScraper;
 use crate::scrapers::work_ua::WorkUaScraper;
 
@@ -59,6 +60,7 @@ enum InputFormat {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ScrapeSource {
     Djinni,
+    DouUa,
     WorkUa,
     RobotaUa,
 }
@@ -92,7 +94,11 @@ async fn main() -> Result<(), String> {
 
     // Run migrations if RUN_DB_MIGRATIONS=true — useful when running ingestion
     // standalone without engine-api having started first.
-    if env::var("RUN_DB_MIGRATIONS").map(|v| v.trim().to_lowercase()).as_deref() == Ok("true") {
+    if env::var("RUN_DB_MIGRATIONS")
+        .map(|v| v.trim().to_lowercase())
+        .as_deref()
+        == Ok("true")
+    {
         db::run_migrations(&pool).await?;
         info!("migrations applied");
     }
@@ -136,9 +142,7 @@ impl Config {
             .ok_or_else(|| "DATABASE_URL is required".to_string())?;
 
         let mut args = env::args().skip(1);
-        let flag = args
-            .next()
-            .ok_or_else(|| usage_error())?;
+        let flag = args.next().ok_or_else(|| usage_error())?;
 
         let run_mode = match flag.as_str() {
             "--input" => {
@@ -146,7 +150,9 @@ impl Config {
                 let mut input_format = InputFormat::Normalized;
                 while let Some(f) = args.next() {
                     if f != "--input-format" {
-                        return Err(format!("unsupported argument '{f}', expected '--input-format'"));
+                        return Err(format!(
+                            "unsupported argument '{f}', expected '--input-format'"
+                        ));
                     }
                     let val = args.next().ok_or("missing value for --input-format")?;
                     input_format = InputFormat::from_cli(&val)?;
@@ -180,7 +186,11 @@ impl Config {
                     }
                 }
 
-                RunMode::Scrape(ScrapeMode { source, pages, keyword })
+                RunMode::Scrape(ScrapeMode {
+                    source,
+                    pages,
+                    keyword,
+                })
             }
             "--daemon" => {
                 let mut sources: Vec<ScrapeSource> = Vec::new();
@@ -196,6 +206,7 @@ impl Config {
                                 let s = s.trim();
                                 if s == "all" {
                                     sources.push(ScrapeSource::Djinni);
+                                    sources.push(ScrapeSource::DouUa);
                                     sources.push(ScrapeSource::WorkUa);
                                     sources.push(ScrapeSource::RobotaUa);
                                 } else {
@@ -215,7 +226,9 @@ impl Config {
                         "--interval-minutes" => {
                             let val = args.next().ok_or("missing value for --interval-minutes")?;
                             interval_minutes = val.parse::<u64>().map_err(|_| {
-                                format!("--interval-minutes must be a positive integer, got '{val}'")
+                                format!(
+                                    "--interval-minutes must be a positive integer, got '{val}'"
+                                )
                             })?;
                             if interval_minutes == 0 {
                                 return Err("--interval-minutes must be at least 1".to_string());
@@ -231,22 +244,31 @@ impl Config {
                 // Default: scrape all sources
                 if sources.is_empty() {
                     sources.push(ScrapeSource::Djinni);
+                    sources.push(ScrapeSource::DouUa);
                     sources.push(ScrapeSource::WorkUa);
                     sources.push(ScrapeSource::RobotaUa);
                 }
                 sources.dedup();
 
-                RunMode::Daemon(DaemonMode { sources, pages, interval_minutes, keyword })
+                RunMode::Daemon(DaemonMode {
+                    sources,
+                    pages,
+                    interval_minutes,
+                    keyword,
+                })
             }
             other => return Err(format!("unsupported flag '{other}'\n{}", usage_error())),
         };
 
-        Ok(Self { database_url, run_mode })
+        Ok(Self {
+            database_url,
+            run_mode,
+        })
     }
 }
 
 fn usage_error() -> String {
-    "usage:\n  cargo run -- --input <path> [--input-format normalized|mock-source]\n  cargo run -- --source <djinni|workua> [--pages <n>] [--keyword <kw>]\n  cargo run -- --daemon [--sources all|djinni|workua] [--pages <n>] [--interval-minutes <m>] [--keyword <kw>]"
+    "usage:\n  cargo run -- --input <path> [--input-format normalized|mock-source]\n  cargo run -- --source <djinni|douua|workua|robotaua> [--pages <n>] [--keyword <kw>]\n  cargo run -- --daemon [--sources all|djinni|douua|workua|robotaua] [--pages <n>] [--interval-minutes <m>] [--keyword <kw>]"
         .to_string()
 }
 
@@ -266,10 +288,11 @@ impl ScrapeSource {
     fn from_cli(value: &str) -> Result<Self, String> {
         match value.trim().to_lowercase().as_str() {
             "djinni" => Ok(Self::Djinni),
+            "dou" | "douua" | "dou_ua" | "dou.ua" => Ok(Self::DouUa),
             "workua" | "work_ua" | "work.ua" => Ok(Self::WorkUa),
             "robotaua" | "robota_ua" | "robota.ua" => Ok(Self::RobotaUa),
             other => Err(format!(
-                "unsupported source '{other}', expected 'djinni', 'workua', or 'robotaua'"
+                "unsupported source '{other}', expected 'djinni', 'douua', 'workua', or 'robotaua'"
             )),
         }
     }
@@ -277,6 +300,7 @@ impl ScrapeSource {
     fn name(self) -> &'static str {
         match self {
             Self::Djinni => "djinni",
+            Self::DouUa => "dou_ua",
             Self::WorkUa => "work_ua",
             Self::RobotaUa => "robota_ua",
         }
@@ -291,15 +315,13 @@ fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
 
     match mode.input_format {
         InputFormat::Normalized => {
-            let payload = serde_json::from_str::<InputDocument>(&raw).map_err(|e| {
-                format!("failed to parse {}: {e}", mode.input_path.display())
-            })?;
+            let payload = serde_json::from_str::<InputDocument>(&raw)
+                .map_err(|e| format!("failed to parse {}: {e}", mode.input_path.display()))?;
             Ok(IngestionBatch::from_jobs(payload.into_jobs()))
         }
         InputFormat::MockSource => {
-            let payload = serde_json::from_str::<MockSourceInput>(&raw).map_err(|e| {
-                format!("failed to parse {}: {e}", mode.input_path.display())
-            })?;
+            let payload = serde_json::from_str::<MockSourceInput>(&raw)
+                .map_err(|e| format!("failed to parse {}: {e}", mode.input_path.display()))?;
             let adapter = MockSourceAdapter;
             let normalized = adapter.normalize(payload)?;
             IngestionBatch::from_normalization_results(normalized)
@@ -319,6 +341,10 @@ async fn run_scraper(mode: &ScrapeMode) -> Result<IngestionBatch, String> {
             let scraper = DjinniScraper::new()?;
             scraper.scrape(&config).await?
         }
+        ScrapeSource::DouUa => {
+            let scraper = DouUaScraper::new()?;
+            scraper.scrape(&config).await?
+        }
         ScrapeSource::WorkUa => {
             let scraper = WorkUaScraper::new()?;
             scraper.scrape(&config).await?
@@ -330,7 +356,10 @@ async fn run_scraper(mode: &ScrapeMode) -> Result<IngestionBatch, String> {
     };
 
     if results.is_empty() {
-        return Err("scraper returned no jobs — site structure may have changed, check selectors".to_string());
+        return Err(
+            "scraper returned no jobs — site structure may have changed, check selectors"
+                .to_string(),
+        );
     }
 
     IngestionBatch::from_normalization_results(results)
@@ -358,25 +387,28 @@ async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result<(), String
             };
 
             match run_scraper(&scrape_mode).await {
-                Ok(batch) => {
-                    match db::upsert_batch(pool, &batch).await {
-                        Ok(summary) => info!(
-                            source = source.name(),
-                            jobs_written = summary.jobs_written,
-                            variants_created = summary.variants_created,
-                            variants_updated = summary.variants_updated,
-                            variants_unchanged = summary.variants_unchanged,
-                            variants_inactivated = summary.variants_inactivated,
-                            "daemon round complete"
-                        ),
-                        Err(e) => error!(source = source.name(), error = %e, "db upsert failed"),
-                    }
+                Ok(batch) => match db::upsert_batch(pool, &batch).await {
+                    Ok(summary) => info!(
+                        source = source.name(),
+                        jobs_written = summary.jobs_written,
+                        variants_created = summary.variants_created,
+                        variants_updated = summary.variants_updated,
+                        variants_unchanged = summary.variants_unchanged,
+                        variants_inactivated = summary.variants_inactivated,
+                        "daemon round complete"
+                    ),
+                    Err(e) => error!(source = source.name(), error = %e, "db upsert failed"),
+                },
+                Err(e) => {
+                    warn!(source = source.name(), error = %e, "scrape failed, skipping source")
                 }
-                Err(e) => warn!(source = source.name(), error = %e, "scrape failed, skipping source"),
             }
         }
 
-        info!(next_in_minutes = mode.interval_minutes, "sleeping until next round");
+        info!(
+            next_in_minutes = mode.interval_minutes,
+            "sleeping until next round"
+        );
         tokio::time::sleep(interval).await;
     }
 }

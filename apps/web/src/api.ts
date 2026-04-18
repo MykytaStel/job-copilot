@@ -141,6 +141,7 @@ type EngineJob = {
   title: string;
   company_name: string;
   description_text: string;
+  location?: string | null;
   remote_type?: string | null;
   seniority?: string | null;
   salary_min?: number | null;
@@ -379,6 +380,17 @@ const API_URL =
 const ML_URL =
   import.meta.env.VITE_ML_URL?.trim() || 'http://localhost:8000';
 const PROFILE_ID_KEY = 'engine_api_profile_id';
+const RECENT_JOBS_LIMIT_MAX = 200;
+const ML_RERANK_MAX_JOB_IDS = 50;
+
+function normalizeMissingString(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const cleaned = value.trim();
+  if (!cleaned || cleaned.toLowerCase() === 'unknown') {
+    return undefined;
+  }
+  return cleaned;
+}
 
 export type RankedJob = {
   jobId: string;
@@ -536,28 +548,51 @@ async function mlRequest<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function rerankJobs(profileId: string, jobIds: string[]): Promise<RankedJob[]> {
-  const result = await mlRequest<{
-    profile_id: string;
-    jobs: Array<{
-      job_id: string;
-      title: string;
-      company_name: string;
-      score: number;
-      matched_terms: string[];
-      evidence: string[];
-    }>;
-  }>('/api/v1/rerank', {
-    method: 'POST',
-    body: JSON.stringify({ profile_id: profileId, job_ids: jobIds }),
-  });
-  return result.jobs.map((j) => ({
-    jobId: j.job_id,
-    title: j.title,
-    companyName: j.company_name,
-    score: j.score,
-    matchedTerms: j.matched_terms,
-    evidence: j.evidence,
-  }));
+  const uniqueJobIds = Array.from(
+    new Set(jobIds.map((jobId) => jobId.trim()).filter(Boolean)),
+  );
+
+  const batches: string[][] = [];
+  for (let index = 0; index < uniqueJobIds.length; index += ML_RERANK_MAX_JOB_IDS) {
+    batches.push(uniqueJobIds.slice(index, index + ML_RERANK_MAX_JOB_IDS));
+  }
+
+  const responses = await Promise.all(
+    batches.map((batch) =>
+      mlRequest<{
+        profile_id: string;
+        jobs: Array<{
+          job_id: string;
+          title: string;
+          company_name: string;
+          score: number;
+          matched_terms: string[];
+          evidence: string[];
+        }>;
+      }>('/api/v1/rerank', {
+        method: 'POST',
+        body: JSON.stringify({ profile_id: profileId, job_ids: batch }),
+      }),
+    ),
+  );
+
+  return responses
+    .flatMap((result) =>
+      result.jobs.map((job) => ({
+        jobId: job.job_id,
+        title: job.title,
+        companyName: job.company_name,
+        score: job.score,
+        matchedTerms: job.matched_terms,
+        evidence: job.evidence,
+      })),
+    )
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.title.localeCompare(right.title) ||
+        left.jobId.localeCompare(right.jobId),
+    );
 }
 
 export async function analyzeFit(profileId: string, jobId: string): Promise<FitAnalysis> {
@@ -651,6 +686,7 @@ function mapJob(job: EngineJob): JobPosting {
     title: job.presentation.title || job.title,
     company: job.presentation.company || job.company_name,
     description: job.description_text,
+    location: normalizeMissingString(job.location),
     notes: '',
     createdAt: job.posted_at ?? job.last_seen_at,
     postedAt: job.posted_at ?? undefined,
@@ -663,7 +699,7 @@ function mapJob(job: EngineJob): JobPosting {
     salaryMin: job.salary_min ?? undefined,
     salaryMax: job.salary_max ?? undefined,
     salaryCurrency: job.salary_currency ?? undefined,
-    seniority: job.seniority ?? undefined,
+    seniority: normalizeMissingString(job.seniority),
     remoteType: job.remote_type ?? undefined,
     primaryVariant: job.primary_variant
       ? {
@@ -894,7 +930,9 @@ export async function getJobsFeed(params?: {
   const qs = new URLSearchParams();
   if (params?.lifecycle) qs.set('lifecycle', params.lifecycle);
   if (params?.source) qs.set('source', params.source);
-  if (params?.limit) qs.set('limit', String(params.limit));
+  if (params?.limit) {
+    qs.set('limit', String(Math.min(params.limit, RECENT_JOBS_LIMIT_MAX)));
+  }
   const profileId = readStoredProfileId();
   if (profileId) qs.set('profile_id', profileId);
   const query = qs.toString();
@@ -948,7 +986,7 @@ export async function buildSearchProfile(
     analyzedProfile: {
       summary: response.analyzed_profile.summary,
       primaryRole: response.analyzed_profile.primary_role,
-      seniority: response.analyzed_profile.seniority,
+      seniority: normalizeMissingString(response.analyzed_profile.seniority) ?? '',
       skills: response.analyzed_profile.skills,
       keywords: response.analyzed_profile.keywords,
       roleCandidates: response.analyzed_profile.role_candidates ?? [],
@@ -960,7 +998,7 @@ export async function buildSearchProfile(
         response.search_profile.primary_role_confidence ?? undefined,
       targetRoles: response.search_profile.target_roles,
       roleCandidates: response.search_profile.role_candidates ?? [],
-      seniority: response.search_profile.seniority,
+      seniority: normalizeMissingString(response.search_profile.seniority) ?? '',
       targetRegions: response.search_profile.target_regions,
       workModes: response.search_profile.work_modes,
       allowedSources: response.search_profile.allowed_sources,
@@ -1001,7 +1039,7 @@ export async function runSearch(
   return {
     results: response.results.map((result) => ({
       job: mapJob(result.job),
-      source: result.job.primary_variant?.source ?? 'unknown',
+      source: result.job.primary_variant?.source ?? '',
       fit: {
         jobId: result.fit.job_id,
         score: result.fit.score,

@@ -61,7 +61,8 @@ export const queryKeys = {
     profile: (profileId: string) => ['feedback', profileId] as const,
   },
   ml: {
-    rerank: (profileId: string) => ['ml', 'rerank', profileId] as const,
+    rerank: (profileId: string, jobsKey: string) =>
+      ['ml', 'rerank', profileId, jobsKey] as const,
     fit: (profileId: string, jobId: string) => ['ml', 'fit', profileId, jobId] as const,
   },
   analytics: {
