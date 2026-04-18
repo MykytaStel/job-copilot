@@ -13,6 +13,11 @@ pub const SOURCE_CATALOG: &[SourceMetadata] = &[
         display_name: "Djinni",
     },
     SourceMetadata {
+        id: SourceId::DouUa,
+        canonical_key: "dou_ua",
+        display_name: "DOU",
+    },
+    SourceMetadata {
         id: SourceId::WorkUa,
         canonical_key: "work_ua",
         display_name: "Work.ua",

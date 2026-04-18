@@ -7,7 +7,11 @@ use serde_json::json;
 use tracing::{info, warn};
 
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
-use crate::scrapers::{ScraperConfig, collect_text, infer_remote_type, infer_seniority, parse_salary_range, polite_delay};
+use crate::scrapers::{
+    DetailSnapshot, ScraperConfig, cleanup_description_text, collect_text, infer_remote_type,
+    infer_seniority, merge_detail_into_result, normalize_company_name, normalized_non_empty,
+    parse_salary_range, polite_delay,
+};
 
 const SOURCE: &str = "work_ua";
 const BASE_URL: &str = "https://www.work.ua";
@@ -44,6 +48,7 @@ impl WorkUaScraper {
             };
 
             let page_results = parse_page(&html, &fetched_at, &selectors);
+            let page_results = self.enrich_page_results(page_results, &fetched_at).await;
             let count = page_results.len();
 
             if count == 0 {
@@ -52,7 +57,13 @@ impl WorkUaScraper {
             }
 
             results.extend(page_results);
-            info!(page, jobs = count, total = results.len(), source = SOURCE, "parsed page");
+            info!(
+                page,
+                jobs = count,
+                total = results.len(),
+                source = SOURCE,
+                "parsed page"
+            );
 
             if page < config.pages {
                 polite_delay(config.page_delay_ms).await;
@@ -74,6 +85,47 @@ impl WorkUaScraper {
             .text()
             .await
             .map_err(|e| format!("body read failed: {e}"))
+    }
+
+    async fn enrich_page_results(
+        &self,
+        results: Vec<NormalizationResult>,
+        fetched_at: &str,
+    ) -> Vec<NormalizationResult> {
+        let total = results.len();
+        let mut enriched = Vec::with_capacity(total);
+
+        for (index, result) in results.into_iter().enumerate() {
+            match self.enrich_result(result, fetched_at).await {
+                Some(result) => enriched.push(result),
+                None => warn!(source = SOURCE, "skipped job after detail fetch"),
+            }
+
+            if index + 1 < total {
+                polite_delay(150).await;
+            }
+        }
+
+        enriched
+    }
+
+    async fn enrich_result(
+        &self,
+        result: NormalizationResult,
+        fetched_at: &str,
+    ) -> Option<NormalizationResult> {
+        let source_url = result.snapshot.source_url.clone();
+
+        let Some(detail_html) = self.fetch(&source_url).await.ok() else {
+            if normalize_company_name(&result.job.company_name).is_none() {
+                warn!(source = SOURCE, %source_url, "detail fetch failed and company is still missing");
+                return None;
+            }
+            return Some(result);
+        };
+
+        let detail = parse_detail_page(&detail_html, &result, fetched_at);
+        merge_detail_into_result(result, detail)
     }
 }
 
@@ -144,7 +196,11 @@ fn parse_page(html: &str, fetched_at: &str, sel: &WorkUaSelectors) -> Vec<Normal
     results
 }
 
-fn parse_item(item: &ElementRef, fetched_at: &str, sel: &WorkUaSelectors) -> Option<NormalizationResult> {
+fn parse_item(
+    item: &ElementRef,
+    fetched_at: &str,
+    sel: &WorkUaSelectors,
+) -> Option<NormalizationResult> {
     let title_el = item.select(&sel.title).next()?;
     let href = title_el.value().attr("href")?;
     let title = collect_text(&title_el);
@@ -159,8 +215,7 @@ fn parse_item(item: &ElementRef, fetched_at: &str, sel: &WorkUaSelectors) -> Opt
         .select(&sel.company)
         .next()
         .map(|el| collect_text(&el))
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "Unknown".to_string());
+        .and_then(|value| normalize_company_name(&value));
 
     // Location is often in the same `.add-top-xs` line as the company: "CompanyName · Kyiv"
     // Strip the company name from it to get just the location part.
@@ -170,7 +225,7 @@ fn parse_item(item: &ElementRef, fetched_at: &str, sel: &WorkUaSelectors) -> Opt
         .map(|el| {
             let full = collect_text(&el);
             // Remove the company portion and clean separators
-            full.replace(&company_name, "")
+            full.replace(company_name.as_deref().unwrap_or(""), "")
                 .trim_matches(|c: char| !c.is_alphanumeric() && c != '(' && c != ')')
                 .to_string()
         })
@@ -183,12 +238,11 @@ fn parse_item(item: &ElementRef, fetched_at: &str, sel: &WorkUaSelectors) -> Opt
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| title.clone());
 
-    let salary_text = item
-        .select(&sel.salary)
-        .next()
-        .map(|el| collect_text(&el));
-    let (salary_min, salary_max, salary_currency) =
-        salary_text.as_deref().map(parse_salary_range).unwrap_or((None, None, None));
+    let salary_text = item.select(&sel.salary).next().map(|el| collect_text(&el));
+    let (salary_min, salary_max, salary_currency) = salary_text
+        .as_deref()
+        .map(parse_salary_range)
+        .unwrap_or((None, None, None));
 
     let full_text = collect_text(item);
     let remote_type = infer_remote_type(&full_text);
@@ -214,7 +268,7 @@ fn parse_item(item: &ElementRef, fetched_at: &str, sel: &WorkUaSelectors) -> Opt
             // id is overridden by IngestionBatch::from_normalization_results
             id: format!("job_{SOURCE}_{source_job_id}"),
             title,
-            company_name,
+            company_name: company_name?,
             location,
             remote_type,
             seniority,
@@ -236,6 +290,151 @@ fn parse_item(item: &ElementRef, fetched_at: &str, sel: &WorkUaSelectors) -> Opt
     })
 }
 
+fn parse_detail_page(
+    html: &str,
+    fallback: &NormalizationResult,
+    fetched_at: &str,
+) -> DetailSnapshot {
+    let document = Html::parse_document(html);
+    let title = extract_first_text(&document, &["h1"]);
+    let company_name = extract_first_text(
+        &document,
+        &[
+            "a[href*='/company/']",
+            "a[href*='/employer/']",
+            ".breadcrumbs a",
+        ],
+    )
+    .and_then(|value| normalize_company_name(&value));
+    let description_text = extract_rich_text(
+        &document,
+        &["div#job-description", "div.wordwrap", "article", "main"],
+    )
+    .map(|value| {
+        cleanup_description_text(
+            &value,
+            title.as_deref().unwrap_or(&fallback.job.title),
+            company_name
+                .as_deref()
+                .unwrap_or(&fallback.job.company_name),
+            &[
+                "Схожі вакансії",
+                "Вакансії за категоріями",
+                "Відгукнутися",
+                "Відгукнутись",
+            ],
+        )
+    })
+    .filter(|value| !value.is_empty());
+    let location = extract_first_text(
+        &document,
+        &[
+            ".text-muted",
+            ".breadcrumbs li:last-child",
+            "[data-qa='vacancy-city']",
+        ],
+    )
+    .and_then(|value| normalized_non_empty(Some(&value)));
+
+    let salary_source = extract_first_text(
+        &document,
+        &[
+            ".salary",
+            ".text-default strong",
+            "span[class*='salary']",
+            "main",
+        ],
+    );
+    let (salary_min, salary_max, salary_currency) = salary_source
+        .as_deref()
+        .map(parse_salary_range)
+        .unwrap_or((None, None, None));
+
+    let signal_text = [
+        title.clone().unwrap_or_default(),
+        company_name.clone().unwrap_or_default(),
+        location.clone().unwrap_or_default(),
+        description_text.clone().unwrap_or_default(),
+    ]
+    .join(" ");
+
+    DetailSnapshot {
+        title,
+        company_name,
+        location,
+        remote_type: infer_remote_type(&signal_text),
+        seniority: infer_seniority(&signal_text),
+        description_text,
+        salary_min,
+        salary_max,
+        salary_currency,
+        posted_at: None,
+        raw_payload: json!({
+            "detail_title": extract_first_text(&document, &["h1"]),
+            "detail_company_name": extract_first_text(
+                &document,
+                &["a[href*='/company/']", "a[href*='/employer/']", ".breadcrumbs a"]
+            ),
+            "detail_location": extract_first_text(
+                &document,
+                &[".text-muted", ".breadcrumbs li:last-child", "[data-qa='vacancy-city']"]
+            ),
+            "detail_description_text": extract_rich_text(
+                &document,
+                &["div#job-description", "div.wordwrap", "article", "main"]
+            ),
+            "detail_salary_text": salary_source,
+            "detail_fetched_at": fetched_at,
+        }),
+    }
+}
+
+fn extract_first_text(document: &Html, selectors: &[&str]) -> Option<String> {
+    for raw_selector in selectors {
+        let Ok(selector) = Selector::parse(raw_selector) else {
+            continue;
+        };
+        if let Some(value) = document
+            .select(&selector)
+            .map(|element| collect_text(&element))
+            .find(|value| !value.trim().is_empty())
+        {
+            return Some(value);
+        }
+    }
+
+    None
+}
+
+fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
+    let list_selector = Selector::parse("p, li").expect("valid selector");
+    let mut best: Option<String> = None;
+
+    for raw_selector in selectors {
+        let Ok(selector) = Selector::parse(raw_selector) else {
+            continue;
+        };
+
+        for container in document.select(&selector) {
+            let parts = container
+                .select(&list_selector)
+                .map(|element| collect_text(&element))
+                .filter(|value| value.len() > 20)
+                .collect::<Vec<_>>();
+            let candidate = if parts.is_empty() {
+                collect_text(&container)
+            } else {
+                parts.join(" ")
+            };
+            if candidate.len() > best.as_ref().map_or(0, String::len) {
+                best = Some(candidate);
+            }
+        }
+    }
+
+    best
+}
+
 /// Extract numeric job ID from a Work.ua job URL.
 /// "/job/87654321/" → "87654321"
 fn extract_job_id(href: &str) -> Option<String> {
@@ -249,7 +448,9 @@ fn extract_job_id(href: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_url, extract_job_id};
+    use super::{build_url, extract_job_id, parse_detail_page};
+    use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
+    use serde_json::json;
 
     #[test]
     fn builds_url_without_params() {
@@ -266,10 +467,7 @@ mod tests {
 
     #[test]
     fn builds_url_with_page() {
-        assert_eq!(
-            build_url(None, 2),
-            "https://www.work.ua/jobs-it/?page=2"
-        );
+        assert_eq!(build_url(None, 2), "https://www.work.ua/jobs-it/?page=2");
     }
 
     #[test]
@@ -283,5 +481,44 @@ mod tests {
     #[test]
     fn rejects_non_numeric_job_id() {
         assert_eq!(extract_job_id("/job/some-slug/"), None);
+    }
+
+    #[test]
+    fn parses_work_ua_detail_fixture() {
+        let html = include_str!("../../tests/fixtures/work_ua_detail.html");
+        let fallback = NormalizationResult {
+            job: NormalizedJob {
+                id: "job_work_ua_123".to_string(),
+                title: "Senior Rust Engineer".to_string(),
+                company_name: "SignalHire".to_string(),
+                location: Some("Kyiv".to_string()),
+                remote_type: Some("remote".to_string()),
+                seniority: Some("senior".to_string()),
+                description_text: "Short snippet".to_string(),
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                posted_at: None,
+                last_seen_at: "2026-04-18T10:00:00Z".to_string(),
+                is_active: true,
+            },
+            snapshot: RawSnapshot {
+                source: "work_ua".to_string(),
+                source_job_id: "123".to_string(),
+                source_url: "https://www.work.ua/jobs/123/".to_string(),
+                raw_payload: json!({}),
+                fetched_at: "2026-04-18T10:00:00Z".to_string(),
+            },
+        };
+
+        let detail = parse_detail_page(html, &fallback, "2026-04-18T10:00:00Z");
+
+        assert_eq!(detail.company_name.as_deref(), Some("SignalHire"));
+        assert!(
+            detail
+                .description_text
+                .as_deref()
+                .is_some_and(|value| value.contains("Build reliable Rust APIs"))
+        );
     }
 }

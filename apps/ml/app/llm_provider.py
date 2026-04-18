@@ -72,13 +72,16 @@ class TemplateEnrichmentProvider:
     ) -> dict[str, Any]:
         analyzed_profile = context.analyzed_profile
         role = analyzed_profile.primary_role.replace("_", " ") if analyzed_profile else "current target role"
-        seniority = analyzed_profile.seniority if analyzed_profile else "current level"
+        seniority = analyzed_profile.seniority if analyzed_profile and analyzed_profile.seniority else ""
         skills = analyzed_profile.skills if analyzed_profile else context.profile_skills
         keywords = analyzed_profile.keywords if analyzed_profile else context.profile_keywords
 
         strengths = []
         if analyzed_profile and analyzed_profile.summary:
-            strengths.append(f"Clear profile positioning around {role} at {seniority} level.")
+            if seniority:
+                strengths.append(f"Clear profile positioning around {role} at {seniority} level.")
+            else:
+                strengths.append(f"Clear profile positioning around {role}.")
         if skills:
             strengths.append(f"Relevant skills are already explicit: {', '.join(skills[:3])}.")
         if context.feedback_summary.saved_jobs_count > 0:

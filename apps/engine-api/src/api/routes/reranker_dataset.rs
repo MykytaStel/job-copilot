@@ -139,6 +139,7 @@ mod tests {
                 id: job_id.to_string(),
                 title: title.to_string(),
                 company_name: "NovaLedger".to_string(),
+                location: None,
                 remote_type: Some("remote".to_string()),
                 seniority: Some("senior".to_string()),
                 description_text: "Build backend Rust services on Postgres".to_string(),

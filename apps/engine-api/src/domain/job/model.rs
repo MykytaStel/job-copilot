@@ -3,6 +3,7 @@ pub struct Job {
     pub id: String,
     pub title: String,
     pub company_name: String,
+    pub location: Option<String>,
     pub remote_type: Option<String>,
     pub seniority: Option<String>,
     pub description_text: String,

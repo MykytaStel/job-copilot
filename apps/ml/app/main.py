@@ -269,9 +269,13 @@ def job_terms(job: EngineJobLifecycle) -> list[str]:
         tokenize(
             job.title,
             job.company_name,
+            job.location,
             job.remote_type,
             job.seniority,
             job.description_text,
+            job.presentation.summary,
+            job.presentation.location_label,
+            job.presentation.work_mode_label,
         )
     )
 
@@ -300,8 +304,12 @@ def build_evidence(
 
     if job.lifecycle_stage != "active":
         evidence.append(f"lifecycle: {job.lifecycle_stage}")
-    if job.remote_type:
+    if job.presentation.work_mode_label:
+        evidence.append(f"job mode: {job.presentation.work_mode_label}")
+    elif job.remote_type:
         evidence.append(f"job mode: {job.remote_type}")
+    if job.presentation.location_label:
+        evidence.append(f"location: {job.presentation.location_label}")
     elif job.primary_variant:
         evidence.append(f"source: {job.primary_variant.source}")
 

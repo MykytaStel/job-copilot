@@ -7,7 +7,11 @@ use serde_json::json;
 use tracing::{info, warn};
 
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
-use crate::scrapers::{ScraperConfig, collect_text, infer_remote_type, infer_seniority, parse_salary_range, polite_delay};
+use crate::scrapers::{
+    DetailSnapshot, ScraperConfig, cleanup_description_text, collect_text, infer_remote_type,
+    infer_seniority, merge_detail_into_result, normalize_company_name, normalized_non_empty,
+    parse_salary_range, polite_delay,
+};
 
 const SOURCE: &str = "djinni";
 const BASE_URL: &str = "https://djinni.co";
@@ -49,6 +53,7 @@ impl DjinniScraper {
             };
 
             let page_results = parse_page(&html, &fetched_at);
+            let page_results = self.enrich_page_results(page_results, &fetched_at).await;
             let count = page_results.len();
 
             if count == 0 {
@@ -65,7 +70,13 @@ impl DjinniScraper {
             }
 
             results.extend(page_results);
-            info!(page, jobs = count, total = results.len(), source = SOURCE, "parsed page");
+            info!(
+                page,
+                jobs = count,
+                total = results.len(),
+                source = SOURCE,
+                "parsed page"
+            );
 
             if page < config.pages {
                 polite_delay(config.page_delay_ms).await;
@@ -87,6 +98,47 @@ impl DjinniScraper {
             .text()
             .await
             .map_err(|e| format!("body read failed: {e}"))
+    }
+
+    async fn enrich_page_results(
+        &self,
+        results: Vec<NormalizationResult>,
+        fetched_at: &str,
+    ) -> Vec<NormalizationResult> {
+        let total = results.len();
+        let mut enriched = Vec::with_capacity(total);
+
+        for (index, result) in results.into_iter().enumerate() {
+            match self.enrich_result(result, fetched_at).await {
+                Some(result) => enriched.push(result),
+                None => warn!(source = SOURCE, "skipped job after detail fetch"),
+            }
+
+            if index + 1 < total {
+                polite_delay(150).await;
+            }
+        }
+
+        enriched
+    }
+
+    async fn enrich_result(
+        &self,
+        result: NormalizationResult,
+        fetched_at: &str,
+    ) -> Option<NormalizationResult> {
+        let source_url = result.snapshot.source_url.clone();
+
+        let Some(detail_html) = self.fetch(&source_url).await.ok() else {
+            if normalize_company_name(&result.job.company_name).is_none() {
+                warn!(source = SOURCE, %source_url, "detail fetch failed and company is still missing");
+                return None;
+            }
+            return Some(result);
+        };
+
+        let detail = parse_detail_page(&detail_html, &result, fetched_at);
+        merge_detail_into_result(result, detail)
     }
 }
 
@@ -118,13 +170,19 @@ impl DjinniSelectors {
             // Variant 1: original BEM names seen in older Djinni HTML
             item_primary: Selector::parse("li.list-jobs__item").expect("valid"),
             // Variant 2: article-based cards some sites migrate to
-            item_fallback: Selector::parse("article.job-list-item, li.job-list-item").expect("valid"),
+            item_fallback: Selector::parse("article.job-list-item, li.job-list-item")
+                .expect("valid"),
             // Title — try both class names that have been in use
-            title_primary: Selector::parse("a.job-list-item__link, a.job-item__title-link").expect("valid"),
+            title_primary: Selector::parse("a.job-list-item__link, a.job-item__title-link")
+                .expect("valid"),
             // Fallback: any anchor whose href matches /jobs/<number>
             title_fallback: Selector::parse("a[href^='/jobs/']").expect("valid"),
-            company: Selector::parse("a[href*='/company/'], .job-list-item__pic a, .company-name").expect("valid"),
-            description: Selector::parse(".job-list-item__description, .job-list-item__summary, .text-default").expect("valid"),
+            company: Selector::parse("a[href*='/company/'], .job-list-item__pic a, .company-name")
+                .expect("valid"),
+            description: Selector::parse(
+                ".job-list-item__description, .job-list-item__summary, .text-default",
+            )
+            .expect("valid"),
             salary: Selector::parse(".public-salary-item, .job-list-item__salary").expect("valid"),
             location: Selector::parse(".location-text, .job-list-item__location").expect("valid"),
             time: Selector::parse("time[datetime]").expect("valid"),
@@ -198,7 +256,11 @@ fn parse_page(html: &str, fetched_at: &str) -> Vec<NormalizationResult> {
     results
 }
 
-fn parse_item(item: &ElementRef, fetched_at: &str, sel: &DjinniSelectors) -> Option<NormalizationResult> {
+fn parse_item(
+    item: &ElementRef,
+    fetched_at: &str,
+    sel: &DjinniSelectors,
+) -> Option<NormalizationResult> {
     // Title: try primary, then fallback within this item
     let title_el = item
         .select(&sel.title_primary)
@@ -222,8 +284,7 @@ fn parse_item(item: &ElementRef, fetched_at: &str, sel: &DjinniSelectors) -> Opt
         .select(&sel.company)
         .next()
         .map(|el| collect_text(&el))
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "Unknown".to_string());
+        .and_then(|value| normalize_company_name(&value));
 
     let description_text = item
         .select(&sel.description)
@@ -239,8 +300,10 @@ fn parse_item(item: &ElementRef, fetched_at: &str, sel: &DjinniSelectors) -> Opt
         .filter(|s| !s.is_empty());
 
     let salary_text = item.select(&sel.salary).next().map(|el| collect_text(&el));
-    let (salary_min, salary_max, salary_currency) =
-        salary_text.as_deref().map(parse_salary_range).unwrap_or((None, None, None));
+    let (salary_min, salary_max, salary_currency) = salary_text
+        .as_deref()
+        .map(parse_salary_range)
+        .unwrap_or((None, None, None));
 
     let posted_at = item
         .select(&sel.time)
@@ -254,9 +317,19 @@ fn parse_item(item: &ElementRef, fetched_at: &str, sel: &DjinniSelectors) -> Opt
     let seniority = infer_seniority(&title);
 
     build_result(
-        source_job_id, source_url, title, company_name,
-        description_text, location, salary_min, salary_max, salary_currency,
-        remote_type, seniority, posted_at, fetched_at,
+        source_job_id,
+        source_url,
+        title,
+        company_name,
+        description_text,
+        location,
+        salary_min,
+        salary_max,
+        salary_currency,
+        remote_type,
+        seniority,
+        posted_at,
+        fetched_at,
     )
 }
 
@@ -276,8 +349,19 @@ fn build_from_link(
     let source_url = format!("{BASE_URL}{href}");
 
     build_result(
-        source_job_id, source_url, title, "Unknown".to_string(),
-        String::new(), None, None, None, None, None, None, None, fetched_at,
+        source_job_id,
+        source_url,
+        title,
+        None,
+        String::new(),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        fetched_at,
     )
 }
 
@@ -286,7 +370,7 @@ fn build_result(
     source_job_id: String,
     source_url: String,
     title: String,
-    company_name: String,
+    company_name: Option<String>,
     description_text: String,
     location: Option<String>,
     salary_min: Option<i32>,
@@ -317,7 +401,7 @@ fn build_result(
         job: NormalizedJob {
             id: format!("job_{SOURCE}_{source_job_id}"),
             title,
-            company_name,
+            company_name: company_name?,
             location,
             remote_type,
             seniority,
@@ -339,6 +423,158 @@ fn build_result(
     })
 }
 
+fn parse_detail_page(
+    html: &str,
+    fallback: &NormalizationResult,
+    fetched_at: &str,
+) -> DetailSnapshot {
+    let document = Html::parse_document(html);
+    let title = extract_first_text(&document, &["h1"]);
+    let company_name = extract_first_text(
+        &document,
+        &[
+            "a[href*='/company/']",
+            ".job-details--title a",
+            ".profile-page__title a",
+        ],
+    )
+    .and_then(|value| normalize_company_name(&value));
+    let description_text = extract_rich_text(
+        &document,
+        &[
+            "#job-description",
+            ".job-post__description",
+            ".profile-page-section",
+            "main",
+        ],
+    )
+    .map(|value| {
+        cleanup_description_text(
+            &value,
+            title.as_deref().unwrap_or(&fallback.job.title),
+            company_name
+                .as_deref()
+                .unwrap_or(&fallback.job.company_name),
+            &[
+                "How to apply",
+                "Send CV",
+                "View vacancy",
+                "Jobs feed in RSS",
+            ],
+        )
+    })
+    .filter(|value| !value.is_empty());
+    let location = extract_first_text(
+        &document,
+        &[".location-text", ".job-details--location", "header"],
+    )
+    .and_then(|value| normalized_non_empty(Some(&value)));
+    let salary_source = extract_first_text(
+        &document,
+        &[".public-salary-item", ".job-details--salary", "main"],
+    );
+    let (salary_min, salary_max, salary_currency) = salary_source
+        .as_deref()
+        .map(parse_salary_range)
+        .unwrap_or((None, None, None));
+    let posted_at = extract_datetime(&document);
+
+    let signal_text = [
+        title.clone().unwrap_or_default(),
+        company_name.clone().unwrap_or_default(),
+        location.clone().unwrap_or_default(),
+        description_text.clone().unwrap_or_default(),
+    ]
+    .join(" ");
+
+    DetailSnapshot {
+        title,
+        company_name,
+        location,
+        remote_type: infer_remote_type(&signal_text),
+        seniority: infer_seniority(&signal_text),
+        description_text,
+        salary_min,
+        salary_max,
+        salary_currency,
+        posted_at,
+        raw_payload: json!({
+            "detail_title": extract_first_text(&document, &["h1"]),
+            "detail_company_name": extract_first_text(
+                &document,
+                &["a[href*='/company/']", ".job-details--title a", ".profile-page__title a"]
+            ),
+            "detail_location": extract_first_text(
+                &document,
+                &[".location-text", ".job-details--location", "header"]
+            ),
+            "detail_description_text": extract_rich_text(
+                &document,
+                &["#job-description", ".job-post__description", ".profile-page-section", "main"]
+            ),
+            "detail_salary_text": salary_source,
+            "detail_posted_at": extract_datetime(&document),
+            "detail_fetched_at": fetched_at,
+        }),
+    }
+}
+
+fn extract_first_text(document: &Html, selectors: &[&str]) -> Option<String> {
+    for raw_selector in selectors {
+        let Ok(selector) = Selector::parse(raw_selector) else {
+            continue;
+        };
+        if let Some(value) = document
+            .select(&selector)
+            .map(|element| collect_text(&element))
+            .find(|value| !value.trim().is_empty())
+        {
+            return Some(value);
+        }
+    }
+
+    None
+}
+
+fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
+    let list_selector = Selector::parse("p, li").expect("valid selector");
+    let mut best: Option<String> = None;
+
+    for raw_selector in selectors {
+        let Ok(selector) = Selector::parse(raw_selector) else {
+            continue;
+        };
+
+        for container in document.select(&selector) {
+            let parts = container
+                .select(&list_selector)
+                .map(|element| collect_text(&element))
+                .filter(|value| value.len() > 20)
+                .collect::<Vec<_>>();
+            let candidate = if parts.is_empty() {
+                collect_text(&container)
+            } else {
+                parts.join(" ")
+            };
+            if candidate.len() > best.as_ref().map_or(0, String::len) {
+                best = Some(candidate);
+            }
+        }
+    }
+
+    best
+}
+
+fn extract_datetime(document: &Html) -> Option<String> {
+    let selector = Selector::parse("time[datetime]").expect("valid selector");
+    document
+        .select(&selector)
+        .filter_map(|element| element.value().attr("datetime"))
+        .map(|value| value.get(..10).unwrap_or(value).to_string())
+        .next()
+        .map(|date| format!("{date}T00:00:00Z"))
+}
+
 /// Extract numeric job ID from a Djinni job slug.
 /// "/jobs/12345-senior-rust-engineer/" → "12345"
 fn extract_job_id(href: &str) -> Option<String> {
@@ -353,7 +589,9 @@ fn extract_job_id(href: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_url, extract_job_id};
+    use super::{build_url, extract_job_id, parse_detail_page};
+    use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
+    use serde_json::json;
 
     #[test]
     fn builds_url_without_params() {
@@ -385,14 +623,53 @@ mod tests {
     fn link_fallback_parses_basic_card() {
         use crate::scrapers::djinni::parse_page;
 
-        // Minimal HTML with just a job link — tests the link-based fallback
+        // Link-only fallbacks are no longer accepted because they cannot
+        // produce a canonical company_name without the detail fetch succeeding.
         let html = r#"<html><body>
           <a href="/jobs/99999-rust-developer/">Senior Rust Developer</a>
         </body></html>"#;
 
         let results = parse_page(html, "2026-04-14T00:00:00Z");
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].job.title, "Senior Rust Developer");
-        assert_eq!(results[0].snapshot.source_job_id, "99999");
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn parses_djinni_detail_fixture() {
+        let html = include_str!("../../tests/fixtures/djinni_detail.html");
+        let fallback = NormalizationResult {
+            job: NormalizedJob {
+                id: "job_djinni_123".to_string(),
+                title: "Senior Rust Engineer".to_string(),
+                company_name: "SignalHire".to_string(),
+                location: Some("Remote".to_string()),
+                remote_type: Some("remote".to_string()),
+                seniority: Some("senior".to_string()),
+                description_text: "Short snippet".to_string(),
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                posted_at: None,
+                last_seen_at: "2026-04-18T10:00:00Z".to_string(),
+                is_active: true,
+            },
+            snapshot: RawSnapshot {
+                source: "djinni".to_string(),
+                source_job_id: "123".to_string(),
+                source_url: "https://djinni.co/jobs/123-senior-rust-engineer/".to_string(),
+                raw_payload: json!({}),
+                fetched_at: "2026-04-18T10:00:00Z".to_string(),
+            },
+        };
+
+        let detail = parse_detail_page(html, &fallback, "2026-04-18T10:00:00Z");
+
+        assert_eq!(detail.company_name.as_deref(), Some("SignalHire"));
+        assert!(
+            detail
+                .description_text
+                .as_deref()
+                .is_some_and(|value| value.contains("Own backend services"))
+        );
+        assert_eq!(detail.posted_at.as_deref(), Some("2026-04-16T00:00:00Z"));
     }
 }

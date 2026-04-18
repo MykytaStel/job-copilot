@@ -395,7 +395,7 @@ export default function FeedbackCenter() {
 
   const { data: jobsFeed, isLoading: jobsLoading } = useQuery({
     queryKey: queryKeys.jobs.filtered('all', null, profileId),
-    queryFn: () => getJobsFeed({ limit: 500 }),
+    queryFn: () => getJobsFeed({ limit: 200 }),
     enabled: !!profileId,
   });
 

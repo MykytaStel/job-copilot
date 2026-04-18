@@ -13,6 +13,7 @@ pub use catalog::{SOURCE_CATALOG, SourceMetadata};
 #[serde(rename_all = "snake_case")]
 pub enum SourceId {
     Djinni,
+    DouUa,
     WorkUa,
     RobotaUa,
 }
@@ -63,12 +64,17 @@ mod tests {
     #[test]
     fn canonical_key_and_parser_match_catalog() {
         assert_eq!(SourceId::Djinni.canonical_key(), "djinni");
+        assert_eq!(SourceId::DouUa.canonical_key(), "dou_ua");
         assert_eq!(SourceId::WorkUa.canonical_key(), "work_ua");
         assert_eq!(SourceId::RobotaUa.canonical_key(), "robota_ua");
 
         assert_eq!(
             SourceId::parse_canonical_key("djinni"),
             Some(SourceId::Djinni)
+        );
+        assert_eq!(
+            SourceId::parse_canonical_key("dou_ua"),
+            Some(SourceId::DouUa)
         );
         assert_eq!(
             SourceId::parse_canonical_key("work_ua"),

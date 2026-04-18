@@ -28,6 +28,7 @@ mod tests {
             payload["sources"],
             json!([
                 { "id": "djinni", "display_name": "Djinni" },
+                { "id": "dou_ua", "display_name": "DOU" },
                 { "id": "work_ua", "display_name": "Work.ua" },
                 { "id": "robota_ua", "display_name": "Robota.ua" }
             ])

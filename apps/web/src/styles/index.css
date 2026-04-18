@@ -4,6 +4,9 @@
 @import './components.css';
 @import './pages.css';
 
-/* Phase 0: additive Tailwind v4 — no preflight, no base reset */
+/* Phase 0: additive Tailwind v4 — no preflight, but keep the default theme
+ * so breakpoint variants like sm:/md:/lg: are generated in production.
+ */
 @import './ds-tokens.css';
+@import 'tailwindcss/theme';
 @import 'tailwindcss/utilities';

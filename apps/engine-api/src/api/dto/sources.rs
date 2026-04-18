@@ -51,6 +51,12 @@ mod tests {
             response
                 .sources
                 .iter()
+                .any(|source| source.id == "dou_ua" && source.display_name == "DOU")
+        );
+        assert!(
+            response
+                .sources
+                .iter()
                 .any(|source| source.id == "work_ua" && source.display_name == "Work.ua")
         );
         assert!(

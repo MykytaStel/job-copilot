@@ -764,6 +764,7 @@ impl
                 id: row.job_id,
                 title: row.job_title,
                 company_name: row.job_company_name,
+                location: None,
                 remote_type: row.job_remote_type,
                 seniority: row.job_seniority,
                 description_text: row.job_description_text,

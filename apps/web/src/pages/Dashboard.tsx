@@ -165,10 +165,12 @@ export default function Dashboard() {
 
   const allJobs = jobsFeed?.jobs ?? [];
   const jobSummary = jobsFeed?.summary;
+  const rerankJobIds = allJobs.map((job) => job.id);
+  const rerankJobsKey = rerankJobIds.join('|');
 
   const { data: rankData } = useQuery<RankedJob[]>({
-    queryKey: queryKeys.ml.rerank(profileId ?? ''),
-    queryFn: () => rerankJobs(profileId!, allJobs.map((j) => j.id)),
+    queryKey: queryKeys.ml.rerank(profileId ?? '', rerankJobsKey),
+    queryFn: () => rerankJobs(profileId!, rerankJobIds),
     enabled: !!profileId && allJobs.length > 0,
     staleTime: 5 * 60_000,
     retry: false,

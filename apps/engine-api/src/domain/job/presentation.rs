@@ -38,7 +38,11 @@ fn build_presentation(
         primary_variant.and_then(|variant| SourceId::parse_canonical_key(variant.source.trim()));
     let title = normalize_label(&job.title);
     let company = normalize_label(&job.company_name);
-    let location_label = build_location_label(primary_variant, &job.description_text);
+    let location_label = build_location_label(
+        job.location.as_deref(),
+        primary_variant,
+        &job.description_text,
+    );
     let work_mode_label = build_work_mode_label(
         job.remote_type.as_deref(),
         primary_variant,
@@ -214,6 +218,11 @@ fn is_meaningful_summary(
         Some(SourceId::WorkUa) => {
             !normalized.starts_with("company") && !normalized.starts_with("save vacancy")
         }
+        Some(SourceId::DouUa) => {
+            !normalized.starts_with("відгукнутися")
+                && !normalized.starts_with("відгукнутись")
+                && !normalized.starts_with("правила відгуків")
+        }
         Some(SourceId::RobotaUa) => {
             !normalized.starts_with("vidguknutis") && !normalized.starts_with("відгукнутись")
         }
@@ -222,10 +231,14 @@ fn is_meaningful_summary(
 }
 
 fn build_location_label(
+    location: Option<&str>,
     primary_variant: Option<&JobSourceVariant>,
     _description_text: &str,
 ) -> Option<String> {
-    let location = raw_string(primary_variant, "location")?;
+    let location = location
+        .map(normalize_label)
+        .filter(|value| !value.is_empty())
+        .or_else(|| raw_string(primary_variant, "location"))?;
     let cleaned = clean_location_label(&location);
 
     if cleaned.is_empty() {
@@ -242,9 +255,8 @@ fn build_work_mode_label(
 ) -> Option<String> {
     let raw_location = raw_string(primary_variant, "location");
     let raw_remote_type = raw_string(primary_variant, "remote_type");
-    let source_text = raw_remote_type
-        .as_deref()
-        .or(remote_type)
+    let source_text = remote_type
+        .or(raw_remote_type.as_deref())
         .or(raw_location.as_deref())
         .unwrap_or(description_text);
 
@@ -267,6 +279,7 @@ fn build_outbound_url(
             Some(format!("https://www.work.ua/jobs/{source_job_id}/"))
         }
         Some(SourceId::Djinni) => source_url.filter(|value| value.contains("://djinni.co/jobs/")),
+        Some(SourceId::DouUa) => source_url.filter(|value| value.contains("://jobs.dou.ua/")),
         Some(SourceId::WorkUa) => source_url.filter(|value| value.contains("://www.work.ua/")),
         Some(SourceId::RobotaUa) => source_url.filter(|value| value.contains("://robota.ua/")),
         None => source_url,
@@ -526,6 +539,7 @@ mod tests {
                 id: format!("job-{source_job_id}"),
                 title: "Senior Backend Engineer".to_string(),
                 company_name: "SignalHire".to_string(),
+                location: Some("Remote, Europe".to_string()),
                 remote_type: Some("remote".to_string()),
                 seniority: Some("senior".to_string()),
                 description_text: description_text.to_string(),
@@ -614,6 +628,28 @@ mod tests {
     }
 
     #[test]
+    fn dou_outbound_url_uses_source_url() {
+        let view = sample_view(
+            "dou_ua",
+            "354587",
+            "https://jobs.dou.ua/companies/getcode/vacancies/354587/",
+            "Працюємо над CRM/ERP-продуктом, який розвиваємо з нуля.",
+            json!({
+                "location": "віддалено",
+                "description_text": "Працюємо над CRM/ERP-продуктом, який розвиваємо з нуля."
+            }),
+        );
+
+        let presentation = build_job_view_presentation(&view);
+
+        assert_eq!(presentation.source_label.as_deref(), Some("DOU"));
+        assert_eq!(
+            presentation.outbound_url.as_deref(),
+            Some("https://jobs.dou.ua/companies/getcode/vacancies/354587")
+        );
+    }
+
+    #[test]
     fn missing_source_url_falls_back_safely() {
         let view = sample_view(
             "work_ua",
@@ -666,14 +702,26 @@ mod tests {
                 "description_text": "Own delivery for outbound automation products."
             }),
         );
+        let dou = sample_view(
+            "dou_ua",
+            "354587",
+            "https://jobs.dou.ua/companies/getcode/vacancies/354587/",
+            "Працюємо над CRM/ERP-продуктом, який розвиваємо з нуля.",
+            json!({
+                "location": "віддалено",
+                "description_text": "Працюємо над CRM/ERP-продуктом, який розвиваємо з нуля."
+            }),
+        );
 
         let first = [
             build_job_view_presentation(&djinni),
+            build_job_view_presentation(&dou),
             build_job_view_presentation(&work),
             build_job_view_presentation(&robota),
         ];
         let second = [
             build_job_view_presentation(&djinni),
+            build_job_view_presentation(&dou),
             build_job_view_presentation(&work),
             build_job_view_presentation(&robota),
         ];

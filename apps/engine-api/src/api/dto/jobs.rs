@@ -47,6 +47,7 @@ pub struct JobResponse {
     pub id: String,
     pub title: String,
     pub company_name: String,
+    pub location: Option<String>,
     pub remote_type: Option<String>,
     pub seniority: Option<String>,
     pub description_text: String,
@@ -70,6 +71,7 @@ pub struct MlJobLifecycleResponse {
     pub id: String,
     pub title: String,
     pub company_name: String,
+    pub location: Option<String>,
     pub remote_type: Option<String>,
     pub seniority: Option<String>,
     pub description_text: String,
@@ -84,6 +86,7 @@ pub struct MlJobLifecycleResponse {
     pub reactivated_at: Option<String>,
     pub lifecycle_stage: JobLifecycleStageResponse,
     pub primary_variant: Option<JobSourceVariantResponse>,
+    pub presentation: JobPresentationResponse,
 }
 
 #[derive(Debug, Serialize)]
@@ -120,6 +123,7 @@ impl JobResponse {
             id: job.id,
             title: job.title,
             company_name: job.company_name,
+            location: job.location,
             remote_type: job.remote_type,
             seniority: job.seniority,
             description_text: job.description_text,
@@ -150,6 +154,7 @@ impl JobResponse {
             id: view.job.id,
             title: view.job.title,
             company_name: view.job.company_name,
+            location: view.job.location,
             remote_type: view.job.remote_type,
             seniority: view.job.seniority,
             description_text: view.job.description_text,
@@ -172,10 +177,13 @@ impl JobResponse {
 
 impl From<JobView> for MlJobLifecycleResponse {
     fn from(view: JobView) -> Self {
+        let presentation = JobPresentationResponse::from(build_job_view_presentation(&view));
+
         Self {
             id: view.job.id,
             title: view.job.title,
             company_name: view.job.company_name,
+            location: view.job.location,
             remote_type: view.job.remote_type,
             seniority: view.job.seniority,
             description_text: view.job.description_text,
@@ -190,6 +198,7 @@ impl From<JobView> for MlJobLifecycleResponse {
             reactivated_at: view.reactivated_at,
             lifecycle_stage: view.lifecycle_stage.into(),
             primary_variant: view.primary_variant.map(JobSourceVariantResponse::from),
+            presentation,
         }
     }
 }

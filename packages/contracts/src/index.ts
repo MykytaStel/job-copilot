@@ -17,6 +17,7 @@ export interface JobPosting {
   title: string;
   company: string;
   description: string;
+  location?: string;
   notes: string;
   createdAt: string;
   postedAt?: string;
@@ -433,7 +434,7 @@ export type EngineTargetRegion =
   | 'us';
 
 export type EngineWorkMode = 'remote' | 'hybrid' | 'onsite';
-export type EngineSourceId = 'djinni' | 'work_ua' | 'robota_ua';
+export type EngineSourceId = 'djinni' | 'dou_ua' | 'work_ua' | 'robota_ua';
 
 export interface EngineRoleCatalogItemResponse {
   id: EngineRoleId;
