@@ -26,7 +26,6 @@
  *   (added) n/a          → "/applications"  ApplicationBoard  ✓ exists, was missing from design
  *
  * PLACEHOLDERS (not yet wired):
- *   - Bell icon button: no notifications route or API
  *   - Settings icon button: no settings route
  *   - Header search input: no global search API (readOnly + tabIndex=-1)
  *   - User section footer: hardcoded; should wire to profile store
@@ -44,6 +43,7 @@ import {
   ChevronRight,
   KanbanSquare,
   LayoutDashboard,
+  LineChart,
   Menu,
   MessageSquare,
   PanelLeftClose,
@@ -55,7 +55,7 @@ import {
 } from 'lucide-react';
 import { cn } from './lib/cn';
 import { Button } from './components/ui/Button';
-import { getProfile } from './api';
+import { getProfile, getUnreadCount } from './api';
 import { queryKeys } from './queryKeys';
 
 // ── Navigation config ──────────────────────────────────────────────────────────
@@ -72,6 +72,7 @@ const navigation: NavItem[] = [
   { name: 'Applications', to: '/applications', end: false, icon: KanbanSquare    },
   { name: 'Feedback',     to: '/feedback',     end: false, icon: MessageSquare   },
   { name: 'Analytics',    to: '/analytics',    end: false, icon: BarChart3       },
+  { name: 'Market',       to: '/market',       end: false, icon: LineChart       },
   { name: 'Profile',      to: '/profile',      end: false, icon: User            },
 ];
 
@@ -104,6 +105,40 @@ function RouteSkeleton() {
   );
 }
 
+function NotificationIconButton({
+  unreadCount,
+  mobile = false,
+}: {
+  unreadCount: number;
+  mobile?: boolean;
+}) {
+  const badgeLabel = unreadCount > 99 ? '99+' : String(unreadCount);
+  const linkClass = mobile
+    ? 'border border-transparent bg-white/[0.03] text-foreground hover:bg-white/[0.06]'
+    : 'border border-border bg-white/[0.03] text-muted-foreground hover:bg-white/[0.06] hover:text-foreground';
+
+  return (
+    <Link
+      to="/notifications"
+      title={
+        unreadCount > 0
+          ? `Notifications (${unreadCount} unread)`
+          : 'Notifications'
+      }
+      className={cn(
+        'relative inline-flex h-9 w-9 items-center justify-center rounded-lg no-underline transition-colors',
+        linkClass,
+      )}
+    >
+      <Bell className="h-5 w-5" />
+      {unreadCount > 0 && (
+        <span className="pointer-events-none absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full border border-background bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground shadow-sm">
+          {badgeLabel}
+        </span>
+      )}
+    </Link>
+  );
+}
 
 /**
  * A single sidebar nav link. Uses NavLink's render-prop API for active state
@@ -157,6 +192,13 @@ export default function AppShellNew() {
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: queryKeys.profile.root(),
     queryFn: getProfile,
+  });
+
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: queryKeys.notifications.unreadCount(profile?.id ?? 'none'),
+    queryFn: () => getUnreadCount(profile?.id),
+    enabled: !!profile?.id,
+    staleTime: 30_000,
   });
 
   const activeNavItem = useMemo(() => {
@@ -362,10 +404,7 @@ export default function AppShellNew() {
           </p>
         </div>
 
-        {/* Placeholder — no notifications route */}
-        <Button variant="ghost" size="icon" title="Notifications (not yet implemented)" className="h-9 w-9">
-          <Bell className="h-5 w-5" />
-        </Button>
+        <NotificationIconButton unreadCount={unreadCount} mobile />
       </header>
 
       {/* ── Desktop: Top Header ──────────────────────────────────────────────── */}
@@ -406,15 +445,7 @@ export default function AppShellNew() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Placeholder — no notifications route */}
-          <Button
-            variant="icon"
-            size="icon"
-            title="Notifications (not yet implemented)"
-            className="h-9 w-9"
-          >
-            <Bell className="h-5 w-5" />
-          </Button>
+          <NotificationIconButton unreadCount={unreadCount} />
           {/* Placeholder — no settings route */}
           <Button
             variant="icon"

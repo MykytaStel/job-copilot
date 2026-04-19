@@ -330,7 +330,12 @@ pub(crate) const ROLE_RULES: &[RoleRule] = &[
             label: "bonus: lead title + architecture/mentoring",
             required_groups: &[
                 SignalGroup {
-                    signals: &["tech lead", "technical lead", "lead engineer", "lead developer"],
+                    signals: &[
+                        "tech lead",
+                        "technical lead",
+                        "lead engineer",
+                        "lead developer",
+                    ],
                     min_matches: 1,
                 },
                 SignalGroup {

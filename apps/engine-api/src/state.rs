@@ -2,7 +2,8 @@ use crate::config::Config;
 use crate::db::Database;
 use crate::db::repositories::{
     ActivitiesRepository, ApplicationsRepository, FeedbackRepository, FitScoresRepository,
-    JobsRepository, ProfilesRepository, ResumesRepository, TasksRepository, UserEventsRepository,
+    JobsRepository, NotificationsRepository, ProfilesRepository, ResumesRepository,
+    TasksRepository, UserEventsRepository,
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
@@ -10,6 +11,7 @@ use crate::services::feedback::FeedbackService;
 use crate::services::followup::FollowUpService;
 use crate::services::jobs::JobsService;
 use crate::services::matching::SearchMatchingService;
+use crate::services::notifications::NotificationsService;
 use crate::services::profile::service::ProfileAnalysisService;
 use crate::services::profiles::ProfilesService;
 use crate::services::ranking::RankingService;
@@ -37,6 +39,7 @@ pub struct AppState {
     pub fit_scores_repository: FitScoresRepository,
     pub search_profile_service: SearchProfileService,
     pub followup_service: FollowUpService,
+    pub notifications_service: NotificationsService,
     pub salary_service: SalaryService,
     pub user_events_service: UserEventsService,
     pub learned_reranker_enabled: bool,
@@ -79,6 +82,7 @@ impl AppState {
         let tasks_repository = TasksRepository::new(database.clone());
         let resumes_repository = ResumesRepository::new(database.clone());
         let fit_scores_repository = FitScoresRepository::new(database.clone());
+        let notifications_repository = NotificationsRepository::new(database.clone());
         let user_events_repository = UserEventsRepository::new(database.clone());
         let profile_analysis_service = ProfileAnalysisService::new();
 
@@ -98,6 +102,7 @@ impl AppState {
             fit_scores_repository,
             search_profile_service: SearchProfileService::new(),
             followup_service: FollowUpService::new(tasks_repository),
+            notifications_service: NotificationsService::new(notifications_repository),
             salary_service: SalaryService::new(salary_jobs_repository),
             user_events_service: UserEventsService::new(user_events_repository),
             learned_reranker_enabled,
@@ -140,6 +145,9 @@ impl AppState {
             fit_scores_repository: FitScoresRepository::new(Database::disabled()),
             search_profile_service: SearchProfileService::new(),
             followup_service: FollowUpService::new(TasksRepository::new(Database::disabled())),
+            notifications_service: NotificationsService::new(NotificationsRepository::new(
+                Database::disabled(),
+            )),
             salary_service: SalaryService::new(JobsRepository::new(Database::disabled())),
             user_events_service: UserEventsService::for_tests(
                 crate::services::user_events::UserEventsServiceStub::default(),
@@ -159,6 +167,15 @@ impl AppState {
     #[cfg(test)]
     pub fn with_user_events_service(mut self, user_events_service: UserEventsService) -> Self {
         self.user_events_service = user_events_service;
+        self
+    }
+
+    #[cfg(test)]
+    pub fn with_notifications_service(
+        mut self,
+        notifications_service: NotificationsService,
+    ) -> Self {
+        self.notifications_service = notifications_service;
         self
     }
 

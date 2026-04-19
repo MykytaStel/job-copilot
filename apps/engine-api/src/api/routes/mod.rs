@@ -5,6 +5,8 @@ pub mod events;
 pub mod feedback;
 pub mod health;
 pub mod jobs;
+pub mod market;
+pub mod notifications;
 pub mod profile;
 pub mod reranker_dataset;
 pub mod resumes;
@@ -111,6 +113,28 @@ pub fn router() -> Router<AppState> {
             "/api/v1/analytics/salary",
             get(analytics::get_salary_intelligence),
         )
+        .route("/api/v1/market/overview", get(market::get_market_overview))
+        .route(
+            "/api/v1/market/companies",
+            get(market::get_market_companies),
+        )
+        .route(
+            "/api/v1/notifications",
+            get(notifications::list_notifications),
+        )
+        .route(
+            "/api/v1/notifications/unread-count",
+            get(notifications::get_unread_count),
+        )
+        .route(
+            "/api/v1/notifications/{id}/read",
+            post(notifications::mark_notification_read),
+        )
+        .route(
+            "/api/v1/market/salaries",
+            get(market::get_market_salary_trend),
+        )
+        .route("/api/v1/market/roles", get(market::get_market_role_demand))
         .route(
             "/api/v1/profiles/{id}/analytics/summary",
             get(analytics::get_analytics_summary),

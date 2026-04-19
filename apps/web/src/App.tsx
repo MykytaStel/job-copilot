@@ -10,6 +10,8 @@ const ApplicationDetail = lazy(() => import('./pages/ApplicationDetail'));
 const Profile = lazy(() => import('./pages/Profile'));
 const FeedbackCenter = lazy(() => import('./pages/FeedbackCenter'));
 const Analytics = lazy(() => import('./pages/Analytics'));
+const Market = lazy(() => import('./pages/Market'));
+const Notifications = lazy(() => import('./pages/Notifications'));
 
 export default function App() {
   return (
@@ -23,6 +25,8 @@ export default function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="feedback" element={<FeedbackCenter />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="market" element={<Market />} />
+          <Route path="notifications" element={<Notifications />} />
         </Route>
       </Routes>
     </BrowserRouter>

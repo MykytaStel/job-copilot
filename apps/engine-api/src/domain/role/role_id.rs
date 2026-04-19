@@ -77,7 +77,10 @@ mod tests {
 
     #[test]
     fn converts_to_canonical_snake_case() {
-        assert_eq!(RoleId::FrontendEngineer.canonical_key(), "frontend_engineer");
+        assert_eq!(
+            RoleId::FrontendEngineer.canonical_key(),
+            "frontend_engineer"
+        );
         assert_eq!(RoleId::MobileEngineer.canonical_key(), "mobile_engineer");
         assert_eq!(RoleId::Generalist.canonical_key(), "generalist");
     }

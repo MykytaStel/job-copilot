@@ -224,7 +224,7 @@ impl SearchMatchingService {
             .unwrap_or(0.0);
         let seniority_penalty = seniority_alignment.penalty;
 
-        let score = (primary_role_score
+        let base_score = primary_role_score
             + target_role_score
             + role_candidate_score
             + profile_skill_score
@@ -237,10 +237,13 @@ impl SearchMatchingService {
             - exclude_penalty
             - role_alignment.mismatch_penalty
             - work_mode_penalty
-            - seniority_penalty)
-            .clamp(0.0, 100.0)
-            .round() as u8;
-        let reasons = build_reasons(
+            - seniority_penalty;
+
+        let days_old = days_since_last_seen(&job.job.last_seen_at);
+        let freshness_decay = compute_freshness_decay(days_old);
+        let score = (base_score * freshness_decay).clamp(0.0, 100.0).round() as u8;
+
+        let mut reasons = build_reasons(
             search_profile,
             job,
             &role_alignment,
@@ -252,6 +255,13 @@ impl SearchMatchingService {
             region_match,
             &seniority_alignment,
         );
+
+        if days_old > 14 {
+            reasons.push(format!(
+                "Freshness decay applied: job is {} days old (factor {:.2})",
+                days_old, freshness_decay
+            ));
+        }
 
         JobFit {
             job_id: job.job.id.clone(),
@@ -643,8 +653,9 @@ fn role_family_overlap(left: RoleId, right: RoleId) -> f32 {
         | (RoleId::DevopsEngineer, RoleId::BackendEngineer) => 0.45,
         (RoleId::FullstackEngineer, RoleId::DevopsEngineer)
         | (RoleId::DevopsEngineer, RoleId::FullstackEngineer) => 0.40,
-        (RoleId::DataEngineer, RoleId::MlEngineer)
-        | (RoleId::MlEngineer, RoleId::DataEngineer) => 0.50,
+        (RoleId::DataEngineer, RoleId::MlEngineer) | (RoleId::MlEngineer, RoleId::DataEngineer) => {
+            0.50
+        }
         (RoleId::TechLead, RoleId::EngineeringManager)
         | (RoleId::EngineeringManager, RoleId::TechLead) => 0.55,
         _ if left.is_fallback() || right.is_fallback() => 0.0,
@@ -1102,6 +1113,45 @@ fn push_ignored_term(target: &mut Vec<String>, value: &str) {
     }
 
     push_unique_string(target, canonical_tokens.join(" "));
+}
+
+fn days_since_last_seen(last_seen_at: &str) -> i64 {
+    let job_day = parse_days_since_epoch(last_seen_at).unwrap_or(0);
+    (current_days_since_epoch() - job_day).max(0)
+}
+
+fn compute_freshness_decay(days_old: i64) -> f32 {
+    if days_old <= 14 {
+        return 1.0;
+    }
+    (1.0 - (days_old as f32 - 14.0) / 30.0).max(0.7)
+}
+
+fn parse_days_since_epoch(datetime_str: &str) -> Option<i64> {
+    let s = datetime_str.get(..10)?;
+    let year: i64 = s[0..4].parse().ok()?;
+    let month: i64 = s[5..7].parse().ok()?;
+    let day: i64 = s[8..10].parse().ok()?;
+    Some(civil_to_days(year, month, day))
+}
+
+// Gregorian civil-to-days algorithm (Howard Hinnant, days since 1970-01-01).
+fn civil_to_days(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = (if y >= 0 { y } else { y - 399 }) / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
+fn current_days_since_epoch() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
+        / 86400
 }
 
 pub fn summarize_match_quality(ranked_jobs: &[RankedJob]) -> MatchQualitySummary {
@@ -1775,6 +1825,44 @@ mod tests {
             platform_fit
                 .matched_keywords
                 .contains(&"distributed systems".to_string())
+        );
+    }
+
+    #[test]
+    fn stale_job_scores_lower_than_fresh_identical_job() {
+        let service = SearchMatchingService::new();
+        let profile = search_profile();
+        let fresh_job = job_view(
+            "job-fresh",
+            "Senior Backend Developer",
+            "Remote EU role with Rust and Postgres",
+            Some("remote"),
+            "djinni",
+        );
+        // Job last seen 365 days ago — well past the 14-day freshness threshold.
+        let stale_job = JobView {
+            job: Job {
+                last_seen_at: "2020-01-01T00:00:00Z".to_string(),
+                ..fresh_job.job.clone()
+            },
+            ..fresh_job.clone()
+        };
+
+        let fresh_fit = service.score_job(&profile, &fresh_job);
+        let stale_fit = service.score_job(&profile, &stale_job);
+
+        assert!(
+            fresh_fit.score > stale_fit.score,
+            "fresh score {} should beat stale score {}",
+            fresh_fit.score,
+            stale_fit.score,
+        );
+        assert!(
+            stale_fit
+                .reasons
+                .iter()
+                .any(|r| r.contains("Freshness decay applied")),
+            "stale job reasons should contain freshness decay explanation"
         );
     }
 

@@ -98,6 +98,19 @@ impl ApiError {
         )
     }
 
+    pub fn invalid_period(period: i64) -> Self {
+        Self::bad_request_with_details(
+            "invalid_period",
+            format!("Query parameter 'period' must be between 1 and 365, got {period}"),
+            json!({
+                "field": "period",
+                "min": 1,
+                "max": 365,
+                "received": period,
+            }),
+        )
+    }
+
     pub fn from_repository(error: RepositoryError, query_failed_code: &'static str) -> Self {
         match error {
             RepositoryError::DatabaseDisabled => {
