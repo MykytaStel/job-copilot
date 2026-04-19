@@ -10,6 +10,7 @@ use crate::domain::application::model::{
 };
 use crate::domain::job::model::Job;
 use crate::domain::resume::model::ResumeVersion;
+use crate::domain::search::global::ApplicationSearchHit;
 
 #[derive(Clone)]
 pub struct ApplicationsRepository {
@@ -122,6 +123,19 @@ struct ApplicationDetailRow {
     resume_raw_text: Option<String>,
     resume_is_active: Option<bool>,
     resume_uploaded_at: Option<String>,
+}
+
+#[derive(FromRow)]
+struct ApplicationSearchHitRow {
+    id: String,
+    job_id: String,
+    resume_id: Option<String>,
+    status: String,
+    applied_at: Option<String>,
+    due_date: Option<String>,
+    updated_at: String,
+    job_title: String,
+    company_name: String,
 }
 
 impl ApplicationsRepository {
@@ -412,6 +426,47 @@ impl ApplicationsRepository {
         .await?;
 
         Ok(rows.into_iter().map(Application::from).collect())
+    }
+
+    pub async fn search_by_job_title(
+        &self,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<ApplicationSearchHit>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let rows = sqlx::query_as::<_, ApplicationSearchHitRow>(
+            r#"
+            SELECT
+                applications.id,
+                applications.job_id,
+                applications.resume_id,
+                applications.status,
+                applications.applied_at::text AS applied_at,
+                applications.due_date::text AS due_date,
+                applications.updated_at::text AS updated_at,
+                jobs.title AS job_title,
+                jobs.company_name
+            FROM applications
+            INNER JOIN jobs ON jobs.id = applications.job_id
+            WHERE to_tsvector('simple', coalesce(jobs.title, '')) @@ plainto_tsquery('simple', $1)
+            ORDER BY
+                ts_rank_cd(
+                    to_tsvector('simple', coalesce(jobs.title, '')),
+                    plainto_tsquery('simple', $1)
+                ) DESC,
+                applications.updated_at DESC
+            LIMIT $2
+            "#,
+        )
+        .bind(query)
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows.into_iter().map(ApplicationSearchHit::from).collect())
     }
 
     pub async fn update(
@@ -726,6 +781,22 @@ impl From<ApplicationRow> for Application {
             applied_at: row.applied_at,
             due_date: row.due_date,
             updated_at: row.updated_at,
+        }
+    }
+}
+
+impl From<ApplicationSearchHitRow> for ApplicationSearchHit {
+    fn from(row: ApplicationSearchHitRow) -> Self {
+        Self {
+            id: row.id,
+            job_id: row.job_id,
+            resume_id: row.resume_id,
+            status: row.status,
+            applied_at: row.applied_at,
+            due_date: row.due_date,
+            updated_at: row.updated_at,
+            job_title: row.job_title,
+            company_name: row.company_name,
         }
     }
 }

@@ -78,18 +78,17 @@ impl JobsService {
         }
     }
 
-    pub async fn search(
+    pub async fn search_active(
         &self,
         query: &str,
         limit: i64,
-        offset: i64,
     ) -> Result<Vec<Job>, RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => {
-                repository.search(query, limit, offset).await
+                repository.search_active(query, limit).await
             }
             #[cfg(test)]
-            JobsServiceBackend::Stub(stub) => stub.search(query, limit, offset),
+            JobsServiceBackend::Stub(stub) => stub.search_active(query, limit),
         }
     }
 
@@ -282,7 +281,7 @@ impl JobsServiceStub {
         Ok(iter.take(limit as usize).cloned().collect())
     }
 
-    fn search(&self, _query: &str, limit: i64, offset: i64) -> Result<Vec<Job>, RepositoryError> {
+    fn search_active(&self, _query: &str, limit: i64) -> Result<Vec<Job>, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }
@@ -290,7 +289,6 @@ impl JobsServiceStub {
         Ok(self
             .search_jobs
             .iter()
-            .skip(offset as usize)
             .take(limit as usize)
             .cloned()
             .collect())

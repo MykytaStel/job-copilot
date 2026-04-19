@@ -27,7 +27,6 @@
  *
  * PLACEHOLDERS (not yet wired):
  *   - Settings icon button: no settings route
- *   - Header search input: no global search API (readOnly + tabIndex=-1)
  *   - User section footer: hardcoded; should wire to profile store
  */
 
@@ -48,13 +47,13 @@ import {
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
-  Search,
   Settings,
   Sparkles,
   User,
 } from 'lucide-react';
 import { cn } from './lib/cn';
 import { Button } from './components/ui/Button';
+import { GlobalSearch } from './components/GlobalSearch';
 import { getProfile, getUnreadCount } from './api';
 import { queryKeys } from './queryKeys';
 
@@ -431,17 +430,7 @@ export default function AppShellNew() {
             </div>
           </div>
 
-          <div className="relative max-w-md flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="search"
-              placeholder="Global search is coming soon"
-              readOnly
-              tabIndex={-1}
-              title="Global search (not yet implemented)"
-              className="h-10 w-full rounded-xl border border-border bg-white/[0.03] pl-9 text-sm text-muted-foreground"
-            />
-          </div>
+          <GlobalSearch />
         </div>
 
         <div className="flex items-center gap-2">

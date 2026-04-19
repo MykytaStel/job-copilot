@@ -33,7 +33,6 @@ import type {
   OfferInput,
   ResumeUploadInput,
   ResumeVersion,
-  SearchResults,
   Task,
   TaskInput,
   FeedbackOverview,
@@ -338,6 +337,22 @@ type EngineApplication = {
   applied_at: string | null;
   due_date: string | null;
   updated_at: string;
+};
+
+type EngineGlobalSearchApplication = {
+  id: string;
+  job_id: string;
+  status: ApplicationStatus;
+  applied_at: string | null;
+  due_date: string | null;
+  updated_at: string;
+  job_title: string;
+  company_name: string;
+};
+
+type EngineGlobalSearchResponse = {
+  jobs: EngineJob[];
+  applications: EngineGlobalSearchApplication[];
 };
 
 type EngineApplicationDetail = EngineApplication & {
@@ -683,6 +698,22 @@ export type SearchRunResult = {
     sourceMismatchJobs: number;
     topMissingSignals: string[];
   };
+};
+
+export type GlobalSearchApplicationResult = {
+  id: string;
+  jobId: string;
+  status: ApplicationStatus;
+  appliedAt?: string;
+  dueDate?: string;
+  updatedAt: string;
+  jobTitle: string;
+  companyName: string;
+};
+
+export type GlobalSearchResults = {
+  jobs: JobPosting[];
+  applications: GlobalSearchApplicationResult[];
 };
 
 async function mlRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -1740,27 +1771,23 @@ export const toggleAlert = (_id: string, _active: boolean): Promise<JobAlert> =>
   unsupported('Alerts');
 export const deleteAlert = (_id: string): Promise<void> => unsupported('Alerts');
 export const getSuggestedSkills = (): Promise<string[]> => unsupported('Suggested skills');
-export async function search(q: string): Promise<SearchResults> {
-  const result = await request<{
-    jobs: EngineJob[];
-    contacts: Array<{ id: string; name: string; role?: string | null; email?: string | null }>;
-    page: number;
-    per_page: number;
-    has_more: boolean;
-  }>(`/api/v1/search?q=${encodeURIComponent(q)}`);
+export async function globalSearch(query: string): Promise<GlobalSearchResults> {
+  const result = await request<EngineGlobalSearchResponse>(
+    `/api/v1/search?q=${encodeURIComponent(query)}&limit=10`,
+  );
 
   return {
     jobs: result.jobs.map(mapJob),
-    contacts: result.contacts.map((contact) => ({
-      id: contact.id,
-      name: contact.name,
-      role: contact.role ?? undefined,
-      email: contact.email ?? undefined,
-      createdAt: '',
+    applications: result.applications.map((application) => ({
+      id: application.id,
+      jobId: application.job_id,
+      status: application.status,
+      appliedAt: application.applied_at ?? undefined,
+      dueDate: application.due_date ?? undefined,
+      updatedAt: application.updated_at,
+      jobTitle: application.job_title,
+      companyName: application.company_name,
     })),
-    page: result.page,
-    perPage: result.per_page,
-    hasMore: result.has_more,
   };
 }
 export async function getContacts(): Promise<Contact[]> {

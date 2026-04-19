@@ -9,6 +9,7 @@ use crate::domain::application::model::{
     CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer,
     UpdateApplication, UpsertOffer,
 };
+use crate::domain::search::global::ApplicationSearchHit;
 
 #[derive(Clone)]
 enum ApplicationsServiceBackend {
@@ -70,6 +71,20 @@ impl ApplicationsService {
             }
             #[cfg(test)]
             ApplicationsServiceBackend::Stub(stub) => stub.list_recent(limit),
+        }
+    }
+
+    pub async fn search_by_job_title(
+        &self,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<ApplicationSearchHit>, RepositoryError> {
+        match &self.backend {
+            ApplicationsServiceBackend::Repository(repository) => {
+                repository.search_by_job_title(query, limit).await
+            }
+            #[cfg(test)]
+            ApplicationsServiceBackend::Stub(stub) => stub.search_by_job_title(query, limit),
         }
     }
 
@@ -175,6 +190,7 @@ impl ApplicationsService {
 pub struct ApplicationsServiceStub {
     applications_by_id: Mutex<HashMap<String, Application>>,
     recent_applications: Vec<Application>,
+    search_applications: Vec<ApplicationSearchHit>,
     details_by_id: Mutex<HashMap<String, ApplicationDetail>>,
     contacts_by_id: Mutex<HashMap<String, Contact>>,
     database_disabled: bool,
@@ -195,6 +211,11 @@ impl ApplicationsServiceStub {
             .lock()
             .expect("contacts stub mutex should not be poisoned")
             .insert(contact.id.clone(), contact);
+        self
+    }
+
+    pub fn with_search_application(mut self, application: ApplicationSearchHit) -> Self {
+        self.search_applications.push(application);
         self
     }
 
@@ -254,6 +275,23 @@ impl ApplicationsServiceStub {
 
         Ok(self
             .recent_applications
+            .iter()
+            .take(limit as usize)
+            .cloned()
+            .collect())
+    }
+
+    fn search_by_job_title(
+        &self,
+        _query: &str,
+        limit: i64,
+    ) -> Result<Vec<ApplicationSearchHit>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self
+            .search_applications
             .iter()
             .take(limit as usize)
             .cloned()

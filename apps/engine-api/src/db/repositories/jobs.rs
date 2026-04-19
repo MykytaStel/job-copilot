@@ -324,11 +324,10 @@ impl JobsRepository {
             .collect())
     }
 
-    pub async fn search(
+    pub async fn search_active(
         &self,
         query: &str,
         limit: i64,
-        offset: i64,
     ) -> Result<Vec<Job>, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
@@ -351,18 +350,37 @@ impl JobsRepository {
                 last_seen_at::text AS last_seen_at,
                 is_active
             FROM jobs
-            WHERE search_vector @@ websearch_to_tsquery('simple', $1)
+            WHERE
+                is_active = TRUE
+                AND to_tsvector(
+                    'simple',
+                    concat_ws(
+                        ' ',
+                        coalesce(title, ''),
+                        coalesce(company_name, ''),
+                        coalesce(description_text, '')
+                    )
+                ) @@ plainto_tsquery('simple', $1)
             ORDER BY
-                ts_rank_cd(search_vector, websearch_to_tsquery('simple', $1)) DESC,
+                ts_rank_cd(
+                    to_tsvector(
+                        'simple',
+                        concat_ws(
+                            ' ',
+                            coalesce(title, ''),
+                            coalesce(company_name, ''),
+                            coalesce(description_text, '')
+                        )
+                    ),
+                    plainto_tsquery('simple', $1)
+                ) DESC,
                 last_seen_at DESC,
                 posted_at DESC NULLS LAST
             LIMIT $2
-            OFFSET $3
             "#,
         )
         .bind(query)
         .bind(limit)
-        .bind(offset)
         .fetch_all(pool)
         .await?;
 
