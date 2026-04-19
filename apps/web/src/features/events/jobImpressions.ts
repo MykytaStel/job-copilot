@@ -1,4 +1,4 @@
-import { logUserEvent } from '../../api';
+import { logUserEvent } from '../../api/events';
 
 const SESSION_STORAGE_KEY = 'job-copilot.job-impressions.v1';
 const runtimeLoggedImpressions = new Set<string>();

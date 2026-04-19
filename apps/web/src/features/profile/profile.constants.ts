@@ -1,4 +1,4 @@
-import type { SearchTargetRegion, SearchWorkMode } from '../../api';
+import type { SearchTargetRegion, SearchWorkMode } from '../../api/profiles';
 
 export const TARGET_REGION_OPTIONS: Array<{ id: SearchTargetRegion; label: string }> = [
   { id: 'ua', label: 'Ukraine' },

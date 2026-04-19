@@ -23,23 +23,15 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-
-import {
-  getAnalyticsSummary,
-  getBehaviorSummary,
-  getFunnelSummary,
-  getLlmContext,
-  getProfileInsights,
-  getWeeklyGuidance,
-} from '../api';
+import { getAnalyticsSummary, getBehaviorSummary, getFunnelSummary, getLlmContext} from '../api/analytics';
+import {getProfileInsights, getWeeklyGuidance} from '../api/enrichment';
 import type {
   AnalyticsSummary,
   BehaviorSignalCount,
   FunnelSummary,
-  LlmContext,
-  ProfileInsights,
-  WeeklyGuidance,
-} from '../api';
+	LlmContext
+} from '../api/analytics';
+import type { ProfileInsights, WeeklyGuidance } from '../api/enrichment';
 import { AIInsightPanel, type AIInsight } from '../components/ui/AIInsightPanel';
 import { Badge } from '../components/ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
