@@ -4,7 +4,7 @@ import type {
   RoleCatalogItem,
   SearchProfileBuildResult,
   SourceCatalogItem,
-} from '../../api';
+} from '../../api/profiles';
 import { formatFallbackLabel } from '../../lib/format';
 
 type PdfTextItemLike = {

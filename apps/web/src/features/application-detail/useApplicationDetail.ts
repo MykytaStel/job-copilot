@@ -11,13 +11,11 @@ import type {
 
 import {
   addNote,
-  createContact,
   createOffer,
   getApplicationDetail,
-  getContacts,
-  linkContact,
   updateApplication,
-} from '../../api';
+} from '../../api/applications';
+import { getContacts, linkContact, createContact } from '../../api/contacts';
 import { normalizeDateInput, parseOptionalNumber } from '../../lib/format';
 import { queryKeys } from '../../queryKeys';
 import { EMPTY_CONTACT_INPUT } from './applicationDetail.constants';

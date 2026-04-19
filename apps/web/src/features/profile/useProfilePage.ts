@@ -5,16 +5,16 @@ import toast from 'react-hot-toast';
 import {
   analyzeStoredProfile,
   buildSearchProfile,
-  getLlmContext,
   getProfile,
   getRoles,
   getSources,
   getStoredProfileRawText,
-  runSearch,
   saveProfile,
   type SearchProfileBuildResult,
-  type SearchRunResult,
-} from '../../api';
+} from '../../api/profiles';
+import { getLlmContext } from '../../api/analytics';
+import type { SearchRunResult } from '../../api/jobs';
+import { runSearch } from '../../api/jobs';
 import { queryKeys } from '../../queryKeys';
 import {
   cleanupExtractedResumeText,
