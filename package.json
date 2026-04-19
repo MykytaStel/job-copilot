@@ -17,6 +17,7 @@
     "train:reranker:v2": "./scripts/train_reranker_v2.sh",
     "train:reranker:v2:docker": "APPLY_TO_DOCKER=1 ./scripts/train_reranker_v2.sh",
     "local:ingestion:demo": "./scripts/run_local_ingestion_demo.sh",
+		"guard:web-api-imports": "./scripts/check_web_api_barrel_imports.sh",
     "ingestion:demo": "DATABASE_URL=${DATABASE_URL:-postgres://jobcopilot:jobcopilot@127.0.0.1:5432/jobcopilot} cargo run --manifest-path apps/ingestion/Cargo.toml -- --input apps/ingestion/examples/sample_jobs.json",
     "ingestion:demo:mock": "DATABASE_URL=${DATABASE_URL:-postgres://jobcopilot:jobcopilot@127.0.0.1:5432/jobcopilot} cargo run --manifest-path apps/ingestion/Cargo.toml -- --input apps/ingestion/examples/mock_source_jobs.json --input-format mock-source",
     "ingestion:demo:mock:update": "DATABASE_URL=${DATABASE_URL:-postgres://jobcopilot:jobcopilot@127.0.0.1:5432/jobcopilot} cargo run --manifest-path apps/ingestion/Cargo.toml -- --input apps/ingestion/examples/mock_source_jobs_updated.json --input-format mock-source",
