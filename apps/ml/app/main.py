@@ -78,6 +78,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+SENIORITY_TERMS = {
+    "intern",
+    "junior",
+    "middle",
+    "mid",
+    "senior",
+    "lead",
+    "staff",
+    "principal",
+    "head",
+    "director",
+}
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -201,20 +214,78 @@ def unique_preserving_order(values: list[str]) -> list[str]:
     return result
 
 
+def term_key(value: str) -> str:
+    return normalize_text(value)
+
+
+def term_weight(value: str) -> float:
+    normalized = term_key(value)
+    if not normalized:
+        return 0.0
+    if "_" in normalized:
+        return 1.35
+    return 1.0
+
+
+def indexed_terms(values: list[str]) -> list[tuple[str, str, float]]:
+    indexed: list[tuple[str, str, float]] = []
+    seen: set[str] = set()
+
+    for value in values:
+        key = term_key(value)
+        if not key or key in SENIORITY_TERMS or key in seen:
+            continue
+
+        seen.add(key)
+        indexed.append((key, normalize_term_for_output(value), term_weight(value)))
+
+    return indexed
+
+
+CONTACT_NOISE_TERMS = {
+    "email",
+    "mail",
+    "phone",
+    "telegram",
+    "linkedin",
+    "contact",
+    "contacts",
+}
+
+
+def _profile_identity_terms(profile: EngineProfile) -> set[str]:
+    return set(tokenize(profile.name, profile.email, profile.location))
+
+
+def _is_profile_noise_term(term: str, identity_terms: set[str]) -> bool:
+    normalized = term_key(term)
+    if not normalized:
+        return True
+    if normalized in identity_terms or normalized in CONTACT_NOISE_TERMS:
+        return True
+    return normalized.isdigit() and len(normalized) >= 7
+
+
+def _append_analysis_terms(terms: list[str], values: list[str]) -> None:
+    for value in values:
+        normalized = normalize_term_for_output(value)
+        if normalized:
+            terms.append(normalized)
+
+
 def profile_terms(profile: EngineProfile) -> list[str]:
     analysis = profile.analysis
     if analysis:
-        terms = tokenize(analysis.primary_role, analysis.seniority, profile.raw_text)
-        for skill in analysis.skills:
-            normalized_skill = normalize_term_for_output(skill)
-            if normalized_skill:
-                terms.append(normalized_skill)
-        for keyword in analysis.keywords:
-            normalized_keyword = normalize_term_for_output(keyword)
-            if normalized_keyword:
-                terms.append(normalized_keyword)
+        terms = tokenize(analysis.primary_role)
+        _append_analysis_terms(terms, analysis.skills)
+        _append_analysis_terms(terms, analysis.keywords)
     else:
-        terms = tokenize(profile.raw_text)
+        identity_terms = _profile_identity_terms(profile)
+        terms = [
+            term
+            for term in tokenize(profile.raw_text)
+            if not _is_profile_noise_term(term, identity_terms)
+        ]
     return unique_preserving_order(terms)[:40]
 
 
@@ -235,8 +306,8 @@ def job_terms(job: EngineJobLifecycle) -> list[str]:
 
 
 def overlap(profile_values: list[str], job_values: list[str]) -> list[str]:
-    job_set = set(job_values)
-    return [value for value in profile_values if value in job_set]
+    job_keys = {key for key, _, _ in indexed_terms(job_values)}
+    return [display for key, display, _ in indexed_terms(profile_values) if key in job_keys]
 
 
 def build_evidence(
@@ -275,16 +346,23 @@ def score_job(
 ) -> tuple[int, list[str], list[str], list[str]]:
     profile_values = profile_terms(profile)
     job_values = job_terms(job)
+    profile_index = indexed_terms(profile_values)
+    job_index = indexed_terms(job_values)
 
-    if not profile_values:
+    if not profile_index:
         return 0, [], [], ["profile has no usable terms yet"]
 
-    matched_terms = overlap(profile_values, job_values)
-    title_values = set(tokenize(job.title))
-    title_matches = [value for value in matched_terms if value in title_values]
+    job_keys = {key for key, _, _ in job_index}
+    matched_terms = [display for key, display, _ in profile_index if key in job_keys]
+    title_keys = {key for key, _, _ in indexed_terms(tokenize(job.title))}
+    title_matches = [display for key, display, _ in profile_index if key in title_keys]
 
-    overlap_ratio = len(matched_terms) / len(profile_values)
-    title_bonus = min(len(title_matches) * 8, 24)
+    total_weight = sum(weight for _, _, weight in profile_index)
+    matched_weight = sum(weight for key, _, weight in profile_index if key in job_keys)
+    title_weight = sum(weight for key, _, weight in profile_index if key in title_keys)
+
+    overlap_ratio = matched_weight / total_weight if total_weight else 0.0
+    title_bonus = min(int(round(title_weight * 8)), 24)
 
     seniority_bonus = 0
     if profile.analysis and profile.analysis.seniority and job.seniority:
@@ -298,7 +376,7 @@ def score_job(
         100,
     )
 
-    missing_terms = [value for value in profile_values if value not in set(job_values)][:8]
+    missing_terms = [display for key, display, _ in profile_index if key not in job_keys][:8]
     evidence = build_evidence(profile, job, matched_terms, title_matches)
     return score, matched_terms[:10], missing_terms, evidence
 
