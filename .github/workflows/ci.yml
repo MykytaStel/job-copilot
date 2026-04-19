@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+
+jobs:
+  web-and-workspace:
+    name: Web + workspace checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Workspace typecheck
+        run: pnpm typecheck
+
+      - name: Workspace build
+        run: pnpm build
+
+      - name: Web tests
+        run: pnpm --dir apps/web test
+
+  engine-api:
+    name: Rust engine-api checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            apps/engine-api
+            apps/ingestion
+
+      - name: Cargo fmt
+        run: cargo fmt --manifest-path apps/engine-api/Cargo.toml --all -- --check
+
+      - name: Cargo check engine-api
+        run: cargo check --manifest-path apps/engine-api/Cargo.toml
+
+      - name: Cargo check ingestion
+        run: cargo check --manifest-path apps/ingestion/Cargo.toml
