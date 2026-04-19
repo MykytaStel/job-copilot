@@ -52,12 +52,13 @@ impl RankingService {
             compute_seniority_alignment(&candidate.seniority, job.seniority.as_deref());
 
         // --- Component 3: salary overlap (weight 15%) ---
-        let (salary_min_usd, salary_max_usd) = profile
-            .map(|p| (p.salary_min_usd, p.salary_max_usd))
-            .unwrap_or((None, None));
+        let (salary_min, salary_max, salary_currency) = profile
+            .map(|p| (p.salary_min, p.salary_max, Some(p.salary_currency.as_str())))
+            .unwrap_or((None, None, None));
         let salary_overlap = compute_salary_overlap(
-            salary_min_usd,
-            salary_max_usd,
+            salary_min,
+            salary_max,
+            salary_currency,
             job.salary_min,
             job.salary_max,
             job.salary_currency.as_deref(),
@@ -160,11 +161,13 @@ fn normalize_to_usd(amount: i32, currency: &str) -> f64 {
 fn compute_salary_overlap(
     cand_min: Option<i32>,
     cand_max: Option<i32>,
+    cand_currency: Option<&str>,
     job_min: Option<i32>,
     job_max: Option<i32>,
     job_currency: Option<&str>,
 ) -> f32 {
-    let currency = job_currency.unwrap_or("USD");
+    let job_currency = job_currency.unwrap_or("USD");
+    let candidate_currency = cand_currency.unwrap_or("USD");
 
     let (Some(j_min), Some(j_max)) = (job_min, job_max) else {
         return 0.5; // no job salary data → neutral
@@ -174,10 +177,10 @@ fn compute_salary_overlap(
         return 0.5; // no candidate preference → neutral
     };
 
-    let j_min_usd = normalize_to_usd(j_min, currency);
-    let j_max_usd = normalize_to_usd(j_max, currency);
-    let c_min_usd = c_min as f64;
-    let c_max_usd = c_max as f64;
+    let j_min_usd = normalize_to_usd(j_min, job_currency);
+    let j_max_usd = normalize_to_usd(j_max, job_currency);
+    let c_min_usd = normalize_to_usd(c_min, candidate_currency);
+    let c_max_usd = normalize_to_usd(c_max, candidate_currency);
 
     let job_range = (j_max_usd - j_min_usd).max(1.0);
     let overlap = (c_max_usd.min(j_max_usd) - c_min_usd.max(j_min_usd)).max(0.0);
@@ -381,6 +384,23 @@ mod tests {
     }
 
     #[test]
+    fn salary_overlap_normalizes_candidate_currency() {
+        let overlap = super::compute_salary_overlap(
+            Some(120_000),
+            Some(160_000),
+            Some("UAH"),
+            Some(3_000),
+            Some(3_800),
+            Some("USD"),
+        );
+
+        assert!(
+            overlap > 0.5,
+            "candidate salary should be normalized from UAH before overlap, got {overlap}"
+        );
+    }
+
+    #[test]
     fn unknown_seniority_gives_neutral_component() {
         let service = RankingService::new();
         let candidate = make_candidate(&[], "unknown");
@@ -451,8 +471,11 @@ mod tests {
             location: None,
             raw_text: "Senior Rust engineer".to_string(),
             analysis: None,
-            salary_min_usd: None,
-            salary_max_usd: None,
+            years_of_experience: None,
+            salary_min: None,
+            salary_max: None,
+            salary_currency: "USD".to_string(),
+            languages: vec![],
             preferred_work_mode: Some("remote".to_string()),
             created_at: "2026-01-01".to_string(),
             updated_at: "2026-04-01".to_string(),

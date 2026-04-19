@@ -163,6 +163,11 @@ mod tests {
                 email: "jane@example.com".to_string(),
                 location: Some("Kyiv".to_string()),
                 raw_text: "Senior frontend engineer with React and TypeScript".to_string(),
+                years_of_experience: None,
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                languages: None,
             }),
         )
         .await
@@ -203,6 +208,11 @@ mod tests {
                 email: "jane@example.com".to_string(),
                 location: Some("Kyiv".to_string()),
                 raw_text: "Senior React Native developer with TypeScript".to_string(),
+                years_of_experience: None,
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                languages: None,
             }),
         )
         .await
@@ -237,6 +247,11 @@ mod tests {
                 email: "jane@example.com".to_string(),
                 location: Some("Kyiv".to_string()),
                 raw_text: "Senior React Native developer with product experience".to_string(),
+                years_of_experience: None,
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                languages: None,
             }),
         )
         .await

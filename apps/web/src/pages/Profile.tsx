@@ -27,6 +27,11 @@ export default function Profile() {
     email,
     location,
     rawText,
+    yearsOfExperience,
+    salaryMin,
+    salaryMax,
+    salaryCurrency,
+    languages,
     targetRegions,
     workModes,
     preferredRoles,
@@ -44,8 +49,13 @@ export default function Profile() {
     setEmail,
     setLocation,
     setRawText,
+    setYearsOfExperience,
+    setSalaryMin,
+    setSalaryMax,
+    setSalaryCurrency,
     setIncludeKeywordsInput,
     setExcludeKeywordsInput,
+    toggleLanguage,
     toggleTargetRegion,
     toggleWorkMode,
     togglePreferredRole,
@@ -162,6 +172,11 @@ export default function Profile() {
             email={email}
             location={location}
             rawText={rawText}
+            yearsOfExperience={yearsOfExperience}
+            salaryMin={salaryMin}
+            salaryMax={salaryMax}
+            salaryCurrency={salaryCurrency}
+            languages={languages}
             profileExists={Boolean(profile)}
             fileInputRef={fileInputRef}
             isSaving={saveMutation.isPending}
@@ -174,6 +189,11 @@ export default function Profile() {
             setEmail={setEmail}
             setLocation={setLocation}
             setRawText={setRawText}
+            setYearsOfExperience={setYearsOfExperience}
+            setSalaryMin={setSalaryMin}
+            setSalaryMax={setSalaryMax}
+            setSalaryCurrency={setSalaryCurrency}
+            onToggleLanguage={toggleLanguage}
           />
 
           <SearchProfileBuilderSection

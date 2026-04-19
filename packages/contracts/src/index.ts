@@ -116,6 +116,11 @@ export interface CandidateProfile {
   name: string;
   email: string;
   location?: string;
+  yearsOfExperience?: number;
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryCurrency: string;
+  languages: string[];
   summary?: string;
   skills: string[];
   updatedAt: string;
@@ -126,6 +131,11 @@ export interface CandidateProfileInput {
   name: string;
   email: string;
   location?: string;
+  yearsOfExperience?: number;
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryCurrency?: string;
+  languages: string[];
   summary?: string;
   skills: string[];
 }

@@ -15,3 +15,16 @@ export const WORK_MODE_OPTIONS: Array<{ id: SearchWorkMode; label: string }> = [
   { id: 'hybrid', label: 'Hybrid' },
   { id: 'onsite', label: 'Onsite' },
 ];
+
+export const PROFILE_LANGUAGE_OPTIONS = [
+  { id: 'Ukrainian', label: 'Ukrainian' },
+  { id: 'English', label: 'English' },
+  { id: 'German', label: 'German' },
+  { id: 'Polish', label: 'Polish' },
+] as const;
+
+export const PROFILE_SALARY_CURRENCY_OPTIONS = [
+  { id: 'USD', label: 'USD' },
+  { id: 'EUR', label: 'EUR' },
+  { id: 'UAH', label: 'UAH' },
+] as const;

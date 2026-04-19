@@ -29,7 +29,12 @@ import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
 import { PillList } from '../../components/ui/PillList';
 import { logJobImpressionsOnce } from '../events/jobImpressions';
 import { formatFallbackLabel } from '../../lib/format';
-import { TARGET_REGION_OPTIONS, WORK_MODE_OPTIONS } from './profile.constants';
+import {
+  PROFILE_LANGUAGE_OPTIONS,
+  PROFILE_SALARY_CURRENCY_OPTIONS,
+  TARGET_REGION_OPTIONS,
+  WORK_MODE_OPTIONS,
+} from './profile.constants';
 import { getFitScoreTone, resolveRoleLabel, resolveSourceLabel } from './profile.utils';
 
 function renderErrorMessage(error: unknown, fallback: string) {
@@ -47,6 +52,11 @@ export function ProfileFormSection({
   email,
   location,
   rawText,
+  yearsOfExperience,
+  salaryMin,
+  salaryMax,
+  salaryCurrency,
+  languages,
   profileExists,
   fileInputRef,
   isSaving,
@@ -59,11 +69,21 @@ export function ProfileFormSection({
   setEmail,
   setLocation,
   setRawText,
+  setYearsOfExperience,
+  setSalaryMin,
+  setSalaryMax,
+  setSalaryCurrency,
+  onToggleLanguage,
 }: {
   name: string;
   email: string;
   location: string;
   rawText: string;
+  yearsOfExperience: string;
+  salaryMin: string;
+  salaryMax: string;
+  salaryCurrency: string;
+  languages: string[];
   profileExists: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
   isSaving: boolean;
@@ -76,6 +96,11 @@ export function ProfileFormSection({
   setEmail: (value: string) => void;
   setLocation: (value: string) => void;
   setRawText: (value: string) => void;
+  setYearsOfExperience: (value: string) => void;
+  setSalaryMin: (value: string) => void;
+  setSalaryMax: (value: string) => void;
+  setSalaryCurrency: (value: string) => void;
+  onToggleLanguage: (value: string) => void;
 }) {
   return (
     <>
@@ -138,6 +163,66 @@ export function ProfileFormSection({
             placeholder="Kyiv / Remote"
           />
         </label>
+        <label>
+          Years of experience <span className="text-muted-foreground">(optional)</span>
+          <input
+            type="number"
+            min={0}
+            max={80}
+            value={yearsOfExperience}
+            onChange={(event) => setYearsOfExperience(event.target.value)}
+            placeholder="5"
+          />
+        </label>
+        <div className="fieldGroup">
+          <span className="fieldLabel">Expected salary</span>
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px]">
+            <label>
+              Min <span className="text-muted-foreground">(optional)</span>
+              <input
+                type="number"
+                min={0}
+                value={salaryMin}
+                onChange={(event) => setSalaryMin(event.target.value)}
+                placeholder="2500"
+              />
+            </label>
+            <label>
+              Max <span className="text-muted-foreground">(optional)</span>
+              <input
+                type="number"
+                min={0}
+                value={salaryMax}
+                onChange={(event) => setSalaryMax(event.target.value)}
+                placeholder="4000"
+              />
+            </label>
+            <label>
+              Currency
+              <select
+                value={salaryCurrency}
+                onChange={(event) => setSalaryCurrency(event.target.value)}
+              >
+                {PROFILE_SALARY_CURRENCY_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+        <div className="fieldGroup">
+          <span className="fieldLabel">Languages</span>
+          <OptionCardGroup
+            options={PROFILE_LANGUAGE_OPTIONS.map((option) => ({
+              id: option.id,
+              label: option.label,
+            }))}
+            value={languages}
+            onToggle={onToggleLanguage}
+          />
+        </div>
         <label>
           <span className="flex items-center justify-between gap-3">
             CV / текст профілю

@@ -19,13 +19,16 @@ struct ProfileRow {
     email: String,
     location: Option<String>,
     raw_text: String,
+    years_of_experience: Option<i32>,
     summary: Option<String>,
     primary_role: Option<String>,
     seniority: Option<String>,
     skills_json: String,
     keywords_json: String,
-    salary_min_usd: Option<i32>,
-    salary_max_usd: Option<i32>,
+    salary_min: Option<i32>,
+    salary_max: Option<i32>,
+    salary_currency: Option<String>,
+    languages_json: String,
     preferred_work_mode: Option<String>,
     created_at: String,
     updated_at: String,
@@ -50,23 +53,31 @@ impl ProfilesRepository {
                 email,
                 location,
                 raw_text,
+                years_of_experience,
+                salary_min,
+                salary_max,
+                salary_currency,
+                languages,
                 created_at,
                 updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
             RETURNING
                 id,
                 name,
                 email,
                 location,
                 raw_text,
+                years_of_experience,
                 summary,
                 primary_role,
                 seniority,
                 skills::text AS skills_json,
                 keywords::text AS keywords_json,
-                salary_min_usd,
-                salary_max_usd,
+                salary_min,
+                salary_max,
+                salary_currency,
+                languages::text AS languages_json,
                 preferred_work_mode,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -78,6 +89,11 @@ impl ProfilesRepository {
         .bind(&input.email)
         .bind(&input.location)
         .bind(&input.raw_text)
+        .bind(input.years_of_experience)
+        .bind(input.salary_min)
+        .bind(input.salary_max)
+        .bind(&input.salary_currency)
+        .bind(Json(input.languages.clone()))
         .fetch_one(pool)
         .await?;
 
@@ -97,13 +113,16 @@ impl ProfilesRepository {
                 email,
                 location,
                 raw_text,
+                years_of_experience,
                 summary,
                 primary_role,
                 seniority,
                 skills::text AS skills_json,
                 keywords::text AS keywords_json,
-                salary_min_usd,
-                salary_max_usd,
+                salary_min,
+                salary_max,
+                COALESCE(salary_currency, 'USD') AS salary_currency,
+                COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -132,13 +151,16 @@ impl ProfilesRepository {
                 email,
                 location,
                 raw_text,
+                years_of_experience,
                 summary,
                 primary_role,
                 seniority,
                 skills::text AS skills_json,
                 keywords::text AS keywords_json,
-                salary_min_usd,
-                salary_max_usd,
+                salary_min,
+                salary_max,
+                COALESCE(salary_currency, 'USD') AS salary_currency,
+                COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -174,6 +196,23 @@ impl ProfilesRepository {
                     ELSE location
                 END,
                 raw_text = COALESCE($6, raw_text),
+                years_of_experience = CASE
+                    WHEN $7 THEN $8
+                    ELSE years_of_experience
+                END,
+                salary_min = CASE
+                    WHEN $9 THEN $10
+                    ELSE salary_min
+                END,
+                salary_max = CASE
+                    WHEN $11 THEN $12
+                    ELSE salary_max
+                END,
+                salary_currency = COALESCE($13, salary_currency, 'USD'),
+                languages = CASE
+                    WHEN $14 THEN $15
+                    ELSE languages
+                END,
                 summary = CASE
                     WHEN $6 IS NULL THEN summary
                     ELSE NULL
@@ -206,13 +245,16 @@ impl ProfilesRepository {
                 email,
                 location,
                 raw_text,
+                years_of_experience,
                 summary,
                 primary_role,
                 seniority,
                 skills::text AS skills_json,
                 keywords::text AS keywords_json,
-                salary_min_usd,
-                salary_max_usd,
+                salary_min,
+                salary_max,
+                COALESCE(salary_currency, 'USD') AS salary_currency,
+                COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -225,6 +267,15 @@ impl ProfilesRepository {
         .bind(input.location.is_some())
         .bind(&input.location)
         .bind(&input.raw_text)
+        .bind(input.years_of_experience.is_some())
+        .bind(input.years_of_experience.flatten())
+        .bind(input.salary_min.is_some())
+        .bind(input.salary_min.flatten())
+        .bind(input.salary_max.is_some())
+        .bind(input.salary_max.flatten())
+        .bind(&input.salary_currency)
+        .bind(input.languages.is_some())
+        .bind(input.languages.as_ref().map(|value| Json(value.clone())))
         .fetch_optional(pool)
         .await?;
 
@@ -258,13 +309,16 @@ impl ProfilesRepository {
                 email,
                 location,
                 raw_text,
+                years_of_experience,
                 summary,
                 primary_role,
                 seniority,
                 skills::text AS skills_json,
                 keywords::text AS keywords_json,
-                salary_min_usd,
-                salary_max_usd,
+                salary_min,
+                salary_max,
+                COALESCE(salary_currency, 'USD') AS salary_currency,
+                COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -309,9 +363,12 @@ impl TryFrom<ProfileRow> for Profile {
             email: row.email,
             location: row.location,
             raw_text: row.raw_text,
+            years_of_experience: row.years_of_experience,
             analysis,
-            salary_min_usd: row.salary_min_usd,
-            salary_max_usd: row.salary_max_usd,
+            salary_min: row.salary_min,
+            salary_max: row.salary_max,
+            salary_currency: row.salary_currency.unwrap_or_else(|| "USD".to_string()),
+            languages: serde_json::from_str(&row.languages_json)?,
             preferred_work_mode: row.preferred_work_mode,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -348,6 +405,11 @@ mod tests {
                 email: "jane@example.com".to_string(),
                 location: None,
                 raw_text: "Senior frontend engineer".to_string(),
+                years_of_experience: None,
+                salary_min: None,
+                salary_max: None,
+                salary_currency: "USD".to_string(),
+                languages: vec![],
             })
             .await
             .expect_err("repository should fail without configured database");
