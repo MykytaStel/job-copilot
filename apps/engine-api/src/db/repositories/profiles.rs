@@ -291,7 +291,7 @@ impl TryFrom<ProfileRow> for Profile {
         let analysis = match (row.summary, row.primary_role, row.seniority) {
             (Some(summary), Some(primary_role), Some(seniority)) => Some(ProfileAnalysis {
                 summary,
-                primary_role: RoleId::parse_canonical_key(&primary_role).ok_or_else(|| {
+                primary_role: RoleId::parse_compat_key(&primary_role).ok_or_else(|| {
                     RepositoryError::InvalidData {
                         message: format!("unknown primary_role stored in profiles: {primary_role}"),
                     }
