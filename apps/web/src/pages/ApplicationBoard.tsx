@@ -14,8 +14,8 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type { Application, ApplicationStatus, JobPosting } from '@job-copilot/shared';
-
-import { getApplications, getJobs, patchApplication } from '../api';
+import { getJobs } from '../api/jobs';
+import { getApplications, patchApplication } from '../api/applications';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
