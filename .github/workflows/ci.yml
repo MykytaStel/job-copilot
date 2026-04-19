@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
 
 jobs:
@@ -27,6 +27,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Prevent internal api barrel imports
+        run: pnpm guard:web-api-imports
 
       - name: Workspace typecheck
         run: pnpm typecheck
