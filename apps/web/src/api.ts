@@ -1,41 +1,21 @@
 import type {
-  Activity,
-  ActivityInput,
-  Application,
-  ApplicationContact,
-  ApplicationDetail,
-  ApplicationInput,
-  ApplicationNote,
-  ApplicationStatus,
   BackupMeta,
   CandidateProfile,
   CandidateProfileInput,
-  Contact,
   CompanyFeedbackRecord,
-  CompanyFeedbackStatus,
-  ContactInput,
-  CoverLetter,
-  CoverLetterInput,
-  DashboardStats,
+  FeedbackOverview,
   HealthResponse,
   ImportBatchResponse,
-  InterviewQA,
-  InterviewQAInput,
-  JobFeedbackRecord,
-  JobFeedbackState,
-  JobFeedSummary,
   JobAlert,
   JobAlertInput,
+  JobFeedSummary,
+  JobFeedbackRecord,
+  JobFeedbackState,
   JobPosting,
   JobPostingInput,
   MatchResult,
-  Offer,
-  OfferInput,
   ResumeUploadInput,
   ResumeVersion,
-  Task,
-  TaskInput,
-  FeedbackOverview,
 } from '@job-copilot/shared';
 import {
   RECENT_JOBS_LIMIT_MAX,
@@ -43,8 +23,6 @@ import {
   mlRequest,
   readStoredProfileId,
   request,
-  requestOptional,
-  resolveProfileId,
   unsupported,
   unsupportedPromise,
   withProfileIdQuery,
@@ -52,29 +30,18 @@ import {
 } from './api/client';
 import type {
   EngineAnalyzeProfile,
-  EngineApplication,
-  EngineApplicationDetail,
   EngineBuildSearchProfileResponse,
   EngineCompanyFeedbackRecord,
-  EngineContact,
-  EngineContactsResponse,
   EngineFeedbackOverviewResponse,
   EngineFitExplanation,
   EngineGlobalSearchResponse,
   EngineHealthResponse,
   EngineJob,
   EngineJobFeedbackRecord,
-  EngineMarketCompaniesResponse,
-  EngineMarketCompanyEntry,
-  EngineMarketOverview,
-  EngineMarketRoleDemandEntry,
-  EngineMarketSalaryTrend,
   EngineMatchResult,
   EngineNotification,
   EngineNotificationsResponse,
-  EngineOffer,
   EngineProfile,
-  EngineRecentApplicationsResponse,
   EngineRecentJobsResponse,
   EngineResume,
   EngineRoleCandidate,
@@ -85,15 +52,11 @@ import type {
   EngineUnreadNotificationsCountResponse,
 } from './api/engine-types';
 import {
-  mapApplication,
-  mapApplicationDetail,
   mapCompanyFeedbackRecord,
-  mapContact,
   mapJob,
   mapJobFeedSummary,
   mapJobFeedbackRecord,
   mapMatchResult,
-  mapOffer,
   mapProfile,
   mapResume,
   normalizeMissingString,
@@ -130,6 +93,8 @@ import type {
   MlProfileInsightsResponse,
   MlWeeklyGuidanceResponse,
 } from './api/enrichment';
+import { logUserEvent } from './api/events';
+import type { GlobalSearchApplicationResult } from './api/applications';
 
 export {
   getAnalyticsSummary,
@@ -152,52 +117,66 @@ export type {
   LlmContextEvidenceEntry,
 } from './api/analytics';
 
-export interface SkillStat {
-  skill: string;
-  count: number;
-  pct: number;
-  inResume: boolean;
-}
+export { logUserEvent } from './api/events';
+export type { UserEventType } from './api/events';
 
-export interface MarketInsights {
-  totalJobs: number;
-  coverageScore: number;
-  topSkills: SkillStat[];
-  hotGaps: string[];
-  salaryMentions: string[];
-}
+export {
+  getApplications,
+  getApplicationDetail,
+  createApplication,
+  updateApplication,
+  patchApplication,
+  setDueDate,
+  addNote,
+  getDashboardStats,
+  createOffer,
+  deleteApplication,
+  getActivities,
+  createActivity,
+  deleteActivity,
+  getTasks,
+  getDueTasks,
+  createTask,
+  patchTask,
+  deleteTask,
+  getCoverLetters,
+  createCoverLetter,
+  updateCoverLetter,
+  deleteCoverLetter,
+  getInterviewQA,
+  createInterviewQA,
+  updateInterviewQA,
+  deleteInterviewQA,
+  getOffers,
+  deleteOffer,
+} from './api/applications';
+export type { GlobalSearchApplicationResult } from './api/applications';
 
-export type MarketTrend = 'up' | 'down' | 'stable';
+export {
+  getContacts,
+  createContact,
+  updateContact,
+  deleteContact,
+  linkContact,
+  unlinkContact,
+} from './api/contacts';
 
-export type MarketOverview = {
-  newJobsThisWeek: number;
-  activeCompaniesCount: number;
-  activeJobsCount: number;
-  remotePercentage: number;
-};
-
-export type MarketCompany = {
-  companyName: string;
-  activeJobs: number;
-  thisWeek: number;
-  prevWeek: number;
-  velocity: number;
-};
-
-export type MarketSalaryTrend = {
-  seniority: string;
-  p25: number;
-  median: number;
-  p75: number;
-  sampleCount: number;
-};
-
-export type MarketRoleDemand = {
-  roleGroup: string;
-  thisPeriod: number;
-  prevPeriod: number;
-  trend: MarketTrend;
-};
+export {
+  getMarketOverview,
+  getMarketCompanies,
+  getMarketSalaries,
+  getMarketRoles,
+  getMarketInsights,
+} from './api/market';
+export type {
+  SkillStat,
+  MarketInsights,
+  MarketTrend,
+  MarketOverview,
+  MarketCompany,
+  MarketSalaryTrend,
+  MarketRoleDemand,
+} from './api/market';
 
 export type AppNotificationType =
   | 'new_jobs_found'
@@ -214,8 +193,6 @@ export type AppNotification = {
   readAt?: string;
   createdAt: string;
 };
-
-const DEFAULT_MARKET_SENIORITY_BUCKETS = ['junior', 'middle', 'senior', 'lead'] as const;
 
 export type RankedJob = {
   jobId: string;
@@ -255,33 +232,6 @@ export type RoleCatalogItem = {
   family?: string;
   deprecatedApiIds: string[];
   isFallback: boolean;
-};
-
-export type UserEventType =
-  | 'job_impression'
-  | 'job_opened'
-  | 'job_saved'
-  | 'job_unsaved'
-  | 'job_hidden'
-  | 'job_unhidden'
-  | 'job_bad_fit'
-  | 'job_bad_fit_removed'
-  | 'company_whitelisted'
-  | 'company_blacklisted'
-  | 'search_run'
-  | 'fit_explanation_requested'
-  | 'application_coach_requested'
-  | 'cover_letter_draft_requested'
-  | 'interview_prep_requested'
-  | 'application_created';
-
-type UserEventLogInput = {
-  eventType: UserEventType;
-  jobId?: string;
-  companyName?: string;
-  source?: string;
-  roleFamily?: string;
-  payloadJson?: Record<string, unknown>;
 };
 
 export type SearchTargetRegion =
@@ -379,103 +329,145 @@ export type SearchRunResult = {
   };
 };
 
-export type GlobalSearchApplicationResult = {
-  id: string;
-  jobId: string;
-  status: ApplicationStatus;
-  appliedAt?: string;
-  dueDate?: string;
-  updatedAt: string;
-  jobTitle: string;
-  companyName: string;
-};
-
 export type GlobalSearchResults = {
   jobs: JobPosting[];
   applications: GlobalSearchApplicationResult[];
 };
 
-export async function rerankJobs(profileId: string, jobIds: string[]): Promise<RankedJob[]> {
-  const uniqueJobIds = Array.from(
-    new Set(jobIds.map((jobId) => jobId.trim()).filter(Boolean)),
-  );
-  if (uniqueJobIds.length === 0) {
-    return [];
-  }
+export type ProfileInsights = {
+  profileSummary: string;
+  searchStrategySummary: string;
+  strengths: string[];
+  risks: string[];
+  recommendedActions: string[];
+  topFocusAreas: string[];
+  searchTermSuggestions: string[];
+  applicationStrategy: string[];
+};
 
-  const response = await request<{
-    profile_id: string;
-    results: EngineFitExplanation[];
-  }>(`/api/v1/profiles/${profileId}/jobs/match`, json('POST', {
-    job_ids: uniqueJobIds,
-  }));
+export type JobFitExplanation = {
+  fitSummary: string;
+  whyItMatches: string[];
+  risks: string[];
+  missingSignals: string[];
+  recommendedNextStep: string;
+  applicationAngle: string;
+};
 
-  return response.results
-    .map((fit) => ({
-      jobId: fit.job_id,
-      title: '',
-      companyName: '',
-      score: fit.score,
-      matchedTerms: uniquePreservingOrder([
-        ...fit.matched_roles,
-        ...fit.matched_skills,
-        ...fit.matched_keywords,
-      ]),
-      positiveReasons: fit.positive_reasons,
-      negativeReasons: fit.negative_reasons,
-      missingSignals: fit.missing_signals,
-      descriptionQuality: fit.description_quality,
-    }))
-    .sort(
-      (left, right) =>
-        right.score - left.score ||
-        left.jobId.localeCompare(right.jobId),
-    );
-}
+export type ApplicationCoach = {
+  applicationSummary: string;
+  resumeFocusPoints: string[];
+  suggestedBullets: string[];
+  coverLetterAngles: string[];
+  interviewFocus: string[];
+  gapsToAddress: string[];
+  redFlags: string[];
+};
 
-export async function analyzeFit(profileId: string, jobId: string): Promise<FitAnalysis> {
-  const result = await request<EngineFitExplanation>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/match`,
-  );
-  const matchedTerms = uniquePreservingOrder([
-    ...result.matched_roles,
-    ...result.matched_skills,
-    ...result.matched_keywords,
-  ]);
-  const evidence = result.positive_reasons.length > 0 ? result.positive_reasons : result.reasons;
+export type CoverLetterDraft = {
+  draftSummary: string;
+  openingParagraph: string;
+  bodyParagraphs: string[];
+  closingParagraph: string;
+  keyClaimsUsed: string[];
+  evidenceGaps: string[];
+  toneNotes: string[];
+};
 
-  return {
-    profileId,
-    jobId: result.job_id,
-    score: result.score,
-    matchedTerms,
-    matchedRoles: result.matched_roles,
-    matchedSkills: result.matched_skills,
-    matchedKeywords: result.matched_keywords,
-    missingTerms: result.missing_signals,
-    descriptionQuality: result.description_quality,
-    positiveReasons: result.positive_reasons,
-    negativeReasons: result.negative_reasons,
-    evidence,
-  };
-}
+export type InterviewPrep = {
+  prepSummary: string;
+  likelyTopics: string[];
+  technicalFocus: string[];
+  behavioralFocus: string[];
+  storiesToPrepare: string[];
+  questionsToAsk: string[];
+  riskAreas: string[];
+  followUpPlan: string[];
+};
 
-export async function logUserEvent(
-  profileId: string,
-  input: UserEventLogInput,
-): Promise<void> {
-  await request<void>(
-    `/api/v1/profiles/${profileId}/events`,
-    json('POST', {
-      event_type: input.eventType,
-      job_id: input.jobId,
-      company_name: input.companyName,
-      source: input.source,
-      role_family: input.roleFamily,
-      payload_json: input.payloadJson,
-    }),
-  );
-}
+export type WeeklyGuidance = {
+  weeklySummary: string;
+  whatIsWorking: string[];
+  whatIsNotWorking: string[];
+  recommendedSearchAdjustments: string[];
+  recommendedSourceMoves: string[];
+  recommendedRoleFocus: string[];
+  funnelBottlenecks: string[];
+  nextWeekPlan: string[];
+};
+
+export type WeeklyGuidanceRequest = {
+  profileId: string;
+  analyticsSummary: AnalyticsSummary;
+  behaviorSummary: BehaviorSummary;
+  funnelSummary: FunnelSummary;
+  llmContext: LlmContext;
+};
+
+export type JobFitExplanationRequest = {
+  profileId: string;
+  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
+  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
+  rankedJob: JobPosting;
+  deterministicFit: FitExplanation;
+  feedbackState?: {
+    feedbackSummary: AnalyticsFeedbackSummary;
+    topPositiveEvidence: LlmContextEvidenceEntry[];
+    topNegativeEvidence: LlmContextEvidenceEntry[];
+    currentJobFeedback?: JobFeedbackState;
+  } | null;
+};
+
+export type ApplicationCoachRequest = {
+  profileId: string;
+  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
+  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
+  rankedJob: JobPosting;
+  deterministicFit: FitExplanation;
+  jobFitExplanation?: JobFitExplanation | null;
+  feedbackState?: {
+    feedbackSummary: AnalyticsFeedbackSummary;
+    topPositiveEvidence: LlmContextEvidenceEntry[];
+    topNegativeEvidence: LlmContextEvidenceEntry[];
+    currentJobFeedback?: JobFeedbackState;
+  } | null;
+  rawProfileText?: string | null;
+};
+
+export type CoverLetterDraftRequest = {
+  profileId: string;
+  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
+  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
+  rankedJob: JobPosting;
+  deterministicFit: FitExplanation;
+  jobFitExplanation?: JobFitExplanation | null;
+  applicationCoach?: ApplicationCoach | null;
+  feedbackState?: {
+    feedbackSummary: AnalyticsFeedbackSummary;
+    topPositiveEvidence: LlmContextEvidenceEntry[];
+    topNegativeEvidence: LlmContextEvidenceEntry[];
+    currentJobFeedback?: JobFeedbackState;
+  } | null;
+  rawProfileText?: string | null;
+};
+
+export type InterviewPrepRequest = {
+  profileId: string;
+  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
+  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
+  rankedJob: JobPosting;
+  deterministicFit: FitExplanation;
+  jobFitExplanation?: JobFitExplanation | null;
+  applicationCoach?: ApplicationCoach | null;
+  coverLetterDraft?: CoverLetterDraft | null;
+  feedbackState?: {
+    feedbackSummary: AnalyticsFeedbackSummary;
+    topPositiveEvidence: LlmContextEvidenceEntry[];
+    topNegativeEvidence: LlmContextEvidenceEntry[];
+    currentJobFeedback?: JobFeedbackState;
+  } | null;
+  rawProfileText?: string | null;
+};
 
 function mapNotification(notification: EngineNotification): AppNotification {
   return {
@@ -510,7 +502,6 @@ export async function analyzeStoredProfile(): Promise<EngineAnalyzeProfile> {
   );
 }
 
-// Supported engine-api endpoints
 export async function getHealth(): Promise<HealthResponse> {
   const health = await request<EngineHealthResponse>('/health');
 
@@ -817,25 +808,18 @@ export async function removeCompanyBlacklist(
   );
 }
 
-export async function getApplications(): Promise<Application[]> {
-  const response = await request<EngineRecentApplicationsResponse>(
-    '/api/v1/applications/recent',
-  );
-  return response.applications.map(mapApplication);
-}
-
 export async function getNotifications(
   profileId?: string,
   limit: number = 20,
 ): Promise<AppNotification[]> {
-  const resolvedProfileId = resolveProfileId(profileId);
-  if (!resolvedProfileId) {
+  const resolvedId = profileId ?? readStoredProfileId() ?? undefined;
+  if (!resolvedId) {
     return [];
   }
 
   const response = await request<EngineNotificationsResponse>(
     `/api/v1/notifications?profile_id=${encodeURIComponent(
-      resolvedProfileId,
+      resolvedId,
     )}&limit=${encodeURIComponent(String(limit))}`,
   );
 
@@ -852,14 +836,14 @@ export async function markNotificationRead(id: string): Promise<AppNotification>
 }
 
 export async function getUnreadCount(profileId?: string): Promise<number> {
-  const resolvedProfileId = resolveProfileId(profileId);
-  if (!resolvedProfileId) {
+  const resolvedId = profileId ?? readStoredProfileId() ?? undefined;
+  if (!resolvedId) {
     return 0;
   }
 
   const response = await request<EngineUnreadNotificationsCountResponse>(
     `/api/v1/notifications/unread-count?profile_id=${encodeURIComponent(
-      resolvedProfileId,
+      resolvedId,
     )}`,
   );
 
@@ -917,37 +901,71 @@ export async function saveProfile(
   };
 }
 
-export async function getDashboardStats(): Promise<DashboardStats> {
-  const applications = await getApplications();
-
-  const byStatus: DashboardStats['byStatus'] = {
-    saved: 0,
-    applied: 0,
-    interview: 0,
-    offer: 0,
-    rejected: 0,
-  };
-
-  for (const application of applications) {
-    byStatus[application.status] += 1;
+export async function rerankJobs(profileId: string, jobIds: string[]): Promise<RankedJob[]> {
+  const uniqueJobIds = Array.from(
+    new Set(jobIds.map((jobId) => jobId.trim()).filter(Boolean)),
+  );
+  if (uniqueJobIds.length === 0) {
+    return [];
   }
 
+  const response = await request<{
+    profile_id: string;
+    results: EngineFitExplanation[];
+  }>(`/api/v1/profiles/${profileId}/jobs/match`, json('POST', {
+    job_ids: uniqueJobIds,
+  }));
+
+  return response.results
+    .map((fit) => ({
+      jobId: fit.job_id,
+      title: '',
+      companyName: '',
+      score: fit.score,
+      matchedTerms: uniquePreservingOrder([
+        ...fit.matched_roles,
+        ...fit.matched_skills,
+        ...fit.matched_keywords,
+      ]),
+      positiveReasons: fit.positive_reasons,
+      negativeReasons: fit.negative_reasons,
+      missingSignals: fit.missing_signals,
+      descriptionQuality: fit.description_quality,
+    }))
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.jobId.localeCompare(right.jobId),
+    );
+}
+
+export async function analyzeFit(profileId: string, jobId: string): Promise<FitAnalysis> {
+  const result = await request<EngineFitExplanation>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/match`,
+  );
+  const matchedTerms = uniquePreservingOrder([
+    ...result.matched_roles,
+    ...result.matched_skills,
+    ...result.matched_keywords,
+  ]);
+  const evidence = result.positive_reasons.length > 0 ? result.positive_reasons : result.reasons;
+
   return {
-    total: applications.length,
-    byStatus,
-    topMissingSkills: [],
-    avgScore: null,
-    tasksDueSoon: 0,
+    profileId,
+    jobId: result.job_id,
+    score: result.score,
+    matchedTerms,
+    matchedRoles: result.matched_roles,
+    matchedSkills: result.matched_skills,
+    matchedKeywords: result.matched_keywords,
+    missingTerms: result.missing_signals,
+    descriptionQuality: result.description_quality,
+    positiveReasons: result.positive_reasons,
+    negativeReasons: result.negative_reasons,
+    evidence,
   };
 }
 
-// Unsupported legacy endpoints kept only to avoid breaking compile-time imports.
-export const createJob = (_payload: JobPostingInput): Promise<JobPosting> =>
-  unsupportedPromise('Job creation');
-export const fetchJobUrl = (
-  _url: string,
-): Promise<{ title: string; company: string; description: string }> =>
-  unsupportedPromise('Job fetch by URL');
 export async function getResumes(): Promise<ResumeVersion[]> {
   const resumes = await request<EngineResume[]>('/api/v1/resumes');
   return resumes.map(mapResume);
@@ -971,8 +989,6 @@ export async function uploadResume(
   return mapResume(resume);
 }
 
-export const uploadResumeFile = (_file: File): Promise<ResumeVersion> =>
-  unsupportedPromise('Resume upload');
 export async function activateResume(id: string): Promise<ResumeVersion> {
   const resume = await request<EngineResume>(
     `/api/v1/resumes/${id}/activate`,
@@ -994,183 +1010,6 @@ export async function getMatch(jobId: string): Promise<MatchResult> {
   return mapMatchResult(result);
 }
 
-export async function getApplicationDetail(id: string): Promise<ApplicationDetail> {
-  const detail = await request<EngineApplicationDetail>(`/api/v1/applications/${id}`);
-  return mapApplicationDetail(detail);
-}
-
-export async function createApplication(
-  payload: ApplicationInput,
-): Promise<Application> {
-  const application = await request<EngineApplication>(
-    '/api/v1/applications',
-    json('POST', {
-      job_id: payload.jobId,
-      status: payload.status,
-      applied_at: payload.appliedAt,
-    }),
-  );
-
-  const profileId = readStoredProfileId();
-  if (profileId) {
-    void logUserEvent(profileId, {
-      eventType: 'application_created',
-      jobId: payload.jobId,
-      payloadJson: {
-        application_id: application.id,
-        status: payload.status,
-        applied_at: payload.appliedAt ?? null,
-      },
-    }).catch(() => null);
-  }
-
-  return mapApplication(application);
-}
-
-export async function updateApplication(
-  id: string,
-  payload: {
-    status?: ApplicationStatus;
-    dueDate?: string | null;
-  },
-): Promise<Application> {
-  const body: {
-    status?: ApplicationStatus;
-    due_date?: string | null;
-  } = {};
-
-  if (payload.status !== undefined) {
-    body.status = payload.status;
-  }
-
-  if (payload.dueDate !== undefined) {
-    body.due_date = payload.dueDate;
-  }
-
-  const application = await request<EngineApplication>(
-    `/api/v1/applications/${id}`,
-    json('PATCH', body),
-  );
-  return mapApplication(application);
-}
-
-export async function patchApplication(
-  id: string,
-  status: ApplicationStatus,
-): Promise<Application> {
-  return updateApplication(id, { status });
-}
-
-export async function setDueDate(
-  id: string,
-  dueDate: string | null,
-): Promise<Application> {
-  return updateApplication(id, { dueDate });
-}
-export async function addNote(
-  applicationId: string,
-  content: string,
-): Promise<ApplicationNote> {
-  const note = await request<{
-    id: string;
-    application_id: string;
-    content: string;
-    created_at: string;
-  }>(`/api/v1/applications/${applicationId}/notes`, json('POST', { content }));
-
-  return {
-    id: note.id,
-    applicationId: note.application_id,
-    content: note.content,
-    createdAt: note.created_at,
-  };
-}
-
-export async function getMarketOverview(): Promise<MarketOverview> {
-  const response = await request<EngineMarketOverview>('/api/v1/market/overview');
-
-  return {
-    newJobsThisWeek: response.new_jobs_this_week,
-    activeCompaniesCount: response.active_companies_count,
-    activeJobsCount: response.active_jobs_count,
-    remotePercentage: response.remote_percentage,
-  };
-}
-
-export async function getMarketCompanies(limit = 10): Promise<MarketCompany[]> {
-  const response = await request<EngineMarketCompaniesResponse>(
-    `/api/v1/market/companies?limit=${encodeURIComponent(String(limit))}`,
-  );
-
-  return response.companies.map((company) => ({
-    companyName: company.company_name,
-    activeJobs: company.active_jobs,
-    thisWeek: company.this_week,
-    prevWeek: company.prev_week,
-    velocity: company.velocity,
-  }));
-}
-
-export async function getMarketSalaries(
-  seniorityBuckets: readonly string[] = DEFAULT_MARKET_SENIORITY_BUCKETS,
-): Promise<MarketSalaryTrend[]> {
-  const buckets = Array.from(
-    new Set(
-      seniorityBuckets
-        .map((bucket) => bucket.trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  );
-
-  const response = await request<EngineMarketSalaryTrend[]>(
-    '/api/v1/market/salary-trends',
-  );
-
-  const trendsBySeniority = new Map(
-    response.map((trend) => [
-      trend.seniority.toLowerCase(),
-      {
-        seniority: trend.seniority,
-        p25: trend.p25,
-        median: trend.median,
-        p75: trend.p75,
-        sampleCount: trend.sample_count,
-      } satisfies MarketSalaryTrend,
-    ]),
-  );
-
-  return buckets
-    .map((bucket) => trendsBySeniority.get(bucket))
-    .filter((result): result is MarketSalaryTrend => result !== undefined);
-}
-
-export async function getMarketRoles(period = 30): Promise<MarketRoleDemand[]> {
-  const response = await request<EngineMarketRoleDemandEntry[]>(
-    `/api/v1/market/roles?period=${encodeURIComponent(String(period))}`,
-  );
-
-  return response.map((entry) => ({
-    roleGroup: entry.role_group,
-    thisPeriod: entry.this_period,
-    prevPeriod: entry.prev_period,
-    trend: entry.trend,
-  }));
-}
-
-export const updateJobNote = (_id: string, _note: string): Promise<JobPosting> =>
-  unsupported('Job notes');
-export const deleteJob = (_id: string): Promise<void> => unsupported('Job deletion');
-export const deleteApplication = (_id: string): Promise<void> =>
-  unsupported('Application deletion');
-export const getMarketInsights = (): Promise<MarketInsights> =>
-  unsupported('Market insights');
-export const getAlerts = (): Promise<JobAlert[]> => unsupported('Alerts');
-export const createAlert = (_payload: JobAlertInput): Promise<JobAlert> =>
-  unsupported('Alerts');
-export const toggleAlert = (_id: string, _active: boolean): Promise<JobAlert> =>
-  unsupported('Alerts');
-export const deleteAlert = (_id: string): Promise<void> => unsupported('Alerts');
-export const getSuggestedSkills = (): Promise<string[]> => unsupported('Suggested skills');
 export async function globalSearch(query: string): Promise<GlobalSearchResults> {
   const result = await request<EngineGlobalSearchResponse>(
     `/api/v1/search?q=${encodeURIComponent(query)}&limit=10`,
@@ -1190,145 +1029,6 @@ export async function globalSearch(query: string): Promise<GlobalSearchResults> 
     })),
   };
 }
-export async function getContacts(): Promise<Contact[]> {
-  const response = await request<EngineContactsResponse>('/api/v1/contacts');
-  return response.contacts.map(mapContact);
-}
-
-export type ProfileInsights = {
-  profileSummary: string;
-  searchStrategySummary: string;
-  strengths: string[];
-  risks: string[];
-  recommendedActions: string[];
-  topFocusAreas: string[];
-  searchTermSuggestions: string[];
-  applicationStrategy: string[];
-};
-
-export type JobFitExplanation = {
-  fitSummary: string;
-  whyItMatches: string[];
-  risks: string[];
-  missingSignals: string[];
-  recommendedNextStep: string;
-  applicationAngle: string;
-};
-
-export type ApplicationCoach = {
-  applicationSummary: string;
-  resumeFocusPoints: string[];
-  suggestedBullets: string[];
-  coverLetterAngles: string[];
-  interviewFocus: string[];
-  gapsToAddress: string[];
-  redFlags: string[];
-};
-
-export type CoverLetterDraft = {
-  draftSummary: string;
-  openingParagraph: string;
-  bodyParagraphs: string[];
-  closingParagraph: string;
-  keyClaimsUsed: string[];
-  evidenceGaps: string[];
-  toneNotes: string[];
-};
-
-export type InterviewPrep = {
-  prepSummary: string;
-  likelyTopics: string[];
-  technicalFocus: string[];
-  behavioralFocus: string[];
-  storiesToPrepare: string[];
-  questionsToAsk: string[];
-  riskAreas: string[];
-  followUpPlan: string[];
-};
-
-export type WeeklyGuidance = {
-  weeklySummary: string;
-  whatIsWorking: string[];
-  whatIsNotWorking: string[];
-  recommendedSearchAdjustments: string[];
-  recommendedSourceMoves: string[];
-  recommendedRoleFocus: string[];
-  funnelBottlenecks: string[];
-  nextWeekPlan: string[];
-};
-
-export type WeeklyGuidanceRequest = {
-  profileId: string;
-  analyticsSummary: AnalyticsSummary;
-  behaviorSummary: BehaviorSummary;
-  funnelSummary: FunnelSummary;
-  llmContext: LlmContext;
-};
-
-export type JobFitExplanationRequest = {
-  profileId: string;
-  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
-  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
-  rankedJob: JobPosting;
-  deterministicFit: FitExplanation;
-  feedbackState?: {
-    feedbackSummary: AnalyticsFeedbackSummary;
-    topPositiveEvidence: LlmContextEvidenceEntry[];
-    topNegativeEvidence: LlmContextEvidenceEntry[];
-    currentJobFeedback?: JobFeedbackState;
-  } | null;
-};
-
-export type ApplicationCoachRequest = {
-  profileId: string;
-  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
-  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
-  rankedJob: JobPosting;
-  deterministicFit: FitExplanation;
-  jobFitExplanation?: JobFitExplanation | null;
-  feedbackState?: {
-    feedbackSummary: AnalyticsFeedbackSummary;
-    topPositiveEvidence: LlmContextEvidenceEntry[];
-    topNegativeEvidence: LlmContextEvidenceEntry[];
-    currentJobFeedback?: JobFeedbackState;
-  } | null;
-  rawProfileText?: string | null;
-};
-
-export type CoverLetterDraftRequest = {
-  profileId: string;
-  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
-  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
-  rankedJob: JobPosting;
-  deterministicFit: FitExplanation;
-  jobFitExplanation?: JobFitExplanation | null;
-  applicationCoach?: ApplicationCoach | null;
-  feedbackState?: {
-    feedbackSummary: AnalyticsFeedbackSummary;
-    topPositiveEvidence: LlmContextEvidenceEntry[];
-    topNegativeEvidence: LlmContextEvidenceEntry[];
-    currentJobFeedback?: JobFeedbackState;
-  } | null;
-  rawProfileText?: string | null;
-};
-
-export type InterviewPrepRequest = {
-  profileId: string;
-  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
-  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
-  rankedJob: JobPosting;
-  deterministicFit: FitExplanation;
-  jobFitExplanation?: JobFitExplanation | null;
-  applicationCoach?: ApplicationCoach | null;
-  coverLetterDraft?: CoverLetterDraft | null;
-  feedbackState?: {
-    feedbackSummary: AnalyticsFeedbackSummary;
-    topPositiveEvidence: LlmContextEvidenceEntry[];
-    topNegativeEvidence: LlmContextEvidenceEntry[];
-    currentJobFeedback?: JobFeedbackState;
-  } | null;
-  rawProfileText?: string | null;
-};
 
 export async function getProfileInsights(
   context: LlmContext,
@@ -1455,107 +1155,25 @@ export async function getInterviewPrep(
   return mapInterviewPrepResponse(response);
 }
 
-export async function createContact(payload: ContactInput): Promise<Contact> {
-  const contact = await request<EngineContact>(
-    '/api/v1/contacts',
-    json('POST', {
-      name: payload.name,
-      email: payload.email,
-      phone: payload.phone,
-      linkedin_url: payload.linkedinUrl,
-      company: payload.company,
-      role: payload.role,
-    }),
-  );
-
-  return mapContact(contact);
-}
-export const updateContact = (
-  _id: string,
-  _payload: Partial<ContactInput>,
-): Promise<Contact> => unsupported('Contacts');
-export const deleteContact = (_id: string): Promise<void> => unsupported('Contacts');
-export async function linkContact(
-  applicationId: string,
-  contactId: string,
-  relationship: ApplicationContact['relationship'],
-): Promise<ApplicationContact> {
-  const contact = await request<{
-    id: string;
-    application_id: string;
-    relationship: ApplicationContact['relationship'];
-    contact: EngineContact;
-  }>(
-    `/api/v1/applications/${applicationId}/contacts`,
-    json('POST', {
-      contact_id: contactId,
-      relationship,
-    }),
-  );
-
-  return {
-    id: contact.id,
-    applicationId: contact.application_id,
-    relationship: contact.relationship,
-    contact: mapContact(contact.contact),
-  };
-}
-export const unlinkContact = (
-  _applicationId: string,
-  _linkId: string,
-): Promise<void> => unsupported('Application contacts');
-export const getActivities = (_applicationId: string): Promise<Activity[]> =>
-  unsupported('Activities');
-export const createActivity = (
-  _applicationId: string,
-  _payload: ActivityInput,
-): Promise<Activity> => unsupported('Activities');
-export const deleteActivity = (_id: string): Promise<void> =>
-  unsupported('Activities');
-export const getTasks = (_applicationId: string): Promise<Task[]> => unsupported('Tasks');
-export const getDueTasks = (): Promise<Task[]> => unsupported('Tasks');
-export const createTask = (_applicationId: string, _payload: TaskInput): Promise<Task> =>
-  unsupported('Tasks');
-export const patchTask = (
-  _id: string,
-  _patch: { title?: string; remindAt?: string | null; done?: boolean },
-): Promise<Task> => unsupported('Tasks');
-export const deleteTask = (_id: string): Promise<void> => unsupported('Tasks');
-export const getCoverLetters = (_jobId?: string): Promise<CoverLetter[]> =>
-  unsupported('Cover letters');
-export const createCoverLetter = (_payload: CoverLetterInput): Promise<CoverLetter> =>
-  unsupported('Cover letters');
-export const updateCoverLetter = (_id: string, _content: string): Promise<CoverLetter> =>
-  unsupported('Cover letters');
-export const deleteCoverLetter = (_id: string): Promise<void> =>
-  unsupported('Cover letters');
-export const getInterviewQA = (_jobId?: string): Promise<InterviewQA[]> =>
-  unsupported('Interview Q&A');
-export const createInterviewQA = (_payload: InterviewQAInput): Promise<InterviewQA> =>
-  unsupported('Interview Q&A');
-export const updateInterviewQA = (
-  _id: string,
-  _patch: { question?: string; answer?: string },
-): Promise<InterviewQA> => unsupported('Interview Q&A');
-export const deleteInterviewQA = (_id: string): Promise<void> =>
-  unsupported('Interview Q&A');
-export const getOffers = (): Promise<Offer[]> => unsupported('Offers');
-export async function createOffer(payload: OfferInput): Promise<Offer> {
-  const offer = await request<EngineOffer>(
-    `/api/v1/applications/${payload.applicationId}/offer`,
-    json('PUT', {
-      status: payload.status,
-      compensation_min: payload.compensationMin,
-      compensation_max: payload.compensationMax,
-      compensation_currency: payload.compensationCurrency,
-      starts_at: payload.startsAt,
-      notes: payload.notes,
-    }),
-  );
-
-  return mapOffer(offer);
-}
-export const deleteOffer = (_id: string): Promise<void> => unsupported('Offers');
+// Unsupported legacy endpoints kept only to avoid breaking compile-time imports.
+export const createJob = (_payload: JobPostingInput): Promise<JobPosting> =>
+  unsupportedPromise('Job creation');
+export const fetchJobUrl = (
+  _url: string,
+): Promise<{ title: string; company: string; description: string }> =>
+  unsupportedPromise('Job fetch by URL');
+export const uploadResumeFile = (_file: File): Promise<ResumeVersion> =>
+  unsupportedPromise('Resume upload');
+export const updateJobNote = (_id: string, _note: string): Promise<JobPosting> =>
+  unsupported('Job notes');
+export const deleteJob = (_id: string): Promise<void> => unsupported('Job deletion');
+export const getAlerts = (): Promise<JobAlert[]> => unsupported('Alerts');
+export const createAlert = (_payload: JobAlertInput): Promise<JobAlert> =>
+  unsupported('Alerts');
+export const toggleAlert = (_id: string, _active: boolean): Promise<JobAlert> =>
+  unsupported('Alerts');
+export const deleteAlert = (_id: string): Promise<void> => unsupported('Alerts');
+export const getSuggestedSkills = (): Promise<string[]> => unsupported('Suggested skills');
 export const importBatch = (_urls: string[]): Promise<ImportBatchResponse> =>
   unsupported('Batch import');
 export const downloadBackup = (): Promise<Record<string, unknown> & BackupMeta> =>
