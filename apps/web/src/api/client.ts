@@ -1,3 +1,5 @@
+import type { EngineApiError } from './engine-types/health';
+
 const API_URL =
   import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
 const ML_URL =
@@ -5,12 +7,6 @@ const ML_URL =
 const PROFILE_ID_KEY = 'engine_api_profile_id';
 
 export const RECENT_JOBS_LIMIT_MAX = 200;
-
-type EngineApiError = {
-  code?: string;
-  message?: string;
-  details?: unknown;
-};
 
 export async function mlRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${ML_URL}${path}`, {
