@@ -1,49 +1,6 @@
-import type {
-  HealthResponse,
-  JobFeedbackState,
-  JobPosting,
-} from '@job-copilot/shared';
-import {
-  mlRequest,
-  request,
-} from './api/client';
-import type {
-  EngineHealthResponse,
-} from './api/engine-types';
-import type {
-  AnalyticsFeedbackSummary,
-  AnalyticsSummary,
-  BehaviorSummary,
-  FunnelSummary,
-  LlmContext,
-  LlmContextAnalyzedProfile,
-  LlmContextEvidenceEntry,
-} from './api/analytics';
-import {
-  buildApplicationCoachPayload,
-  buildCoverLetterDraftPayload,
-  buildInterviewPrepPayload,
-  buildJobFitExplanationPayload,
-  buildProfileInsightsPayload,
-  buildWeeklyGuidancePayload,
-  mapApplicationCoachResponse,
-  mapCoverLetterDraftResponse,
-  mapInterviewPrepResponse,
-  mapJobFitExplanationResponse,
-  mapProfileInsightsResponse,
-  mapWeeklyGuidanceResponse,
-} from './api/enrichment';
-import type {
-  MlApplicationCoachResponse,
-  MlCoverLetterDraftResponse,
-  MlInterviewPrepResponse,
-  MlJobFitExplanationResponse,
-  MlProfileInsightsResponse,
-  MlWeeklyGuidanceResponse,
-} from './api/enrichment';
-import { logUserEvent } from './api/events';
-import type { SearchProfileBuildResult } from './api/profiles';
-import type { FitExplanation } from './api/jobs';
+import type { HealthResponse } from '@job-copilot/shared';
+import { request } from './api/client';
+import type { EngineHealthResponse } from './api/engine-types';
 
 export {
   getAnalyticsSummary,
@@ -207,140 +164,27 @@ export type {
   AppNotification,
 } from './api/notifications';
 
-export type ProfileInsights = {
-  profileSummary: string;
-  searchStrategySummary: string;
-  strengths: string[];
-  risks: string[];
-  recommendedActions: string[];
-  topFocusAreas: string[];
-  searchTermSuggestions: string[];
-  applicationStrategy: string[];
-};
-
-export type JobFitExplanation = {
-  fitSummary: string;
-  whyItMatches: string[];
-  risks: string[];
-  missingSignals: string[];
-  recommendedNextStep: string;
-  applicationAngle: string;
-};
-
-export type ApplicationCoach = {
-  applicationSummary: string;
-  resumeFocusPoints: string[];
-  suggestedBullets: string[];
-  coverLetterAngles: string[];
-  interviewFocus: string[];
-  gapsToAddress: string[];
-  redFlags: string[];
-};
-
-export type CoverLetterDraft = {
-  draftSummary: string;
-  openingParagraph: string;
-  bodyParagraphs: string[];
-  closingParagraph: string;
-  keyClaimsUsed: string[];
-  evidenceGaps: string[];
-  toneNotes: string[];
-};
-
-export type InterviewPrep = {
-  prepSummary: string;
-  likelyTopics: string[];
-  technicalFocus: string[];
-  behavioralFocus: string[];
-  storiesToPrepare: string[];
-  questionsToAsk: string[];
-  riskAreas: string[];
-  followUpPlan: string[];
-};
-
-export type WeeklyGuidance = {
-  weeklySummary: string;
-  whatIsWorking: string[];
-  whatIsNotWorking: string[];
-  recommendedSearchAdjustments: string[];
-  recommendedSourceMoves: string[];
-  recommendedRoleFocus: string[];
-  funnelBottlenecks: string[];
-  nextWeekPlan: string[];
-};
-
-export type WeeklyGuidanceRequest = {
-  profileId: string;
-  analyticsSummary: AnalyticsSummary;
-  behaviorSummary: BehaviorSummary;
-  funnelSummary: FunnelSummary;
-  llmContext: LlmContext;
-};
-
-export type JobFitExplanationRequest = {
-  profileId: string;
-  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
-  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
-  rankedJob: JobPosting;
-  deterministicFit: FitExplanation;
-  feedbackState?: {
-    feedbackSummary: AnalyticsFeedbackSummary;
-    topPositiveEvidence: LlmContextEvidenceEntry[];
-    topNegativeEvidence: LlmContextEvidenceEntry[];
-    currentJobFeedback?: JobFeedbackState;
-  } | null;
-};
-
-export type ApplicationCoachRequest = {
-  profileId: string;
-  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
-  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
-  rankedJob: JobPosting;
-  deterministicFit: FitExplanation;
-  jobFitExplanation?: JobFitExplanation | null;
-  feedbackState?: {
-    feedbackSummary: AnalyticsFeedbackSummary;
-    topPositiveEvidence: LlmContextEvidenceEntry[];
-    topNegativeEvidence: LlmContextEvidenceEntry[];
-    currentJobFeedback?: JobFeedbackState;
-  } | null;
-  rawProfileText?: string | null;
-};
-
-export type CoverLetterDraftRequest = {
-  profileId: string;
-  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
-  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
-  rankedJob: JobPosting;
-  deterministicFit: FitExplanation;
-  jobFitExplanation?: JobFitExplanation | null;
-  applicationCoach?: ApplicationCoach | null;
-  feedbackState?: {
-    feedbackSummary: AnalyticsFeedbackSummary;
-    topPositiveEvidence: LlmContextEvidenceEntry[];
-    topNegativeEvidence: LlmContextEvidenceEntry[];
-    currentJobFeedback?: JobFeedbackState;
-  } | null;
-  rawProfileText?: string | null;
-};
-
-export type InterviewPrepRequest = {
-  profileId: string;
-  analyzedProfile: SearchProfileBuildResult['analyzedProfile'] | LlmContextAnalyzedProfile | null;
-  searchProfile: SearchProfileBuildResult['searchProfile'] | null;
-  rankedJob: JobPosting;
-  deterministicFit: FitExplanation;
-  jobFitExplanation?: JobFitExplanation | null;
-  applicationCoach?: ApplicationCoach | null;
-  coverLetterDraft?: CoverLetterDraft | null;
-  feedbackState?: {
-    feedbackSummary: AnalyticsFeedbackSummary;
-    topPositiveEvidence: LlmContextEvidenceEntry[];
-    topNegativeEvidence: LlmContextEvidenceEntry[];
-    currentJobFeedback?: JobFeedbackState;
-  } | null;
-  rawProfileText?: string | null;
-};
+export {
+  getProfileInsights,
+  getWeeklyGuidance,
+  getJobFitExplanation,
+  getApplicationCoach,
+  getCoverLetterDraft,
+  getInterviewPrep,
+} from './api/enrichment';
+export type {
+  ProfileInsights,
+  JobFitExplanation,
+  ApplicationCoach,
+  CoverLetterDraft,
+  InterviewPrep,
+  WeeklyGuidance,
+  WeeklyGuidanceRequest,
+  JobFitExplanationRequest,
+  ApplicationCoachRequest,
+  CoverLetterDraftRequest,
+  InterviewPrepRequest,
+} from './api/enrichment';
 
 export async function getHealth(): Promise<HealthResponse> {
   const health = await request<EngineHealthResponse>('/health');
@@ -350,129 +194,4 @@ export async function getHealth(): Promise<HealthResponse> {
     service: `engine-api:${health.database.status}`,
     timestamp: new Date().toISOString(),
   };
-}
-
-export async function getProfileInsights(
-  context: LlmContext,
-): Promise<ProfileInsights> {
-  const response = await mlRequest<MlProfileInsightsResponse>(
-    '/v1/enrichment/profile-insights',
-    {
-    method: 'POST',
-    body: JSON.stringify(buildProfileInsightsPayload(context)),
-  });
-
-  return mapProfileInsightsResponse(response);
-}
-
-export async function getWeeklyGuidance(
-  payload: WeeklyGuidanceRequest,
-): Promise<WeeklyGuidance> {
-  const response = await mlRequest<MlWeeklyGuidanceResponse>(
-    '/v1/enrichment/weekly-guidance',
-    {
-    method: 'POST',
-    body: JSON.stringify(buildWeeklyGuidancePayload(payload)),
-  });
-
-  return mapWeeklyGuidanceResponse(response);
-}
-
-export async function getJobFitExplanation(
-  payload: JobFitExplanationRequest,
-): Promise<JobFitExplanation> {
-  void logUserEvent(payload.profileId, {
-    eventType: 'fit_explanation_requested',
-    jobId: payload.rankedJob.id,
-    payloadJson: {
-      surface: 'profile_page',
-      deterministic_fit_score: payload.deterministicFit.score,
-      primary_role: payload.searchProfile?.primaryRole ?? null,
-      has_feedback_state: Boolean(payload.feedbackState),
-    },
-  }).catch(() => null);
-
-  const response = await mlRequest<MlJobFitExplanationResponse>(
-    '/v1/enrichment/job-fit-explanation',
-    {
-    method: 'POST',
-    body: JSON.stringify(buildJobFitExplanationPayload(payload)),
-  });
-
-  return mapJobFitExplanationResponse(response);
-}
-
-export async function getApplicationCoach(
-  payload: ApplicationCoachRequest,
-): Promise<ApplicationCoach> {
-  void logUserEvent(payload.profileId, {
-    eventType: 'application_coach_requested',
-    jobId: payload.rankedJob.id,
-    payloadJson: {
-      surface: 'profile_page',
-      deterministic_fit_score: payload.deterministicFit.score,
-      has_fit_explanation: Boolean(payload.jobFitExplanation),
-      primary_role: payload.searchProfile?.primaryRole ?? null,
-    },
-  }).catch(() => null);
-
-  const response = await mlRequest<MlApplicationCoachResponse>(
-    '/v1/enrichment/application-coach',
-    {
-    method: 'POST',
-    body: JSON.stringify(buildApplicationCoachPayload(payload)),
-  });
-
-  return mapApplicationCoachResponse(response);
-}
-
-export async function getCoverLetterDraft(
-  payload: CoverLetterDraftRequest,
-): Promise<CoverLetterDraft> {
-  void logUserEvent(payload.profileId, {
-    eventType: 'cover_letter_draft_requested',
-    jobId: payload.rankedJob.id,
-    payloadJson: {
-      surface: 'profile_page',
-      deterministic_fit_score: payload.deterministicFit.score,
-      has_fit_explanation: Boolean(payload.jobFitExplanation),
-      has_application_coach: Boolean(payload.applicationCoach),
-      has_raw_profile_text: Boolean(payload.rawProfileText),
-    },
-  }).catch(() => null);
-
-  const response = await mlRequest<MlCoverLetterDraftResponse>(
-    '/v1/enrichment/cover-letter-draft',
-    {
-    method: 'POST',
-    body: JSON.stringify(buildCoverLetterDraftPayload(payload)),
-  });
-
-  return mapCoverLetterDraftResponse(response);
-}
-
-export async function getInterviewPrep(
-  payload: InterviewPrepRequest,
-): Promise<InterviewPrep> {
-  void logUserEvent(payload.profileId, {
-    eventType: 'interview_prep_requested',
-    jobId: payload.rankedJob.id,
-    payloadJson: {
-      surface: 'profile_page',
-      deterministic_fit_score: payload.deterministicFit.score,
-      has_fit_explanation: Boolean(payload.jobFitExplanation),
-      has_application_coach: Boolean(payload.applicationCoach),
-      has_cover_letter_draft: Boolean(payload.coverLetterDraft),
-      has_raw_profile_text: Boolean(payload.rawProfileText),
-    },
-  }).catch(() => null);
-
-  const response = await mlRequest<MlInterviewPrepResponse>(
-    '/v1/enrichment/interview-prep',
-    {
-    method: 'POST',
-    body: JSON.stringify(buildInterviewPrepPayload(payload)),
-  });
-
-  return mapInterviewPrepResponse(response);
 }
