@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { analyzeFit, rerankJobs, runSearch } from '../src/api';
 
+const ENGINE_API_URL =
+  import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
+
 function jsonResponse(body: unknown) {
   return Promise.resolve({
     ok: true,
@@ -120,7 +123,7 @@ describe('canonical matching api', () => {
     const result = await rerankJobs('profile-1', ['job-b', 'job-a', 'job-b']);
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8080/api/v1/profiles/profile-1/jobs/match',
+      `${ENGINE_API_URL}/api/v1/profiles/profile-1/jobs/match`,
       expect.objectContaining({ method: 'POST' }),
     );
     expect(result.map((item) => item.jobId)).toEqual(['job-a', 'job-b']);
@@ -157,7 +160,7 @@ describe('canonical matching api', () => {
     const result = await analyzeFit('profile-1', 'job-1');
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8080/api/v1/profiles/profile-1/jobs/job-1/match',
+      `${ENGINE_API_URL}/api/v1/profiles/profile-1/jobs/job-1/match`,
       undefined,
     );
     expect(result).toMatchObject({
@@ -233,7 +236,7 @@ describe('canonical matching api', () => {
     });
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8080/api/v1/search/run',
+      `${ENGINE_API_URL}/api/v1/search/run`,
       expect.objectContaining({ method: 'POST' }),
     );
     expect(result.meta).toEqual({

@@ -28,10 +28,25 @@ Environment variables:
 - `PORT` default `8000`
 - `ENGINE_API_BASE_URL` default `http://localhost:8080`
 - `ENGINE_API_TIMEOUT_SECONDS` default `10`
-- `ML_LLM_PROVIDER` default `template`, or `openai` when `OPENAI_API_KEY` is present
+- `ML_LLM_PROVIDER` default `template`
 - `OPENAI_API_KEY` required for the OpenAI provider
-- `OPENAI_MODEL` default `gpt-5.4-mini`
+- `OPENAI_MODEL` default `gpt-4o-mini`
 - `OPENAI_BASE_URL` optional override
+- `OLLAMA_BASE_URL` default `http://localhost:11434`
+- `OLLAMA_MODEL` default `mistral:7b`
+- `ML_CORS_ALLOWED_ORIGINS` comma-separated allowlist; default is local dev origins for `3000` and `5173`
+- `ML_LOG_LEVEL` default `INFO`
+
+## Internal structure
+
+- `app/api.py` wires the FastAPI app and endpoints
+- `app/service_dependencies.py` owns cached enrichment service construction
+- `app/scoring.py` owns deterministic fit/rerank helpers
+- `app/settings.py` owns runtime logging and CORS defaults
+- `app/llm_provider.py` stays the public provider entrypoint, with implementations split across:
+  - `app/llm_provider_template.py`
+  - `app/llm_provider_remote.py`
+  - `app/llm_provider_factory.py`
 
 Install dependencies:
 

@@ -37,6 +37,120 @@ import type {
   TaskInput,
   FeedbackOverview,
 } from '@job-copilot/shared';
+import {
+  RECENT_JOBS_LIMIT_MAX,
+  json,
+  mlRequest,
+  readStoredProfileId,
+  request,
+  requestOptional,
+  resolveProfileId,
+  unsupported,
+  unsupportedPromise,
+  withProfileIdQuery,
+  writeStoredProfileId,
+} from './api/client';
+import type {
+  EngineAnalyzeProfile,
+  EngineApplication,
+  EngineApplicationDetail,
+  EngineBuildSearchProfileResponse,
+  EngineCompanyFeedbackRecord,
+  EngineContact,
+  EngineContactsResponse,
+  EngineFeedbackOverviewResponse,
+  EngineFitExplanation,
+  EngineGlobalSearchResponse,
+  EngineHealthResponse,
+  EngineJob,
+  EngineJobFeedbackRecord,
+  EngineMarketCompaniesResponse,
+  EngineMarketCompanyEntry,
+  EngineMarketOverview,
+  EngineMarketRoleDemandEntry,
+  EngineMarketSalaryTrend,
+  EngineMatchResult,
+  EngineNotification,
+  EngineNotificationsResponse,
+  EngineOffer,
+  EngineProfile,
+  EngineRecentApplicationsResponse,
+  EngineRecentJobsResponse,
+  EngineResume,
+  EngineRoleCandidate,
+  EngineRoleCatalogResponse,
+  EngineRunSearchResponse,
+  EngineSearchRoleCandidate,
+  EngineSourceCatalogResponse,
+  EngineUnreadNotificationsCountResponse,
+} from './api/engine-types';
+import {
+  mapApplication,
+  mapApplicationDetail,
+  mapCompanyFeedbackRecord,
+  mapContact,
+  mapJob,
+  mapJobFeedSummary,
+  mapJobFeedbackRecord,
+  mapMatchResult,
+  mapOffer,
+  mapProfile,
+  mapResume,
+  normalizeMissingString,
+  uniquePreservingOrder,
+} from './api/mappers';
+import type {
+  AnalyticsFeedbackSummary,
+  AnalyticsSummary,
+  BehaviorSummary,
+  FunnelSummary,
+  LlmContext,
+  LlmContextAnalyzedProfile,
+  LlmContextEvidenceEntry,
+} from './api/analytics';
+import {
+  buildApplicationCoachPayload,
+  buildCoverLetterDraftPayload,
+  buildInterviewPrepPayload,
+  buildJobFitExplanationPayload,
+  buildProfileInsightsPayload,
+  buildWeeklyGuidancePayload,
+  mapApplicationCoachResponse,
+  mapCoverLetterDraftResponse,
+  mapInterviewPrepResponse,
+  mapJobFitExplanationResponse,
+  mapProfileInsightsResponse,
+  mapWeeklyGuidanceResponse,
+} from './api/enrichment';
+import type {
+  MlApplicationCoachResponse,
+  MlCoverLetterDraftResponse,
+  MlInterviewPrepResponse,
+  MlJobFitExplanationResponse,
+  MlProfileInsightsResponse,
+  MlWeeklyGuidanceResponse,
+} from './api/enrichment';
+
+export {
+  getAnalyticsSummary,
+  getBehaviorSummary,
+  getFunnelSummary,
+  getLlmContext,
+} from './api/analytics';
+export type {
+  AnalyticsFeedbackSummary,
+  AnalyticsSummary,
+  BehaviorSignalCount,
+  BehaviorSummary,
+  FunnelConversionRates,
+  FunnelSourceCountEntry,
+  FunnelSummary,
+  JobsByLifecycle,
+  JobsBySourceEntry,
+  LlmContext,
+  LlmContextAnalyzedProfile,
+  LlmContextEvidenceEntry,
+} from './api/analytics';
 
 export interface SkillStat {
   skill: string;
@@ -102,446 +216,6 @@ export type AppNotification = {
 };
 
 const DEFAULT_MARKET_SENIORITY_BUCKETS = ['junior', 'middle', 'senior', 'lead'] as const;
-
-type EngineApiError = {
-  code?: string;
-  message?: string;
-  details?: unknown;
-};
-
-function uniquePreservingOrder(values: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const value of values) {
-    const normalized = value.trim();
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-    seen.add(normalized);
-    result.push(normalized);
-  }
-
-  return result;
-}
-
-type EngineHealthResponse = {
-  status: string;
-  database: {
-    status: string;
-    configured: boolean;
-    migrations_enabled_on_startup: boolean;
-  };
-};
-
-type EngineRecentJobsResponse = {
-  jobs: EngineJob[];
-  summary: EngineJobFeedSummary;
-};
-
-type EngineSourceCatalogResponse = {
-  sources: EngineSourceCatalogItem[];
-};
-
-type EngineRoleCatalogResponse = {
-  roles: EngineRoleCatalogItem[];
-};
-
-type EngineSourceCatalogItem = {
-  id: string;
-  display_name: string;
-};
-
-type EngineRoleCatalogItem = {
-  id: string;
-  display_name: string;
-  deprecated_api_ids: string[];
-  family?: string;
-  is_fallback: boolean;
-};
-
-type EngineRecentApplicationsResponse = {
-  applications: EngineApplication[];
-};
-
-type EngineFeedbackOverviewResponse = {
-  profile_id: string;
-  jobs: EngineJobFeedbackRecord[];
-  companies: EngineCompanyFeedbackRecord[];
-  summary: {
-    saved_jobs_count: number;
-    hidden_jobs_count: number;
-    bad_fit_jobs_count: number;
-    whitelisted_companies_count: number;
-    blacklisted_companies_count: number;
-  };
-};
-
-type EngineMarketOverview = {
-  new_jobs_this_week: number;
-  active_companies_count: number;
-  active_jobs_count: number;
-  remote_percentage: number;
-};
-
-type EngineMarketCompanyEntry = {
-  company_name: string;
-  active_jobs: number;
-  this_week: number;
-  prev_week: number;
-  velocity: number;
-};
-
-type EngineMarketCompaniesResponse = {
-  companies: EngineMarketCompanyEntry[];
-};
-
-type EngineMarketSalaryTrend = {
-  seniority: string;
-  p25: number;
-  median: number;
-  p75: number;
-  sample_count: number;
-};
-
-type EngineMarketRoleDemandEntry = {
-  role_group: string;
-  this_period: number;
-  prev_period: number;
-  trend: MarketTrend;
-};
-
-type EngineNotification = {
-  id: string;
-  profile_id: string;
-  type: AppNotificationType;
-  title: string;
-  body?: string | null;
-  payload?: Record<string, unknown> | null;
-  read_at?: string | null;
-  created_at: string;
-};
-
-type EngineNotificationsResponse = {
-  notifications: EngineNotification[];
-};
-
-type EngineUnreadNotificationsCountResponse = {
-  profile_id: string;
-  unread_count: number;
-};
-
-type EngineContactsResponse = {
-  contacts: EngineContact[];
-};
-
-type EngineResume = {
-  id: string;
-  version: number;
-  filename: string;
-  raw_text: string;
-  is_active: boolean;
-  uploaded_at: string;
-};
-
-type EngineMatchResult = {
-  id: string;
-  job_id: string;
-  resume_id: string;
-  score: number;
-  matched_skills: string[];
-  missing_skills: string[];
-  notes: string;
-  created_at: string;
-};
-
-type EngineJob = {
-  id: string;
-  title: string;
-  company_name: string;
-  description_text: string;
-  location?: string | null;
-  remote_type?: string | null;
-  seniority?: string | null;
-  salary_min?: number | null;
-  salary_max?: number | null;
-  salary_currency?: string | null;
-  posted_at: string | null;
-  first_seen_at: string;
-  last_seen_at: string;
-  is_active: boolean;
-  inactivated_at?: string | null;
-  reactivated_at?: string | null;
-  lifecycle_stage: 'active' | 'inactive' | 'reactivated';
-  primary_variant?: {
-    source: string;
-    source_job_id: string;
-    source_url: string;
-    fetched_at: string;
-    last_seen_at: string;
-    is_active: boolean;
-    inactivated_at?: string | null;
-  } | null;
-  presentation: {
-    title: string;
-    company: string;
-    summary?: string | null;
-    summary_quality?: string | null;
-    summary_fallback: boolean;
-    description_quality: string;
-    location_label?: string | null;
-    work_mode_label?: string | null;
-    source_label?: string | null;
-    outbound_url?: string | null;
-    salary_label?: string | null;
-    freshness_label?: string | null;
-    badges: string[];
-  };
-  feedback: EngineJobFeedbackState;
-};
-
-type EngineJobFeedbackState = {
-  saved: boolean;
-  hidden: boolean;
-  bad_fit: boolean;
-  company_status?: CompanyFeedbackStatus | null;
-};
-
-type EngineJobFeedbackRecord = {
-  job_id: string;
-  saved: boolean;
-  hidden: boolean;
-  bad_fit: boolean;
-  updated_at: string;
-};
-
-type EngineCompanyFeedbackRecord = {
-  company_name: string;
-  normalized_company_name: string;
-  status: CompanyFeedbackStatus;
-  updated_at: string;
-};
-
-type EngineJobFeedSummary = {
-  total_jobs: number;
-  active_jobs: number;
-  inactive_jobs: number;
-  reactivated_jobs: number;
-};
-
-type EngineApplication = {
-  id: string;
-  job_id: string;
-  resume_id: string | null;
-  status: ApplicationStatus;
-  applied_at: string | null;
-  due_date: string | null;
-  updated_at: string;
-};
-
-type EngineGlobalSearchApplication = {
-  id: string;
-  job_id: string;
-  status: ApplicationStatus;
-  applied_at: string | null;
-  due_date: string | null;
-  updated_at: string;
-  job_title: string;
-  company_name: string;
-};
-
-type EngineGlobalSearchResponse = {
-  jobs: EngineJob[];
-  applications: EngineGlobalSearchApplication[];
-};
-
-type EngineApplicationDetail = EngineApplication & {
-  job: EngineJob;
-  resume: EngineResume | null;
-  offer?: EngineOffer | null;
-  notes: Array<{
-    id: string;
-    application_id: string;
-    content: string;
-    created_at: string;
-  }>;
-  contacts: Array<{
-    id: string;
-    application_id: string;
-    relationship: string;
-    contact: {
-      id: string;
-      name: string;
-      email?: string | null;
-      phone?: string | null;
-      linkedin_url?: string | null;
-      company?: string | null;
-      role?: string | null;
-      created_at: string;
-    };
-  }>;
-  activities: Array<{
-    id: string;
-    application_id: string;
-    activity_type: string;
-    description: string;
-    happened_at: string;
-    created_at: string;
-  }>;
-  tasks: Array<{
-    id: string;
-    application_id: string;
-    title: string;
-    remind_at?: string | null;
-    done: boolean;
-    created_at: string;
-  }>;
-};
-
-type EngineContact = {
-  id: string;
-  name: string;
-  email?: string | null;
-  phone?: string | null;
-  linkedin_url?: string | null;
-  company?: string | null;
-  role?: string | null;
-  created_at: string;
-};
-
-type EngineOffer = {
-  id: string;
-  application_id: string;
-  status: Offer['status'];
-  compensation_min?: number | null;
-  compensation_max?: number | null;
-  compensation_currency?: string | null;
-  starts_at?: string | null;
-  notes?: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type EngineProfile = {
-  id: string;
-  name: string;
-  email: string;
-  location?: string | null;
-  raw_text: string;
-  years_of_experience?: number | null;
-  salary_min?: number | null;
-  salary_max?: number | null;
-  salary_currency?: string | null;
-  languages?: string[] | null;
-  analysis?: {
-    summary: string;
-    primary_role: string;
-    seniority: string;
-    skills: string[];
-    keywords: string[];
-  } | null;
-  created_at: string;
-  updated_at: string;
-  skills_updated_at?: string | null;
-};
-
-type EngineAnalyzeProfile = {
-  summary: string;
-  primary_role: string;
-  seniority: string;
-  skills: string[];
-  keywords: string[];
-  role_candidates?: EngineRoleCandidate[];
-  suggested_search_terms?: string[];
-};
-
-type EngineRoleCandidate = {
-  role: string;
-  score: number;
-  confidence: number;
-  matched_signals: string[];
-};
-
-type EngineSearchRoleCandidate = {
-  role: string;
-  confidence: number;
-};
-
-type EngineSearchProfile = {
-  primary_role: string;
-  primary_role_confidence?: number | null;
-  target_roles: string[];
-  role_candidates: EngineSearchRoleCandidate[];
-  seniority: string;
-  target_regions: SearchTargetRegion[];
-  work_modes: SearchWorkMode[];
-  allowed_sources: string[];
-  profile_skills: string[];
-  profile_keywords: string[];
-  search_terms: string[];
-  exclude_terms: string[];
-};
-
-type EngineBuildSearchProfileResponse = {
-  analyzed_profile: EngineAnalyzeProfile;
-  search_profile: EngineSearchProfile;
-};
-
-type EngineRunSearchResponse = {
-  results: EngineRankedJobResult[];
-  meta: EngineSearchRunMeta;
-};
-
-type EngineRankedJobResult = {
-  job: EngineJob;
-  fit: EngineFitExplanation;
-};
-
-type EngineFitExplanation = {
-  job_id: string;
-  score: number;
-  matched_roles: string[];
-  matched_skills: string[];
-  matched_keywords: string[];
-   missing_signals: string[];
-  source_match: boolean;
-  work_mode_match?: boolean | null;
-  region_match?: boolean | null;
-   description_quality: string;
-   positive_reasons: string[];
-   negative_reasons: string[];
-  reasons: string[];
-};
-
-type EngineSearchRunMeta = {
-  total_candidates: number;
-  filtered_out_by_source: number;
-  filtered_out_hidden: number;
-  filtered_out_company_blacklist: number;
-  scored_jobs: number;
-  returned_jobs: number;
-  low_evidence_jobs: number;
-  weak_description_jobs: number;
-  role_mismatch_jobs: number;
-  seniority_mismatch_jobs: number;
-  source_mismatch_jobs: number;
-  top_missing_signals: string[];
-};
-
-const API_URL =
-  import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
-const ML_URL =
-  import.meta.env.VITE_ML_URL?.trim() || 'http://localhost:8000';
-const PROFILE_ID_KEY = 'engine_api_profile_id';
-const RECENT_JOBS_LIMIT_MAX = 200;
-function normalizeMissingString(value?: string | null): string | undefined {
-  if (!value) return undefined;
-  const cleaned = value.trim();
-  if (!cleaned || cleaned.toLowerCase() === 'unknown') {
-    return undefined;
-  }
-  return cleaned;
-}
 
 export type RankedJob = {
   jobId: string;
@@ -721,18 +395,6 @@ export type GlobalSearchResults = {
   applications: GlobalSearchApplicationResult[];
 };
 
-async function mlRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${ML_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(body.detail ?? `ML HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
 export async function rerankJobs(profileId: string, jobIds: string[]): Promise<RankedJob[]> {
   const uniqueJobIds = Array.from(
     new Set(jobIds.map((jobId) => jobId.trim()).filter(Boolean)),
@@ -798,59 +460,6 @@ export async function analyzeFit(profileId: string, jobId: string): Promise<FitA
   };
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, init);
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as EngineApiError;
-    throw new Error(body.message ?? body.code ?? `HTTP ${res.status}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json();
-}
-
-async function requestOptional<T>(path: string, init?: RequestInit): Promise<T | undefined> {
-  const res = await fetch(`${API_URL}${path}`, init);
-  if (res.status === 404) {
-    return undefined;
-  }
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as EngineApiError;
-    throw new Error(body.message ?? body.code ?? `HTTP ${res.status}`);
-  }
-  if (res.status === 204) return undefined;
-  return res.json();
-}
-
-function json(method: string, body: unknown): RequestInit {
-  return {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  };
-}
-
-function unsupported(feature: string): never {
-  throw new Error(`${feature} is not supported by engine-api yet`);
-}
-
-function unsupportedPromise<T>(feature: string): Promise<T> {
-  return Promise.reject(
-    new Error(`${feature} is not supported by engine-api yet`),
-  );
-}
-
-function readStoredProfileId() {
-  return window.localStorage.getItem(PROFILE_ID_KEY);
-}
-
-function resolveProfileId(profileId?: string) {
-  return profileId ?? readStoredProfileId() ?? undefined;
-}
-
-function writeStoredProfileId(profileId: string) {
-  window.localStorage.setItem(PROFILE_ID_KEY, profileId);
-}
-
 export async function logUserEvent(
   profileId: string,
   input: UserEventLogInput,
@@ -868,118 +477,6 @@ export async function logUserEvent(
   );
 }
 
-function withProfileIdQuery(path: string) {
-  const profileId = readStoredProfileId();
-  if (!profileId) return path;
-
-  const separator = path.includes('?') ? '&' : '?';
-  return `${path}${separator}profile_id=${encodeURIComponent(profileId)}`;
-}
-
-function mapJob(job: EngineJob): JobPosting {
-  return {
-    id: job.id,
-    source: 'manual',
-    url: job.presentation.outbound_url ?? job.primary_variant?.source_url ?? undefined,
-    title: job.presentation.title || job.title,
-    company: job.presentation.company || job.company_name,
-    description: job.description_text,
-    location: normalizeMissingString(job.location),
-    notes: '',
-    createdAt: job.posted_at ?? job.last_seen_at,
-    postedAt: job.posted_at ?? undefined,
-    firstSeenAt: job.first_seen_at,
-    lastSeenAt: job.last_seen_at,
-    isActive: job.is_active,
-    inactivatedAt: job.inactivated_at ?? undefined,
-    reactivatedAt: job.reactivated_at ?? undefined,
-    lifecycleStage: job.lifecycle_stage,
-    salaryMin: job.salary_min ?? undefined,
-    salaryMax: job.salary_max ?? undefined,
-    salaryCurrency: job.salary_currency ?? undefined,
-    seniority: normalizeMissingString(job.seniority),
-    remoteType: job.remote_type ?? undefined,
-    primaryVariant: job.primary_variant
-      ? {
-          source: job.primary_variant.source,
-          sourceJobId: job.primary_variant.source_job_id,
-          sourceUrl: job.primary_variant.source_url,
-          fetchedAt: job.primary_variant.fetched_at,
-          lastSeenAt: job.primary_variant.last_seen_at,
-          isActive: job.primary_variant.is_active,
-          inactivatedAt: job.primary_variant.inactivated_at ?? undefined,
-        }
-      : undefined,
-    presentation: {
-      title: job.presentation.title,
-      company: job.presentation.company,
-      summary: job.presentation.summary ?? undefined,
-      summaryQuality: job.presentation.summary_quality ?? undefined,
-      summaryFallback: job.presentation.summary_fallback,
-      descriptionQuality: job.presentation.description_quality,
-      locationLabel: job.presentation.location_label ?? undefined,
-      workModeLabel: job.presentation.work_mode_label ?? undefined,
-      sourceLabel: job.presentation.source_label ?? undefined,
-      outboundUrl: job.presentation.outbound_url ?? undefined,
-      salaryLabel: job.presentation.salary_label ?? undefined,
-      freshnessLabel: job.presentation.freshness_label ?? undefined,
-      badges: job.presentation.badges,
-    },
-    feedback: mapJobFeedbackState(job.feedback),
-  };
-}
-
-function mapJobFeedbackState(feedback: EngineJobFeedbackState): JobFeedbackState {
-  return {
-    saved: feedback.saved,
-    hidden: feedback.hidden,
-    badFit: feedback.bad_fit,
-    companyStatus: feedback.company_status ?? undefined,
-  };
-}
-
-function mapJobFeedbackRecord(record: EngineJobFeedbackRecord): JobFeedbackRecord {
-  return {
-    jobId: record.job_id,
-    saved: record.saved,
-    hidden: record.hidden,
-    badFit: record.bad_fit,
-    updatedAt: record.updated_at,
-  };
-}
-
-function mapCompanyFeedbackRecord(
-  record: EngineCompanyFeedbackRecord,
-): CompanyFeedbackRecord {
-  return {
-    companyName: record.company_name,
-    normalizedCompanyName: record.normalized_company_name,
-    status: record.status,
-    updatedAt: record.updated_at,
-  };
-}
-
-function mapJobFeedSummary(summary: EngineJobFeedSummary): JobFeedSummary {
-  return {
-    totalJobs: summary.total_jobs,
-    activeJobs: summary.active_jobs,
-    inactiveJobs: summary.inactive_jobs,
-    reactivatedJobs: summary.reactivated_jobs,
-  };
-}
-
-function mapApplication(application: EngineApplication): Application {
-  return {
-    id: application.id,
-    jobId: application.job_id,
-    resumeId: application.resume_id ?? undefined,
-    status: application.status,
-    appliedAt: application.applied_at ?? undefined,
-    dueDate: application.due_date ?? undefined,
-    updatedAt: application.updated_at,
-  };
-}
-
 function mapNotification(notification: EngineNotification): AppNotification {
   return {
     id: notification.id,
@@ -990,113 +487,6 @@ function mapNotification(notification: EngineNotification): AppNotification {
     payload: notification.payload ?? undefined,
     readAt: notification.read_at ?? undefined,
     createdAt: notification.created_at,
-  };
-}
-
-function mapProfile(profile: EngineProfile): CandidateProfile {
-  return {
-    id: profile.id,
-    name: profile.name,
-    email: profile.email,
-    location: profile.location ?? undefined,
-    yearsOfExperience: profile.years_of_experience ?? undefined,
-    salaryMin: profile.salary_min ?? undefined,
-    salaryMax: profile.salary_max ?? undefined,
-    salaryCurrency: profile.salary_currency ?? 'USD',
-    languages: profile.languages ?? [],
-    summary: profile.analysis?.summary,
-    skills: profile.analysis?.skills ?? [],
-    updatedAt: profile.updated_at,
-    skillsUpdatedAt: profile.skills_updated_at ?? undefined,
-  };
-}
-
-function mapContact(contact: EngineContact): Contact {
-  return {
-    id: contact.id,
-    name: contact.name,
-    email: contact.email ?? undefined,
-    phone: contact.phone ?? undefined,
-    linkedinUrl: contact.linkedin_url ?? undefined,
-    company: contact.company ?? undefined,
-    role: contact.role ?? undefined,
-    createdAt: contact.created_at,
-  };
-}
-
-function mapOffer(offer: EngineOffer): Offer {
-  return {
-    id: offer.id,
-    applicationId: offer.application_id,
-    status: offer.status,
-    compensationMin: offer.compensation_min ?? undefined,
-    compensationMax: offer.compensation_max ?? undefined,
-    compensationCurrency: offer.compensation_currency ?? undefined,
-    startsAt: offer.starts_at ?? undefined,
-    notes: offer.notes ?? undefined,
-    createdAt: offer.created_at,
-    updatedAt: offer.updated_at,
-  };
-}
-
-function mapResume(resume: EngineResume): ResumeVersion {
-  return {
-    id: resume.id,
-    version: resume.version,
-    filename: resume.filename,
-    rawText: resume.raw_text,
-    isActive: resume.is_active,
-    uploadedAt: resume.uploaded_at,
-  };
-}
-
-function mapMatchResult(result: EngineMatchResult): MatchResult {
-  return {
-    id: result.id,
-    jobId: result.job_id,
-    resumeId: result.resume_id,
-    score: result.score,
-    matchedSkills: result.matched_skills,
-    missingSkills: result.missing_skills,
-    notes: result.notes,
-    createdAt: result.created_at,
-  };
-}
-
-function mapApplicationDetail(detail: EngineApplicationDetail): ApplicationDetail {
-  return {
-    ...mapApplication(detail),
-    job: mapJob(detail.job),
-    resume: detail.resume ? mapResume(detail.resume) : undefined,
-    offer: detail.offer ? mapOffer(detail.offer) : undefined,
-    notes: detail.notes.map((note) => ({
-      id: note.id,
-      applicationId: note.application_id,
-      content: note.content,
-      createdAt: note.created_at,
-    })),
-    contacts: detail.contacts.map((contact) => ({
-      id: contact.id,
-      applicationId: contact.application_id,
-      relationship: contact.relationship as ApplicationContact['relationship'],
-      contact: mapContact(contact.contact),
-    })),
-    activities: detail.activities.map((activity) => ({
-      id: activity.id,
-      applicationId: activity.application_id,
-      type: activity.activity_type as Activity['type'],
-      description: activity.description,
-      happenedAt: activity.happened_at,
-      createdAt: activity.created_at,
-    })),
-    tasks: detail.tasks.map((task) => ({
-      id: task.id,
-      applicationId: task.application_id,
-      title: task.title,
-      remindAt: task.remind_at ?? undefined,
-      done: task.done,
-      createdAt: task.created_at,
-    })),
   };
 }
 
@@ -1805,300 +1195,6 @@ export async function getContacts(): Promise<Contact[]> {
   return response.contacts.map(mapContact);
 }
 
-// ─── Analytics types ──────────────────────────────────────────────────────────
-
-type EngineJobsBySourceEntry = {
-  source: string;
-  count: number;
-};
-
-type EngineJobsByLifecycle = {
-  total: number;
-  active: number;
-  inactive: number;
-  reactivated: number;
-};
-
-type EngineFeedbackSummarySection = {
-  saved_jobs_count: number;
-  hidden_jobs_count: number;
-  bad_fit_jobs_count: number;
-  whitelisted_companies_count: number;
-  blacklisted_companies_count: number;
-};
-
-type EngineFunnelSourceCountEntry = {
-  source: string;
-  count: number;
-};
-
-type EngineFunnelConversionRates = {
-  open_rate_from_impressions: number;
-  save_rate_from_opens: number;
-  application_rate_from_saves: number;
-};
-
-type EngineAnalyticsSummaryResponse = {
-  profile_id: string;
-  feedback: EngineFeedbackSummarySection;
-  jobs_by_source: EngineJobsBySourceEntry[];
-  jobs_by_lifecycle: EngineJobsByLifecycle;
-  top_matched_roles: string[];
-  top_matched_skills: string[];
-  top_matched_keywords: string[];
-  search_quality: EngineSearchQualitySummary;
-};
-
-type EngineSearchQualitySummary = {
-  low_evidence_jobs: number;
-  weak_description_jobs: number;
-  role_mismatch_jobs: number;
-  seniority_mismatch_jobs: number;
-  source_mismatch_jobs: number;
-  top_missing_signals: string[];
-};
-
-type EngineFunnelSummaryResponse = {
-  profile_id: string;
-  impression_count: number;
-  open_count: number;
-  save_count: number;
-  hide_count: number;
-  bad_fit_count: number;
-  application_created_count: number;
-  fit_explanation_requested_count: number;
-  application_coach_requested_count: number;
-  cover_letter_draft_requested_count: number;
-  interview_prep_requested_count: number;
-  conversion_rates: EngineFunnelConversionRates;
-  impressions_by_source: EngineFunnelSourceCountEntry[];
-  opens_by_source: EngineFunnelSourceCountEntry[];
-  saves_by_source: EngineFunnelSourceCountEntry[];
-  applications_by_source: EngineFunnelSourceCountEntry[];
-};
-
-type EngineBehaviorSignalCountResponse = {
-  key: string;
-  save_count: number;
-  hide_count: number;
-  bad_fit_count: number;
-  application_created_count: number;
-  positive_count: number;
-  negative_count: number;
-  net_score: number;
-};
-
-type EngineBehaviorSummaryResponse = {
-  profile_id: string;
-  search_run_count: number;
-  top_positive_sources: EngineBehaviorSignalCountResponse[];
-  top_negative_sources: EngineBehaviorSignalCountResponse[];
-  top_positive_role_families: EngineBehaviorSignalCountResponse[];
-  top_negative_role_families: EngineBehaviorSignalCountResponse[];
-  source_signal_counts: EngineBehaviorSignalCountResponse[];
-  role_family_signal_counts: EngineBehaviorSignalCountResponse[];
-};
-
-type EngineLlmContextAnalyzedProfile = {
-  summary: string;
-  primary_role: string;
-  seniority: string;
-  skills: string[];
-  keywords: string[];
-};
-
-type EngineLlmContextEvidenceEntry = {
-  type: string;
-  label: string;
-};
-
-type EngineLlmContextResponse = {
-  profile_id: string;
-  analyzed_profile: EngineLlmContextAnalyzedProfile | null;
-  profile_skills: string[];
-  profile_keywords: string[];
-  jobs_feed_summary: EngineJobsByLifecycle;
-  feedback_summary: EngineFeedbackSummarySection;
-  top_positive_evidence: EngineLlmContextEvidenceEntry[];
-  top_negative_evidence: EngineLlmContextEvidenceEntry[];
-};
-
-type MlProfileInsightsResponse = {
-  profile_summary: string;
-  search_strategy_summary: string;
-  strengths: string[];
-  risks: string[];
-  recommended_actions: string[];
-  top_focus_areas: string[];
-  search_term_suggestions: string[];
-  application_strategy: string[];
-};
-
-type MlJobFitExplanationResponse = {
-  fit_summary: string;
-  why_it_matches: string[];
-  risks: string[];
-  missing_signals: string[];
-  recommended_next_step: string;
-  application_angle: string;
-};
-
-type MlApplicationCoachResponse = {
-  application_summary: string;
-  resume_focus_points: string[];
-  suggested_bullets: string[];
-  cover_letter_angles: string[];
-  interview_focus: string[];
-  gaps_to_address: string[];
-  red_flags: string[];
-};
-
-type MlCoverLetterDraftResponse = {
-  draft_summary: string;
-  opening_paragraph: string;
-  body_paragraphs: string[];
-  closing_paragraph: string;
-  key_claims_used: string[];
-  evidence_gaps: string[];
-  tone_notes: string[];
-};
-
-type MlInterviewPrepResponse = {
-  prep_summary: string;
-  likely_topics: string[];
-  technical_focus: string[];
-  behavioral_focus: string[];
-  stories_to_prepare: string[];
-  questions_to_ask: string[];
-  risk_areas: string[];
-  follow_up_plan: string[];
-};
-
-type MlWeeklyGuidanceResponse = {
-  weekly_summary: string;
-  what_is_working: string[];
-  what_is_not_working: string[];
-  recommended_search_adjustments: string[];
-  recommended_source_moves: string[];
-  recommended_role_focus: string[];
-  funnel_bottlenecks: string[];
-  next_week_plan: string[];
-};
-
-export type JobsBySourceEntry = {
-  source: string;
-  count: number;
-};
-
-export type JobsByLifecycle = {
-  total: number;
-  active: number;
-  inactive: number;
-  reactivated: number;
-};
-
-export type AnalyticsFeedbackSummary = {
-  savedJobsCount: number;
-  hiddenJobsCount: number;
-  badFitJobsCount: number;
-  whitelistedCompaniesCount: number;
-  blacklistedCompaniesCount: number;
-};
-
-export type AnalyticsSummary = {
-  profileId: string;
-  feedback: AnalyticsFeedbackSummary;
-  jobsBySource: JobsBySourceEntry[];
-  jobsByLifecycle: JobsByLifecycle;
-  topMatchedRoles: string[];
-  topMatchedSkills: string[];
-  topMatchedKeywords: string[];
-  searchQuality: {
-    lowEvidenceJobs: number;
-    weakDescriptionJobs: number;
-    roleMismatchJobs: number;
-    seniorityMismatchJobs: number;
-    sourceMismatchJobs: number;
-    topMissingSignals: string[];
-  };
-};
-
-export type BehaviorSignalCount = {
-  key: string;
-  saveCount: number;
-  hideCount: number;
-  badFitCount: number;
-  applicationCreatedCount: number;
-  positiveCount: number;
-  negativeCount: number;
-  netScore: number;
-};
-
-export type BehaviorSummary = {
-  profileId: string;
-  searchRunCount: number;
-  topPositiveSources: BehaviorSignalCount[];
-  topNegativeSources: BehaviorSignalCount[];
-  topPositiveRoleFamilies: BehaviorSignalCount[];
-  topNegativeRoleFamilies: BehaviorSignalCount[];
-  sourceSignalCounts: BehaviorSignalCount[];
-  roleFamilySignalCounts: BehaviorSignalCount[];
-};
-
-export type FunnelSourceCountEntry = {
-  source: string;
-  count: number;
-};
-
-export type FunnelConversionRates = {
-  openRateFromImpressions: number;
-  saveRateFromOpens: number;
-  applicationRateFromSaves: number;
-};
-
-export type FunnelSummary = {
-  profileId: string;
-  impressionCount: number;
-  openCount: number;
-  saveCount: number;
-  hideCount: number;
-  badFitCount: number;
-  applicationCreatedCount: number;
-  fitExplanationRequestedCount: number;
-  applicationCoachRequestedCount: number;
-  coverLetterDraftRequestedCount: number;
-  interviewPrepRequestedCount: number;
-  conversionRates: FunnelConversionRates;
-  impressionsBySource: FunnelSourceCountEntry[];
-  opensBySource: FunnelSourceCountEntry[];
-  savesBySource: FunnelSourceCountEntry[];
-  applicationsBySource: FunnelSourceCountEntry[];
-};
-
-export type LlmContextEvidenceEntry = {
-  type: string;
-  label: string;
-};
-
-export type LlmContextAnalyzedProfile = {
-  summary: string;
-  primaryRole: string;
-  seniority: string;
-  skills: string[];
-  keywords: string[];
-};
-
-export type LlmContext = {
-  profileId: string;
-  analyzedProfile: LlmContextAnalyzedProfile | null;
-  profileSkills: string[];
-  profileKeywords: string[];
-  jobsFeedSummary: JobsByLifecycle;
-  feedbackSummary: AnalyticsFeedbackSummary;
-  topPositiveEvidence: LlmContextEvidenceEntry[];
-  topNegativeEvidence: LlmContextEvidenceEntry[];
-};
-
 export type ProfileInsights = {
   profileSummary: string;
   searchStrategySummary: string;
@@ -2234,354 +1330,30 @@ export type InterviewPrepRequest = {
   rawProfileText?: string | null;
 };
 
-function mapFeedbackSummarySection(s: EngineFeedbackSummarySection): AnalyticsFeedbackSummary {
-  return {
-    savedJobsCount: s.saved_jobs_count,
-    hiddenJobsCount: s.hidden_jobs_count,
-    badFitJobsCount: s.bad_fit_jobs_count,
-    whitelistedCompaniesCount: s.whitelisted_companies_count,
-    blacklistedCompaniesCount: s.blacklisted_companies_count,
-  };
-}
-
-function mapJobsByLifecycle(l: EngineJobsByLifecycle): JobsByLifecycle {
-  return { total: l.total, active: l.active, inactive: l.inactive, reactivated: l.reactivated };
-}
-
-function mapBehaviorSignalCount(
-  signal: EngineBehaviorSignalCountResponse,
-): BehaviorSignalCount {
-  return {
-    key: signal.key,
-    saveCount: signal.save_count,
-    hideCount: signal.hide_count,
-    badFitCount: signal.bad_fit_count,
-    applicationCreatedCount: signal.application_created_count,
-    positiveCount: signal.positive_count,
-    negativeCount: signal.negative_count,
-    netScore: signal.net_score,
-  };
-}
-
-export async function getAnalyticsSummary(profileId: string): Promise<AnalyticsSummary> {
-  const response = await request<EngineAnalyticsSummaryResponse>(
-    `/api/v1/profiles/${profileId}/analytics/summary`,
-  );
-
-  return {
-    profileId: response.profile_id,
-    feedback: mapFeedbackSummarySection(response.feedback),
-    jobsBySource: response.jobs_by_source,
-    jobsByLifecycle: mapJobsByLifecycle(response.jobs_by_lifecycle),
-    topMatchedRoles: response.top_matched_roles,
-    topMatchedSkills: response.top_matched_skills,
-    topMatchedKeywords: response.top_matched_keywords,
-    searchQuality: {
-      lowEvidenceJobs: response.search_quality.low_evidence_jobs,
-      weakDescriptionJobs: response.search_quality.weak_description_jobs,
-      roleMismatchJobs: response.search_quality.role_mismatch_jobs,
-      seniorityMismatchJobs: response.search_quality.seniority_mismatch_jobs,
-      sourceMismatchJobs: response.search_quality.source_mismatch_jobs,
-      topMissingSignals: response.search_quality.top_missing_signals,
-    },
-  };
-}
-
-export async function getBehaviorSummary(profileId: string): Promise<BehaviorSummary> {
-  const response = await request<EngineBehaviorSummaryResponse>(
-    `/api/v1/profiles/${profileId}/behavior-summary`,
-  );
-
-  return {
-    profileId: response.profile_id,
-    searchRunCount: response.search_run_count,
-    topPositiveSources: response.top_positive_sources.map(mapBehaviorSignalCount),
-    topNegativeSources: response.top_negative_sources.map(mapBehaviorSignalCount),
-    topPositiveRoleFamilies: response.top_positive_role_families.map(mapBehaviorSignalCount),
-    topNegativeRoleFamilies: response.top_negative_role_families.map(mapBehaviorSignalCount),
-    sourceSignalCounts: response.source_signal_counts.map(mapBehaviorSignalCount),
-    roleFamilySignalCounts: response.role_family_signal_counts.map(mapBehaviorSignalCount),
-  };
-}
-
-export async function getFunnelSummary(profileId: string): Promise<FunnelSummary> {
-  const response = await request<EngineFunnelSummaryResponse>(
-    `/api/v1/profiles/${profileId}/funnel-summary`,
-  );
-
-  return {
-    profileId: response.profile_id,
-    impressionCount: response.impression_count,
-    openCount: response.open_count,
-    saveCount: response.save_count,
-    hideCount: response.hide_count,
-    badFitCount: response.bad_fit_count,
-    applicationCreatedCount: response.application_created_count,
-    fitExplanationRequestedCount: response.fit_explanation_requested_count,
-    applicationCoachRequestedCount: response.application_coach_requested_count,
-    coverLetterDraftRequestedCount: response.cover_letter_draft_requested_count,
-    interviewPrepRequestedCount: response.interview_prep_requested_count,
-    conversionRates: {
-      openRateFromImpressions: response.conversion_rates.open_rate_from_impressions,
-      saveRateFromOpens: response.conversion_rates.save_rate_from_opens,
-      applicationRateFromSaves: response.conversion_rates.application_rate_from_saves,
-    },
-    impressionsBySource: response.impressions_by_source,
-    opensBySource: response.opens_by_source,
-    savesBySource: response.saves_by_source,
-    applicationsBySource: response.applications_by_source,
-  };
-}
-
-export async function getLlmContext(profileId: string): Promise<LlmContext> {
-  const response = await request<EngineLlmContextResponse>(
-    `/api/v1/profiles/${profileId}/analytics/llm-context`,
-  );
-
-  return {
-    profileId: response.profile_id,
-    analyzedProfile: response.analyzed_profile
-      ? {
-          summary: response.analyzed_profile.summary,
-          primaryRole: response.analyzed_profile.primary_role,
-          seniority: response.analyzed_profile.seniority,
-          skills: response.analyzed_profile.skills,
-          keywords: response.analyzed_profile.keywords,
-        }
-      : null,
-    profileSkills: response.profile_skills,
-    profileKeywords: response.profile_keywords,
-    jobsFeedSummary: mapJobsByLifecycle(response.jobs_feed_summary),
-    feedbackSummary: mapFeedbackSummarySection(response.feedback_summary),
-    topPositiveEvidence: response.top_positive_evidence,
-    topNegativeEvidence: response.top_negative_evidence,
-  };
-}
-
-export async function getProfileInsights(context: LlmContext): Promise<ProfileInsights> {
-  const response = await mlRequest<MlProfileInsightsResponse>('/v1/enrichment/profile-insights', {
+export async function getProfileInsights(
+  context: LlmContext,
+): Promise<ProfileInsights> {
+  const response = await mlRequest<MlProfileInsightsResponse>(
+    '/v1/enrichment/profile-insights',
+    {
     method: 'POST',
-    body: JSON.stringify({
-      profile_id: context.profileId,
-      analyzed_profile: context.analyzedProfile
-        ? {
-            summary: context.analyzedProfile.summary,
-            primary_role: context.analyzedProfile.primaryRole,
-            seniority: context.analyzedProfile.seniority,
-            skills: context.analyzedProfile.skills,
-            keywords: context.analyzedProfile.keywords,
-          }
-        : null,
-      profile_skills: context.profileSkills,
-      profile_keywords: context.profileKeywords,
-      jobs_feed_summary: {
-        total: context.jobsFeedSummary.total,
-        active: context.jobsFeedSummary.active,
-        inactive: context.jobsFeedSummary.inactive,
-        reactivated: context.jobsFeedSummary.reactivated,
-      },
-      feedback_summary: {
-        saved_jobs_count: context.feedbackSummary.savedJobsCount,
-        hidden_jobs_count: context.feedbackSummary.hiddenJobsCount,
-        bad_fit_jobs_count: context.feedbackSummary.badFitJobsCount,
-        whitelisted_companies_count: context.feedbackSummary.whitelistedCompaniesCount,
-        blacklisted_companies_count: context.feedbackSummary.blacklistedCompaniesCount,
-      },
-      top_positive_evidence: context.topPositiveEvidence.map((entry) => ({
-        type: entry.type,
-        label: entry.label,
-      })),
-      top_negative_evidence: context.topNegativeEvidence.map((entry) => ({
-        type: entry.type,
-        label: entry.label,
-      })),
-    }),
+    body: JSON.stringify(buildProfileInsightsPayload(context)),
   });
 
-  return {
-    profileSummary: response.profile_summary,
-    searchStrategySummary: response.search_strategy_summary,
-    strengths: response.strengths,
-    risks: response.risks,
-    recommendedActions: response.recommended_actions,
-    topFocusAreas: response.top_focus_areas,
-    searchTermSuggestions: response.search_term_suggestions,
-    applicationStrategy: response.application_strategy,
-  };
+  return mapProfileInsightsResponse(response);
 }
 
 export async function getWeeklyGuidance(
   payload: WeeklyGuidanceRequest,
 ): Promise<WeeklyGuidance> {
-  const response = await mlRequest<MlWeeklyGuidanceResponse>('/v1/enrichment/weekly-guidance', {
+  const response = await mlRequest<MlWeeklyGuidanceResponse>(
+    '/v1/enrichment/weekly-guidance',
+    {
     method: 'POST',
-    body: JSON.stringify({
-      profile_id: payload.profileId,
-      analytics_summary: {
-        feedback: {
-          saved_jobs_count: payload.analyticsSummary.feedback.savedJobsCount,
-          hidden_jobs_count: payload.analyticsSummary.feedback.hiddenJobsCount,
-          bad_fit_jobs_count: payload.analyticsSummary.feedback.badFitJobsCount,
-          whitelisted_companies_count: payload.analyticsSummary.feedback.whitelistedCompaniesCount,
-          blacklisted_companies_count: payload.analyticsSummary.feedback.blacklistedCompaniesCount,
-        },
-        jobs_by_source: payload.analyticsSummary.jobsBySource.map((entry) => ({
-          source: entry.source,
-          count: entry.count,
-        })),
-        jobs_by_lifecycle: {
-          total: payload.analyticsSummary.jobsByLifecycle.total,
-          active: payload.analyticsSummary.jobsByLifecycle.active,
-          inactive: payload.analyticsSummary.jobsByLifecycle.inactive,
-          reactivated: payload.analyticsSummary.jobsByLifecycle.reactivated,
-        },
-        top_matched_roles: payload.analyticsSummary.topMatchedRoles,
-        top_matched_skills: payload.analyticsSummary.topMatchedSkills,
-        top_matched_keywords: payload.analyticsSummary.topMatchedKeywords,
-      },
-      behavior_summary: {
-        search_run_count: payload.behaviorSummary.searchRunCount,
-        top_positive_sources: payload.behaviorSummary.topPositiveSources.map((signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        })),
-        top_negative_sources: payload.behaviorSummary.topNegativeSources.map((signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        })),
-        top_positive_role_families: payload.behaviorSummary.topPositiveRoleFamilies.map((signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        })),
-        top_negative_role_families: payload.behaviorSummary.topNegativeRoleFamilies.map((signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        })),
-        source_signal_counts: payload.behaviorSummary.sourceSignalCounts.map((signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        })),
-        role_family_signal_counts: payload.behaviorSummary.roleFamilySignalCounts.map((signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        })),
-      },
-      funnel_summary: {
-        impression_count: payload.funnelSummary.impressionCount,
-        open_count: payload.funnelSummary.openCount,
-        save_count: payload.funnelSummary.saveCount,
-        hide_count: payload.funnelSummary.hideCount,
-        bad_fit_count: payload.funnelSummary.badFitCount,
-        application_created_count: payload.funnelSummary.applicationCreatedCount,
-        fit_explanation_requested_count: payload.funnelSummary.fitExplanationRequestedCount,
-        application_coach_requested_count: payload.funnelSummary.applicationCoachRequestedCount,
-        cover_letter_draft_requested_count: payload.funnelSummary.coverLetterDraftRequestedCount,
-        interview_prep_requested_count: payload.funnelSummary.interviewPrepRequestedCount,
-        conversion_rates: {
-          open_rate_from_impressions: payload.funnelSummary.conversionRates.openRateFromImpressions,
-          save_rate_from_opens: payload.funnelSummary.conversionRates.saveRateFromOpens,
-          application_rate_from_saves: payload.funnelSummary.conversionRates.applicationRateFromSaves,
-        },
-        impressions_by_source: payload.funnelSummary.impressionsBySource.map((entry) => ({
-          source: entry.source,
-          count: entry.count,
-        })),
-        opens_by_source: payload.funnelSummary.opensBySource.map((entry) => ({
-          source: entry.source,
-          count: entry.count,
-        })),
-        saves_by_source: payload.funnelSummary.savesBySource.map((entry) => ({
-          source: entry.source,
-          count: entry.count,
-        })),
-        applications_by_source: payload.funnelSummary.applicationsBySource.map((entry) => ({
-          source: entry.source,
-          count: entry.count,
-        })),
-      },
-      llm_context: {
-        analyzed_profile: payload.llmContext.analyzedProfile
-          ? {
-              summary: payload.llmContext.analyzedProfile.summary,
-              primary_role: payload.llmContext.analyzedProfile.primaryRole,
-              seniority: payload.llmContext.analyzedProfile.seniority,
-              skills: payload.llmContext.analyzedProfile.skills,
-              keywords: payload.llmContext.analyzedProfile.keywords,
-            }
-          : null,
-        profile_skills: payload.llmContext.profileSkills,
-        profile_keywords: payload.llmContext.profileKeywords,
-        jobs_feed_summary: {
-          total: payload.llmContext.jobsFeedSummary.total,
-          active: payload.llmContext.jobsFeedSummary.active,
-          inactive: payload.llmContext.jobsFeedSummary.inactive,
-          reactivated: payload.llmContext.jobsFeedSummary.reactivated,
-        },
-        feedback_summary: {
-          saved_jobs_count: payload.llmContext.feedbackSummary.savedJobsCount,
-          hidden_jobs_count: payload.llmContext.feedbackSummary.hiddenJobsCount,
-          bad_fit_jobs_count: payload.llmContext.feedbackSummary.badFitJobsCount,
-          whitelisted_companies_count: payload.llmContext.feedbackSummary.whitelistedCompaniesCount,
-          blacklisted_companies_count: payload.llmContext.feedbackSummary.blacklistedCompaniesCount,
-        },
-        top_positive_evidence: payload.llmContext.topPositiveEvidence.map((entry) => ({
-          type: entry.type,
-          label: entry.label,
-        })),
-        top_negative_evidence: payload.llmContext.topNegativeEvidence.map((entry) => ({
-          type: entry.type,
-          label: entry.label,
-        })),
-      },
-    }),
+    body: JSON.stringify(buildWeeklyGuidancePayload(payload)),
   });
 
-  return {
-    weeklySummary: response.weekly_summary,
-    whatIsWorking: response.what_is_working,
-    whatIsNotWorking: response.what_is_not_working,
-    recommendedSearchAdjustments: response.recommended_search_adjustments,
-    recommendedSourceMoves: response.recommended_source_moves,
-    recommendedRoleFocus: response.recommended_role_focus,
-    funnelBottlenecks: response.funnel_bottlenecks,
-    nextWeekPlan: response.next_week_plan,
-  };
+  return mapWeeklyGuidanceResponse(response);
 }
 
 export async function getJobFitExplanation(
@@ -2598,103 +1370,14 @@ export async function getJobFitExplanation(
     },
   }).catch(() => null);
 
-  const response = await mlRequest<MlJobFitExplanationResponse>('/v1/enrichment/job-fit-explanation', {
+  const response = await mlRequest<MlJobFitExplanationResponse>(
+    '/v1/enrichment/job-fit-explanation',
+    {
     method: 'POST',
-    body: JSON.stringify({
-      profile_id: payload.profileId,
-      analyzed_profile: payload.analyzedProfile
-        ? {
-            summary: payload.analyzedProfile.summary,
-            primary_role: payload.analyzedProfile.primaryRole,
-            seniority: payload.analyzedProfile.seniority,
-            skills: payload.analyzedProfile.skills,
-            keywords: payload.analyzedProfile.keywords,
-          }
-        : null,
-      search_profile: payload.searchProfile
-        ? {
-            primary_role: payload.searchProfile.primaryRole,
-            primary_role_confidence: payload.searchProfile.primaryRoleConfidence,
-            target_roles: payload.searchProfile.targetRoles,
-            role_candidates: payload.searchProfile.roleCandidates,
-            seniority: payload.searchProfile.seniority,
-            target_regions: payload.searchProfile.targetRegions,
-            work_modes: payload.searchProfile.workModes,
-            allowed_sources: payload.searchProfile.allowedSources,
-            profile_skills: payload.searchProfile.profileSkills,
-            profile_keywords: payload.searchProfile.profileKeywords,
-            search_terms: payload.searchProfile.searchTerms,
-            exclude_terms: payload.searchProfile.excludeTerms,
-          }
-        : null,
-      ranked_job: {
-        id: payload.rankedJob.id,
-        title: payload.rankedJob.title,
-        company_name: payload.rankedJob.company,
-        description_text: payload.rankedJob.description,
-        summary: payload.rankedJob.presentation?.summary,
-        source: payload.rankedJob.primaryVariant?.source,
-        source_job_id: payload.rankedJob.primaryVariant?.sourceJobId,
-        source_url: payload.rankedJob.primaryVariant?.sourceUrl ?? payload.rankedJob.url,
-        remote_type: payload.rankedJob.remoteType,
-        seniority: payload.rankedJob.seniority,
-        salary_label: payload.rankedJob.presentation?.salaryLabel,
-        location_label: payload.rankedJob.presentation?.locationLabel,
-        work_mode_label: payload.rankedJob.presentation?.workModeLabel,
-        freshness_label: payload.rankedJob.presentation?.freshnessLabel,
-        badges: payload.rankedJob.presentation?.badges ?? [],
-      },
-      deterministic_fit: {
-        job_id: payload.deterministicFit.jobId,
-        score: payload.deterministicFit.score,
-        matched_roles: payload.deterministicFit.matchedRoles,
-        matched_skills: payload.deterministicFit.matchedSkills,
-        matched_keywords: payload.deterministicFit.matchedKeywords,
-        source_match: payload.deterministicFit.sourceMatch,
-        work_mode_match: payload.deterministicFit.workModeMatch,
-        region_match: payload.deterministicFit.regionMatch,
-        reasons: payload.deterministicFit.reasons,
-      },
-      feedback_state: payload.feedbackState
-        ? {
-            summary: {
-              saved_jobs_count: payload.feedbackState.feedbackSummary.savedJobsCount,
-              hidden_jobs_count: payload.feedbackState.feedbackSummary.hiddenJobsCount,
-              bad_fit_jobs_count: payload.feedbackState.feedbackSummary.badFitJobsCount,
-              whitelisted_companies_count:
-                payload.feedbackState.feedbackSummary.whitelistedCompaniesCount,
-              blacklisted_companies_count:
-                payload.feedbackState.feedbackSummary.blacklistedCompaniesCount,
-            },
-            top_positive_evidence: payload.feedbackState.topPositiveEvidence.map((entry) => ({
-              type: entry.type,
-              label: entry.label,
-            })),
-            top_negative_evidence: payload.feedbackState.topNegativeEvidence.map((entry) => ({
-              type: entry.type,
-              label: entry.label,
-            })),
-            current_job_feedback: payload.feedbackState.currentJobFeedback
-              ? {
-                  saved: payload.feedbackState.currentJobFeedback.saved,
-                  hidden: payload.feedbackState.currentJobFeedback.hidden,
-                  bad_fit: payload.feedbackState.currentJobFeedback.badFit,
-                  company_status: payload.feedbackState.currentJobFeedback.companyStatus,
-                }
-              : null,
-          }
-        : null,
-    }),
+    body: JSON.stringify(buildJobFitExplanationPayload(payload)),
   });
 
-  return {
-    fitSummary: response.fit_summary,
-    whyItMatches: response.why_it_matches,
-    risks: response.risks,
-    missingSignals: response.missing_signals,
-    recommendedNextStep: response.recommended_next_step,
-    applicationAngle: response.application_angle,
-  };
+  return mapJobFitExplanationResponse(response);
 }
 
 export async function getApplicationCoach(
@@ -2711,115 +1394,14 @@ export async function getApplicationCoach(
     },
   }).catch(() => null);
 
-  const response = await mlRequest<MlApplicationCoachResponse>('/v1/enrichment/application-coach', {
+  const response = await mlRequest<MlApplicationCoachResponse>(
+    '/v1/enrichment/application-coach',
+    {
     method: 'POST',
-    body: JSON.stringify({
-      profile_id: payload.profileId,
-      analyzed_profile: payload.analyzedProfile
-        ? {
-            summary: payload.analyzedProfile.summary,
-            primary_role: payload.analyzedProfile.primaryRole,
-            seniority: payload.analyzedProfile.seniority,
-            skills: payload.analyzedProfile.skills,
-            keywords: payload.analyzedProfile.keywords,
-          }
-        : null,
-      search_profile: payload.searchProfile
-        ? {
-            primary_role: payload.searchProfile.primaryRole,
-            primary_role_confidence: payload.searchProfile.primaryRoleConfidence,
-            target_roles: payload.searchProfile.targetRoles,
-            role_candidates: payload.searchProfile.roleCandidates,
-            seniority: payload.searchProfile.seniority,
-            target_regions: payload.searchProfile.targetRegions,
-            work_modes: payload.searchProfile.workModes,
-            allowed_sources: payload.searchProfile.allowedSources,
-            profile_skills: payload.searchProfile.profileSkills,
-            profile_keywords: payload.searchProfile.profileKeywords,
-            search_terms: payload.searchProfile.searchTerms,
-            exclude_terms: payload.searchProfile.excludeTerms,
-          }
-        : null,
-      ranked_job: {
-        id: payload.rankedJob.id,
-        title: payload.rankedJob.title,
-        company_name: payload.rankedJob.company,
-        description_text: payload.rankedJob.description,
-        summary: payload.rankedJob.presentation?.summary,
-        source: payload.rankedJob.primaryVariant?.source,
-        source_job_id: payload.rankedJob.primaryVariant?.sourceJobId,
-        source_url: payload.rankedJob.primaryVariant?.sourceUrl ?? payload.rankedJob.url,
-        remote_type: payload.rankedJob.remoteType,
-        seniority: payload.rankedJob.seniority,
-        salary_label: payload.rankedJob.presentation?.salaryLabel,
-        location_label: payload.rankedJob.presentation?.locationLabel,
-        work_mode_label: payload.rankedJob.presentation?.workModeLabel,
-        freshness_label: payload.rankedJob.presentation?.freshnessLabel,
-        badges: payload.rankedJob.presentation?.badges ?? [],
-      },
-      deterministic_fit: {
-        job_id: payload.deterministicFit.jobId,
-        score: payload.deterministicFit.score,
-        matched_roles: payload.deterministicFit.matchedRoles,
-        matched_skills: payload.deterministicFit.matchedSkills,
-        matched_keywords: payload.deterministicFit.matchedKeywords,
-        source_match: payload.deterministicFit.sourceMatch,
-        work_mode_match: payload.deterministicFit.workModeMatch,
-        region_match: payload.deterministicFit.regionMatch,
-        reasons: payload.deterministicFit.reasons,
-      },
-      job_fit_explanation: payload.jobFitExplanation
-        ? {
-            fit_summary: payload.jobFitExplanation.fitSummary,
-            why_it_matches: payload.jobFitExplanation.whyItMatches,
-            risks: payload.jobFitExplanation.risks,
-            missing_signals: payload.jobFitExplanation.missingSignals,
-            recommended_next_step: payload.jobFitExplanation.recommendedNextStep,
-            application_angle: payload.jobFitExplanation.applicationAngle,
-          }
-        : null,
-      feedback_state: payload.feedbackState
-        ? {
-            summary: {
-              saved_jobs_count: payload.feedbackState.feedbackSummary.savedJobsCount,
-              hidden_jobs_count: payload.feedbackState.feedbackSummary.hiddenJobsCount,
-              bad_fit_jobs_count: payload.feedbackState.feedbackSummary.badFitJobsCount,
-              whitelisted_companies_count:
-                payload.feedbackState.feedbackSummary.whitelistedCompaniesCount,
-              blacklisted_companies_count:
-                payload.feedbackState.feedbackSummary.blacklistedCompaniesCount,
-            },
-            top_positive_evidence: payload.feedbackState.topPositiveEvidence.map((entry) => ({
-              type: entry.type,
-              label: entry.label,
-            })),
-            top_negative_evidence: payload.feedbackState.topNegativeEvidence.map((entry) => ({
-              type: entry.type,
-              label: entry.label,
-            })),
-            current_job_feedback: payload.feedbackState.currentJobFeedback
-              ? {
-                  saved: payload.feedbackState.currentJobFeedback.saved,
-                  hidden: payload.feedbackState.currentJobFeedback.hidden,
-                  bad_fit: payload.feedbackState.currentJobFeedback.badFit,
-                  company_status: payload.feedbackState.currentJobFeedback.companyStatus,
-                }
-              : null,
-          }
-        : null,
-      raw_profile_text: payload.rawProfileText ?? null,
-    }),
+    body: JSON.stringify(buildApplicationCoachPayload(payload)),
   });
 
-  return {
-    applicationSummary: response.application_summary,
-    resumeFocusPoints: response.resume_focus_points,
-    suggestedBullets: response.suggested_bullets,
-    coverLetterAngles: response.cover_letter_angles,
-    interviewFocus: response.interview_focus,
-    gapsToAddress: response.gaps_to_address,
-    redFlags: response.red_flags,
-  };
+  return mapApplicationCoachResponse(response);
 }
 
 export async function getCoverLetterDraft(
@@ -2837,126 +1419,14 @@ export async function getCoverLetterDraft(
     },
   }).catch(() => null);
 
-  const response = await mlRequest<MlCoverLetterDraftResponse>('/v1/enrichment/cover-letter-draft', {
+  const response = await mlRequest<MlCoverLetterDraftResponse>(
+    '/v1/enrichment/cover-letter-draft',
+    {
     method: 'POST',
-    body: JSON.stringify({
-      profile_id: payload.profileId,
-      analyzed_profile: payload.analyzedProfile
-        ? {
-            summary: payload.analyzedProfile.summary,
-            primary_role: payload.analyzedProfile.primaryRole,
-            seniority: payload.analyzedProfile.seniority,
-            skills: payload.analyzedProfile.skills,
-            keywords: payload.analyzedProfile.keywords,
-          }
-        : null,
-      search_profile: payload.searchProfile
-        ? {
-            primary_role: payload.searchProfile.primaryRole,
-            primary_role_confidence: payload.searchProfile.primaryRoleConfidence,
-            target_roles: payload.searchProfile.targetRoles,
-            role_candidates: payload.searchProfile.roleCandidates,
-            seniority: payload.searchProfile.seniority,
-            target_regions: payload.searchProfile.targetRegions,
-            work_modes: payload.searchProfile.workModes,
-            allowed_sources: payload.searchProfile.allowedSources,
-            profile_skills: payload.searchProfile.profileSkills,
-            profile_keywords: payload.searchProfile.profileKeywords,
-            search_terms: payload.searchProfile.searchTerms,
-            exclude_terms: payload.searchProfile.excludeTerms,
-          }
-        : null,
-      ranked_job: {
-        id: payload.rankedJob.id,
-        title: payload.rankedJob.title,
-        company_name: payload.rankedJob.company,
-        description_text: payload.rankedJob.description,
-        summary: payload.rankedJob.presentation?.summary,
-        source: payload.rankedJob.primaryVariant?.source,
-        source_job_id: payload.rankedJob.primaryVariant?.sourceJobId,
-        source_url: payload.rankedJob.primaryVariant?.sourceUrl ?? payload.rankedJob.url,
-        remote_type: payload.rankedJob.remoteType,
-        seniority: payload.rankedJob.seniority,
-        salary_label: payload.rankedJob.presentation?.salaryLabel,
-        location_label: payload.rankedJob.presentation?.locationLabel,
-        work_mode_label: payload.rankedJob.presentation?.workModeLabel,
-        freshness_label: payload.rankedJob.presentation?.freshnessLabel,
-        badges: payload.rankedJob.presentation?.badges ?? [],
-      },
-      deterministic_fit: {
-        job_id: payload.deterministicFit.jobId,
-        score: payload.deterministicFit.score,
-        matched_roles: payload.deterministicFit.matchedRoles,
-        matched_skills: payload.deterministicFit.matchedSkills,
-        matched_keywords: payload.deterministicFit.matchedKeywords,
-        source_match: payload.deterministicFit.sourceMatch,
-        work_mode_match: payload.deterministicFit.workModeMatch,
-        region_match: payload.deterministicFit.regionMatch,
-        reasons: payload.deterministicFit.reasons,
-      },
-      job_fit_explanation: payload.jobFitExplanation
-        ? {
-            fit_summary: payload.jobFitExplanation.fitSummary,
-            why_it_matches: payload.jobFitExplanation.whyItMatches,
-            risks: payload.jobFitExplanation.risks,
-            missing_signals: payload.jobFitExplanation.missingSignals,
-            recommended_next_step: payload.jobFitExplanation.recommendedNextStep,
-            application_angle: payload.jobFitExplanation.applicationAngle,
-          }
-        : null,
-      application_coach: payload.applicationCoach
-        ? {
-            application_summary: payload.applicationCoach.applicationSummary,
-            resume_focus_points: payload.applicationCoach.resumeFocusPoints,
-            suggested_bullets: payload.applicationCoach.suggestedBullets,
-            cover_letter_angles: payload.applicationCoach.coverLetterAngles,
-            interview_focus: payload.applicationCoach.interviewFocus,
-            gaps_to_address: payload.applicationCoach.gapsToAddress,
-            red_flags: payload.applicationCoach.redFlags,
-          }
-        : null,
-      feedback_state: payload.feedbackState
-        ? {
-            summary: {
-              saved_jobs_count: payload.feedbackState.feedbackSummary.savedJobsCount,
-              hidden_jobs_count: payload.feedbackState.feedbackSummary.hiddenJobsCount,
-              bad_fit_jobs_count: payload.feedbackState.feedbackSummary.badFitJobsCount,
-              whitelisted_companies_count:
-                payload.feedbackState.feedbackSummary.whitelistedCompaniesCount,
-              blacklisted_companies_count:
-                payload.feedbackState.feedbackSummary.blacklistedCompaniesCount,
-            },
-            top_positive_evidence: payload.feedbackState.topPositiveEvidence.map((entry) => ({
-              type: entry.type,
-              label: entry.label,
-            })),
-            top_negative_evidence: payload.feedbackState.topNegativeEvidence.map((entry) => ({
-              type: entry.type,
-              label: entry.label,
-            })),
-            current_job_feedback: payload.feedbackState.currentJobFeedback
-              ? {
-                  saved: payload.feedbackState.currentJobFeedback.saved,
-                  hidden: payload.feedbackState.currentJobFeedback.hidden,
-                  bad_fit: payload.feedbackState.currentJobFeedback.badFit,
-                  company_status: payload.feedbackState.currentJobFeedback.companyStatus,
-                }
-              : null,
-          }
-        : null,
-      raw_profile_text: payload.rawProfileText ?? null,
-    }),
+    body: JSON.stringify(buildCoverLetterDraftPayload(payload)),
   });
 
-  return {
-    draftSummary: response.draft_summary,
-    openingParagraph: response.opening_paragraph,
-    bodyParagraphs: response.body_paragraphs,
-    closingParagraph: response.closing_paragraph,
-    keyClaimsUsed: response.key_claims_used,
-    evidenceGaps: response.evidence_gaps,
-    toneNotes: response.tone_notes,
-  };
+  return mapCoverLetterDraftResponse(response);
 }
 
 export async function getInterviewPrep(
@@ -2975,138 +1445,14 @@ export async function getInterviewPrep(
     },
   }).catch(() => null);
 
-  const response = await mlRequest<MlInterviewPrepResponse>('/v1/enrichment/interview-prep', {
+  const response = await mlRequest<MlInterviewPrepResponse>(
+    '/v1/enrichment/interview-prep',
+    {
     method: 'POST',
-    body: JSON.stringify({
-      profile_id: payload.profileId,
-      analyzed_profile: payload.analyzedProfile
-        ? {
-            summary: payload.analyzedProfile.summary,
-            primary_role: payload.analyzedProfile.primaryRole,
-            seniority: payload.analyzedProfile.seniority,
-            skills: payload.analyzedProfile.skills,
-            keywords: payload.analyzedProfile.keywords,
-          }
-        : null,
-      search_profile: payload.searchProfile
-        ? {
-            primary_role: payload.searchProfile.primaryRole,
-            primary_role_confidence: payload.searchProfile.primaryRoleConfidence,
-            target_roles: payload.searchProfile.targetRoles,
-            role_candidates: payload.searchProfile.roleCandidates,
-            seniority: payload.searchProfile.seniority,
-            target_regions: payload.searchProfile.targetRegions,
-            work_modes: payload.searchProfile.workModes,
-            allowed_sources: payload.searchProfile.allowedSources,
-            profile_skills: payload.searchProfile.profileSkills,
-            profile_keywords: payload.searchProfile.profileKeywords,
-            search_terms: payload.searchProfile.searchTerms,
-            exclude_terms: payload.searchProfile.excludeTerms,
-          }
-        : null,
-      ranked_job: {
-        id: payload.rankedJob.id,
-        title: payload.rankedJob.title,
-        company_name: payload.rankedJob.company,
-        description_text: payload.rankedJob.description,
-        summary: payload.rankedJob.presentation?.summary,
-        source: payload.rankedJob.primaryVariant?.source,
-        source_job_id: payload.rankedJob.primaryVariant?.sourceJobId,
-        source_url: payload.rankedJob.primaryVariant?.sourceUrl ?? payload.rankedJob.url,
-        remote_type: payload.rankedJob.remoteType,
-        seniority: payload.rankedJob.seniority,
-        salary_label: payload.rankedJob.presentation?.salaryLabel,
-        location_label: payload.rankedJob.presentation?.locationLabel,
-        work_mode_label: payload.rankedJob.presentation?.workModeLabel,
-        freshness_label: payload.rankedJob.presentation?.freshnessLabel,
-        badges: payload.rankedJob.presentation?.badges ?? [],
-      },
-      deterministic_fit: {
-        job_id: payload.deterministicFit.jobId,
-        score: payload.deterministicFit.score,
-        matched_roles: payload.deterministicFit.matchedRoles,
-        matched_skills: payload.deterministicFit.matchedSkills,
-        matched_keywords: payload.deterministicFit.matchedKeywords,
-        source_match: payload.deterministicFit.sourceMatch,
-        work_mode_match: payload.deterministicFit.workModeMatch,
-        region_match: payload.deterministicFit.regionMatch,
-        reasons: payload.deterministicFit.reasons,
-      },
-      job_fit_explanation: payload.jobFitExplanation
-        ? {
-            fit_summary: payload.jobFitExplanation.fitSummary,
-            why_it_matches: payload.jobFitExplanation.whyItMatches,
-            risks: payload.jobFitExplanation.risks,
-            missing_signals: payload.jobFitExplanation.missingSignals,
-            recommended_next_step: payload.jobFitExplanation.recommendedNextStep,
-            application_angle: payload.jobFitExplanation.applicationAngle,
-          }
-        : null,
-      application_coach: payload.applicationCoach
-        ? {
-            application_summary: payload.applicationCoach.applicationSummary,
-            resume_focus_points: payload.applicationCoach.resumeFocusPoints,
-            suggested_bullets: payload.applicationCoach.suggestedBullets,
-            cover_letter_angles: payload.applicationCoach.coverLetterAngles,
-            interview_focus: payload.applicationCoach.interviewFocus,
-            gaps_to_address: payload.applicationCoach.gapsToAddress,
-            red_flags: payload.applicationCoach.redFlags,
-          }
-        : null,
-      cover_letter_draft: payload.coverLetterDraft
-        ? {
-            draft_summary: payload.coverLetterDraft.draftSummary,
-            opening_paragraph: payload.coverLetterDraft.openingParagraph,
-            body_paragraphs: payload.coverLetterDraft.bodyParagraphs,
-            closing_paragraph: payload.coverLetterDraft.closingParagraph,
-            key_claims_used: payload.coverLetterDraft.keyClaimsUsed,
-            evidence_gaps: payload.coverLetterDraft.evidenceGaps,
-            tone_notes: payload.coverLetterDraft.toneNotes,
-          }
-        : null,
-      feedback_state: payload.feedbackState
-        ? {
-            summary: {
-              saved_jobs_count: payload.feedbackState.feedbackSummary.savedJobsCount,
-              hidden_jobs_count: payload.feedbackState.feedbackSummary.hiddenJobsCount,
-              bad_fit_jobs_count: payload.feedbackState.feedbackSummary.badFitJobsCount,
-              whitelisted_companies_count:
-                payload.feedbackState.feedbackSummary.whitelistedCompaniesCount,
-              blacklisted_companies_count:
-                payload.feedbackState.feedbackSummary.blacklistedCompaniesCount,
-            },
-            top_positive_evidence: payload.feedbackState.topPositiveEvidence.map((entry) => ({
-              type: entry.type,
-              label: entry.label,
-            })),
-            top_negative_evidence: payload.feedbackState.topNegativeEvidence.map((entry) => ({
-              type: entry.type,
-              label: entry.label,
-            })),
-            current_job_feedback: payload.feedbackState.currentJobFeedback
-              ? {
-                  saved: payload.feedbackState.currentJobFeedback.saved,
-                  hidden: payload.feedbackState.currentJobFeedback.hidden,
-                  bad_fit: payload.feedbackState.currentJobFeedback.badFit,
-                  company_status: payload.feedbackState.currentJobFeedback.companyStatus,
-                }
-              : null,
-          }
-        : null,
-      raw_profile_text: payload.rawProfileText ?? null,
-    }),
+    body: JSON.stringify(buildInterviewPrepPayload(payload)),
   });
 
-  return {
-    prepSummary: response.prep_summary,
-    likelyTopics: response.likely_topics,
-    technicalFocus: response.technical_focus,
-    behavioralFocus: response.behavioral_focus,
-    storiesToPrepare: response.stories_to_prepare,
-    questionsToAsk: response.questions_to_ask,
-    riskAreas: response.risk_areas,
-    followUpPlan: response.follow_up_plan,
-  };
+  return mapInterviewPrepResponse(response);
 }
 
 export async function createContact(payload: ContactInput): Promise<Contact> {
