@@ -24,10 +24,13 @@ Each example contains:
 - `job_id`, title, company, source, inferred `role_family`
 - `label`, `label_score`, `label_reasons`
 - outcome signals from profile events and current feedback:
+  - viewed
   - saved
+  - applied
+  - dismissed
   - hidden
   - bad_fit
-  - application_created
+  - explicit feedback flags
 - ranking features:
   - `deterministic_score`
   - `behavior_score_delta`
@@ -37,19 +40,37 @@ Each example contains:
   - matched role / skill / keyword counts
   - deterministic fit, behavior, and learned-reranker reasons
 
-## Label policy v1
+## Label policy v2
 
-`label_policy_version = outcome_label_v1`
+`label_policy_version = outcome_label_v2`
 
 Labels are assigned deterministically with this precedence:
 
-1. `positive`, score `2`: an `application_created` event exists for the profile/job.
-2. `negative`, score `0`: a `bad_fit` or `hidden` signal exists for the profile/job.
-3. `medium`, score `1`: a `saved` signal exists for the profile/job.
+1. `positive`, score `2`: at least one `application_created` event exists for the profile/job.
+2. `negative`, score `0`: the normalized current state is dismissed because `hidden` or `bad_fit` is active.
+3. `medium`, score `1`: the normalized current state is saved.
+4. `medium`, score `1`: the job was viewed with `job_opened`, but no stronger signal exists.
 
-Jobs without one of these signals are not exported as labeled examples.
+Jobs without one of these normalized signals are not exported as labeled examples.
 
-The policy intentionally treats application creation as the strongest positive outcome. Negative feedback outranks save-only feedback when a job has both saved and hidden/bad-fit history, because explicit rejection is a stronger training signal than prior interest.
+Normalization rules:
+
+- `viewed` means `job_opened`. `job_impression` is not treated as a view.
+- `saved`, `hidden`, and `bad_fit` prefer the current mutable feedback row when present.
+- If no feedback row is active for a flag, the export reconstructs the effective event state from ordered event history:
+  - `job_saved` / `job_unsaved`
+  - `job_hidden` / `job_unhidden`
+  - `job_bad_fit` / `job_bad_fit_removed`
+- `dismissed = hidden || bad_fit`
+- `explicit_feedback = saved || hidden || bad_fit` from the feedback table
+
+The policy intentionally treats application creation as the strongest positive outcome. Dismissal outranks save-only or view-only history when a job has conflicting signals, because explicit rejection is a stronger reranking signal than prior interest.
+
+The export is deterministic:
+
+- examples are sorted by `job_id`
+- event normalization is processed in ascending `(created_at, id)` order per job
+- label reasons use a fixed precedence order
 
 An export with `"examples": []` is valid when a profile has no labelable job outcomes yet.
 It can be evaluated defensively, but it cannot train `trained_reranker_v2`.

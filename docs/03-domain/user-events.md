@@ -171,14 +171,16 @@ When enabled and loaded, `/api/v1/search/run` meta includes:
 - `trained_reranker_enabled`
 - `trained_reranker_adjusted_jobs`
 
-## Outcome dataset + offline evaluation v1
+## Outcome dataset + offline evaluation v2
 
 `GET /api/v1/profiles/:id/reranker-dataset` exports profile-scoped labeled examples for future reranker evaluation and training. It is read-only and does not change live ranking.
 
 Label policy is documented in `docs/03-domain/reranker-outcomes.md`:
 
-- `positive` = `application_created`
-- `medium` = saved
-- `negative` = bad-fit / hidden
+- `positive` = applied
+- `medium` = saved or viewed-only
+- `negative` = dismissed (`hidden` / `bad_fit`)
+
+The export also normalizes reversal events (`unsaved`, `unhidden`, `bad_fit_removed`) before labeling, so current-state feedback and immutable event history resolve into one deterministic training shape.
 
 `apps/ml/app/reranker_evaluation.py` can compare deterministic, behavior-adjusted, and learned-reranker-adjusted score orderings with simple offline metrics.
