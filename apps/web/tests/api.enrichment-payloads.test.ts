@@ -27,17 +27,18 @@ describe('enrichment api payloads', () => {
   });
 
   it('getWeeklyGuidance serializes nested enrichment payloads in engine/ml snake_case', async () => {
-    vi.mocked(fetch).mockImplementationOnce(() =>
-      jsonResponse({
-        weekly_summary: 'summary',
-        what_is_working: ['focus'],
-        what_is_not_working: ['noise'],
-        recommended_search_adjustments: ['narrow search'],
-        recommended_source_moves: ['prioritize djinni'],
-        recommended_role_focus: ['backend developer'],
-        funnel_bottlenecks: ['save to apply'],
-        next_week_plan: ['apply faster'],
-      }) as ReturnType<typeof fetch>,
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        jsonResponse({
+          weekly_summary: 'summary',
+          what_is_working: ['focus'],
+          what_is_not_working: ['noise'],
+          recommended_search_adjustments: ['narrow search'],
+          recommended_source_moves: ['prioritize djinni'],
+          recommended_role_focus: ['backend developer'],
+          funnel_bottlenecks: ['save to apply'],
+          next_week_plan: ['apply faster'],
+        }) as ReturnType<typeof fetch>,
     );
 
     await getWeeklyGuidance({

@@ -9,11 +9,8 @@ import {
   Eye,
   EyeOff,
   FileWarning,
-  Hash,
   Layers,
   Search,
-  ShieldCheck,
-  ShieldOff,
   Sparkles,
   Target,
   ThumbsDown,
@@ -23,13 +20,18 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { getAnalyticsSummary, getBehaviorSummary, getFunnelSummary, getLlmContext} from '../api/analytics';
-import {getProfileInsights, getWeeklyGuidance} from '../api/enrichment';
+import {
+  getAnalyticsSummary,
+  getBehaviorSummary,
+  getFunnelSummary,
+  getLlmContext,
+} from '../api/analytics';
+import { getProfileInsights, getWeeklyGuidance } from '../api/enrichment';
 import type {
   AnalyticsSummary,
   BehaviorSignalCount,
   FunnelSummary,
-	LlmContext
+  LlmContext,
 } from '../api/analytics';
 import type { ProfileInsights, WeeklyGuidance } from '../api/enrichment';
 import { AIInsightPanel, type AIInsight } from '../components/ui/AIInsightPanel';
@@ -163,12 +165,17 @@ function BarList({
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
                 <div
-                  className={cn('h-full rounded-full transition-[width] duration-300', barToneClasses[tone])}
+                  className={cn(
+                    'h-full rounded-full transition-[width] duration-300',
+                    barToneClasses[tone],
+                  )}
                   style={{ width }}
                 />
               </div>
             </div>
-            <p className="m-0 text-right text-sm font-semibold text-card-foreground">{item.value}</p>
+            <p className="m-0 text-right text-sm font-semibold text-card-foreground">
+              {item.value}
+            </p>
           </div>
         );
       })}
@@ -195,13 +202,27 @@ function ConversionCard({
     <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="m-0 text-xs text-muted-foreground">{label}</p>
-        <span className={cn('text-lg font-bold', tone === 'danger' ? 'text-destructive' : tone === 'warning' ? 'text-fit-fair' : tone === 'success' ? 'text-fit-excellent' : 'text-primary')}>
+        <span
+          className={cn(
+            'text-lg font-bold',
+            tone === 'danger'
+              ? 'text-destructive'
+              : tone === 'warning'
+                ? 'text-fit-fair'
+                : tone === 'success'
+                  ? 'text-fit-excellent'
+                  : 'text-primary',
+          )}
+        >
           {Math.round(rate * 100)}%
         </span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
         <div
-          className={cn('h-full rounded-full transition-[width] duration-300', barToneClasses[tone])}
+          className={cn(
+            'h-full rounded-full transition-[width] duration-300',
+            barToneClasses[tone],
+          )}
           style={{ width }}
         />
       </div>
@@ -257,7 +278,12 @@ function SignalList({
                 </span>
               </div>
             </div>
-            <span className={cn('shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]', toneClasses[tone])}>
+            <span
+              className={cn(
+                'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]',
+                toneClasses[tone],
+              )}
+            >
               net {item.netScore}
             </span>
           </div>
@@ -321,7 +347,10 @@ function TextList({
       ) : (
         <div className="mt-4 space-y-3">
           {items.map((item) => (
-            <div key={item} className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-3">
+            <div
+              key={item}
+              className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-3"
+            >
               <span className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', barToneClasses[tone])} />
               <p className="m-0 text-sm leading-6 text-card-foreground">{item}</p>
             </div>
@@ -352,20 +381,26 @@ function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
               {seniorityLabel}
             </span>
           </div>
-          <p className="m-0 mt-4 text-sm leading-7 text-card-foreground">{ctx.analyzedProfile.summary}</p>
+          <p className="m-0 mt-4 text-sm leading-7 text-card-foreground">
+            {ctx.analyzedProfile.summary}
+          </p>
         </div>
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <TextList
           title="Positive signals"
-          items={ctx.topPositiveEvidence.map((entry) => `${entry.type.replaceAll('_', ' ')}: ${entry.label}`)}
+          items={ctx.topPositiveEvidence.map(
+            (entry) => `${entry.type.replaceAll('_', ' ')}: ${entry.label}`,
+          )}
           emptyMessage="No positive signals yet."
           tone="success"
         />
         <TextList
           title="Negative signals"
-          items={ctx.topNegativeEvidence.map((entry) => `${entry.type.replaceAll('_', ' ')}: ${entry.label}`)}
+          items={ctx.topNegativeEvidence.map(
+            (entry) => `${entry.type.replaceAll('_', ' ')}: ${entry.label}`,
+          )}
           emptyMessage="No negative signals yet."
           tone="danger"
         />
@@ -511,12 +546,10 @@ function FunnelBySource({ summary }: { summary: FunnelSummary }) {
     ]),
   ).map((source) => ({
     source,
-    impressions:
-      summary.impressionsBySource.find((entry) => entry.source === source)?.count ?? 0,
+    impressions: summary.impressionsBySource.find((entry) => entry.source === source)?.count ?? 0,
     opens: summary.opensBySource.find((entry) => entry.source === source)?.count ?? 0,
     saves: summary.savesBySource.find((entry) => entry.source === source)?.count ?? 0,
-    applications:
-      summary.applicationsBySource.find((entry) => entry.source === source)?.count ?? 0,
+    applications: summary.applicationsBySource.find((entry) => entry.source === source)?.count ?? 0,
   }));
 
   if (rows.length === 0) {
@@ -701,10 +734,7 @@ export default function Analytics() {
       <PageHeader
         title="Analytics"
         description="Track job-search progress, feedback signals, conversion flow, and enrichment-ready context."
-        breadcrumb={[
-          { label: 'Dashboard', href: '/' },
-          { label: 'Analytics' },
-        ]}
+        breadcrumb={[{ label: 'Dashboard', href: '/' }, { label: 'Analytics' }]}
       />
 
       {isLoading ? (
@@ -775,12 +805,20 @@ export default function Analytics() {
             />
             <AnalyticsCard
               title="Open Rate"
-              value={funnel ? `${Math.round(funnel.conversionRates.openRateFromImpressions * 100)}%` : '0%'}
+              value={
+                funnel
+                  ? `${Math.round(funnel.conversionRates.openRateFromImpressions * 100)}%`
+                  : '0%'
+              }
               icon={Eye}
             />
             <AnalyticsCard
               title="Apply Rate"
-              value={funnel ? `${Math.round(funnel.conversionRates.applicationRateFromSaves * 100)}%` : '0%'}
+              value={
+                funnel
+                  ? `${Math.round(funnel.conversionRates.applicationRateFromSaves * 100)}%`
+                  : '0%'
+              }
               icon={Zap}
             />
           </div>
@@ -823,10 +861,26 @@ export default function Analytics() {
                   eyebrow="Diagnostics"
                 >
                   <div className="grid grid-cols-2 gap-3">
-                    <StatCard title="Low evidence" value={summary.searchQuality.lowEvidenceJobs} icon={AlertTriangle} />
-                    <StatCard title="Weak descriptions" value={summary.searchQuality.weakDescriptionJobs} icon={FileWarning} />
-                    <StatCard title="Role mismatch" value={summary.searchQuality.roleMismatchJobs} icon={XCircle} />
-                    <StatCard title="Seniority mismatch" value={summary.searchQuality.seniorityMismatchJobs} icon={TrendingDown} />
+                    <StatCard
+                      title="Low evidence"
+                      value={summary.searchQuality.lowEvidenceJobs}
+                      icon={AlertTriangle}
+                    />
+                    <StatCard
+                      title="Weak descriptions"
+                      value={summary.searchQuality.weakDescriptionJobs}
+                      icon={FileWarning}
+                    />
+                    <StatCard
+                      title="Role mismatch"
+                      value={summary.searchQuality.roleMismatchJobs}
+                      icon={XCircle}
+                    />
+                    <StatCard
+                      title="Seniority mismatch"
+                      value={summary.searchQuality.seniorityMismatchJobs}
+                      icon={TrendingDown}
+                    />
                   </div>
 
                   <div className="mt-4">
@@ -853,7 +907,11 @@ export default function Analytics() {
                     <StatCard title="Impressions" value={funnel.impressionCount} icon={Eye} />
                     <StatCard title="Opens" value={funnel.openCount} icon={BarChart2} />
                     <StatCard title="Saves" value={funnel.saveCount} icon={Bookmark} />
-                    <StatCard title="Applications" value={funnel.applicationCreatedCount} icon={Zap} />
+                    <StatCard
+                      title="Applications"
+                      value={funnel.applicationCreatedCount}
+                      icon={Zap}
+                    />
                   </div>
 
                   <div className="mt-6 grid gap-4 xl:grid-cols-3">
@@ -1050,10 +1108,7 @@ export default function Analytics() {
                   eyebrow="Profile intelligence"
                 >
                   {insightsLoading ? (
-                    <EmptyState
-                      message="Generating enrichment…"
-                      className="px-4 py-4 text-left"
-                    />
+                    <EmptyState message="Generating enrichment…" className="px-4 py-4 text-left" />
                   ) : insightsError ? (
                     <EmptyState
                       message={

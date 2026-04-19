@@ -39,9 +39,7 @@ export type GlobalSearchApplicationResult = {
 };
 
 export async function getApplications(): Promise<Application[]> {
-  const response = await request<EngineRecentApplicationsResponse>(
-    '/api/v1/applications/recent',
-  );
+  const response = await request<EngineRecentApplicationsResponse>('/api/v1/applications/recent');
   return response.applications.map(mapApplication);
 }
 
@@ -50,9 +48,7 @@ export async function getApplicationDetail(id: string): Promise<ApplicationDetai
   return mapApplicationDetail(detail);
 }
 
-export async function createApplication(
-  payload: ApplicationInput,
-): Promise<Application> {
+export async function createApplication(payload: ApplicationInput): Promise<Application> {
   const application = await request<EngineApplication>(
     '/api/v1/applications',
     json('POST', {
@@ -112,17 +108,11 @@ export async function patchApplication(
   return updateApplication(id, { status });
 }
 
-export async function setDueDate(
-  id: string,
-  dueDate: string | null,
-): Promise<Application> {
+export async function setDueDate(id: string, dueDate: string | null): Promise<Application> {
   return updateApplication(id, { dueDate });
 }
 
-export async function addNote(
-  applicationId: string,
-  content: string,
-): Promise<ApplicationNote> {
+export async function addNote(applicationId: string, content: string): Promise<ApplicationNote> {
   const note = await request<{
     id: string;
     application_id: string;
@@ -186,8 +176,7 @@ export const createActivity = (
   _applicationId: string,
   _payload: ActivityInput,
 ): Promise<Activity> => unsupported('Activities');
-export const deleteActivity = (_id: string): Promise<void> =>
-  unsupported('Activities');
+export const deleteActivity = (_id: string): Promise<void> => unsupported('Activities');
 export const getTasks = (_applicationId: string): Promise<Task[]> => unsupported('Tasks');
 export const getDueTasks = (): Promise<Task[]> => unsupported('Tasks');
 export const createTask = (_applicationId: string, _payload: TaskInput): Promise<Task> =>
@@ -203,8 +192,7 @@ export const createCoverLetter = (_payload: CoverLetterInput): Promise<CoverLett
   unsupported('Cover letters');
 export const updateCoverLetter = (_id: string, _content: string): Promise<CoverLetter> =>
   unsupported('Cover letters');
-export const deleteCoverLetter = (_id: string): Promise<void> =>
-  unsupported('Cover letters');
+export const deleteCoverLetter = (_id: string): Promise<void> => unsupported('Cover letters');
 export const getInterviewQA = (_jobId?: string): Promise<InterviewQA[]> =>
   unsupported('Interview Q&A');
 export const createInterviewQA = (_payload: InterviewQAInput): Promise<InterviewQA> =>
@@ -213,7 +201,6 @@ export const updateInterviewQA = (
   _id: string,
   _patch: { question?: string; answer?: string },
 ): Promise<InterviewQA> => unsupported('Interview Q&A');
-export const deleteInterviewQA = (_id: string): Promise<void> =>
-  unsupported('Interview Q&A');
+export const deleteInterviewQA = (_id: string): Promise<void> => unsupported('Interview Q&A');
 export const getOffers = (): Promise<Offer[]> => unsupported('Offers');
 export const deleteOffer = (_id: string): Promise<void> => unsupported('Offers');

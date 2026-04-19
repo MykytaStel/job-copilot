@@ -3,9 +3,7 @@ import { logUserEvent } from '../../api/events';
 const SESSION_STORAGE_KEY = 'job-copilot.job-impressions.v1';
 const runtimeLoggedImpressions = new Set<string>();
 
-export type JobImpressionSurface =
-  | 'dashboard_recent_jobs'
-  | 'ranked_search_results';
+export type JobImpressionSurface = 'dashboard_recent_jobs' | 'ranked_search_results';
 
 function readLoggedImpressionKeys() {
   if (typeof window === 'undefined') {
@@ -23,9 +21,7 @@ function readLoggedImpressionKeys() {
       return new Set<string>();
     }
 
-    return new Set(
-      parsed.filter((value): value is string => typeof value === 'string'),
-    );
+    return new Set(parsed.filter((value): value is string => typeof value === 'string'));
   } catch {
     return new Set<string>();
   }
@@ -46,11 +42,7 @@ function persistLoggedImpressionKeys(keys: Set<string>) {
   }
 }
 
-function impressionKey(
-  profileId: string,
-  surface: JobImpressionSurface,
-  jobId: string,
-) {
+function impressionKey(profileId: string, surface: JobImpressionSurface, jobId: string) {
   return `${profileId}:${surface}:${jobId}`;
 }
 

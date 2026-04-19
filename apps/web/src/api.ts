@@ -154,15 +154,8 @@ export {
   removeCompanyBlacklist,
 } from './api/feedback';
 
-export {
-  getNotifications,
-  markNotificationRead,
-  getUnreadCount,
-} from './api/notifications';
-export type {
-  AppNotificationType,
-  AppNotification,
-} from './api/notifications';
+export { getNotifications, markNotificationRead, getUnreadCount } from './api/notifications';
+export type { AppNotificationType, AppNotification } from './api/notifications';
 
 export {
   getProfileInsights,

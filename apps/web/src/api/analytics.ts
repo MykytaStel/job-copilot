@@ -251,9 +251,7 @@ function mapJobsByLifecycle(lifecycle: EngineJobsByLifecycle): JobsByLifecycle {
   };
 }
 
-function mapBehaviorSignalCount(
-  signal: EngineBehaviorSignalCountResponse,
-): BehaviorSignalCount {
+function mapBehaviorSignalCount(signal: EngineBehaviorSignalCountResponse): BehaviorSignalCount {
   return {
     key: signal.key,
     saveCount: signal.save_count,
@@ -266,9 +264,7 @@ function mapBehaviorSignalCount(
   };
 }
 
-export async function getAnalyticsSummary(
-  profileId: string,
-): Promise<AnalyticsSummary> {
+export async function getAnalyticsSummary(profileId: string): Promise<AnalyticsSummary> {
   const response = await request<EngineAnalyticsSummaryResponse>(
     `/api/v1/profiles/${profileId}/analytics/summary`,
   );
@@ -292,9 +288,7 @@ export async function getAnalyticsSummary(
   };
 }
 
-export async function getBehaviorSummary(
-  profileId: string,
-): Promise<BehaviorSummary> {
+export async function getBehaviorSummary(profileId: string): Promise<BehaviorSummary> {
   const response = await request<EngineBehaviorSummaryResponse>(
     `/api/v1/profiles/${profileId}/behavior-summary`,
   );
@@ -304,13 +298,10 @@ export async function getBehaviorSummary(
     searchRunCount: response.search_run_count,
     topPositiveSources: response.top_positive_sources.map(mapBehaviorSignalCount),
     topNegativeSources: response.top_negative_sources.map(mapBehaviorSignalCount),
-    topPositiveRoleFamilies:
-      response.top_positive_role_families.map(mapBehaviorSignalCount),
-    topNegativeRoleFamilies:
-      response.top_negative_role_families.map(mapBehaviorSignalCount),
+    topPositiveRoleFamilies: response.top_positive_role_families.map(mapBehaviorSignalCount),
+    topNegativeRoleFamilies: response.top_negative_role_families.map(mapBehaviorSignalCount),
     sourceSignalCounts: response.source_signal_counts.map(mapBehaviorSignalCount),
-    roleFamilySignalCounts:
-      response.role_family_signal_counts.map(mapBehaviorSignalCount),
+    roleFamilySignalCounts: response.role_family_signal_counts.map(mapBehaviorSignalCount),
   };
 }
 
@@ -332,11 +323,9 @@ export async function getFunnelSummary(profileId: string): Promise<FunnelSummary
     coverLetterDraftRequestedCount: response.cover_letter_draft_requested_count,
     interviewPrepRequestedCount: response.interview_prep_requested_count,
     conversionRates: {
-      openRateFromImpressions:
-        response.conversion_rates.open_rate_from_impressions,
+      openRateFromImpressions: response.conversion_rates.open_rate_from_impressions,
       saveRateFromOpens: response.conversion_rates.save_rate_from_opens,
-      applicationRateFromSaves:
-        response.conversion_rates.application_rate_from_saves,
+      applicationRateFromSaves: response.conversion_rates.application_rate_from_saves,
     },
     impressionsBySource: response.impressions_by_source,
     opensBySource: response.opens_by_source,
