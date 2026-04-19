@@ -204,7 +204,8 @@ mod tests {
                         "job-saved",
                         "Rust Platform Engineer",
                         "djinni",
-                    )),
+                    ))
+                    .with_job_view(sample_job_view("job-viewed", "Backend Engineer", "djinni")),
             ),
             ApplicationsService::for_tests(ApplicationsServiceStub::default()),
             ResumesService::for_tests(ResumesServiceStub::default()),
@@ -244,6 +245,12 @@ mod tests {
                         "other-profile",
                         "job-saved",
                         UserEventType::ApplicationCreated,
+                    ))
+                    .with_event(event(
+                        "evt-4",
+                        "profile-1",
+                        "job-viewed",
+                        UserEventType::JobOpened,
                     )),
             ));
 
@@ -258,17 +265,37 @@ mod tests {
             serde_json::from_slice(&body).expect("response body should be valid JSON");
 
         assert_eq!(payload["profile_id"], json!("profile-1"));
-        assert_eq!(payload["label_policy_version"], json!("outcome_label_v1"));
-        assert_eq!(payload["examples"].as_array().map(Vec::len), Some(3));
+        assert_eq!(payload["label_policy_version"], json!("outcome_label_v2"));
+        assert_eq!(payload["examples"].as_array().map(Vec::len), Some(4));
         assert_eq!(payload["examples"][0]["job_id"], json!("job-applied"));
         assert_eq!(payload["examples"][0]["label"], json!("positive"));
         assert_eq!(payload["examples"][0]["label_score"], json!(2));
+        assert_eq!(payload["examples"][0]["signals"]["applied"], json!(true));
         assert_eq!(
-            payload["examples"][0]["signals"]["application_created"],
+            payload["examples"][0]["signals"]["applied_event_count"],
+            json!(1)
+        );
+        assert_eq!(payload["examples"][1]["job_id"], json!("job-hidden"));
+        assert_eq!(payload["examples"][1]["label"], json!("negative"));
+        assert_eq!(payload["examples"][1]["signals"]["dismissed"], json!(true));
+        assert_eq!(
+            payload["examples"][1]["label_reasons"],
+            json!(["dismissed", "hidden"])
+        );
+        assert_eq!(payload["examples"][2]["job_id"], json!("job-saved"));
+        assert_eq!(payload["examples"][2]["label"], json!("medium"));
+        assert_eq!(
+            payload["examples"][2]["signals"]["explicit_feedback"],
             json!(true)
         );
-        assert_eq!(payload["examples"][1]["label"], json!("negative"));
-        assert_eq!(payload["examples"][2]["label"], json!("medium"));
+        assert_eq!(payload["examples"][2]["signals"]["saved"], json!(true));
+        assert_eq!(payload["examples"][3]["job_id"], json!("job-viewed"));
+        assert_eq!(payload["examples"][3]["label_reasons"], json!(["viewed"]));
+        assert_eq!(payload["examples"][3]["signals"]["viewed"], json!(true));
+        assert_eq!(
+            payload["examples"][3]["signals"]["viewed_event_count"],
+            json!(1)
+        );
         assert!(payload["examples"][2]["ranking"]["deterministic_score"].is_number());
         assert!(payload["examples"][2]["ranking"]["learned_reranker_score"].is_number());
     }
