@@ -1,30 +1,15 @@
 import type {
-  CompanyFeedbackRecord,
-  FeedbackOverview,
   HealthResponse,
-  JobFeedbackRecord,
   JobFeedbackState,
   JobPosting,
 } from '@job-copilot/shared';
 import {
-  json,
   mlRequest,
-  readStoredProfileId,
   request,
 } from './api/client';
 import type {
-  EngineCompanyFeedbackRecord,
-  EngineFeedbackOverviewResponse,
   EngineHealthResponse,
-  EngineJobFeedbackRecord,
-  EngineNotification,
-  EngineNotificationsResponse,
-  EngineUnreadNotificationsCountResponse,
 } from './api/engine-types';
-import {
-  mapCompanyFeedbackRecord,
-  mapJobFeedbackRecord,
-} from './api/mappers';
 import type {
   AnalyticsFeedbackSummary,
   AnalyticsSummary,
@@ -198,21 +183,29 @@ export type {
   GlobalSearchResults,
 } from './api/jobs';
 
-export type AppNotificationType =
-  | 'new_jobs_found'
-  | 'job_reactivated'
-  | 'application_due_soon';
+export {
+  getFeedback,
+  markJobSaved,
+  hideJobForProfile,
+  markJobBadFit,
+  unsaveJob,
+  unhideJob,
+  unmarkJobBadFit,
+  addCompanyWhitelist,
+  removeCompanyWhitelist,
+  addCompanyBlacklist,
+  removeCompanyBlacklist,
+} from './api/feedback';
 
-export type AppNotification = {
-  id: string;
-  profileId: string;
-  type: AppNotificationType;
-  title: string;
-  body?: string;
-  payload?: Record<string, unknown>;
-  readAt?: string;
-  createdAt: string;
-};
+export {
+  getNotifications,
+  markNotificationRead,
+  getUnreadCount,
+} from './api/notifications';
+export type {
+  AppNotificationType,
+  AppNotification,
+} from './api/notifications';
 
 export type ProfileInsights = {
   profileSummary: string;
@@ -349,19 +342,6 @@ export type InterviewPrepRequest = {
   rawProfileText?: string | null;
 };
 
-function mapNotification(notification: EngineNotification): AppNotification {
-  return {
-    id: notification.id,
-    profileId: notification.profile_id,
-    type: notification.type,
-    title: notification.title,
-    body: notification.body ?? undefined,
-    payload: notification.payload ?? undefined,
-    readAt: notification.read_at ?? undefined,
-    createdAt: notification.created_at,
-  };
-}
-
 export async function getHealth(): Promise<HealthResponse> {
   const health = await request<EngineHealthResponse>('/health');
 
@@ -370,177 +350,6 @@ export async function getHealth(): Promise<HealthResponse> {
     service: `engine-api:${health.database.status}`,
     timestamp: new Date().toISOString(),
   };
-}
-
-export async function getFeedback(profileId: string): Promise<FeedbackOverview> {
-  const response = await request<EngineFeedbackOverviewResponse>(
-    `/api/v1/profiles/${profileId}/feedback`,
-  );
-
-  return {
-    profileId: response.profile_id,
-    jobs: response.jobs.map(mapJobFeedbackRecord),
-    companies: response.companies.map(mapCompanyFeedbackRecord),
-    summary: {
-      savedJobsCount: response.summary.saved_jobs_count,
-      hiddenJobsCount: response.summary.hidden_jobs_count,
-      badFitJobsCount: response.summary.bad_fit_jobs_count,
-      whitelistedCompaniesCount: response.summary.whitelisted_companies_count,
-      blacklistedCompaniesCount: response.summary.blacklisted_companies_count,
-    },
-  };
-}
-
-export async function markJobSaved(
-  profileId: string,
-  jobId: string,
-): Promise<JobFeedbackRecord> {
-  const record = await request<EngineJobFeedbackRecord>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/saved`,
-    json('PUT', {}),
-  );
-
-  return mapJobFeedbackRecord(record);
-}
-
-export async function hideJobForProfile(
-  profileId: string,
-  jobId: string,
-): Promise<JobFeedbackRecord> {
-  const record = await request<EngineJobFeedbackRecord>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/hidden`,
-    json('PUT', {}),
-  );
-
-  return mapJobFeedbackRecord(record);
-}
-
-export async function markJobBadFit(
-  profileId: string,
-  jobId: string,
-): Promise<JobFeedbackRecord> {
-  const record = await request<EngineJobFeedbackRecord>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/bad-fit`,
-    json('PUT', {}),
-  );
-
-  return mapJobFeedbackRecord(record);
-}
-
-export async function unsaveJob(
-  profileId: string,
-  jobId: string,
-): Promise<void> {
-  await request<void>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/saved`,
-    { method: 'DELETE' },
-  );
-}
-
-export async function unhideJob(
-  profileId: string,
-  jobId: string,
-): Promise<void> {
-  await request<void>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/hidden`,
-    { method: 'DELETE' },
-  );
-}
-
-export async function unmarkJobBadFit(
-  profileId: string,
-  jobId: string,
-): Promise<void> {
-  await request<void>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/bad-fit`,
-    { method: 'DELETE' },
-  );
-}
-
-export async function addCompanyWhitelist(
-  profileId: string,
-  companyName: string,
-): Promise<CompanyFeedbackRecord> {
-  const record = await request<EngineCompanyFeedbackRecord>(
-    `/api/v1/profiles/${profileId}/companies/whitelist`,
-    json('PUT', { company_name: companyName }),
-  );
-
-  return mapCompanyFeedbackRecord(record);
-}
-
-export async function removeCompanyWhitelist(
-  profileId: string,
-  companyName: string,
-): Promise<void> {
-  await request<void>(
-    `/api/v1/profiles/${profileId}/companies/whitelist`,
-    json('DELETE', { company_name: companyName }),
-  );
-}
-
-export async function addCompanyBlacklist(
-  profileId: string,
-  companyName: string,
-): Promise<CompanyFeedbackRecord> {
-  const record = await request<EngineCompanyFeedbackRecord>(
-    `/api/v1/profiles/${profileId}/companies/blacklist`,
-    json('PUT', { company_name: companyName }),
-  );
-
-  return mapCompanyFeedbackRecord(record);
-}
-
-export async function removeCompanyBlacklist(
-  profileId: string,
-  companyName: string,
-): Promise<void> {
-  await request<void>(
-    `/api/v1/profiles/${profileId}/companies/blacklist`,
-    json('DELETE', { company_name: companyName }),
-  );
-}
-
-export async function getNotifications(
-  profileId?: string,
-  limit: number = 20,
-): Promise<AppNotification[]> {
-  const resolvedId = profileId ?? readStoredProfileId() ?? undefined;
-  if (!resolvedId) {
-    return [];
-  }
-
-  const response = await request<EngineNotificationsResponse>(
-    `/api/v1/notifications?profile_id=${encodeURIComponent(
-      resolvedId,
-    )}&limit=${encodeURIComponent(String(limit))}`,
-  );
-
-  return response.notifications.map(mapNotification);
-}
-
-export async function markNotificationRead(id: string): Promise<AppNotification> {
-  const notification = await request<EngineNotification>(
-    `/api/v1/notifications/${encodeURIComponent(id)}/read`,
-    json('POST', {}),
-  );
-
-  return mapNotification(notification);
-}
-
-export async function getUnreadCount(profileId?: string): Promise<number> {
-  const resolvedId = profileId ?? readStoredProfileId() ?? undefined;
-  if (!resolvedId) {
-    return 0;
-  }
-
-  const response = await request<EngineUnreadNotificationsCountResponse>(
-    `/api/v1/notifications/unread-count?profile_id=${encodeURIComponent(
-      resolvedId,
-    )}`,
-  );
-
-  return response.unread_count;
 }
 
 export async function getProfileInsights(
