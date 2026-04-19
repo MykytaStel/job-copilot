@@ -28,14 +28,20 @@ pub struct OutcomeExampleResponse {
 
 #[derive(Debug, Serialize)]
 pub struct OutcomeSignalsResponse {
+    pub viewed: bool,
     pub saved: bool,
     pub hidden: bool,
     pub bad_fit: bool,
-    pub application_created: bool,
-    pub saved_count: usize,
-    pub hidden_count: usize,
-    pub bad_fit_count: usize,
-    pub application_created_count: usize,
+    pub applied: bool,
+    pub dismissed: bool,
+    pub explicit_feedback: bool,
+    pub explicit_saved: bool,
+    pub explicit_hidden: bool,
+    pub explicit_bad_fit: bool,
+    pub viewed_event_count: usize,
+    pub saved_event_count: usize,
+    pub applied_event_count: usize,
+    pub dismissed_event_count: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -91,14 +97,20 @@ impl From<OutcomeExample> for OutcomeExampleResponse {
 impl From<OutcomeSignals> for OutcomeSignalsResponse {
     fn from(value: OutcomeSignals) -> Self {
         Self {
+            viewed: value.viewed,
             saved: value.saved,
             hidden: value.hidden,
             bad_fit: value.bad_fit,
-            application_created: value.application_created,
-            saved_count: value.saved_count,
-            hidden_count: value.hidden_count,
-            bad_fit_count: value.bad_fit_count,
-            application_created_count: value.application_created_count,
+            applied: value.applied,
+            dismissed: value.dismissed,
+            explicit_feedback: value.explicit_feedback,
+            explicit_saved: value.explicit_saved,
+            explicit_hidden: value.explicit_hidden,
+            explicit_bad_fit: value.explicit_bad_fit,
+            viewed_event_count: value.viewed_event_count,
+            saved_event_count: value.saved_event_count,
+            applied_event_count: value.applied_event_count,
+            dismissed_event_count: value.dismissed_event_count,
         }
     }
 }
