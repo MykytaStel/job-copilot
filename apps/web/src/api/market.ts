@@ -84,16 +84,10 @@ export async function getMarketSalaries(
   seniorityBuckets: readonly string[] = DEFAULT_SENIORITY_BUCKETS,
 ): Promise<MarketSalaryTrend[]> {
   const buckets = Array.from(
-    new Set(
-      seniorityBuckets
-        .map((bucket) => bucket.trim().toLowerCase())
-        .filter(Boolean),
-    ),
+    new Set(seniorityBuckets.map((bucket) => bucket.trim().toLowerCase()).filter(Boolean)),
   );
 
-  const response = await request<EngineMarketSalaryTrend[]>(
-    '/api/v1/market/salary-trends',
-  );
+  const response = await request<EngineMarketSalaryTrend[]>('/api/v1/market/salary-trends');
 
   const trendsBySeniority = new Map(
     response.map((trend) => [
@@ -126,5 +120,4 @@ export async function getMarketRoles(period = 30): Promise<MarketRoleDemand[]> {
   }));
 }
 
-export const getMarketInsights = (): Promise<MarketInsights> =>
-  unsupported('Market insights');
+export const getMarketInsights = (): Promise<MarketInsights> => unsupported('Market insights');

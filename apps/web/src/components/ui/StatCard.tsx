@@ -11,7 +11,14 @@ interface StatCardProps {
   className?: string;
 }
 
-export function StatCard({ title, value, description, icon: Icon, trend, className }: StatCardProps) {
+export function StatCard({
+  title,
+  value,
+  description,
+  icon: Icon,
+  trend,
+  className,
+}: StatCardProps) {
   return (
     <Card className={cn('border-border bg-card', className)}>
       <CardContent className="px-5">
@@ -19,9 +26,7 @@ export function StatCard({ title, value, description, icon: Icon, trend, classNa
           <div className="space-y-1.5">
             <p className="text-sm font-medium text-muted-foreground">{title}</p>
             <p className="text-2xl font-bold text-card-foreground">{value}</p>
-            {description && (
-              <p className="text-sm text-muted-foreground">{description}</p>
-            )}
+            {description && <p className="text-sm text-muted-foreground">{description}</p>}
             {trend && (
               <div className="mt-1 flex items-center gap-1.5">
                 <span
@@ -30,7 +35,8 @@ export function StatCard({ title, value, description, icon: Icon, trend, classNa
                     trend.value >= 0 ? 'text-fit-excellent' : 'text-fit-poor',
                   )}
                 >
-                  {trend.value >= 0 ? '+' : ''}{trend.value}%
+                  {trend.value >= 0 ? '+' : ''}
+                  {trend.value}%
                 </span>
                 <span className="text-xs text-muted-foreground">{trend.label}</span>
               </div>

@@ -1,9 +1,7 @@
 import type { EngineApiError } from './engine-types/health';
 
-const API_URL =
-  import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
-const ML_URL =
-  import.meta.env.VITE_ML_URL?.trim() || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
+const ML_URL = import.meta.env.VITE_ML_URL?.trim() || 'http://localhost:8000';
 const PROFILE_ID_KEY = 'engine_api_profile_id';
 
 export const RECENT_JOBS_LIMIT_MAX = 200;
@@ -30,10 +28,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export async function requestOptional<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T | undefined> {
+export async function requestOptional<T>(path: string, init?: RequestInit): Promise<T | undefined> {
   const res = await fetch(`${API_URL}${path}`, init);
   if (res.status === 404) {
     return undefined;
@@ -59,9 +54,7 @@ export function unsupported(feature: string): never {
 }
 
 export function unsupportedPromise<T>(feature: string): Promise<T> {
-  return Promise.reject(
-    new Error(`${feature} is not supported by engine-api yet`),
-  );
+  return Promise.reject(new Error(`${feature} is not supported by engine-api yet`));
 }
 
 export function readStoredProfileId() {

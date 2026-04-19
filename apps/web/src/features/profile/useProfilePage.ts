@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 
@@ -23,21 +23,46 @@ import {
   toggleValue,
 } from './profile.utils';
 
+type ProfileFormState = {
+  name: string;
+  email: string;
+  location: string;
+  rawText: string;
+  yearsOfExperience: string;
+  salaryMin: string;
+  salaryMax: string;
+  salaryCurrency: string;
+  languages: string[];
+};
+
+function getProfileFormState(
+  profile: Awaited<ReturnType<typeof getProfile>> | undefined,
+  rawText: string | undefined,
+): ProfileFormState {
+  return {
+    name: profile?.name ?? '',
+    email: profile?.email ?? '',
+    location: profile?.location ?? '',
+    rawText: rawText ?? '',
+    yearsOfExperience: profile?.yearsOfExperience?.toString() ?? '',
+    salaryMin: profile?.salaryMin?.toString() ?? '',
+    salaryMax: profile?.salaryMax?.toString() ?? '',
+    salaryCurrency: profile?.salaryCurrency ?? 'USD',
+    languages: profile?.languages ?? [],
+  };
+}
+
 export function useProfilePage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [location, setLocation] = useState('');
-  const [rawText, setRawText] = useState('');
-  const [yearsOfExperience, setYearsOfExperience] = useState('');
-  const [salaryMin, setSalaryMin] = useState('');
-  const [salaryMax, setSalaryMax] = useState('');
-  const [salaryCurrency, setSalaryCurrency] = useState('USD');
-  const [languages, setLanguages] = useState<string[]>([]);
-  const [targetRegions, setTargetRegions] = useState<SearchProfileBuildResult['searchProfile']['targetRegions']>([]);
-  const [workModes, setWorkModes] = useState<SearchProfileBuildResult['searchProfile']['workModes']>([]);
+  const [profileDraft, setProfileDraft] = useState<ProfileFormState | null>(null);
+  const [targetRegions, setTargetRegions] = useState<
+    SearchProfileBuildResult['searchProfile']['targetRegions']
+  >([]);
+  const [workModes, setWorkModes] = useState<
+    SearchProfileBuildResult['searchProfile']['workModes']
+  >([]);
   const [preferredRoles, setPreferredRoles] = useState<string[]>([]);
   const [allowedSources, setAllowedSources] = useState<string[]>([]);
   const [includeKeywordsInput, setIncludeKeywordsInput] = useState('');
@@ -49,6 +74,12 @@ export function useProfilePage() {
   const profileQuery = useQuery({
     queryKey: queryKeys.profile.root(),
     queryFn: getProfile,
+  });
+  const rawTextQuery = useQuery({
+    queryKey: queryKeys.profile.rawText(),
+    queryFn: getStoredProfileRawText,
+    enabled: Boolean(profileQuery.data),
+    retry: false,
   });
   const rolesQuery = useQuery({
     queryKey: queryKeys.roles.all(),
@@ -64,22 +95,30 @@ export function useProfilePage() {
     enabled: !!profileQuery.data?.id,
   });
 
-  useEffect(() => {
-    if (!profileQuery.data) return;
+  const baseProfileForm = useMemo(
+    () => getProfileFormState(profileQuery.data, rawTextQuery.data),
+    [profileQuery.data, rawTextQuery.data],
+  );
+  const profileForm = profileDraft ?? baseProfileForm;
 
-    setName(profileQuery.data.name);
-    setEmail(profileQuery.data.email);
-    setLocation(profileQuery.data.location ?? '');
-    setYearsOfExperience(profileQuery.data.yearsOfExperience?.toString() ?? '');
-    setSalaryMin(profileQuery.data.salaryMin?.toString() ?? '');
-    setSalaryMax(profileQuery.data.salaryMax?.toString() ?? '');
-    setSalaryCurrency(profileQuery.data.salaryCurrency ?? 'USD');
-    setLanguages(profileQuery.data.languages ?? []);
+  function updateProfileDraft(patch: Partial<ProfileFormState>) {
+    setProfileDraft((current) => ({
+      ...(current ?? profileForm),
+      ...patch,
+    }));
+  }
 
-    void getStoredProfileRawText()
-      .then(setRawText)
-      .catch(() => {});
-  }, [profileQuery.data]);
+  const {
+    name,
+    email,
+    location,
+    rawText,
+    yearsOfExperience,
+    salaryMin,
+    salaryMax,
+    salaryCurrency,
+  } = profileForm;
+  const languages = profileForm.languages;
 
   const saveMutation = useMutation({
     mutationFn: (vars: {
@@ -106,14 +145,15 @@ export function useProfilePage() {
         summary: undefined,
         skills: [],
       }),
-    onSuccess: (updated) => {
+    onSuccess: (updated, vars) => {
       queryClient.setQueryData(queryKeys.profile.root(), updated);
+      queryClient.setQueryData(queryKeys.profile.rawText(), vars.rawText);
+      setProfileDraft(null);
       void queryClient.invalidateQueries({ queryKey: ['ml', 'rerank', updated.id] });
       void queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Profile saved');
     },
-    onError: (error: unknown) =>
-      toast.error(error instanceof Error ? error.message : 'Error'),
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
   });
 
   const analyzeMutation = useMutation({
@@ -130,15 +170,16 @@ export function useProfilePage() {
               }
             : current,
       );
-      const profileId = (queryClient.getQueryData(queryKeys.profile.root()) as { id?: string } | undefined)?.id;
+      const profileId = (
+        queryClient.getQueryData(queryKeys.profile.root()) as { id?: string } | undefined
+      )?.id;
       if (profileId) {
         void queryClient.invalidateQueries({ queryKey: ['ml', 'rerank', profileId] });
         void queryClient.invalidateQueries({ queryKey: ['analytics'] });
       }
       toast.success('Profile analyzed');
     },
-    onError: (error: unknown) =>
-      toast.error(error instanceof Error ? error.message : 'Error'),
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
   });
 
   const runMutation = useMutation({
@@ -184,8 +225,7 @@ export function useProfilePage() {
       setSearchError(null);
       toast.success('Search profile built');
     },
-    onError: (error: unknown) =>
-      toast.error(error instanceof Error ? error.message : 'Error'),
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
   });
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -199,7 +239,7 @@ export function useProfilePage() {
       try {
         const text = await extractPdfText(file);
         if (text.trim()) {
-          setRawText(text);
+          updateProfileDraft({ rawText: text });
           toast.success(`PDF завантажено: ${file.name}`, { id: loadingToast });
         } else {
           toast.error('PDF порожній або захищений — спробуйте .txt', { id: loadingToast });
@@ -216,7 +256,7 @@ export function useProfilePage() {
       const text = loadEvent.target?.result;
       const cleanedText = typeof text === 'string' ? cleanupExtractedResumeText(text) : '';
       if (cleanedText.trim()) {
-        setRawText(cleanedText);
+        updateProfileDraft({ rawText: cleanedText });
         toast.success(`Файл завантажено: ${file.name}`);
       } else {
         toast.error('Файл порожній або не вдалося прочитати');
@@ -272,19 +312,23 @@ export function useProfilePage() {
     analyzeMutation,
     buildMutation,
     runMutation,
-    setName,
-    setEmail,
-    setLocation,
-    setRawText,
-    setYearsOfExperience,
-    setSalaryMin,
-    setSalaryMax,
-    setSalaryCurrency,
+    setName: (value: string) => updateProfileDraft({ name: value }),
+    setEmail: (value: string) => updateProfileDraft({ email: value }),
+    setLocation: (value: string) => updateProfileDraft({ location: value }),
+    setRawText: (value: string) => updateProfileDraft({ rawText: value }),
+    setYearsOfExperience: (value: string) => updateProfileDraft({ yearsOfExperience: value }),
+    setSalaryMin: (value: string) => updateProfileDraft({ salaryMin: value }),
+    setSalaryMax: (value: string) => updateProfileDraft({ salaryMax: value }),
+    setSalaryCurrency: (value: string) => updateProfileDraft({ salaryCurrency: value }),
     setIncludeKeywordsInput,
     setExcludeKeywordsInput,
-    toggleLanguage: (value: string) => setLanguages((current) => toggleValue(current, value)),
-    toggleTargetRegion: (value: SearchProfileBuildResult['searchProfile']['targetRegions'][number]) =>
-      setTargetRegions((current) => toggleValue(current, value)),
+    toggleLanguage: (value: string) =>
+      updateProfileDraft({
+        languages: toggleValue(languages, value),
+      }),
+    toggleTargetRegion: (
+      value: SearchProfileBuildResult['searchProfile']['targetRegions'][number],
+    ) => setTargetRegions((current) => toggleValue(current, value)),
     toggleWorkMode: (value: SearchProfileBuildResult['searchProfile']['workModes'][number]) =>
       setWorkModes((current) => toggleValue(current, value)),
     togglePreferredRole: (value: string) =>

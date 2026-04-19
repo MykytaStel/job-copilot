@@ -24,11 +24,7 @@ export function FilterChips({
 }: FilterChipsProps) {
   function handleSelect(id: string) {
     if (multiple) {
-      onChange(
-        selected.includes(id)
-          ? selected.filter((s) => s !== id)
-          : [...selected, id],
-      );
+      onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
     } else {
       onChange(selected.includes(id) && selected.length === 1 ? [] : [id]);
     }
@@ -57,9 +53,7 @@ export function FilterChips({
               <span
                 className={cn(
                   'ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                  isActive
-                    ? 'bg-white/20 text-white'
-                    : 'bg-white/10 text-content-muted',
+                  isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-content-muted',
                 )}
               >
                 {option.count}

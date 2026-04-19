@@ -99,7 +99,9 @@ export default function ApplicationBoard() {
   });
 
   const jobsById = new Map(jobs.map((job) => [job.id, job]));
-  const rejectedCount = applications.filter((application) => application.status === 'rejected').length;
+  const rejectedCount = applications.filter(
+    (application) => application.status === 'rejected',
+  ).length;
   const activeCount = applications.length - rejectedCount;
   const latestUpdatedAt = applications
     .slice()
@@ -123,10 +125,7 @@ export default function ApplicationBoard() {
       <PageHeader
         title="Applications"
         description="Track saved roles, submitted applications, interview loops, offers, and closed outcomes in one operator board."
-        breadcrumb={[
-          { label: 'Dashboard', href: '/' },
-          { label: 'Applications' },
-        ]}
+        breadcrumb={[{ label: 'Dashboard', href: '/' }, { label: 'Applications' }]}
         actions={
           applications.length > 0 ? (
             <Button onClick={() => exportCsv(applications, jobsById)}>
@@ -205,7 +204,10 @@ export default function ApplicationBoard() {
                             Offers
                           </p>
                           <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">
-                            {applications.filter((application) => application.status === 'offer').length}
+                            {
+                              applications.filter((application) => application.status === 'offer')
+                                .length
+                            }
                           </p>
                         </div>
                       </div>
@@ -250,7 +252,9 @@ export default function ApplicationBoard() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {COLUMNS.map((status) => {
-                      const count = applications.filter((application) => application.status === status).length;
+                      const count = applications.filter(
+                        (application) => application.status === status,
+                      ).length;
 
                       return (
                         <div
@@ -260,7 +264,9 @@ export default function ApplicationBoard() {
                           <div className="flex items-center gap-3">
                             <StatusBadge status={status} />
                           </div>
-                          <span className="text-sm font-semibold text-card-foreground">{count}</span>
+                          <span className="text-sm font-semibold text-card-foreground">
+                            {count}
+                          </span>
                         </div>
                       );
                     })}
@@ -276,14 +282,16 @@ export default function ApplicationBoard() {
                       <div>
                         <CardTitle className="text-base font-semibold">Operator Notes</CardTitle>
                         <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">
-                          Keep the board lean and move into detail views when coordination gets real.
+                          Keep the board lean and move into detail views when coordination gets
+                          real.
                         </p>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm leading-6 text-muted-foreground">
                     <div className="rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-3">
-                      Open the application record when you need contacts, notes, tasks, or offer state.
+                      Open the application record when you need contacts, notes, tasks, or offer
+                      state.
                     </div>
                     <div className="rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-3">
                       Keep `saved` small. If a role is serious, move it forward or reject it.
@@ -302,7 +310,10 @@ export default function ApplicationBoard() {
                 const meta = COLUMN_META[status];
 
                 return (
-                  <Card key={status} className="gap-4 overflow-hidden border-border bg-card/85 py-0">
+                  <Card
+                    key={status}
+                    className="gap-4 overflow-hidden border-border bg-card/85 py-0"
+                  >
                     <CardHeader className="border-b border-border/70 px-4 py-4">
                       <div className="space-y-3">
                         <div className="flex items-center justify-between gap-3">
@@ -318,7 +329,9 @@ export default function ApplicationBoard() {
                             {items.length}
                           </span>
                         </div>
-                        <p className="m-0 text-xs leading-6 text-muted-foreground">{meta.description}</p>
+                        <p className="m-0 text-xs leading-6 text-muted-foreground">
+                          {meta.description}
+                        </p>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3 px-4 py-4">
@@ -329,7 +342,9 @@ export default function ApplicationBoard() {
                           const job = jobsById.get(application.jobId);
                           const next = NEXT_STATUS[status];
                           const sourceLabel =
-                            job?.presentation?.sourceLabel ?? job?.primaryVariant?.source ?? 'source';
+                            job?.presentation?.sourceLabel ??
+                            job?.primaryVariant?.source ??
+                            'source';
                           const summary = job?.presentation?.summary;
 
                           return (
@@ -397,7 +412,10 @@ export default function ApplicationBoard() {
                                     size="sm"
                                     disabled={moveMutation.isPending}
                                     onClick={() =>
-                                      moveMutation.mutate({ id: application.id, status: 'rejected' })
+                                      moveMutation.mutate({
+                                        id: application.id,
+                                        status: 'rejected',
+                                      })
                                     }
                                   >
                                     Reject

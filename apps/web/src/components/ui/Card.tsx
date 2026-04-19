@@ -52,7 +52,10 @@ export function CardDescription({ className, children, ...props }: HTMLAttribute
 
 export function CardAction({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('col-start-2 row-span-2 row-start-1 self-start justify-self-end', className)} {...props}>
+    <div
+      className={cn('col-start-2 row-span-2 row-start-1 self-start justify-self-end', className)}
+      {...props}
+    >
       {children}
     </div>
   );

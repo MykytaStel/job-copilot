@@ -26,12 +26,7 @@ import type {
   EngineRecentJobsResponse,
   EngineRunSearchResponse,
 } from './engine-types';
-import {
-  mapJob,
-  mapJobFeedSummary,
-  mapMatchResult,
-  uniquePreservingOrder,
-} from './mappers';
+import { mapJob, mapJobFeedSummary, mapMatchResult, uniquePreservingOrder } from './mappers';
 import type { SearchProfileBuildResult } from './profiles';
 import type { GlobalSearchApplicationResult } from './applications';
 
@@ -151,9 +146,7 @@ export async function getJob(id: string): Promise<JobPosting> {
   return mapJob(job);
 }
 
-export async function runSearch(
-  payload: SearchRunRequest,
-): Promise<SearchRunResult> {
+export async function runSearch(payload: SearchRunRequest): Promise<SearchRunResult> {
   const profileId = readStoredProfileId();
   const response = await request<EngineRunSearchResponse>(
     '/api/v1/search/run',
@@ -215,9 +208,7 @@ export async function runSearch(
 }
 
 export async function rerankJobs(profileId: string, jobIds: string[]): Promise<RankedJob[]> {
-  const uniqueJobIds = Array.from(
-    new Set(jobIds.map((jobId) => jobId.trim()).filter(Boolean)),
-  );
+  const uniqueJobIds = Array.from(new Set(jobIds.map((jobId) => jobId.trim()).filter(Boolean)));
   if (uniqueJobIds.length === 0) {
     return [];
   }
@@ -225,9 +216,12 @@ export async function rerankJobs(profileId: string, jobIds: string[]): Promise<R
   const response = await request<{
     profile_id: string;
     results: EngineFitExplanation[];
-  }>(`/api/v1/profiles/${profileId}/jobs/match`, json('POST', {
-    job_ids: uniqueJobIds,
-  }));
+  }>(
+    `/api/v1/profiles/${profileId}/jobs/match`,
+    json('POST', {
+      job_ids: uniqueJobIds,
+    }),
+  );
 
   return response.results
     .map((fit) => ({
@@ -245,11 +239,7 @@ export async function rerankJobs(profileId: string, jobIds: string[]): Promise<R
       missingSignals: fit.missing_signals,
       descriptionQuality: fit.description_quality,
     }))
-    .sort(
-      (left, right) =>
-        right.score - left.score ||
-        left.jobId.localeCompare(right.jobId),
-    );
+    .sort((left, right) => right.score - left.score || left.jobId.localeCompare(right.jobId));
 }
 
 export async function analyzeFit(profileId: string, jobId: string): Promise<FitAnalysis> {
@@ -280,10 +270,7 @@ export async function analyzeFit(profileId: string, jobId: string): Promise<FitA
 }
 
 export async function runMatch(jobId: string): Promise<MatchResult> {
-  const result = await request<EngineMatchResult>(
-    `/api/v1/jobs/${jobId}/match`,
-    json('POST', {}),
-  );
+  const result = await request<EngineMatchResult>(`/api/v1/jobs/${jobId}/match`, json('POST', {}));
   return mapMatchResult(result);
 }
 
@@ -325,8 +312,7 @@ export const updateJobNote = (_id: string, _note: string): Promise<JobPosting> =
   unsupported('Job notes');
 export const deleteJob = (_id: string): Promise<void> => unsupported('Job deletion');
 export const getAlerts = (): Promise<JobAlert[]> => unsupported('Alerts');
-export const createAlert = (_payload: JobAlertInput): Promise<JobAlert> =>
-  unsupported('Alerts');
+export const createAlert = (_payload: JobAlertInput): Promise<JobAlert> => unsupported('Alerts');
 export const toggleAlert = (_id: string, _active: boolean): Promise<JobAlert> =>
   unsupported('Alerts');
 export const deleteAlert = (_id: string): Promise<void> => unsupported('Alerts');
@@ -335,6 +321,5 @@ export const importBatch = (_urls: string[]): Promise<ImportBatchResponse> =>
   unsupported('Batch import');
 export const downloadBackup = (): Promise<Record<string, unknown> & BackupMeta> =>
   unsupported('Backup');
-export const restoreBackup = (
-  _data: unknown,
-): Promise<{ restored: boolean; exportedAt: string }> => unsupported('Backup');
+export const restoreBackup = (_data: unknown): Promise<{ restored: boolean; exportedAt: string }> =>
+  unsupported('Backup');

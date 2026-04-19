@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type {
+  ApplicationDetail,
   ApplicationContact,
   ApplicationStatus,
   ContactInput,
@@ -21,24 +22,63 @@ import { queryKeys } from '../../queryKeys';
 import { EMPTY_CONTACT_INPUT } from './applicationDetail.constants';
 import { formatCompensation } from './applicationDetail.utils';
 
+type OfferFormState = {
+  status: OfferStatus;
+  min: string;
+  max: string;
+  currency: string;
+  startsAt: string;
+  notes: string;
+};
+
+type ApplicationFormState = {
+  status: ApplicationStatus;
+  dueDate: string;
+};
+
+function getOfferFormState(offer: ApplicationDetail['offer']): OfferFormState {
+  if (!offer) {
+    return {
+      status: 'draft',
+      min: '',
+      max: '',
+      currency: 'USD',
+      startsAt: '',
+      notes: '',
+    };
+  }
+
+  return {
+    status: offer.status,
+    min: offer.compensationMin?.toString() ?? '',
+    max: offer.compensationMax?.toString() ?? '',
+    currency: offer.compensationCurrency ?? 'USD',
+    startsAt: normalizeDateInput(offer.startsAt),
+    notes: offer.notes ?? '',
+  };
+}
+
+function getApplicationFormState(
+  detail: { status: ApplicationStatus; dueDate?: string } | undefined,
+) {
+  return {
+    status: detail?.status ?? 'saved',
+    dueDate: normalizeDateInput(detail?.dueDate),
+  };
+}
+
 export function useApplicationDetail(id?: string) {
   const queryClient = useQueryClient();
 
   const [noteContent, setNoteContent] = useState('');
-  const [existingContactId, setExistingContactId] = useState('');
+  const [selectedExistingContactId, setSelectedExistingContactId] = useState('');
   const [existingRelationship, setExistingRelationship] =
     useState<ContactRelationship>('recruiter');
   const [newContactRelationship, setNewContactRelationship] =
     useState<ContactRelationship>('recruiter');
   const [newContact, setNewContact] = useState<ContactInput>(EMPTY_CONTACT_INPUT);
-  const [offerStatus, setOfferStatus] = useState<OfferStatus>('draft');
-  const [offerMin, setOfferMin] = useState('');
-  const [offerMax, setOfferMax] = useState('');
-  const [offerCurrency, setOfferCurrency] = useState('USD');
-  const [offerStartsAt, setOfferStartsAt] = useState('');
-  const [offerNotes, setOfferNotes] = useState('');
-  const [applicationStatus, setApplicationStatus] = useState<ApplicationStatus>('saved');
-  const [dueDate, setDueDate] = useState('');
+  const [offerDraft, setOfferDraft] = useState<OfferFormState | null>(null);
+  const [applicationDraft, setApplicationDraft] = useState<ApplicationFormState | null>(null);
 
   const detailQuery = useQuery({
     queryKey: queryKeys.applications.detail(id ?? ''),
@@ -52,32 +92,10 @@ export function useApplicationDetail(id?: string) {
   });
 
   const detail = detailQuery.data;
-
-  useEffect(() => {
-    if (!detail?.offer) {
-      setOfferStatus('draft');
-      setOfferMin('');
-      setOfferMax('');
-      setOfferCurrency('USD');
-      setOfferStartsAt('');
-      setOfferNotes('');
-      return;
-    }
-
-    setOfferStatus(detail.offer.status);
-    setOfferMin(detail.offer.compensationMin?.toString() ?? '');
-    setOfferMax(detail.offer.compensationMax?.toString() ?? '');
-    setOfferCurrency(detail.offer.compensationCurrency ?? 'USD');
-    setOfferStartsAt(normalizeDateInput(detail.offer.startsAt));
-    setOfferNotes(detail.offer.notes ?? '');
-  }, [detail?.offer]);
-
-  useEffect(() => {
-    if (!detail) return;
-
-    setApplicationStatus(detail.status);
-    setDueDate(normalizeDateInput(detail.dueDate));
-  }, [detail]);
+  const baseOfferForm = useMemo(() => getOfferFormState(detail?.offer), [detail?.offer]);
+  const offerForm = offerDraft ?? baseOfferForm;
+  const baseApplicationForm = useMemo(() => getApplicationFormState(detail), [detail]);
+  const applicationForm = applicationDraft ?? baseApplicationForm;
 
   const availableContacts = useMemo(() => {
     if (!detail || !contactsQuery.data) return [];
@@ -85,16 +103,11 @@ export function useApplicationDetail(id?: string) {
     const attachedIds = new Set(detail.contacts.map((item) => item.contact.id));
     return contactsQuery.data.filter((contact) => !attachedIds.has(contact.id));
   }, [contactsQuery.data, detail]);
-
-  useEffect(() => {
-    if (!existingContactId && availableContacts.length > 0) {
-      setExistingContactId(availableContacts[0].id);
-    }
-
-    if (availableContacts.length === 0) {
-      setExistingContactId('');
-    }
-  }, [availableContacts, existingContactId]);
+  const existingContactId =
+    selectedExistingContactId &&
+    availableContacts.some((contact) => contact.id === selectedExistingContactId)
+      ? selectedExistingContactId
+      : (availableContacts[0]?.id ?? '');
 
   async function refreshDetail() {
     if (!id) return;
@@ -156,14 +169,15 @@ export function useApplicationDetail(id?: string) {
     mutationFn: () =>
       createOffer({
         applicationId: id!,
-        status: offerStatus,
-        compensationMin: parseOptionalNumber(offerMin),
-        compensationMax: parseOptionalNumber(offerMax),
-        compensationCurrency: offerCurrency.trim() || undefined,
-        startsAt: offerStartsAt || undefined,
-        notes: offerNotes.trim() || undefined,
+        status: offerForm.status,
+        compensationMin: parseOptionalNumber(offerForm.min),
+        compensationMax: parseOptionalNumber(offerForm.max),
+        compensationCurrency: offerForm.currency.trim() || undefined,
+        startsAt: offerForm.startsAt || undefined,
+        notes: offerForm.notes.trim() || undefined,
       }),
     onSuccess: async () => {
+      setOfferDraft(null);
       await refreshDetail();
       toast.success('Offer saved');
     },
@@ -175,10 +189,11 @@ export function useApplicationDetail(id?: string) {
   const applicationMutation = useMutation({
     mutationFn: () =>
       updateApplication(id!, {
-        status: applicationStatus,
-        dueDate: dueDate || null,
+        status: applicationForm.status,
+        dueDate: applicationForm.dueDate || null,
       }),
     onSuccess: async () => {
+      setApplicationDraft(null);
       await refreshDetail();
       toast.success('Application updated');
     },
@@ -187,10 +202,66 @@ export function useApplicationDetail(id?: string) {
     },
   });
 
-  const normalizedCurrentDueDate = normalizeDateInput(detail?.dueDate);
   const hasApplicationChanges = detail
-    ? applicationStatus !== detail.status || dueDate !== normalizedCurrentDueDate
+    ? applicationForm.status !== baseApplicationForm.status ||
+      applicationForm.dueDate !== baseApplicationForm.dueDate
     : false;
+
+  function setApplicationStatus(value: ApplicationStatus) {
+    setApplicationDraft((current) => ({
+      ...(current ?? applicationForm),
+      status: value,
+    }));
+  }
+
+  function setDueDate(value: string) {
+    setApplicationDraft((current) => ({
+      ...(current ?? applicationForm),
+      dueDate: value,
+    }));
+  }
+
+  function setOfferStatus(value: OfferStatus) {
+    setOfferDraft((current) => ({
+      ...(current ?? offerForm),
+      status: value,
+    }));
+  }
+
+  function setOfferMin(value: string) {
+    setOfferDraft((current) => ({
+      ...(current ?? offerForm),
+      min: value,
+    }));
+  }
+
+  function setOfferMax(value: string) {
+    setOfferDraft((current) => ({
+      ...(current ?? offerForm),
+      max: value,
+    }));
+  }
+
+  function setOfferCurrency(value: string) {
+    setOfferDraft((current) => ({
+      ...(current ?? offerForm),
+      currency: value,
+    }));
+  }
+
+  function setOfferStartsAt(value: string) {
+    setOfferDraft((current) => ({
+      ...(current ?? offerForm),
+      startsAt: value,
+    }));
+  }
+
+  function setOfferNotes(value: string) {
+    setOfferDraft((current) => ({
+      ...(current ?? offerForm),
+      notes: value,
+    }));
+  }
 
   function saveApplication() {
     if (!hasApplicationChanges) return;
@@ -232,10 +303,7 @@ export function useApplicationDetail(id?: string) {
     });
   }
 
-  function setNewContactField<K extends keyof ContactInput>(
-    field: K,
-    value: ContactInput[K],
-  ) {
+  function setNewContactField<K extends keyof ContactInput>(field: K, value: ContactInput[K]) {
     setNewContact((current) => ({ ...current, [field]: value }));
   }
 
@@ -246,8 +314,8 @@ export function useApplicationDetail(id?: string) {
     availableContacts,
     compensationLabel: detail ? formatCompensation(detail) : null,
     applicationForm: {
-      applicationStatus,
-      dueDate,
+      applicationStatus: applicationForm.status,
+      dueDate: applicationForm.dueDate,
       hasApplicationChanges,
       isPending: applicationMutation.isPending,
       setApplicationStatus,
@@ -265,7 +333,7 @@ export function useApplicationDetail(id?: string) {
       existingContactId,
       existingRelationship,
       isPending: linkExistingContactMutation.isPending,
-      setExistingContactId,
+      setExistingContactId: setSelectedExistingContactId,
       setExistingRelationship,
       linkExistingContact,
     },
@@ -278,12 +346,12 @@ export function useApplicationDetail(id?: string) {
       createAndLinkContact,
     },
     offerForm: {
-      offerStatus,
-      offerMin,
-      offerMax,
-      offerCurrency,
-      offerStartsAt,
-      offerNotes,
+      offerStatus: offerForm.status,
+      offerMin: offerForm.min,
+      offerMax: offerForm.max,
+      offerCurrency: offerForm.currency,
+      offerStartsAt: offerForm.startsAt,
+      offerNotes: offerForm.notes,
       isPending: offerMutation.isPending,
       setOfferStatus,
       setOfferMin,

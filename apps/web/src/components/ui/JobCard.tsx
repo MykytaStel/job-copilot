@@ -28,10 +28,14 @@ function fitBand(score: number): 'excellent' | 'good' | 'fair' | 'poor' {
 
 function fitLabel(score: number): string {
   switch (fitBand(score)) {
-    case 'excellent': return 'Excellent';
-    case 'good':      return 'Good';
-    case 'fair':      return 'Fair';
-    default:          return 'Weak';
+    case 'excellent':
+      return 'Excellent';
+    case 'good':
+      return 'Good';
+    case 'fair':
+      return 'Fair';
+    default:
+      return 'Weak';
   }
 }
 
@@ -42,9 +46,9 @@ function FitScoreBox({ score }: { score: number }) {
       className={cn(
         'flex flex-col items-center justify-center rounded-lg px-3 py-1.5 shrink-0',
         band === 'excellent' && 'text-fit-excellent bg-fit-excellent/15',
-        band === 'good'      && 'text-fit-good bg-fit-good/15',
-        band === 'fair'      && 'text-fit-fair bg-fit-fair/15',
-        band === 'poor'      && 'text-fit-poor bg-fit-poor/15',
+        band === 'good' && 'text-fit-good bg-fit-good/15',
+        band === 'fair' && 'text-fit-fair bg-fit-fair/15',
+        band === 'poor' && 'text-fit-poor bg-fit-poor/15',
       )}
     >
       <span className="text-lg font-bold leading-none">{score}</span>
@@ -59,10 +63,10 @@ function FitScoreBox({ score }: { score: number }) {
 
 function sourceClass(source: string): string {
   const s = source.toLowerCase();
-  if (s.includes('djinni'))    return 'bg-blue-500/15 text-blue-400';
-  if (s.includes('work.ua'))   return 'bg-purple-500/15 text-purple-400';
-  if (s.includes('linkedin'))  return 'bg-blue-600/15 text-blue-300';
-  if (s.includes('indeed'))    return 'bg-purple-600/15 text-purple-300';
+  if (s.includes('djinni')) return 'bg-blue-500/15 text-blue-400';
+  if (s.includes('work.ua')) return 'bg-purple-500/15 text-purple-400';
+  if (s.includes('linkedin')) return 'bg-blue-600/15 text-blue-300';
+  if (s.includes('indeed')) return 'bg-purple-600/15 text-purple-300';
   return 'bg-muted text-muted-foreground';
 }
 
@@ -131,14 +135,12 @@ export function JobCard({
   onUnmarkBadFit,
 }: JobCardProps) {
   const p = job.presentation;
-  const title   = p?.title   ?? job.title;
+  const title = p?.title ?? job.title;
   const company = p?.company ?? job.company;
-  const source  = p?.sourceLabel ?? job.primaryVariant?.source ?? '';
-  const badges  = p?.badges ?? [];
+  const source = p?.sourceLabel ?? job.primaryVariant?.source ?? '';
+  const badges = p?.badges ?? [];
   const summary = p?.summary;
-  const showSummary = Boolean(
-    summary && !p?.summaryFallback && p?.summaryQuality !== 'weak',
-  );
+  const showSummary = Boolean(summary && !p?.summaryFallback && p?.summaryQuality !== 'weak');
 
   const applicationStatus = application?.status;
 
@@ -153,7 +155,6 @@ export function JobCard({
       <CardContent className={cn('p-4', compact && 'p-3')}>
         <div className="flex items-start gap-4">
           <div className="flex-1 min-w-0">
-
             {/* Header row: title + score */}
             <div className="flex items-start justify-between gap-2 mb-2">
               <div className="flex-1 min-w-0">
@@ -180,7 +181,12 @@ export function JobCard({
             </div>
 
             {/* Meta row */}
-            <div className={cn('flex flex-wrap items-center gap-3 text-xs text-muted-foreground', compact ? 'mb-2' : 'mb-3')}>
+            <div
+              className={cn(
+                'flex flex-wrap items-center gap-3 text-xs text-muted-foreground',
+                compact ? 'mb-2' : 'mb-3',
+              )}
+            >
               {p?.locationLabel && (
                 <span className="flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
@@ -234,19 +240,18 @@ export function JobCard({
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap">
                 {source && (
-                  <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded border border-current/20', sourceClass(source))}>
+                  <span
+                    className={cn(
+                      'text-[10px] font-medium px-2 py-0.5 rounded border border-current/20',
+                      sourceClass(source),
+                    )}
+                  >
                     {source}
                   </span>
                 )}
-                {applicationStatus && (
-                  <StatusBadge status={applicationStatus} />
-                )}
-                {!applicationStatus && isSaved && (
-                  <StatusBadge status="saved" />
-                )}
-                {isBadFit && (
-                  <StatusBadge status="bad fit" />
-                )}
+                {applicationStatus && <StatusBadge status={applicationStatus} />}
+                {!applicationStatus && isSaved && <StatusBadge status="saved" />}
+                {isBadFit && <StatusBadge status="bad fit" />}
               </div>
 
               {/* Hover-revealed actions */}
@@ -260,9 +265,11 @@ export function JobCard({
                     className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors disabled:opacity-40"
                     style={{ background: 'transparent', border: 'none' }}
                   >
-                    {isSaved
-                      ? <BookmarkCheck className="h-4 w-4 text-primary" />
-                      : <Bookmark className="h-4 w-4" />}
+                    {isSaved ? (
+                      <BookmarkCheck className="h-4 w-4 text-primary" />
+                    ) : (
+                      <Bookmark className="h-4 w-4" />
+                    )}
                   </button>
                 )}
                 {onHide && (
@@ -309,7 +316,6 @@ export function JobCard({
                 </Link>
               </div>
             </div>
-
           </div>
         </div>
       </CardContent>

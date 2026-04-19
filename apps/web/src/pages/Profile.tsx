@@ -73,10 +73,7 @@ export default function Profile() {
       <PageHeader
         title="Profile & Search"
         description="Manage the persisted candidate profile, build a structured search profile, and inspect ranked results with explanation layers."
-        breadcrumb={[
-          { label: 'Dashboard', href: '/' },
-          { label: 'Profile' },
-        ]}
+        breadcrumb={[{ label: 'Dashboard', href: '/' }, { label: 'Profile' }]}
       />
 
       <Card className="overflow-hidden border-border bg-card">

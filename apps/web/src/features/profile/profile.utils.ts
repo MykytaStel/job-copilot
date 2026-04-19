@@ -54,17 +54,15 @@ export async function extractPdfText(file: File): Promise<string> {
 
 export async function extractPdfTextFromData(data: Uint8Array): Promise<string> {
   const pdfjsLib = await pdfjsLibPromise;
-  const pdf = await pdfjsLib
-    .getDocument({
-      data,
-      ...(typeof window === 'undefined'
-        ? {
-            disableFontFace: true,
-            useSystemFonts: true,
-          }
-        : {}),
-    })
-    .promise;
+  const pdf = await pdfjsLib.getDocument({
+    data,
+    ...(typeof window === 'undefined'
+      ? {
+          disableFontFace: true,
+          useSystemFonts: true,
+        }
+      : {}),
+  }).promise;
   const pages: string[] = [];
 
   for (let index = 1; index <= pdf.numPages; index += 1) {
@@ -73,13 +71,15 @@ export async function extractPdfTextFromData(data: Uint8Array): Promise<string> 
     const pageText = extractPdfTextFromItems(
       content.items.flatMap((item) =>
         'str' in item
-          ? [{
-              str: item.str,
-              width: item.width,
-              height: item.height,
-              hasEOL: item.hasEOL,
-              transform: item.transform,
-            }]
+          ? [
+              {
+                str: item.str,
+                width: item.width,
+                height: item.height,
+                hasEOL: item.hasEOL,
+                transform: item.transform,
+              },
+            ]
           : [],
       ),
     );
@@ -170,8 +170,7 @@ export function resolveRoleLabel(roles: RoleCatalogItem[], roleId: string): stri
 
 export function resolveSourceLabel(sources: SourceCatalogItem[], sourceId: string): string {
   return (
-    sources.find((source) => source.id === sourceId)?.displayName ??
-    formatFallbackLabel(sourceId)
+    sources.find((source) => source.id === sourceId)?.displayName ?? formatFallbackLabel(sourceId)
   );
 }
 
@@ -222,8 +221,7 @@ function joinPdfLines(lines: PdfLine[]): string {
     const previous = renderedLines[index - 1];
     const current = renderedLines[index];
     const verticalGap = Math.abs(previous.y - current.y);
-    const paragraphBreak =
-      verticalGap > Math.max(previous.height, current.height, 12) * 1.45;
+    const paragraphBreak = verticalGap > Math.max(previous.height, current.height, 12) * 1.45;
 
     text += paragraphBreak ? '\n\n' : '\n';
     text += current.text;
@@ -291,10 +289,7 @@ function cleanupExtractedResumeLine(line: string): string {
 }
 
 function collapseKnownLigatureSplits(line: string): string {
-  return line.replace(
-    /\b([\p{L}]{2,}) (ffi|ffl|ff|fi|fl) ([\p{L}]{2,})\b/giu,
-    '$1$2$3',
-  );
+  return line.replace(/\b([\p{L}]{2,}) (ffi|ffl|ff|fi|fl) ([\p{L}]{2,})\b/giu, '$1$2$3');
 }
 
 function collapseKnownLetterSpacing(line: string): string {
