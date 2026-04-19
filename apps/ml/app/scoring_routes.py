@@ -1,20 +1,20 @@
 import asyncio
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, FastAPI, HTTPException, status
 
 from app.bootstrap_training import DEFAULT_MODEL_PATH, bootstrap_and_retrain
 from app.engine_api_client import EngineApiClient, engine_api_timeout_seconds
-from app.models import (
+from app.scoring import score_job, unique_preserving_order
+from app.scoring_models import (
     BootstrapRequest,
     BootstrapResponse,
     FitAnalyzeRequest,
     FitAnalyzeResponse,
-    RerankedJob,
     RerankRequest,
     RerankResponse,
+    RerankedJob,
 )
-from app.scoring import score_job, unique_preserving_order
 
 router = APIRouter()
 
@@ -22,12 +22,14 @@ router = APIRouter()
 @router.post("/api/v1/fit/analyze", response_model=FitAnalyzeResponse)
 async def analyze_fit(payload: FitAnalyzeRequest) -> FitAnalyzeResponse:
     timeout = httpx.Timeout(engine_api_timeout_seconds())
+
     async with httpx.AsyncClient(timeout=timeout) as client:
         engine_api = EngineApiClient(client)
         profile = await engine_api.fetch_profile(payload.profile_id)
         job = await engine_api.fetch_job_lifecycle(payload.job_id)
 
     score, matched_terms, missing_terms, evidence = score_job(profile, job)
+
     return FitAnalyzeResponse(
         profile_id=payload.profile_id,
         job_id=payload.job_id,
@@ -43,6 +45,7 @@ async def rerank_jobs(payload: RerankRequest) -> RerankResponse:
     unique_job_ids = unique_preserving_order(
         [job_id.strip() for job_id in payload.job_ids if job_id.strip()]
     )
+
     if not unique_job_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -50,6 +53,7 @@ async def rerank_jobs(payload: RerankRequest) -> RerankResponse:
         )
 
     timeout = httpx.Timeout(engine_api_timeout_seconds())
+
     async with httpx.AsyncClient(timeout=timeout) as client:
         engine_api = EngineApiClient(client)
         profile = await engine_api.fetch_profile(payload.profile_id)
@@ -58,6 +62,7 @@ async def rerank_jobs(payload: RerankRequest) -> RerankResponse:
         )
 
     ranked_jobs: list[RerankedJob] = []
+
     for job in jobs:
         score, matched_terms, _, evidence = score_job(profile, job)
         ranked_jobs.append(
@@ -72,6 +77,7 @@ async def rerank_jobs(payload: RerankRequest) -> RerankResponse:
         )
 
     ranked_jobs.sort(key=lambda item: (-item.score, item.title.lower(), item.job_id))
+
     return RerankResponse(profile_id=payload.profile_id, jobs=ranked_jobs)
 
 
@@ -93,4 +99,9 @@ async def bootstrap_reranker(payload: BootstrapRequest) -> BootstrapResponse:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"engine-api unreachable: {exc}",
         ) from exc
+
     return BootstrapResponse(**result)
+
+
+def register_scoring_routes(application: FastAPI) -> None:
+    application.include_router(router)
