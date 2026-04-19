@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::domain::job::model::{Job, JobView};
 use crate::domain::job::presentation::{JobTextQuality, assess_description_quality};
-use crate::domain::matching::JobFit;
+use crate::domain::matching::{JobFit, JobScoreBreakdown, JobScorePenalty};
 use crate::domain::role::RoleId;
 use crate::domain::role::catalog::ROLE_CATALOG;
 use crate::domain::search::profile::{SearchProfile, SearchRoleCandidate, TargetRegion, WorkMode};
@@ -224,7 +224,7 @@ impl SearchMatchingService {
             .unwrap_or(0.0);
         let seniority_penalty = seniority_alignment.penalty;
 
-        let base_score = primary_role_score
+        let matching_score = primary_role_score
             + target_role_score
             + role_candidate_score
             + profile_skill_score
@@ -233,7 +233,68 @@ impl SearchMatchingService {
             + source_score
             + work_mode_score
             + region_score
-            + seniority_score
+            + seniority_score;
+
+        let penalty_reasons = DeterministicPenaltyReasons {
+            exclude_terms: (!matched_exclude_terms.matched_terms.is_empty()).then_some(format!(
+                "Exclude term penalty applied: {}",
+                matched_exclude_terms.matched_terms.join(", ")
+            )),
+            role_mismatch: (role_alignment.mismatch_penalty > 0.0
+                && !role_alignment.job_roles.is_empty())
+            .then_some(format!(
+                "Role mismatch penalty applied: strongest job roles {}",
+                role_alignment
+                    .job_roles
+                    .iter()
+                    .take(3)
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+            work_mode_mismatch: matches!(work_mode_match, Some(false))
+                .then_some("Work mode mismatch penalty applied".to_string()),
+            seniority_mismatch: match (
+                seniority_alignment.normalized_profile.as_deref(),
+                seniority_alignment.normalized_job.as_deref(),
+            ) {
+                (Some(profile_seniority), Some(job_seniority))
+                    if profile_seniority != job_seniority =>
+                {
+                    Some(format!(
+                        "Seniority mismatch penalty applied: profile {} vs job {}",
+                        profile_seniority, job_seniority
+                    ))
+                }
+                _ => None,
+            },
+        };
+        let penalties = vec![
+            penalty_entry(
+                "exclude_terms",
+                exclude_penalty,
+                penalty_reasons.exclude_terms.clone(),
+            ),
+            penalty_entry(
+                "role_mismatch",
+                role_alignment.mismatch_penalty,
+                penalty_reasons.role_mismatch.clone(),
+            ),
+            penalty_entry(
+                "work_mode_mismatch",
+                work_mode_penalty,
+                penalty_reasons.work_mode_mismatch.clone(),
+            ),
+            penalty_entry(
+                "seniority_mismatch",
+                seniority_penalty,
+                penalty_reasons.seniority_mismatch.clone(),
+            ),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        let base_score = matching_score
             - exclude_penalty
             - role_alignment.mismatch_penalty
             - work_mode_penalty
@@ -242,6 +303,13 @@ impl SearchMatchingService {
         let days_old = days_since_last_seen(&job.job.last_seen_at);
         let freshness_decay = compute_freshness_decay(days_old);
         let score = (base_score * freshness_decay).clamp(0.0, 100.0).round() as u8;
+        let pre_freshness_total = (matching_score.round() as i16
+            + penalties
+                .iter()
+                .map(|penalty| penalty.score_delta)
+                .sum::<i16>())
+        .clamp(0, 100);
+        let freshness_score = i16::from(score) - pre_freshness_total;
 
         let mut reasons = build_reasons(
             search_profile,
@@ -266,6 +334,12 @@ impl SearchMatchingService {
         JobFit {
             job_id: job.job.id.clone(),
             score,
+            score_breakdown: JobScoreBreakdown::new(
+                matching_score.round() as i16,
+                0,
+                freshness_score,
+                penalties,
+            ),
             matched_roles: role_alignment.matched_roles,
             matched_skills: matched_profile_skills.matched_terms.clone(),
             matched_keywords,
@@ -291,6 +365,14 @@ impl SearchMatchingService {
     pub fn infer_role_family_for_job(&self, job: &Job) -> Option<String> {
         infer_role_family_for_job(job, None).map(str::to_string)
     }
+}
+
+#[derive(Clone, Debug, Default)]
+struct DeterministicPenaltyReasons {
+    exclude_terms: Option<String>,
+    role_mismatch: Option<String>,
+    work_mode_mismatch: Option<String>,
+    seniority_mismatch: Option<String>,
 }
 
 fn build_searchable_text(job: &JobView) -> String {
@@ -1076,6 +1158,23 @@ fn weighted_overlap_ratio(matched_strength: f32, total: usize) -> f32 {
     } else {
         (matched_strength / total as f32).min(1.0)
     }
+}
+
+fn penalty_entry(kind: &str, raw_penalty: f32, reason: Option<String>) -> Option<JobScorePenalty> {
+    let Some(reason) = reason else {
+        return None;
+    };
+
+    let score_delta = -((raw_penalty.round() as i16).max(0));
+    if score_delta == 0 {
+        return None;
+    }
+
+    Some(JobScorePenalty {
+        kind: kind.to_string(),
+        score_delta,
+        reason,
+    })
 }
 
 fn push_unique_role(target: &mut Vec<RoleId>, value: RoleId) {
