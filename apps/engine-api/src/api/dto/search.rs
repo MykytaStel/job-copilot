@@ -108,9 +108,13 @@ pub struct JobFitResponse {
     pub matched_roles: Vec<String>,
     pub matched_skills: Vec<String>,
     pub matched_keywords: Vec<String>,
+    pub missing_signals: Vec<String>,
     pub source_match: bool,
     pub work_mode_match: Option<bool>,
     pub region_match: Option<bool>,
+    pub description_quality: String,
+    pub positive_reasons: Vec<String>,
+    pub negative_reasons: Vec<String>,
     pub reasons: Vec<String>,
 }
 
@@ -122,6 +126,12 @@ pub struct SearchRunMetaResponse {
     pub filtered_out_company_blacklist: usize,
     pub scored_jobs: usize,
     pub returned_jobs: usize,
+    pub low_evidence_jobs: usize,
+    pub weak_description_jobs: usize,
+    pub role_mismatch_jobs: usize,
+    pub seniority_mismatch_jobs: usize,
+    pub source_mismatch_jobs: usize,
+    pub top_missing_signals: Vec<String>,
     pub learned_reranker_enabled: bool,
     pub learned_reranker_adjusted_jobs: usize,
     pub trained_reranker_enabled: bool,
@@ -214,6 +224,12 @@ impl RunSearchResponse {
                 filtered_out_company_blacklist: result.filtered_out_company_blacklist,
                 scored_jobs,
                 returned_jobs,
+                low_evidence_jobs: 0,
+                weak_description_jobs: 0,
+                role_mismatch_jobs: 0,
+                seniority_mismatch_jobs: 0,
+                source_mismatch_jobs: 0,
+                top_missing_signals: Vec::new(),
                 learned_reranker_enabled: false,
                 learned_reranker_adjusted_jobs: 0,
                 trained_reranker_enabled: false,
@@ -234,6 +250,8 @@ impl From<crate::services::matching::RankedJob> for RankedJobResponse {
 
 impl From<JobFit> for JobFitResponse {
     fn from(value: JobFit) -> Self {
+        let (positive_reasons, negative_reasons) = split_reasons(&value.reasons);
+
         Self {
             job_id: value.job_id,
             score: value.score,
@@ -244,12 +262,49 @@ impl From<JobFit> for JobFitResponse {
                 .collect(),
             matched_skills: value.matched_skills,
             matched_keywords: value.matched_keywords,
+            missing_signals: value.missing_signals,
             source_match: value.source_match,
             work_mode_match: value.work_mode_match,
             region_match: value.region_match,
+            description_quality: value.description_quality.as_str().to_string(),
+            positive_reasons,
+            negative_reasons,
             reasons: value.reasons,
         }
     }
+}
+
+fn split_reasons(reasons: &[String]) -> (Vec<String>, Vec<String>) {
+    let mut positive = Vec::new();
+    let mut negative = Vec::new();
+
+    for reason in reasons {
+        if is_negative_reason(reason) {
+            negative.push(reason.clone());
+        } else {
+            positive.push(reason.clone());
+        }
+    }
+
+    (positive, negative)
+}
+
+fn is_negative_reason(reason: &str) -> bool {
+    let normalized = reason.to_lowercase();
+
+    [
+        "penalty",
+        "mismatch",
+        "did not match",
+        "no target role signals",
+        "no strong profile evidence",
+        "could not be inferred",
+        "unavailable",
+        "bad fit",
+        "weak description",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
 }
 
 fn validate_roles(field: &'static str, roles: Vec<String>) -> Result<Vec<RoleId>, ApiError> {
@@ -397,6 +452,7 @@ fn push_unique_string(target: &mut Vec<String>, value: String) {
 mod tests {
     use serde_json::json;
 
+    use crate::domain::job::presentation::JobTextQuality;
     use crate::domain::matching::JobFit;
     use crate::domain::role::RoleId;
     use crate::services::matching::{RankedJob, SearchRunResult};
@@ -488,6 +544,8 @@ mod tests {
             source_match: true,
             work_mode_match: Some(true),
             region_match: Some(true),
+            missing_signals: vec!["graphql".to_string()],
+            description_quality: JobTextQuality::Strong,
             reasons: vec!["Matched target roles: backend_developer".to_string()],
         };
 
@@ -495,6 +553,8 @@ mod tests {
             serde_json::to_value(JobFitResponse::from(fit)).expect("fit response should serialize");
 
         assert_eq!(response["score"], json!(88));
+        assert_eq!(response["missing_signals"], json!(["graphql"]));
+        assert_eq!(response["description_quality"], json!("strong"));
         assert_eq!(
             response["reasons"],
             json!(["Matched target roles: backend_developer"])

@@ -180,8 +180,8 @@ pub fn cleanup_description_text(
 ) -> String {
     let mut cleaned = normalize_text(value);
 
-    for marker in cut_markers {
-        if let Some((head, _)) = cleaned.split_once(marker) {
+    for marker in cut_markers.iter().chain(DESCRIPTION_CUT_MARKERS.iter()) {
+        if let Some(head) = truncate_at_marker(&cleaned, marker) {
             cleaned = head.trim().to_string();
         }
     }
@@ -194,6 +194,14 @@ pub fn cleanup_description_text(
     }
 
     normalize_text(&cleaned)
+}
+
+fn truncate_at_marker(value: &str, marker: &str) -> Option<String> {
+    let value_lower = value.to_lowercase();
+    let marker_lower = marker.to_lowercase();
+    let index = value_lower.find(&marker_lower)?;
+
+    Some(value[..index].to_string())
 }
 
 fn choose_better_description(
@@ -271,9 +279,26 @@ fn score_description_quality(raw: &str, cleaned: &str, title: &str, company_name
         .filter(|term| term != &normalized_title && term != &normalized_company)
         .collect::<std::collections::BTreeSet<_>>()
         .len();
+    let cleaned_lower = cleaned.to_lowercase();
+    let noise_hits = DESCRIPTION_CUT_MARKERS
+        .iter()
+        .filter(|marker| cleaned_lower.contains(&marker.to_lowercase()))
+        .count();
 
-    useful_length / 20 + block_count * 4 + sentence_count * 3 + unique_terms
+    useful_length / 20 + block_count * 4 + sentence_count * 3 + unique_terms - noise_hits * 8
 }
+
+const DESCRIPTION_CUT_MARKERS: &[&str] = &[
+    "how to apply",
+    "apply now",
+    "apply on company website",
+    "similar vacancies",
+    "related jobs",
+    "схожі вакансії",
+    "відгукнутися",
+    "відгукнутись",
+    "правила відгуків",
+];
 
 /// Parse a salary string into (min, max, currency).
 /// Handles Ukrainian notation ("40 000 грн"), USD ("$3000-5000"), EUR ("€2000").
@@ -352,7 +377,7 @@ mod tests {
 
     use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 
-    use super::{DetailSnapshot, merge_detail_into_result};
+    use super::{DetailSnapshot, cleanup_description_text, merge_detail_into_result};
 
     #[test]
     fn rejects_results_with_placeholder_company_after_detail_merge() {
@@ -441,6 +466,21 @@ mod tests {
                 .job
                 .description_text
                 .contains("Partner with product and design")
+        );
+    }
+
+    #[test]
+    fn cleanup_description_text_truncates_apply_blocks_and_related_jobs_noise() {
+        let cleaned = cleanup_description_text(
+            "Ship accessible frontend features with React and TypeScript. How to apply: send CV. Similar vacancies below.",
+            "Senior Front-end React Developer",
+            "SignalHire",
+            &[],
+        );
+
+        assert_eq!(
+            cleaned,
+            "Ship accessible frontend features with React and TypeScript."
         );
     }
 }

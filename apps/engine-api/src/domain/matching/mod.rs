@@ -1,3 +1,4 @@
+use crate::domain::job::presentation::JobTextQuality;
 use crate::domain::role::RoleId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -10,5 +11,7 @@ pub struct JobFit {
     pub source_match: bool,
     pub work_mode_match: Option<bool>,
     pub region_match: Option<bool>,
+    pub missing_signals: Vec<String>,
+    pub description_quality: JobTextQuality,
     pub reasons: Vec<String>,
 }

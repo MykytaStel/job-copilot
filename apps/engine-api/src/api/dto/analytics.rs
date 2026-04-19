@@ -65,6 +65,17 @@ pub struct AnalyticsSummaryResponse {
     pub top_matched_roles: Vec<String>,
     pub top_matched_skills: Vec<String>,
     pub top_matched_keywords: Vec<String>,
+    pub search_quality: SearchQualitySummaryResponse,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SearchQualitySummaryResponse {
+    pub low_evidence_jobs: usize,
+    pub weak_description_jobs: usize,
+    pub role_mismatch_jobs: usize,
+    pub seniority_mismatch_jobs: usize,
+    pub source_mismatch_jobs: usize,
+    pub top_missing_signals: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]

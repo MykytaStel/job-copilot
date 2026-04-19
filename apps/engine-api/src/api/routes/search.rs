@@ -14,7 +14,7 @@ use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::behavior::{BehaviorService, ProfileBehaviorAggregates};
 use crate::services::funnel::{FunnelService, ProfileFunnelAggregates};
 use crate::services::learned_reranker::LearnedRerankerService;
-use crate::services::matching::RankedJob;
+use crate::services::matching::{RankedJob, summarize_match_quality};
 use crate::services::trained_reranker::TrainedRerankerFeatures;
 use crate::state::AppState;
 
@@ -157,6 +157,7 @@ pub async fn run_search(
         trained_reranker_adjusted_jobs = adjusted_count;
     }
     adjusted_jobs.truncate(input.limit as usize);
+    let quality = summarize_match_quality(&adjusted_jobs);
     let ranked_jobs: Vec<crate::api::dto::search::RankedJobResponse> = adjusted_jobs
         .into_iter()
         .map(|ranked| {
@@ -184,6 +185,12 @@ pub async fn run_search(
             .saturating_sub(filtered_out_hidden)
             .saturating_sub(filtered_out_company_blacklist),
         returned_jobs: ranked_jobs.len(),
+        low_evidence_jobs: quality.low_evidence_jobs,
+        weak_description_jobs: quality.weak_description_jobs,
+        role_mismatch_jobs: quality.role_mismatch_jobs,
+        seniority_mismatch_jobs: quality.seniority_mismatch_jobs,
+        source_mismatch_jobs: quality.source_mismatch_jobs,
+        top_missing_signals: quality.top_missing_signals,
         learned_reranker_enabled: state.learned_reranker_enabled,
         learned_reranker_adjusted_jobs,
         trained_reranker_enabled: state.trained_reranker_enabled
@@ -261,7 +268,7 @@ pub async fn run_search(
 /// - Job marked as bad fit by this profile → −BAD_FIT_SCORE_PENALTY (floored at 0)
 ///
 /// Re-sorts so the caller always receives a properly ordered slice.
-fn apply_feedback_scoring(
+pub(crate) fn apply_feedback_scoring(
     mut ranked_jobs: Vec<RankedJob>,
     feedback_by_job_id: &HashMap<String, JobFeedbackState>,
 ) -> Vec<RankedJob> {
@@ -304,12 +311,12 @@ fn apply_feedback_scoring(
     ranked_jobs
 }
 
-struct SearchLearningAggregates {
-    behavior: ProfileBehaviorAggregates,
-    funnel: ProfileFunnelAggregates,
+pub(crate) struct SearchLearningAggregates {
+    pub(crate) behavior: ProfileBehaviorAggregates,
+    pub(crate) funnel: ProfileFunnelAggregates,
 }
 
-async fn load_learning_aggregates(
+pub(crate) async fn load_learning_aggregates(
     state: &AppState,
     profile_id: Option<&str>,
 ) -> Option<SearchLearningAggregates> {
@@ -332,7 +339,7 @@ async fn load_learning_aggregates(
     })
 }
 
-fn apply_behavior_scoring(
+pub(crate) fn apply_behavior_scoring(
     state: &AppState,
     mut ranked_jobs: Vec<RankedJob>,
     aggregates: &ProfileBehaviorAggregates,
@@ -368,7 +375,7 @@ fn apply_behavior_scoring(
     ranked_jobs
 }
 
-fn apply_learned_reranking(
+pub(crate) fn apply_learned_reranking(
     state: &AppState,
     mut ranked_jobs: Vec<RankedJob>,
     behavior: &ProfileBehaviorAggregates,
@@ -425,7 +432,7 @@ fn apply_learned_reranking(
     (ranked_jobs, adjusted_count)
 }
 
-fn apply_trained_reranking(
+pub(crate) fn apply_trained_reranking(
     state: &AppState,
     mut ranked_jobs: Vec<RankedJob>,
     deterministic_score_by_job_id: &HashMap<String, u8>,
@@ -488,7 +495,7 @@ fn apply_trained_reranking(
     (ranked_jobs, adjusted_count)
 }
 
-fn score_by_job_id(ranked_jobs: &[RankedJob]) -> HashMap<String, u8> {
+pub(crate) fn score_by_job_id(ranked_jobs: &[RankedJob]) -> HashMap<String, u8> {
     ranked_jobs
         .iter()
         .map(|ranked| (ranked.job.job.id.clone(), ranked.fit.score))
@@ -1967,6 +1974,8 @@ mod tests {
                     source_match: true,
                     work_mode_match: Some(true),
                     region_match: Some(true),
+                    missing_signals: Vec::new(),
+                    description_quality: crate::domain::job::presentation::JobTextQuality::Strong,
                     reasons: Vec::new(),
                 },
             },
@@ -1987,6 +1996,8 @@ mod tests {
                     source_match: true,
                     work_mode_match: Some(true),
                     region_match: Some(true),
+                    missing_signals: Vec::new(),
+                    description_quality: crate::domain::job::presentation::JobTextQuality::Strong,
                     reasons: Vec::new(),
                 },
             },

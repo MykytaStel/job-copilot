@@ -1,14 +1,23 @@
+use std::collections::HashMap;
+
 use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 use tracing::warn;
 
 use crate::api::dto::jobs::{JobResponse, MlJobLifecycleResponse, RecentJobsResponse};
 use crate::api::dto::ranking::FitScoreResponse;
-use crate::api::error::ApiError;
+use crate::api::dto::search::JobFitResponse;
+use crate::api::error::{ApiError, ApiJson};
 use crate::api::routes::feedback::ensure_profile_exists;
+use crate::api::routes::search::{
+    apply_behavior_scoring, apply_feedback_scoring, apply_learned_reranking,
+    apply_trained_reranking, load_learning_aggregates, score_by_job_id,
+};
 use crate::domain::feedback::model::{CompanyFeedbackRecord, JobFeedbackRecord, JobFeedbackState};
+use crate::domain::search::profile::SearchPreferences;
 use crate::domain::source::SourceId;
 use crate::services::feedback::FeedbackService;
+use crate::services::matching::{RankedJob, summarize_match_quality};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -24,6 +33,65 @@ pub struct RecentJobsQuery {
 #[derive(Debug, Default, Deserialize)]
 pub struct JobContextQuery {
     pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BulkProfileJobMatchRequest {
+    pub job_ids: Vec<String>,
+}
+
+#[derive(Debug)]
+struct BulkProfileJobMatchInput {
+    job_ids: Vec<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct BulkProfileJobMatchResponse {
+    pub profile_id: String,
+    pub results: Vec<JobFitResponse>,
+    pub meta: BulkProfileJobMatchMeta,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct BulkProfileJobMatchMeta {
+    pub returned_jobs: usize,
+    pub low_evidence_jobs: usize,
+    pub weak_description_jobs: usize,
+    pub role_mismatch_jobs: usize,
+    pub seniority_mismatch_jobs: usize,
+    pub source_mismatch_jobs: usize,
+    pub top_missing_signals: Vec<String>,
+}
+
+impl BulkProfileJobMatchRequest {
+    fn validate(self) -> Result<BulkProfileJobMatchInput, ApiError> {
+        let mut job_ids = Vec::new();
+
+        for job_id in self.job_ids {
+            let normalized = job_id.trim();
+            if normalized.is_empty() || job_ids.iter().any(|existing| existing == normalized) {
+                continue;
+            }
+
+            job_ids.push(normalized.to_string());
+        }
+
+        if job_ids.is_empty() {
+            return Err(ApiError::bad_request(
+                "invalid_job_ids",
+                "job_ids must contain at least one non-empty id",
+            ));
+        }
+
+        if job_ids.len() > 200 {
+            return Err(ApiError::bad_request(
+                "invalid_job_ids",
+                "job_ids must contain at most 200 ids",
+            ));
+        }
+
+        Ok(BulkProfileJobMatchInput { job_ids })
+    }
 }
 
 pub async fn get_job_by_id(
@@ -113,6 +181,138 @@ pub async fn get_recent_jobs(
         jobs,
         summary: summary.into(),
     }))
+}
+
+pub async fn get_profile_job_match(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+) -> Result<axum::Json<JobFitResponse>, ApiError> {
+    let ranked_jobs = load_profile_ranked_jobs(&state, &profile_id, &[job_id.clone()]).await?;
+    let Some(ranked) = ranked_jobs
+        .into_iter()
+        .find(|ranked| ranked.job.job.id == job_id)
+    else {
+        return Err(ApiError::not_found(
+            "job_not_found",
+            format!("Job '{job_id}' was not found"),
+        ));
+    };
+
+    Ok(axum::Json(JobFitResponse::from(ranked.fit)))
+}
+
+pub async fn bulk_profile_job_match(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+    ApiJson(payload): ApiJson<BulkProfileJobMatchRequest>,
+) -> Result<axum::Json<BulkProfileJobMatchResponse>, ApiError> {
+    let input = payload.validate()?;
+    let ranked_jobs = load_profile_ranked_jobs(&state, &profile_id, &input.job_ids).await?;
+    let quality = summarize_match_quality(&ranked_jobs);
+    let results = ranked_jobs
+        .into_iter()
+        .map(|ranked| JobFitResponse::from(ranked.fit))
+        .collect::<Vec<_>>();
+
+    Ok(axum::Json(BulkProfileJobMatchResponse {
+        profile_id,
+        meta: BulkProfileJobMatchMeta {
+            returned_jobs: results.len(),
+            low_evidence_jobs: quality.low_evidence_jobs,
+            weak_description_jobs: quality.weak_description_jobs,
+            role_mismatch_jobs: quality.role_mismatch_jobs,
+            seniority_mismatch_jobs: quality.seniority_mismatch_jobs,
+            source_mismatch_jobs: quality.source_mismatch_jobs,
+            top_missing_signals: quality.top_missing_signals,
+        },
+        results,
+    }))
+}
+
+async fn load_profile_ranked_jobs(
+    state: &AppState,
+    profile_id: &str,
+    job_ids: &[String],
+) -> Result<Vec<RankedJob>, ApiError> {
+    ensure_profile_exists(state, profile_id).await?;
+
+    let profile = state
+        .profiles_service
+        .get_by_id(profile_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
+        .expect("profile existence already verified above");
+    let analyzed_profile = state.profile_analysis_service.analyze(&profile.raw_text);
+    let search_profile = state
+        .search_profile_service
+        .build(&analyzed_profile, &SearchPreferences::default());
+
+    let mut jobs = Vec::new();
+    for job_id in job_ids {
+        if let Some(job) = state
+            .jobs_service
+            .get_view_by_id(job_id)
+            .await
+            .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?
+        {
+            jobs.push(job);
+        }
+    }
+
+    let feedback_states = load_feedback_state(state, Some(profile_id), &jobs).await?;
+    let mut feedback_by_job_id = HashMap::new();
+    let ranked_candidates = jobs
+        .into_iter()
+        .zip(feedback_states)
+        .map(|(job, feedback)| {
+            feedback_by_job_id.insert(job.job.id.clone(), feedback);
+            job
+        })
+        .collect::<Vec<_>>();
+
+    let result = state
+        .search_matching_service
+        .run(&search_profile, ranked_candidates);
+    let deterministic_score_by_job_id = result
+        .ranked_jobs
+        .iter()
+        .map(|ranked| (ranked.job.job.id.clone(), ranked.fit.score))
+        .collect::<HashMap<_, _>>();
+
+    let mut adjusted_jobs = apply_feedback_scoring(result.ranked_jobs, &feedback_by_job_id);
+    let learning_aggregates = load_learning_aggregates(state, Some(profile_id)).await;
+
+    if let Some(aggregates) = learning_aggregates.as_ref() {
+        adjusted_jobs = apply_behavior_scoring(state, adjusted_jobs, &aggregates.behavior);
+    }
+
+    let behavior_score_by_job_id = score_by_job_id(&adjusted_jobs);
+
+    if state.learned_reranker_enabled {
+        if let Some(aggregates) = learning_aggregates.as_ref() {
+            let (reranked_jobs, _adjusted_count) = apply_learned_reranking(
+                state,
+                adjusted_jobs,
+                &aggregates.behavior,
+                &aggregates.funnel,
+                &feedback_by_job_id,
+                &deterministic_score_by_job_id,
+            );
+            adjusted_jobs = reranked_jobs;
+        }
+    }
+
+    if state.trained_reranker_enabled {
+        let (reranked_jobs, _adjusted_count) = apply_trained_reranking(
+            state,
+            adjusted_jobs,
+            &deterministic_score_by_job_id,
+            &behavior_score_by_job_id,
+        );
+        adjusted_jobs = reranked_jobs;
+    }
+
+    Ok(adjusted_jobs)
 }
 
 /// Read the persisted fit score for a job (previously computed via GET /fit or POST /match).
@@ -317,9 +517,12 @@ mod tests {
     use axum::{body, http::StatusCode};
     use serde_json::{Value, json};
 
+    use crate::api::error::ApiJson;
     use crate::domain::job::model::{
         Job, JobFeedSummary, JobLifecycleStage, JobSourceVariant, JobView,
     };
+    use crate::domain::profile::model::{Profile, ProfileAnalysis};
+    use crate::domain::role::RoleId;
     use crate::domain::source::SourceId;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
@@ -328,7 +531,8 @@ mod tests {
     use crate::state::AppState;
 
     use super::{
-        JobContextQuery, RecentJobsQuery, get_job_by_id, get_ml_job_lifecycle, get_recent_jobs,
+        BulkProfileJobMatchRequest, JobContextQuery, RecentJobsQuery, bulk_profile_job_match,
+        get_job_by_id, get_ml_job_lifecycle, get_profile_job_match, get_recent_jobs,
     };
 
     fn sample_job_view(id: &str) -> JobView {
@@ -362,6 +566,31 @@ mod tests {
                 is_active: true,
                 inactivated_at: None,
             }),
+        }
+    }
+
+    fn sample_profile() -> Profile {
+        Profile {
+            id: "profile-1".to_string(),
+            name: "Jane Doe".to_string(),
+            email: "jane@example.com".to_string(),
+            location: Some("Kyiv".to_string()),
+            raw_text:
+                "Senior frontend engineer with React, TypeScript and design system experience"
+                    .to_string(),
+            analysis: Some(ProfileAnalysis {
+                summary: "Senior frontend engineer".to_string(),
+                primary_role: RoleId::FrontendDeveloper,
+                seniority: "senior".to_string(),
+                skills: vec!["react".to_string(), "typescript".to_string()],
+                keywords: vec!["frontend".to_string(), "design system".to_string()],
+            }),
+            salary_min_usd: None,
+            salary_max_usd: None,
+            preferred_work_mode: None,
+            created_at: "2026-04-14T08:00:00Z".to_string(),
+            updated_at: "2026-04-14T08:00:00Z".to_string(),
+            skills_updated_at: Some("2026-04-14T08:00:00Z".to_string()),
         }
     }
 
@@ -440,6 +669,94 @@ mod tests {
             serde_json::from_slice(&body).expect("response body should be valid json");
 
         assert_eq!(payload["code"], json!("invalid_limit"));
+    }
+
+    #[tokio::test]
+    async fn profile_job_match_returns_canonical_fit_diagnostics() {
+        let frontend_job = JobView {
+            job: Job {
+                title: "Senior Front-end React Developer".to_string(),
+                description_text: "Ship frontend design system features with React and TypeScript. Partner with product and design on accessibility and performance improvements. Own component architecture, testing quality, and release readiness across a shared UI platform used by multiple product teams. Drive performance budgets, documentation standards, and cross-team adoption for reusable components, tokens, and frontend platform tooling.".to_string(),
+                ..sample_job_view("job-frontend-1").job
+            },
+            ..sample_job_view("job-frontend-1")
+        };
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(JobsServiceStub::default().with_job_view(frontend_job)),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        );
+
+        let Json(response) = get_profile_job_match(
+            State(state),
+            Path(("profile-1".to_string(), "job-frontend-1".to_string())),
+        )
+        .await
+        .expect("profile match should succeed");
+
+        assert!(response.score > 0);
+        assert!(response.matched_skills.contains(&"react".to_string()));
+        assert!(
+            response
+                .positive_reasons
+                .iter()
+                .any(|reason| reason.contains("Matched"))
+        );
+        assert_eq!(response.description_quality, "strong");
+    }
+
+    #[tokio::test]
+    async fn bulk_profile_job_match_supports_dashboard_sorting() {
+        let strong_job = JobView {
+            job: Job {
+                title: "Senior Front-end React Developer".to_string(),
+                description_text: "Ship frontend design system features with React and TypeScript. Collaborate with product, accessibility, and platform teams to improve shared components, design tokens, and performance budgets across multiple customer-facing surfaces.".to_string(),
+                ..sample_job_view("job-frontend-strong").job
+            },
+            ..sample_job_view("job-frontend-strong")
+        };
+        let weak_job = JobView {
+            job: Job {
+                title: "Senior UI Engineer".to_string(),
+                description_text: "Improve shared product experiences and collaborate with design."
+                    .to_string(),
+                ..sample_job_view("job-frontend-weak").job
+            },
+            ..sample_job_view("job-frontend-weak")
+        };
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(strong_job)
+                    .with_job_view(weak_job),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        );
+
+        let Json(response) = bulk_profile_job_match(
+            State(state),
+            Path("profile-1".to_string()),
+            ApiJson(BulkProfileJobMatchRequest {
+                job_ids: vec![
+                    "job-frontend-weak".to_string(),
+                    "job-frontend-strong".to_string(),
+                ],
+            }),
+        )
+        .await
+        .expect("bulk profile match should succeed");
+
+        assert_eq!(response.results.len(), 2);
+        assert_eq!(response.results[0].job_id, "job-frontend-strong");
+        assert!(response.results[0].score > response.results[1].score);
+        assert!(response.meta.low_evidence_jobs <= response.meta.returned_jobs);
     }
 
     #[tokio::test]

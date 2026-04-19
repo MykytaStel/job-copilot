@@ -1,11 +1,31 @@
 use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
 use crate::domain::source::SourceId;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JobTextQuality {
+    Strong,
+    Mixed,
+    Weak,
+}
+
+impl JobTextQuality {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Strong => "strong",
+            Self::Mixed => "mixed",
+            Self::Weak => "weak",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JobPresentation {
     pub title: String,
     pub company: String,
     pub summary: Option<String>,
+    pub summary_quality: Option<JobTextQuality>,
+    pub summary_fallback: bool,
+    pub description_quality: JobTextQuality,
     pub location_label: Option<String>,
     pub work_mode_label: Option<String>,
     pub source_label: Option<String>,
@@ -59,7 +79,8 @@ fn build_presentation(
     );
     let freshness_label =
         build_freshness_label(job.posted_at.as_deref(), first_seen_at, &job.last_seen_at);
-    let summary = build_summary(
+    let description_quality = assess_description_quality(&job.description_text);
+    let (summary, summary_quality, summary_fallback) = build_summary(
         source_id,
         &title,
         &company,
@@ -80,6 +101,9 @@ fn build_presentation(
         title,
         company,
         summary,
+        summary_quality,
+        summary_fallback,
+        description_quality,
         location_label,
         work_mode_label,
         source_label,
@@ -100,18 +124,28 @@ fn build_summary(
     work_mode_label: Option<&str>,
     salary_label: Option<&str>,
     seniority: Option<&str>,
-) -> Option<String> {
+) -> (Option<String>, Option<JobTextQuality>, bool) {
     let raw_description = raw_string(primary_variant, "description_text")
         .unwrap_or_else(|| description_text.to_string());
     let cleaned_description = clean_summary_text(&raw_description);
+    let description_quality = assess_description_quality(description_text);
 
     if let Some(summary) =
         extract_description_summary(source_id, &cleaned_description, title, company)
     {
-        return Some(summary);
+        let summary_quality = match description_quality {
+            JobTextQuality::Strong => JobTextQuality::Strong,
+            JobTextQuality::Mixed => JobTextQuality::Mixed,
+            JobTextQuality::Weak => JobTextQuality::Mixed,
+        };
+
+        return (Some(summary), Some(summary_quality), false);
     }
 
-    build_metadata_summary(location_label, work_mode_label, salary_label, seniority)
+    let summary = build_metadata_summary(location_label, work_mode_label, salary_label, seniority);
+    let summary_quality = summary.as_ref().map(|_| JobTextQuality::Weak);
+
+    (summary, summary_quality, true)
 }
 
 fn build_metadata_summary(
@@ -209,6 +243,13 @@ fn is_meaningful_summary(
         return false;
     }
 
+    if SUMMARY_NOISE_MARKERS
+        .iter()
+        .any(|marker| normalized.contains(marker))
+    {
+        return false;
+    }
+
     match source_id {
         Some(SourceId::Djinni) => {
             !normalized.contains("view vacancy")
@@ -228,6 +269,69 @@ fn is_meaningful_summary(
         }
         None => true,
     }
+}
+
+const SUMMARY_NOISE_MARKERS: &[&str] = &[
+    "how to apply",
+    "apply now",
+    "apply on company website",
+    "similar vacancies",
+    "related jobs",
+    "відгукнутись",
+    "відгукнутися",
+    "схожі вакансії",
+    "правила відгуків",
+];
+
+const DESCRIPTION_NOISE_MARKERS: &[&str] = &[
+    "how to apply",
+    "apply now",
+    "apply on company website",
+    "similar vacancies",
+    "related jobs",
+    "send cv",
+    "відгукнутись",
+    "відгукнутися",
+    "схожі вакансії",
+    "правила відгуків",
+];
+
+pub fn assess_description_quality(value: &str) -> JobTextQuality {
+    let normalized = normalized_cmp(value);
+
+    if normalized.is_empty() {
+        return JobTextQuality::Weak;
+    }
+
+    let char_count = normalized.chars().count();
+    let word_count = normalized.split_whitespace().count();
+    let sentence_count = normalized
+        .split(['.', '!', '?', ';'])
+        .map(str::trim)
+        .filter(|segment| segment.len() > 24)
+        .count();
+    let noise_hits = DESCRIPTION_NOISE_MARKERS
+        .iter()
+        .filter(|marker| normalized.contains(**marker))
+        .count();
+
+    if char_count < 90 || word_count < 14 {
+        return JobTextQuality::Weak;
+    }
+
+    if noise_hits >= 2 {
+        return JobTextQuality::Weak;
+    }
+
+    if char_count >= 260 && word_count >= 40 && sentence_count >= 2 && noise_hits == 0 {
+        return JobTextQuality::Strong;
+    }
+
+    if char_count >= 160 && word_count >= 24 && sentence_count >= 1 && noise_hits <= 1 {
+        return JobTextQuality::Mixed;
+    }
+
+    JobTextQuality::Weak
 }
 
 fn build_location_label(
@@ -668,6 +772,33 @@ mod tests {
             presentation.outbound_url.as_deref(),
             Some("https://www.work.ua/jobs/87654321/")
         );
+    }
+
+    #[test]
+    fn weak_summaries_fall_back_to_metadata_and_mark_quality() {
+        let view = sample_view(
+            "work_ua",
+            "87654321",
+            "https://www.work.ua/jobs/87654321/",
+            "React team",
+            json!({
+                "location": "Remote",
+                "description_text": "React team"
+            }),
+        );
+
+        let presentation = build_job_view_presentation(&view);
+
+        assert!(presentation.summary_fallback);
+        assert_eq!(
+            presentation.summary_quality,
+            Some(super::JobTextQuality::Weak)
+        );
+        assert_eq!(
+            presentation.description_quality,
+            super::JobTextQuality::Weak
+        );
+        assert!(presentation.summary.is_some());
     }
 
     #[test]

@@ -3,12 +3,14 @@ use axum::extract::{Path, State};
 use crate::api::dto::analytics::{
     AnalyticsSummaryResponse, FeedbackSummarySection, FunnelSummaryResponse,
     JobsByLifecycleSection, JobsBySourceEntry, LlmContextAnalyzedProfile, LlmContextEvidenceEntry,
-    LlmContextResponse, SalaryIntelligenceResponse,
+    LlmContextResponse, SalaryIntelligenceResponse, SearchQualitySummaryResponse,
 };
 use crate::api::error::ApiError;
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::domain::feedback::model::CompanyFeedbackStatus;
+use crate::domain::search::profile::SearchPreferences;
 use crate::services::funnel::FunnelService;
+use crate::services::matching::summarize_match_quality;
 use crate::state::AppState;
 
 pub async fn get_salary_intelligence(
@@ -90,6 +92,8 @@ pub async fn get_analytics_summary(
             (vec![], vec![], vec![])
         };
 
+    let search_quality = build_search_quality_summary(&state, &profile.raw_text).await?;
+
     Ok(axum::Json(AnalyticsSummaryResponse {
         profile_id,
         feedback,
@@ -109,6 +113,7 @@ pub async fn get_analytics_summary(
         top_matched_roles,
         top_matched_skills,
         top_matched_keywords,
+        search_quality,
     }))
 }
 
@@ -254,6 +259,35 @@ pub async fn get_llm_context(
         top_positive_evidence,
         top_negative_evidence,
     }))
+}
+
+async fn build_search_quality_summary(
+    state: &AppState,
+    raw_text: &str,
+) -> Result<SearchQualitySummaryResponse, ApiError> {
+    let analyzed_profile = state.profile_analysis_service.analyze(raw_text);
+    let search_profile = state
+        .search_profile_service
+        .build(&analyzed_profile, &SearchPreferences::default());
+    let jobs = state
+        .jobs_service
+        .list_filtered_views(200, Some("active"), None)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
+    let ranked_jobs = state
+        .search_matching_service
+        .run(&search_profile, jobs)
+        .ranked_jobs;
+    let quality = summarize_match_quality(&ranked_jobs);
+
+    Ok(SearchQualitySummaryResponse {
+        low_evidence_jobs: quality.low_evidence_jobs,
+        weak_description_jobs: quality.weak_description_jobs,
+        role_mismatch_jobs: quality.role_mismatch_jobs,
+        seniority_mismatch_jobs: quality.seniority_mismatch_jobs,
+        source_mismatch_jobs: quality.source_mismatch_jobs,
+        top_missing_signals: quality.top_missing_signals,
+    })
 }
 
 #[cfg(test)]

@@ -60,6 +60,22 @@ type EngineApiError = {
   details?: unknown;
 };
 
+function uniquePreservingOrder(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const normalized = value.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    result.push(normalized);
+  }
+
+  return result;
+}
+
 type EngineHealthResponse = {
   status: string;
   database: {
@@ -167,6 +183,9 @@ type EngineJob = {
     title: string;
     company: string;
     summary?: string | null;
+    summary_quality?: string | null;
+    summary_fallback: boolean;
+    description_quality: string;
     location_label?: string | null;
     work_mode_label?: string | null;
     source_label?: string | null;
@@ -360,9 +379,13 @@ type EngineFitExplanation = {
   matched_roles: string[];
   matched_skills: string[];
   matched_keywords: string[];
+   missing_signals: string[];
   source_match: boolean;
   work_mode_match?: boolean | null;
   region_match?: boolean | null;
+   description_quality: string;
+   positive_reasons: string[];
+   negative_reasons: string[];
   reasons: string[];
 };
 
@@ -373,6 +396,12 @@ type EngineSearchRunMeta = {
   filtered_out_company_blacklist: number;
   scored_jobs: number;
   returned_jobs: number;
+  low_evidence_jobs: number;
+  weak_description_jobs: number;
+  role_mismatch_jobs: number;
+  seniority_mismatch_jobs: number;
+  source_mismatch_jobs: number;
+  top_missing_signals: string[];
 };
 
 const API_URL =
@@ -381,8 +410,6 @@ const ML_URL =
   import.meta.env.VITE_ML_URL?.trim() || 'http://localhost:8000';
 const PROFILE_ID_KEY = 'engine_api_profile_id';
 const RECENT_JOBS_LIMIT_MAX = 200;
-const ML_RERANK_MAX_JOB_IDS = 50;
-
 function normalizeMissingString(value?: string | null): string | undefined {
   if (!value) return undefined;
   const cleaned = value.trim();
@@ -398,7 +425,10 @@ export type RankedJob = {
   companyName: string;
   score: number;
   matchedTerms: string[];
-  evidence: string[];
+  positiveReasons: string[];
+  negativeReasons: string[];
+  missingSignals: string[];
+  descriptionQuality: string;
 };
 
 export type FitAnalysis = {
@@ -406,7 +436,13 @@ export type FitAnalysis = {
   jobId: string;
   score: number;
   matchedTerms: string[];
+  matchedRoles: string[];
+  matchedSkills: string[];
+  matchedKeywords: string[];
   missingTerms: string[];
+  descriptionQuality: string;
+  positiveReasons: string[];
+  negativeReasons: string[];
   evidence: string[];
 };
 
@@ -511,9 +547,13 @@ export type FitExplanation = {
   matchedRoles: string[];
   matchedSkills: string[];
   matchedKeywords: string[];
+  missingSignals: string[];
   sourceMatch: boolean;
   workModeMatch?: boolean;
   regionMatch?: boolean;
+  descriptionQuality: string;
+  positiveReasons: string[];
+  negativeReasons: string[];
   reasons: string[];
 };
 
@@ -532,6 +572,12 @@ export type SearchRunResult = {
     filteredOutCompanyBlacklist: number;
     scoredJobs: number;
     returnedJobs: number;
+    lowEvidenceJobs: number;
+    weakDescriptionJobs: number;
+    roleMismatchJobs: number;
+    seniorityMismatchJobs: number;
+    sourceMismatchJobs: number;
+    topMissingSignals: string[];
   };
 };
 
@@ -551,69 +597,64 @@ export async function rerankJobs(profileId: string, jobIds: string[]): Promise<R
   const uniqueJobIds = Array.from(
     new Set(jobIds.map((jobId) => jobId.trim()).filter(Boolean)),
   );
-
-  const batches: string[][] = [];
-  for (let index = 0; index < uniqueJobIds.length; index += ML_RERANK_MAX_JOB_IDS) {
-    batches.push(uniqueJobIds.slice(index, index + ML_RERANK_MAX_JOB_IDS));
+  if (uniqueJobIds.length === 0) {
+    return [];
   }
 
-  const responses = await Promise.all(
-    batches.map((batch) =>
-      mlRequest<{
-        profile_id: string;
-        jobs: Array<{
-          job_id: string;
-          title: string;
-          company_name: string;
-          score: number;
-          matched_terms: string[];
-          evidence: string[];
-        }>;
-      }>('/api/v1/rerank', {
-        method: 'POST',
-        body: JSON.stringify({ profile_id: profileId, job_ids: batch }),
-      }),
-    ),
-  );
+  const response = await request<{
+    profile_id: string;
+    results: EngineFitExplanation[];
+  }>(`/api/v1/profiles/${profileId}/jobs/match`, json('POST', {
+    job_ids: uniqueJobIds,
+  }));
 
-  return responses
-    .flatMap((result) =>
-      result.jobs.map((job) => ({
-        jobId: job.job_id,
-        title: job.title,
-        companyName: job.company_name,
-        score: job.score,
-        matchedTerms: job.matched_terms,
-        evidence: job.evidence,
-      })),
-    )
+  return response.results
+    .map((fit) => ({
+      jobId: fit.job_id,
+      title: '',
+      companyName: '',
+      score: fit.score,
+      matchedTerms: uniquePreservingOrder([
+        ...fit.matched_roles,
+        ...fit.matched_skills,
+        ...fit.matched_keywords,
+      ]),
+      positiveReasons: fit.positive_reasons,
+      negativeReasons: fit.negative_reasons,
+      missingSignals: fit.missing_signals,
+      descriptionQuality: fit.description_quality,
+    }))
     .sort(
       (left, right) =>
         right.score - left.score ||
-        left.title.localeCompare(right.title) ||
         left.jobId.localeCompare(right.jobId),
     );
 }
 
 export async function analyzeFit(profileId: string, jobId: string): Promise<FitAnalysis> {
-  const result = await mlRequest<{
-    profile_id: string;
-    job_id: string;
-    score: number;
-    matched_terms: string[];
-    missing_terms: string[];
-    evidence: string[];
-  }>('/api/v1/fit/analyze', {
-    method: 'POST',
-    body: JSON.stringify({ profile_id: profileId, job_id: jobId }),
-  });
+  const result = await request<EngineFitExplanation>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/match`,
+  );
+  const matchedTerms = uniquePreservingOrder([
+    ...result.matched_roles,
+    ...result.matched_skills,
+    ...result.matched_keywords,
+  ]);
+  const evidence = result.positive_reasons.length > 0 ? result.positive_reasons : result.reasons;
+
   return {
-    profileId: result.profile_id,
+    profileId,
     jobId: result.job_id,
     score: result.score,
-    matchedTerms: result.matched_terms,
-    missingTerms: result.missing_terms,
-    evidence: result.evidence,
+    matchedTerms,
+    matchedRoles: result.matched_roles,
+    matchedSkills: result.matched_skills,
+    matchedKeywords: result.matched_keywords,
+    missingTerms: result.missing_signals,
+    descriptionQuality: result.description_quality,
+    positiveReasons: result.positive_reasons,
+    negativeReasons: result.negative_reasons,
+    evidence,
   };
 }
 
@@ -716,6 +757,9 @@ function mapJob(job: EngineJob): JobPosting {
       title: job.presentation.title,
       company: job.presentation.company,
       summary: job.presentation.summary ?? undefined,
+      summaryQuality: job.presentation.summary_quality ?? undefined,
+      summaryFallback: job.presentation.summary_fallback,
+      descriptionQuality: job.presentation.description_quality,
       locationLabel: job.presentation.location_label ?? undefined,
       workModeLabel: job.presentation.work_mode_label ?? undefined,
       sourceLabel: job.presentation.source_label ?? undefined,
@@ -1046,9 +1090,13 @@ export async function runSearch(
         matchedRoles: result.fit.matched_roles,
         matchedSkills: result.fit.matched_skills,
         matchedKeywords: result.fit.matched_keywords,
+        missingSignals: result.fit.missing_signals,
         sourceMatch: result.fit.source_match,
         workModeMatch: result.fit.work_mode_match ?? undefined,
         regionMatch: result.fit.region_match ?? undefined,
+        descriptionQuality: result.fit.description_quality,
+        positiveReasons: result.fit.positive_reasons,
+        negativeReasons: result.fit.negative_reasons,
         reasons: result.fit.reasons,
       },
     })),
@@ -1060,6 +1108,12 @@ export async function runSearch(
         response.meta.filtered_out_company_blacklist,
       scoredJobs: response.meta.scored_jobs,
       returnedJobs: response.meta.returned_jobs,
+      lowEvidenceJobs: response.meta.low_evidence_jobs,
+      weakDescriptionJobs: response.meta.weak_description_jobs,
+      roleMismatchJobs: response.meta.role_mismatch_jobs,
+      seniorityMismatchJobs: response.meta.seniority_mismatch_jobs,
+      sourceMismatchJobs: response.meta.source_mismatch_jobs,
+      topMissingSignals: response.meta.top_missing_signals,
     },
   };
 }
@@ -1506,6 +1560,16 @@ type EngineAnalyticsSummaryResponse = {
   top_matched_roles: string[];
   top_matched_skills: string[];
   top_matched_keywords: string[];
+  search_quality: EngineSearchQualitySummary;
+};
+
+type EngineSearchQualitySummary = {
+  low_evidence_jobs: number;
+  weak_description_jobs: number;
+  role_mismatch_jobs: number;
+  seniority_mismatch_jobs: number;
+  source_mismatch_jobs: number;
+  top_missing_signals: string[];
 };
 
 type EngineFunnelSummaryResponse = {
@@ -1663,6 +1727,14 @@ export type AnalyticsSummary = {
   topMatchedRoles: string[];
   topMatchedSkills: string[];
   topMatchedKeywords: string[];
+  searchQuality: {
+    lowEvidenceJobs: number;
+    weakDescriptionJobs: number;
+    roleMismatchJobs: number;
+    seniorityMismatchJobs: number;
+    sourceMismatchJobs: number;
+    topMissingSignals: string[];
+  };
 };
 
 export type BehaviorSignalCount = {
@@ -1918,6 +1990,14 @@ export async function getAnalyticsSummary(profileId: string): Promise<AnalyticsS
     topMatchedRoles: response.top_matched_roles,
     topMatchedSkills: response.top_matched_skills,
     topMatchedKeywords: response.top_matched_keywords,
+    searchQuality: {
+      lowEvidenceJobs: response.search_quality.low_evidence_jobs,
+      weakDescriptionJobs: response.search_quality.weak_description_jobs,
+      roleMismatchJobs: response.search_quality.role_mismatch_jobs,
+      seniorityMismatchJobs: response.search_quality.seniority_mismatch_jobs,
+      sourceMismatchJobs: response.search_quality.source_mismatch_jobs,
+      topMissingSignals: response.search_quality.top_missing_signals,
+    },
   };
 }
 

@@ -1,12 +1,14 @@
 import { useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   BarChart2,
   Bookmark,
   Brain,
   Building2,
   Eye,
   EyeOff,
+  FileWarning,
   Hash,
   Layers,
   Search,
@@ -15,7 +17,9 @@ import {
   Sparkles,
   Target,
   ThumbsDown,
+  TrendingDown,
   TrendingUp,
+  XCircle,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
@@ -816,6 +820,28 @@ export default function Analytics() {
                       title="Matched keywords"
                       items={summary.topMatchedKeywords}
                       emptyMessage="No matched keywords yet."
+                      tone="warning"
+                    />
+                  </div>
+                </Section>
+                <Section
+                  title="Search Quality"
+                  description="Signals that explain why current matching can feel weak or noisy."
+                  icon={AlertTriangle}
+                  eyebrow="Diagnostics"
+                >
+                  <div className="grid grid-cols-2 gap-3">
+                    <StatCard title="Low evidence" value={summary.searchQuality.lowEvidenceJobs} icon={AlertTriangle} />
+                    <StatCard title="Weak descriptions" value={summary.searchQuality.weakDescriptionJobs} icon={FileWarning} />
+                    <StatCard title="Role mismatch" value={summary.searchQuality.roleMismatchJobs} icon={XCircle} />
+                    <StatCard title="Seniority mismatch" value={summary.searchQuality.seniorityMismatchJobs} icon={TrendingDown} />
+                  </div>
+
+                  <div className="mt-4">
+                    <PillCloud
+                      title="Top missing signals"
+                      items={summary.searchQuality.topMissingSignals}
+                      emptyMessage="No repeated missing signals yet."
                       tone="warning"
                     />
                   </div>

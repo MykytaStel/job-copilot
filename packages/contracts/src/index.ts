@@ -90,6 +90,9 @@ export interface JobPresentation {
   title: string;
   company: string;
   summary?: string;
+  summaryQuality?: string;
+  summaryFallback?: boolean;
+  descriptionQuality?: string;
   locationLabel?: string;
   workModeLabel?: string;
   sourceLabel?: string;
