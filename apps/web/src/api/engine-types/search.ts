@@ -1,39 +1,38 @@
+import type {
+  EngineBuildSearchProfileResponse as SharedEngineBuildSearchProfileResponse,
+  EngineRoleId,
+  EngineSearchProfileResponse as SharedEngineSearchProfileResponse,
+  EngineTargetRegion,
+  EngineWorkMode,
+} from '@job-copilot/shared';
+
 import type { EngineGlobalSearchApplication } from './applications';
 import type { EngineJob } from './jobs';
 import type { EngineAnalyzeProfile } from './profiles';
 
-export type InternalSearchTargetRegion =
-  | 'ua'
-  | 'eu'
-  | 'eu_remote'
-  | 'poland'
-  | 'germany'
-  | 'uk'
-  | 'us';
+export type InternalSearchTargetRegion = EngineTargetRegion;
 
-export type InternalSearchWorkMode = 'remote' | 'hybrid' | 'onsite';
+export type InternalSearchWorkMode = EngineWorkMode;
 
 export type EngineSearchRoleCandidate = {
-  role: string;
+  role: EngineRoleId;
   confidence: number;
 };
 
-export type EngineSearchProfile = {
-  primary_role: string;
+export type EngineSearchProfile = Omit<
+  SharedEngineSearchProfileResponse,
+  'role_candidates'
+> & {
   primary_role_confidence?: number | null;
-  target_roles: string[];
   role_candidates: EngineSearchRoleCandidate[];
-  seniority: string;
-  target_regions: InternalSearchTargetRegion[];
-  work_modes: InternalSearchWorkMode[];
-  allowed_sources: string[];
-  profile_skills: string[];
-  profile_keywords: string[];
-  search_terms: string[];
-  exclude_terms: string[];
+  profile_skills?: string[] | null;
+  profile_keywords?: string[] | null;
 };
 
-export type EngineBuildSearchProfileResponse = {
+export type EngineBuildSearchProfileResponse = Omit<
+  SharedEngineBuildSearchProfileResponse,
+  'analyzed_profile' | 'search_profile'
+> & {
   analyzed_profile: EngineAnalyzeProfile;
   search_profile: EngineSearchProfile;
 };

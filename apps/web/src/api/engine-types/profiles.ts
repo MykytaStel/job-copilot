@@ -1,3 +1,8 @@
+import type {
+  EngineAnalyzeProfileResponse as SharedEngineAnalyzeProfileResponse,
+  EngineRoleCandidateResponse,
+} from '@job-copilot/shared';
+
 export type EngineResume = {
   id: string;
   version: number;
@@ -18,30 +23,20 @@ export type EngineMatchResult = {
   created_at: string;
 };
 
-export type EngineRoleCandidate = {
-  role: string;
-  score: number;
-  confidence: number;
-  matched_signals: string[];
-};
+export type EngineRoleCandidate = EngineRoleCandidateResponse;
 
-export type EngineAnalyzeProfile = {
-  summary: string;
-  primary_role: string;
-  seniority: string;
-  skills: string[];
-  keywords: string[];
+export type EngineAnalyzeProfile = Omit<
+  SharedEngineAnalyzeProfileResponse,
+  'role_candidates' | 'suggested_search_terms'
+> & {
   role_candidates?: EngineRoleCandidate[];
   suggested_search_terms?: string[];
 };
 
-export type EngineProfileAnalysis = {
-  summary: string;
-  primary_role: string;
-  seniority: string;
-  skills: string[];
-  keywords: string[];
-};
+export type EngineProfileAnalysis = Pick<
+  SharedEngineAnalyzeProfileResponse,
+  'summary' | 'primary_role' | 'seniority' | 'skills' | 'keywords'
+>;
 
 export type EngineProfile = {
   id: string;

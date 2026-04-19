@@ -1,20 +1,18 @@
+import type {
+  EngineRoleCatalogItemResponse,
+  EngineRoleCatalogResponse as SharedEngineRoleCatalogResponse,
+  EngineSourceId,
+} from '@job-copilot/shared';
+
 export type EngineSourceCatalogItem = {
-  id: string;
+  id: EngineSourceId;
   display_name: string;
 };
 
-export type EngineRoleCatalogItem = {
-  id: string;
-  display_name: string;
-  deprecated_api_ids: string[];
-  family?: string;
-  is_fallback: boolean;
-};
+export type EngineRoleCatalogItem = EngineRoleCatalogItemResponse;
 
 export type EngineSourceCatalogResponse = {
   sources: EngineSourceCatalogItem[];
 };
 
-export type EngineRoleCatalogResponse = {
-  roles: EngineRoleCatalogItem[];
-};
+export type EngineRoleCatalogResponse = SharedEngineRoleCatalogResponse;

@@ -1,4 +1,9 @@
-import type { ApplicationStatus } from '@job-copilot/shared';
+import type {
+  ActivityType,
+  ApplicationStatus,
+  ContactRelationship,
+  OfferStatus,
+} from '@job-copilot/shared';
 
 import type { EngineContact } from './contacts';
 import type { EngineJob } from './jobs';
@@ -32,7 +37,7 @@ export type EngineGlobalSearchApplication = {
 export type EngineOffer = {
   id: string;
   application_id: string;
-  status: string;
+  status: OfferStatus;
   compensation_min?: number | null;
   compensation_max?: number | null;
   compensation_currency?: string | null;
@@ -52,14 +57,14 @@ export type EngineApplicationNote = {
 export type EngineApplicationContactLink = {
   id: string;
   application_id: string;
-  relationship: string;
+  relationship: ContactRelationship;
   contact: EngineContact;
 };
 
 export type EngineApplicationActivity = {
   id: string;
   application_id: string;
-  activity_type: string;
+  activity_type: ActivityType;
   description: string;
   happened_at: string;
   created_at: string;
