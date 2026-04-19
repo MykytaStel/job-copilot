@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::api::dto::applications::ApplicationResponse;
 use crate::api::dto::jobs::JobResponse;
 use crate::api::error::ApiError;
 use crate::domain::job::model::Job;
 use crate::domain::matching::JobFit;
 use crate::domain::role::RoleId;
 use crate::domain::role::catalog::ROLE_CATALOG;
+use crate::domain::search::global::ApplicationSearchHit;
 use crate::domain::search::profile::{SearchProfile, SearchRoleCandidate, TargetRegion, WorkMode};
 use crate::domain::source::SOURCE_CATALOG;
 use crate::domain::source::SourceId;
@@ -15,28 +17,43 @@ use crate::services::matching::SearchRunResult;
 #[derive(Debug, Serialize)]
 pub struct SearchResponse {
     pub jobs: Vec<JobResponse>,
-    pub contacts: Vec<SearchContactResponse>,
-    pub page: i64,
-    pub per_page: i64,
-    pub has_more: bool,
+    pub applications: Vec<SearchApplicationResponse>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct SearchContactResponse {
-    pub id: String,
-    pub name: String,
-    pub role: Option<String>,
-    pub email: Option<String>,
+pub struct SearchApplicationResponse {
+    #[serde(flatten)]
+    pub application: ApplicationResponse,
+    pub job_title: String,
+    pub company_name: String,
 }
 
 impl SearchResponse {
-    pub fn from_jobs(jobs: Vec<Job>, page: i64, per_page: i64, has_more: bool) -> Self {
+    pub fn new(jobs: Vec<Job>, applications: Vec<ApplicationSearchHit>) -> Self {
         Self {
             jobs: jobs.into_iter().map(JobResponse::from).collect(),
-            contacts: Vec::new(),
-            page,
-            per_page,
-            has_more,
+            applications: applications
+                .into_iter()
+                .map(SearchApplicationResponse::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<ApplicationSearchHit> for SearchApplicationResponse {
+    fn from(value: ApplicationSearchHit) -> Self {
+        Self {
+            application: ApplicationResponse {
+                id: value.id,
+                job_id: value.job_id,
+                resume_id: value.resume_id,
+                status: value.status,
+                applied_at: value.applied_at,
+                due_date: value.due_date,
+                updated_at: value.updated_at,
+            },
+            job_title: value.job_title,
+            company_name: value.company_name,
         }
     }
 }

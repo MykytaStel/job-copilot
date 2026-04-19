@@ -28,7 +28,6 @@ const BAD_FIT_SCORE_PENALTY: u8 = 30;
 pub struct SearchQuery {
     pub q: String,
     pub limit: Option<i64>,
-    pub page: Option<i64>,
 }
 
 pub async fn search(
@@ -44,23 +43,19 @@ pub async fn search(
         ));
     }
 
-    let per_page = query.limit.unwrap_or(20).clamp(1, 50);
-    let page = query.page.unwrap_or(1).max(1);
-    let offset = (page - 1) * per_page;
-
-    // Fetch one extra row so we can cheaply detect whether a next page exists.
-    let mut jobs = state
+    let limit = query.limit.unwrap_or(10).clamp(1, 25);
+    let jobs = state
         .jobs_service
-        .search(q, per_page + 1, offset)
+        .search_active(q, limit)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "search_query_failed"))?;
+    let applications = state
+        .applications_service
+        .search_by_job_title(q, limit)
         .await
         .map_err(|error| ApiError::from_repository(error, "search_query_failed"))?;
 
-    let has_more = jobs.len() as i64 > per_page;
-    jobs.truncate(per_page as usize);
-
-    Ok(axum::Json(SearchResponse::from_jobs(
-        jobs, page, per_page, has_more,
-    )))
+    Ok(axum::Json(SearchResponse::new(jobs, applications)))
 }
 
 pub async fn run_search(
@@ -553,6 +548,25 @@ mod tests {
         }
     }
 
+    fn sample_application_search_hit(
+        id: &str,
+        job_id: &str,
+        job_title: &str,
+        company_name: &str,
+    ) -> crate::domain::search::global::ApplicationSearchHit {
+        crate::domain::search::global::ApplicationSearchHit {
+            id: id.to_string(),
+            job_id: job_id.to_string(),
+            resume_id: None,
+            status: "saved".to_string(),
+            applied_at: None,
+            due_date: None,
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+            job_title: job_title.to_string(),
+            company_name: company_name.to_string(),
+        }
+    }
+
     fn sample_profile() -> Profile {
         Profile {
             id: "profile-1".to_string(),
@@ -674,7 +688,6 @@ mod tests {
             Query(SearchQuery {
                 q: "   ".to_string(),
                 limit: None,
-                page: None,
             }),
         )
         .await
@@ -685,16 +698,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn returns_paginated_results_with_has_more() {
+    async fn returns_jobs_and_applications_results() {
         let state = AppState::for_services(
             ProfilesService::for_tests(ProfilesServiceStub::default()),
             JobsService::for_tests(
                 JobsServiceStub::default()
                     .with_job(sample_job("job-1", "Backend Rust Engineer"))
-                    .with_job(sample_job("job-2", "Senior Rust Platform Engineer"))
-                    .with_job(sample_job("job-3", "Rust Data Engineer")),
+                    .with_job(sample_job("job-2", "Senior Rust Platform Engineer")),
             ),
-            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ApplicationsService::for_tests(
+                ApplicationsServiceStub::default().with_search_application(
+                    sample_application_search_hit(
+                        "application-1",
+                        "job-1",
+                        "Backend Rust Engineer",
+                        "Acme",
+                    ),
+                ),
+            ),
             ResumesService::for_tests(ResumesServiceStub::default()),
         );
 
@@ -703,20 +724,18 @@ mod tests {
             Query(SearchQuery {
                 q: "rust".to_string(),
                 limit: Some(2),
-                page: Some(1),
             }),
         )
         .await
         .expect("search should succeed");
 
         assert_eq!(response.jobs.len(), 2);
-        assert_eq!(response.page, 1);
-        assert_eq!(response.per_page, 2);
-        assert!(response.has_more);
+        assert_eq!(response.applications.len(), 1);
+        assert_eq!(response.applications[0].job_title, "Backend Rust Engineer");
     }
 
     #[tokio::test]
-    async fn returns_second_page_results() {
+    async fn limits_each_result_group() {
         let state = AppState::for_services(
             ProfilesService::for_tests(ProfilesServiceStub::default()),
             JobsService::for_tests(
@@ -725,31 +744,42 @@ mod tests {
                     .with_job(sample_job("job-2", "Senior Rust Platform Engineer"))
                     .with_job(sample_job("job-3", "Rust Data Engineer")),
             ),
-            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ApplicationsService::for_tests(
+                ApplicationsServiceStub::default()
+                    .with_search_application(sample_application_search_hit(
+                        "application-1",
+                        "job-1",
+                        "Backend Rust Engineer",
+                        "Acme",
+                    ))
+                    .with_search_application(sample_application_search_hit(
+                        "application-2",
+                        "job-2",
+                        "Senior Rust Platform Engineer",
+                        "Acme",
+                    ))
+                    .with_search_application(sample_application_search_hit(
+                        "application-3",
+                        "job-3",
+                        "Rust Data Engineer",
+                        "Acme",
+                    )),
+            ),
             ResumesService::for_tests(ResumesServiceStub::default()),
         );
 
-        let response = search(
+        let Json(response) = search(
             State(state),
             Query(SearchQuery {
                 q: "rust".to_string(),
                 limit: Some(2),
-                page: Some(2),
             }),
         )
         .await
-        .expect("search should succeed")
-        .into_response();
+        .expect("search should succeed");
 
-        let body = body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("response body should be readable");
-        let payload: Value =
-            serde_json::from_slice(&body).expect("response body should be valid JSON");
-
-        assert_eq!(payload["jobs"].as_array().map(Vec::len), Some(1));
-        assert_eq!(payload["page"].as_i64(), Some(2));
-        assert_eq!(payload["has_more"].as_bool(), Some(false));
+        assert_eq!(response.jobs.len(), 2);
+        assert_eq!(response.applications.len(), 2);
     }
 
     #[tokio::test]
