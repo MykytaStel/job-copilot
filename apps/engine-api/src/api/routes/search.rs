@@ -10,11 +10,13 @@ use crate::api::error::{ApiError, ApiJson};
 use crate::api::routes::events::log_user_event_softly;
 use crate::api::routes::jobs::load_feedback_state;
 use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackState};
+use crate::domain::matching::RerankerMode;
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::behavior::{BehaviorService, ProfileBehaviorAggregates};
 use crate::services::funnel::{FunnelService, ProfileFunnelAggregates};
 use crate::services::learned_reranker::LearnedRerankerService;
 use crate::services::matching::{RankedJob, summarize_match_quality};
+use crate::services::salary::{SearchSalaryExpectation, score_search_salary};
 use crate::services::trained_reranker::TrainedRerankerFeatures;
 use crate::state::AppState;
 
@@ -105,6 +107,8 @@ pub async fn run_search(
     let result = state
         .search_matching_service
         .run(&input.search_profile, ranked_candidates);
+    let salary_expectation =
+        load_search_salary_expectation(&state, input.profile_id.as_deref()).await?;
     let deterministic_score_by_job_id = result
         .ranked_jobs
         .iter()
@@ -120,7 +124,8 @@ pub async fn run_search(
     //
     // Truncation happens after all additive layers so jobs just outside the
     // deterministic limit can still be promoted by profile-specific evidence.
-    let mut adjusted_jobs = apply_feedback_scoring(result.ranked_jobs, &feedback_by_job_id);
+    let mut adjusted_jobs = apply_salary_scoring(result.ranked_jobs, salary_expectation.as_ref());
+    adjusted_jobs = apply_feedback_scoring(adjusted_jobs, &feedback_by_job_id);
     if let Some(aggregates) = learning_aggregates.as_ref() {
         adjusted_jobs = apply_behavior_scoring(&state, adjusted_jobs, &aggregates.behavior);
     }
@@ -138,6 +143,11 @@ pub async fn run_search(
             );
             adjusted_jobs = reranked_jobs;
             learned_reranker_adjusted_jobs = adjusted_count;
+        } else if input.profile_id.is_some() {
+            mark_reranker_fallback(
+                &mut adjusted_jobs,
+                "Learned reranker unavailable; kept deterministic ranking",
+            );
         }
     }
     let mut trained_reranker_adjusted_jobs = 0usize;
@@ -150,6 +160,12 @@ pub async fn run_search(
         );
         adjusted_jobs = reranked_jobs;
         trained_reranker_adjusted_jobs = adjusted_count;
+        if state.trained_reranker_model.is_none() {
+            mark_reranker_fallback(
+                &mut adjusted_jobs,
+                "Trained reranker unavailable; kept current ranking",
+            );
+        }
     }
     adjusted_jobs.truncate(input.limit as usize);
     let quality = summarize_match_quality(&adjusted_jobs);
@@ -273,23 +289,18 @@ pub(crate) fn apply_feedback_scoring(
         };
 
         if feedback.company_status == Some(CompanyFeedbackStatus::Whitelist) {
-            ranked.fit.score = ranked
-                .fit
-                .score
-                .saturating_add(WHITELIST_SCORE_BONUS)
-                .min(100);
-            ranked
-                .fit
-                .reasons
-                .push("Company is whitelisted for this profile".to_string());
+            ranked.fit.apply_matching_adjustment(
+                i16::from(WHITELIST_SCORE_BONUS),
+                Some("Company is whitelisted for this profile".to_string()),
+            );
         }
 
         if feedback.bad_fit {
-            ranked.fit.score = ranked.fit.score.saturating_sub(BAD_FIT_SCORE_PENALTY);
-            ranked
-                .fit
-                .reasons
-                .push("Job was previously marked as bad fit".to_string());
+            ranked.fit.add_penalty(
+                "bad_fit_feedback",
+                -i16::from(BAD_FIT_SCORE_PENALTY),
+                "Job was previously marked as bad fit".to_string(),
+            );
         }
     }
 
@@ -334,6 +345,49 @@ pub(crate) async fn load_learning_aggregates(
     })
 }
 
+async fn load_search_salary_expectation(
+    state: &AppState,
+    profile_id: Option<&str>,
+) -> Result<Option<SearchSalaryExpectation>, ApiError> {
+    let Some(profile_id) = profile_id else {
+        return Ok(None);
+    };
+    let profile = state
+        .profiles_service
+        .get_by_id(profile_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "search_run_failed"))?;
+
+    Ok(profile.map(|profile| SearchSalaryExpectation {
+        min: profile.salary_min,
+        max: profile.salary_max,
+        currency: profile.salary_currency,
+    }))
+}
+
+pub(crate) fn apply_salary_scoring(
+    mut ranked_jobs: Vec<RankedJob>,
+    expectation: Option<&SearchSalaryExpectation>,
+) -> Vec<RankedJob> {
+    for ranked in &mut ranked_jobs {
+        let adjustment = score_search_salary(expectation, &ranked.job.job);
+        ranked
+            .fit
+            .apply_salary_score(adjustment.score_delta, adjustment.reason);
+    }
+
+    ranked_jobs.sort_by(|left, right| {
+        right
+            .fit
+            .score
+            .cmp(&left.fit.score)
+            .then_with(|| right.job.job.last_seen_at.cmp(&left.job.job.last_seen_at))
+            .then_with(|| left.job.job.id.cmp(&right.job.job.id))
+    });
+
+    ranked_jobs
+}
+
 pub(crate) fn apply_behavior_scoring(
     state: &AppState,
     mut ranked_jobs: Vec<RankedJob>,
@@ -354,7 +408,9 @@ pub(crate) fn apply_behavior_scoring(
             continue;
         }
 
-        ranked.fit.score = (ranked.fit.score as i16 + adjustment.score_delta).clamp(0, 100) as u8;
+        ranked
+            .fit
+            .apply_matching_adjustment(adjustment.score_delta, None);
         ranked.fit.reasons.extend(adjustment.reasons);
     }
 
@@ -406,12 +462,17 @@ pub(crate) fn apply_learned_reranking(
         );
 
         if learned_score.score_delta == 0 {
+            ranked
+                .fit
+                .apply_reranker_score(0, RerankerMode::Learned, Vec::new());
             continue;
         }
 
-        ranked.fit.score =
-            (ranked.fit.score as i16 + learned_score.score_delta).clamp(0, 100) as u8;
-        ranked.fit.reasons.extend(learned_score.reasons);
+        ranked.fit.apply_reranker_score(
+            learned_score.score_delta,
+            RerankerMode::Learned,
+            learned_score.reasons,
+        );
         adjusted_count += 1;
     }
 
@@ -470,11 +531,15 @@ pub(crate) fn apply_trained_reranking(
         let score = model.score(&features);
 
         if score.score_delta == 0 {
+            ranked
+                .fit
+                .apply_reranker_score(0, RerankerMode::Trained, Vec::new());
             continue;
         }
 
-        ranked.fit.score = (i16::from(ranked.fit.score) + score.score_delta).clamp(0, 100) as u8;
-        ranked.fit.reasons.extend(score.reasons);
+        ranked
+            .fit
+            .apply_reranker_score(score.score_delta, RerankerMode::Trained, score.reasons);
         adjusted_count += 1;
     }
 
@@ -497,6 +562,17 @@ pub(crate) fn score_by_job_id(ranked_jobs: &[RankedJob]) -> HashMap<String, u8> 
         .collect()
 }
 
+fn mark_reranker_fallback(ranked_jobs: &mut [RankedJob], reason: &str) {
+    for ranked in ranked_jobs {
+        if matches!(
+            ranked.fit.score_breakdown.reranker_mode,
+            RerankerMode::Deterministic | RerankerMode::Fallback
+        ) {
+            ranked.fit.mark_reranker_fallback(reason.to_string());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -512,7 +588,7 @@ mod tests {
         CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackRecord,
     };
     use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
-    use crate::domain::matching::JobFit;
+    use crate::domain::matching::{JobFit, JobScoreBreakdown};
     use crate::domain::profile::model::Profile;
     use crate::domain::search::profile::{TargetRegion, WorkMode};
     use crate::domain::user_event::model::{UserEventRecord, UserEventType};
@@ -961,6 +1037,14 @@ mod tests {
         assert_eq!(payload["results"].as_array().map(Vec::len), Some(1));
         assert_eq!(payload["results"][0]["job"]["id"], json!("job-1"));
         assert_eq!(
+            payload["results"][0]["fit"]["score_breakdown"]["total_score"],
+            payload["results"][0]["fit"]["score"]
+        );
+        assert_eq!(
+            payload["results"][0]["fit"]["score_breakdown"]["reranker_mode"],
+            json!("deterministic")
+        );
+        assert_eq!(
             payload["results"][0]["job"]["presentation"]["source_label"],
             json!("Djinni")
         );
@@ -977,6 +1061,75 @@ mod tests {
                     .as_str()
                     .is_some_and(|reason| reason.contains("Matched target roles")))
         );
+    }
+
+    #[tokio::test]
+    async fn run_search_includes_stable_score_breakdown_fields() {
+        let mut profile = sample_profile();
+        profile.salary_min = Some(4500);
+        profile.salary_max = Some(6000);
+
+        let mut salary_job = sample_job_view(
+            "job-salary-1",
+            "Senior Backend Developer",
+            "Remote EU role working with Rust and Postgres",
+            Some("remote"),
+            "djinni",
+        );
+        salary_job.job.salary_min = Some(5000);
+        salary_job.job.salary_max = Some(7000);
+        salary_job.job.salary_currency = Some("USD".to_string());
+
+        let state = AppState::for_services(
+            ProfilesService::for_tests(ProfilesServiceStub::default().with_profile(profile)),
+            JobsService::for_tests(JobsServiceStub::default().with_job_view(salary_job)),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_learned_reranker_enabled(false);
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_engineer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(
+            payload["results"][0]["fit"]["score_breakdown"]["reranker_mode"],
+            json!("deterministic")
+        );
+        assert_eq!(
+            payload["results"][0]["fit"]["score_breakdown"]["salary_score"],
+            json!(8)
+        );
+        assert!(payload["results"][0]["fit"]["score_breakdown"]["matching_score"].is_number());
+        assert!(payload["results"][0]["fit"]["score_breakdown"]["freshness_score"].is_number());
+        assert!(payload["results"][0]["fit"]["score_breakdown"]["penalties"].is_array());
     }
 
     #[tokio::test]
@@ -2001,6 +2154,7 @@ mod tests {
                 fit: JobFit {
                     job_id: "job-1".to_string(),
                     score: 70,
+                    score_breakdown: JobScoreBreakdown::deterministic(70),
                     matched_roles: Vec::new(),
                     matched_skills: Vec::new(),
                     matched_keywords: Vec::new(),
@@ -2023,6 +2177,7 @@ mod tests {
                 fit: JobFit {
                     job_id: "job-2".to_string(),
                     score: 69,
+                    score_breakdown: JobScoreBreakdown::deterministic(69),
                     matched_roles: Vec::new(),
                     matched_skills: Vec::new(),
                     matched_keywords: Vec::new(),
@@ -2161,6 +2316,73 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn learned_reranker_unavailable_falls_back_cleanly() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(JobsServiceStub::default().with_job_view(sample_job_view(
+                "job-1",
+                "Senior Backend Developer",
+                "Remote role working with Rust and Postgres",
+                Some("remote"),
+                "djinni",
+            ))),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default().with_database_disabled(),
+        ));
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_engineer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(
+            payload["results"][0]["fit"]["score_breakdown"]["reranker_mode"],
+            json!("fallback")
+        );
+        assert!(
+            payload["results"][0]["fit"]["reasons"]
+                .as_array()
+                .expect("reasons should be an array")
+                .iter()
+                .any(|reason| reason
+                    .as_str()
+                    .is_some_and(|value| value.contains("Learned reranker unavailable"))),
+            "fallback reason should be exposed for debugging"
+        );
+    }
+
+    #[tokio::test]
     async fn trained_reranker_feature_flag_disables_layer_cleanly() {
         let build_state = || {
             AppState::for_services(
@@ -2258,6 +2480,72 @@ mod tests {
                     .as_str()
                     .is_some_and(|value| value.contains("Trained reranker v2"))),
             "trained reranker reasons should not appear when disabled"
+        );
+    }
+
+    #[tokio::test]
+    async fn trained_reranker_unavailable_falls_back_cleanly() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(JobsServiceStub::default().with_job_view(sample_job_view(
+                "job-1",
+                "Senior Backend Developer",
+                "Remote role working with Rust and Postgres",
+                Some("remote"),
+                "djinni",
+            ))),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_learned_reranker_enabled(false)
+        .with_trained_reranker(true, None);
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_engineer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(
+            payload["results"][0]["fit"]["score_breakdown"]["reranker_mode"],
+            json!("fallback")
+        );
+        assert!(
+            payload["results"][0]["fit"]["reasons"]
+                .as_array()
+                .expect("reasons should be an array")
+                .iter()
+                .any(|reason| reason
+                    .as_str()
+                    .is_some_and(|value| value.contains("Trained reranker unavailable"))),
+            "trained fallback reason should be exposed for debugging"
         );
     }
 }

@@ -5,7 +5,7 @@ use crate::api::dto::applications::ApplicationResponse;
 use crate::api::dto::jobs::JobResponse;
 use crate::api::error::ApiError;
 use crate::domain::job::model::Job;
-use crate::domain::matching::JobFit;
+use crate::domain::matching::{JobFit, JobScoreBreakdown, JobScorePenalty};
 use crate::domain::role::RoleId;
 use crate::domain::role::catalog::ROLE_CATALOG;
 use crate::domain::search::global::ApplicationSearchHit;
@@ -122,6 +122,7 @@ pub struct RankedJobResponse {
 pub struct JobFitResponse {
     pub job_id: String,
     pub score: u8,
+    pub score_breakdown: JobScoreBreakdownResponse,
     pub matched_roles: Vec<String>,
     pub matched_skills: Vec<String>,
     pub matched_keywords: Vec<String>,
@@ -133,6 +134,24 @@ pub struct JobFitResponse {
     pub positive_reasons: Vec<String>,
     pub negative_reasons: Vec<String>,
     pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JobScoreBreakdownResponse {
+    pub total_score: u8,
+    pub matching_score: i16,
+    pub salary_score: i16,
+    pub reranker_score: i16,
+    pub freshness_score: i16,
+    pub penalties: Vec<JobScorePenaltyResponse>,
+    pub reranker_mode: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JobScorePenaltyResponse {
+    pub kind: String,
+    pub score_delta: i16,
+    pub reason: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -272,6 +291,7 @@ impl From<JobFit> for JobFitResponse {
         Self {
             job_id: value.job_id,
             score: value.score,
+            score_breakdown: JobScoreBreakdownResponse::from(value.score_breakdown),
             matched_roles: value
                 .matched_roles
                 .into_iter()
@@ -287,6 +307,34 @@ impl From<JobFit> for JobFitResponse {
             positive_reasons,
             negative_reasons,
             reasons: value.reasons,
+        }
+    }
+}
+
+impl From<JobScoreBreakdown> for JobScoreBreakdownResponse {
+    fn from(value: JobScoreBreakdown) -> Self {
+        Self {
+            total_score: value.total_score,
+            matching_score: value.matching_score,
+            salary_score: value.salary_score,
+            reranker_score: value.reranker_score,
+            freshness_score: value.freshness_score,
+            penalties: value
+                .penalties
+                .into_iter()
+                .map(JobScorePenaltyResponse::from)
+                .collect(),
+            reranker_mode: value.reranker_mode.as_str().to_string(),
+        }
+    }
+}
+
+impl From<JobScorePenalty> for JobScorePenaltyResponse {
+    fn from(value: JobScorePenalty) -> Self {
+        Self {
+            kind: value.kind,
+            score_delta: value.score_delta,
+            reason: value.reason,
         }
     }
 }
@@ -470,7 +518,7 @@ mod tests {
     use serde_json::json;
 
     use crate::domain::job::presentation::JobTextQuality;
-    use crate::domain::matching::JobFit;
+    use crate::domain::matching::{JobFit, JobScoreBreakdown};
     use crate::domain::role::RoleId;
     use crate::services::matching::{RankedJob, SearchRunResult};
 
@@ -555,6 +603,7 @@ mod tests {
         let fit = JobFit {
             job_id: "job-1".to_string(),
             score: 88,
+            score_breakdown: JobScoreBreakdown::deterministic(88),
             matched_roles: vec![RoleId::BackendEngineer],
             matched_skills: vec!["rust".to_string()],
             matched_keywords: vec!["platform".to_string()],
@@ -570,6 +619,11 @@ mod tests {
             serde_json::to_value(JobFitResponse::from(fit)).expect("fit response should serialize");
 
         assert_eq!(response["score"], json!(88));
+        assert_eq!(response["score_breakdown"]["total_score"], json!(88));
+        assert_eq!(
+            response["score_breakdown"]["reranker_mode"],
+            json!("deterministic")
+        );
         assert_eq!(response["missing_signals"], json!(["graphql"]));
         assert_eq!(response["description_quality"], json!("strong"));
         assert_eq!(
