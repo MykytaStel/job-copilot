@@ -242,21 +242,21 @@ mod tests {
     fn serializes_role_ids_as_snake_case_strings() {
         let response = AnalyzeProfileResponse::from(CandidateProfile {
             summary: "Summary".to_string(),
-            primary_role: RoleId::ReactNativeDeveloper,
+            primary_role: RoleId::MobileEngineer,
             seniority: "senior".to_string(),
             skills: vec!["react native".to_string()],
             keywords: vec!["mobile".to_string()],
             role_candidates: vec![RoleScore {
-                role: RoleId::ReactNativeDeveloper,
+                role: RoleId::MobileEngineer,
                 score: 30,
                 confidence: 100,
                 matched_signals: vec!["react native".to_string()],
             }],
-            suggested_search_terms: vec!["react native developer".to_string()],
+            suggested_search_terms: vec!["mobile engineer".to_string()],
         });
 
-        assert_eq!(response.primary_role, "react_native_developer");
-        assert_eq!(response.role_candidates[0].role, "react_native_developer");
+        assert_eq!(response.primary_role, "mobile_engineer");
+        assert_eq!(response.role_candidates[0].role, "mobile_engineer");
     }
 
     #[test]

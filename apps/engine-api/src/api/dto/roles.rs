@@ -49,8 +49,8 @@ mod tests {
             response
                 .roles
                 .iter()
-                .any(|role| role.id == "frontend_developer"
-                    && role.display_name == "Frontend Developer"
+                .any(|role| role.id == "frontend_engineer"
+                    && role.display_name == "Frontend Engineer"
                     && role.family.as_deref() == Some("engineering")
                     && !role.is_fallback)
         );

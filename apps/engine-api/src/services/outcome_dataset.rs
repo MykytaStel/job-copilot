@@ -368,7 +368,7 @@ mod tests {
             raw_text: "Senior backend engineer with Rust and Postgres".to_string(),
             analysis: Some(ProfileAnalysis {
                 summary: "Senior backend engineer".to_string(),
-                primary_role: RoleId::BackendDeveloper,
+                primary_role: RoleId::BackendEngineer,
                 seniority: "senior".to_string(),
                 skills: vec!["Rust".to_string(), "Postgres".to_string()],
                 keywords: vec!["backend".to_string(), "platform".to_string()],

@@ -1,136 +1,126 @@
-# Job Copilot Master Plan
+# Job Copilot — Master Plan
 
-## 1. Product
-Job Copilot is a candidate operating system:
-- profile understanding
-- search intention building
-- ingestion and normalization
-- ranking and fit explanation
-- action management
-- learning loop from user behavior and outcomes
+> Last updated: 2026-04-18
 
-## 2. Product pillars
-### A. Understanding the candidate
-Input:
-- CV/raw text
-- profile preferences
-- user actions over time
-Output:
-- canonical profile
-- target roles
-- seniority
-- normalized skills
-- search profile
+## 1. Що таке Job Copilot
 
-### B. Understanding jobs
-Input:
-- job boards / scraped sources / feeds
-Output:
-- canonical job representation
-- normalized company
-- lifecycle state
-- source metadata
-- parsable filters
+Job Copilot — це не job board. Це **candidate intelligence system**:
+- розуміє кандидата (профіль, навички, цілі)
+- розуміє ринок (тренди, зарплати, компанії, попит)
+- знаходить і ранжує вакансії під конкретну людину
+- пояснює fit і gaps
+- підтримує дії: зберегти, сховати, відправити, підготуватись
+- навчається від результатів
 
-### C. Matching and ranking
-Output:
-- fit score
-- explanation
-- gaps
-- confidence
-- ranked results
+## 2. Продуктові стовпи
+
+### A. Розуміння кандидата
+- CV/raw text → canonical profile
+- Цілі та обмеження → search profile
+- Дії користувача → поведінкові сигнали
+
+### B. Розуміння ринку (Market Intelligence)
+- Агрегація статистики з ingested jobs (без додаткових scrape)
+- Яка компанія активно набирає / призупинила набір
+- Тренди зарплат по ролях і senior/junior
+- Попит на технології в реальному часі
+- Географія та remote-тренди
+- Детально: `docs/03-domain/market-intelligence.md`
+
+### C. Matching та ранжування
+- Детермінований scoring (Rust) — базис
+- Поведінкові сигнали (save/hide/badfit) — коригування
+- Навчений reranker — після накопичення даних
+- Пояснення: matched terms, missing signals, reasons
 
 ### D. Action layer
-User actions:
-- save
-- hide
-- mark bad
-- whitelist company
-- blacklist company
-- applied
-- interviewing
-- rejected
-- offer
+- save / hide / bad fit / whitelist company / blacklist company
+- applied / interviewing / offer / rejected
+- CV tailoring / cover letter / interview prep
 
 ### E. Learning loop
-Use feedback from:
-- viewed jobs
-- saved/hidden jobs
-- good/bad labels
-- whitelist/blacklist companies
-- applications and outcomes
+- User events → training data → retrain reranker
+- Bootstrap від перших saved/hidden
+- Semantic matching — після накопичення достатньо даних
 
-## 3. System design
-### engine-api
-Canonical domain + APIs + validation + persistence.
+## 3. Архітектура
 
-### ingestion
-Source-specific scrape/fetch + normalization + dedupe + lifecycle.
+```
+ingestion (Rust) ─→ PostgreSQL ←─ engine-api (Rust) ←─ web (React)
+                                         ↕
+                                   ml sidecar (Python)
+```
 
-### ml
-Python sidecar for enrichment:
-- richer extraction
-- fit explanation
-- reranking
-- analytics and charts
-- future LLM workflows
+- **engine-api**: canonical domain, API, validation, persistence
+- **ingestion**: scrape → normalize → dedupe → lifecycle → DB
+- **ml**: scoring, reranking, enrichment, market analytics, (Ollama LLM)
+- **web**: dashboard, profile, ranked jobs, application board, market insights
 
-### web
-Dashboard + profile + search intent + ranked jobs + action loops.
+## 4. AI стратегія (без платного API)
 
-## 4. Near-term roadmap
-1. Canonical role catalog
-2. Search preferences / search profile
-3. Source filtering
-4. Ranking v2
-5. Web refresh/query-state fixes
-6. Job lists / company lists
-7. Analytics endpoints + charts
-8. LLM enrichment integration
+### Зараз (безкоштовно)
+- Детермінований scoring в Rust — головний двигун
+- Покращені шаблони в Python — структуровані пояснення без LLM
+- Bootstrap ML з реальних feedbacks юзера
 
-## 5. Source filtering requirement
-The user must be able to control where jobs come from:
-- one or more sources enabled
-- region-specific behavior
-- source-level trust / quality later
-- search must preserve source filters as structured fields
+### Наступний крок (self-hosted)
+- Ollama + Mistral 7B / Qwen 2.5 3B на сервері
+- ~$10-15/міс VPS замість per-call API
+- Провайдер: `OllamaEnrichmentProvider` в `llm_provider.py`
 
-## 6. Lists to support
-### Job-level
-- saved
-- hidden
-- bad fit
-- normal / undecided
+### Платна підписка (майбутнє)
+- Claude Haiku / GPT-4o-mini для CV tailoring, cover letter, interview prep
+- Перемикання провайдера через `ML_LLM_PROVIDER` env var
+- Tier free → self-hosted, Tier paid → real API
 
-### Company-level
-- whitelist
-- blacklist
+Детально: `docs/04-development/ml-strategy.md`
 
-These lists must influence ranking and UI presentation.
+## 5. Монетизація (план)
 
-## 7. Unique algorithm direction
-Use a hybrid engine:
-- deterministic role/search/ranking baseline in Rust
-- LLM enrichment in Python
-- explicit merge/validation in Rust
-- explanations and analytics generated from structured evidence, not only raw text
+### Free tier
+- Ingestion + matching + ranking (все детерміністичне)
+- Market Intelligence (аналітика ринку)
+- Application board (до 20 активних)
+- Базові шаблонні пояснення
 
-## 8. Charts and analytics
-The system should eventually provide:
-- application funnel charts
-- source performance charts
-- role distribution charts
-- compensation trend charts
-- fit-over-time charts
-- company quality views
-- activity timeline
+### Paid tier (~$10-15/міс)
+- CV tailoring з реальним LLM
+- Cover letter generation
+- Interview preparation
+- Необмежені applications
+- Пріоритетний scraping (частіше оновлення)
+- Export (PDF, CSV)
 
-## 9. Rule for LLM
-LLM may suggest:
-- richer skills
-- fit explanations
-- refined search terms
-- company risk notes
-- resume tailoring hints
+### Team/Enterprise (майбутнє)
+- Multi-user
+- HR-аналітика
+- Власні джерела вакансій
 
-LLM may not define canonical truth by itself.
+## 6. Правила
+
+- Domain truth — тільки в Rust, не в LLM і не у фронтенді
+- LLM — шар збагачення, не джерело канонічної правди
+- Canonical role catalog (`RoleId`) — не free-form strings
+- Search filters — структуровані поля, не флаттений текст
+- Prefer explicit DTOs, small services, testable helpers
+- Не додавати broad abstractions без реального другого use-case
+
+## 7. Sources (поточні)
+
+| Source | Метод | Статус |
+|--------|-------|--------|
+| Djinni | HTML + detail page | ✅ Active |
+| Work.ua | HTML + detail page | ✅ Active |
+| Dou.ua | RSS feed | ✅ Active |
+| Robota.ua | JSON API + detail page | ✅ Active |
+
+Оновлення: кожні 60 хв (daemon), 3 сторінки на source.
+
+## 8. Що заборонено
+
+- Нові role IDs поза canonical catalog
+- Обхід DTO validation
+- Domain truth у фронтенді
+- LLM output без Rust-side validation
+- Broad abstractions без реального другого use-case
+- Мок-дані там де можна взяти реальні

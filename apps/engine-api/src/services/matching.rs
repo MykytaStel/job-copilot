@@ -631,22 +631,22 @@ fn role_family_overlap(left: RoleId, right: RoleId) -> f32 {
     }
 
     match (left, right) {
-        (RoleId::ReactNativeDeveloper, RoleId::MobileDeveloper)
-        | (RoleId::MobileDeveloper, RoleId::ReactNativeDeveloper) => 0.85,
-        (RoleId::ReactNativeDeveloper, RoleId::FrontendDeveloper)
-        | (RoleId::FrontendDeveloper, RoleId::ReactNativeDeveloper) => 0.65,
-        (RoleId::FrontendDeveloper, RoleId::FullstackDeveloper)
-        | (RoleId::FullstackDeveloper, RoleId::FrontendDeveloper) => 0.70,
-        (RoleId::BackendDeveloper, RoleId::FullstackDeveloper)
-        | (RoleId::FullstackDeveloper, RoleId::BackendDeveloper) => 0.70,
-        (RoleId::BackendDeveloper, RoleId::DevopsEngineer)
-        | (RoleId::DevopsEngineer, RoleId::BackendDeveloper) => 0.45,
-        (RoleId::MobileDeveloper, RoleId::FrontendDeveloper)
-        | (RoleId::FrontendDeveloper, RoleId::MobileDeveloper) => 0.40,
-        (RoleId::MobileDeveloper, RoleId::FullstackDeveloper)
-        | (RoleId::FullstackDeveloper, RoleId::MobileDeveloper) => 0.35,
-        (RoleId::FullstackDeveloper, RoleId::DevopsEngineer)
-        | (RoleId::DevopsEngineer, RoleId::FullstackDeveloper) => 0.40,
+        (RoleId::FrontendEngineer, RoleId::FullstackEngineer)
+        | (RoleId::FullstackEngineer, RoleId::FrontendEngineer) => 0.70,
+        (RoleId::BackendEngineer, RoleId::FullstackEngineer)
+        | (RoleId::FullstackEngineer, RoleId::BackendEngineer) => 0.70,
+        (RoleId::MobileEngineer, RoleId::FrontendEngineer)
+        | (RoleId::FrontendEngineer, RoleId::MobileEngineer) => 0.40,
+        (RoleId::MobileEngineer, RoleId::FullstackEngineer)
+        | (RoleId::FullstackEngineer, RoleId::MobileEngineer) => 0.35,
+        (RoleId::BackendEngineer, RoleId::DevopsEngineer)
+        | (RoleId::DevopsEngineer, RoleId::BackendEngineer) => 0.45,
+        (RoleId::FullstackEngineer, RoleId::DevopsEngineer)
+        | (RoleId::DevopsEngineer, RoleId::FullstackEngineer) => 0.40,
+        (RoleId::DataEngineer, RoleId::MlEngineer)
+        | (RoleId::MlEngineer, RoleId::DataEngineer) => 0.50,
+        (RoleId::TechLead, RoleId::EngineeringManager)
+        | (RoleId::EngineeringManager, RoleId::TechLead) => 0.55,
         _ if left.is_fallback() || right.is_fallback() => 0.0,
         _ if left.family().is_some() && left.family() == right.family() => 0.15,
         _ => 0.0,
@@ -1182,12 +1182,12 @@ mod tests {
 
     fn search_profile() -> SearchProfile {
         SearchProfile {
-            primary_role: RoleId::BackendDeveloper,
+            primary_role: RoleId::BackendEngineer,
             primary_role_confidence: Some(94),
-            target_roles: vec![RoleId::BackendDeveloper, RoleId::DevopsEngineer],
+            target_roles: vec![RoleId::BackendEngineer, RoleId::DevopsEngineer],
             role_candidates: vec![
                 SearchRoleCandidate {
-                    role: RoleId::BackendDeveloper,
+                    role: RoleId::BackendEngineer,
                     confidence: 94,
                 },
                 SearchRoleCandidate {
@@ -1212,16 +1212,16 @@ mod tests {
 
     fn mobile_profile() -> SearchProfile {
         SearchProfile {
-            primary_role: RoleId::ReactNativeDeveloper,
+            primary_role: RoleId::MobileEngineer,
             primary_role_confidence: Some(97),
-            target_roles: vec![RoleId::ReactNativeDeveloper, RoleId::FrontendDeveloper],
+            target_roles: vec![RoleId::MobileEngineer, RoleId::FrontendEngineer],
             role_candidates: vec![
                 SearchRoleCandidate {
-                    role: RoleId::ReactNativeDeveloper,
+                    role: RoleId::MobileEngineer,
                     confidence: 97,
                 },
                 SearchRoleCandidate {
-                    role: RoleId::FrontendDeveloper,
+                    role: RoleId::FrontendEngineer,
                     confidence: 68,
                 },
             ],
@@ -1242,16 +1242,16 @@ mod tests {
 
     fn frontend_profile() -> SearchProfile {
         SearchProfile {
-            primary_role: RoleId::FrontendDeveloper,
+            primary_role: RoleId::FrontendEngineer,
             primary_role_confidence: Some(96),
-            target_roles: vec![RoleId::FrontendDeveloper, RoleId::ReactNativeDeveloper],
+            target_roles: vec![RoleId::FrontendEngineer, RoleId::MobileEngineer],
             role_candidates: vec![
                 SearchRoleCandidate {
-                    role: RoleId::FrontendDeveloper,
+                    role: RoleId::FrontendEngineer,
                     confidence: 96,
                 },
                 SearchRoleCandidate {
-                    role: RoleId::ReactNativeDeveloper,
+                    role: RoleId::MobileEngineer,
                     confidence: 54,
                 },
             ],
@@ -1337,7 +1337,7 @@ mod tests {
         assert!(
             matching_fit
                 .matched_roles
-                .contains(&RoleId::BackendDeveloper)
+                .contains(&RoleId::BackendEngineer)
         );
         assert!(matching_fit.matched_skills.contains(&"rust".to_string()));
     }
@@ -1633,7 +1633,7 @@ mod tests {
         let fit = service.score_job(&profile, &job);
 
         assert!(fit.score >= 70);
-        assert!(fit.matched_roles.contains(&RoleId::FrontendDeveloper));
+        assert!(fit.matched_roles.contains(&RoleId::FrontendEngineer));
         assert!(fit.matched_skills.contains(&"react".to_string()));
         assert!(fit.matched_keywords.contains(&"frontend".to_string()));
         assert!(
@@ -1663,7 +1663,7 @@ mod tests {
         let fit = service.score_job(&profile, &job);
 
         assert!(fit.score >= 70);
-        assert!(fit.matched_roles.contains(&RoleId::ReactNativeDeveloper));
+        assert!(fit.matched_roles.contains(&RoleId::MobileEngineer));
         assert!(fit.matched_skills.contains(&"react native".to_string()));
         assert!(!fit.matched_skills.iter().any(|term| term == "react_native"));
         assert!(
@@ -1708,11 +1708,11 @@ mod tests {
     fn non_contiguous_frontend_search_phrase_matches_canonical_frontend_term() {
         let service = SearchMatchingService::new();
         let profile = SearchProfile {
-            primary_role: RoleId::FrontendDeveloper,
+            primary_role: RoleId::FrontendEngineer,
             primary_role_confidence: Some(96),
-            target_roles: vec![RoleId::FrontendDeveloper],
+            target_roles: vec![RoleId::FrontendEngineer],
             role_candidates: vec![SearchRoleCandidate {
-                role: RoleId::FrontendDeveloper,
+                role: RoleId::FrontendEngineer,
                 confidence: 96,
             }],
             seniority: "senior".to_string(),

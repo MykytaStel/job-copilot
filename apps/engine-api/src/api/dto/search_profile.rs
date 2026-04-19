@@ -257,7 +257,7 @@ mod tests {
             "preferences": {
                 "target_regions": ["ua", "eu_remote"],
                 "work_modes": ["remote", "hybrid"],
-                "preferred_roles": ["frontend_developer"],
+                "preferred_roles": ["frontend_engineer"],
                 "allowed_sources": ["djinni", "work_ua"],
                 "include_keywords": ["product company"],
                 "exclude_keywords": ["gambling"]
@@ -299,7 +299,7 @@ mod tests {
     fn rejects_unknown_preferred_roles() {
         let error = SearchPreferencesRequest {
             preferred_roles: vec![
-                "frontend_developer".to_string(),
+                "frontend_engineer".to_string(),
                 "frontend_specialist".to_string(),
             ],
             ..SearchPreferencesRequest::default()
@@ -314,8 +314,8 @@ mod tests {
     fn converts_known_preferred_roles_successfully() {
         let preferences = SearchPreferencesRequest {
             preferred_roles: vec![
-                "frontend_developer".to_string(),
-                "react_native_developer".to_string(),
+                "frontend_engineer".to_string(),
+                "mobile_engineer".to_string(),
             ],
             ..SearchPreferencesRequest::default()
         }
@@ -324,7 +324,7 @@ mod tests {
 
         assert_eq!(
             preferences.preferred_roles,
-            vec![RoleId::FrontendDeveloper, RoleId::ReactNativeDeveloper]
+            vec![RoleId::FrontendEngineer, RoleId::MobileEngineer]
         );
     }
 
@@ -360,7 +360,7 @@ mod tests {
         let request = BuildSearchProfileRequest {
             raw_text: " Senior frontend engineer ".to_string(),
             preferences: SearchPreferencesRequest {
-                preferred_roles: vec!["frontend_developer".to_string()],
+                preferred_roles: vec!["frontend_engineer".to_string()],
                 allowed_sources: vec!["djinni".to_string()],
                 ..SearchPreferencesRequest::default()
             },
@@ -371,7 +371,7 @@ mod tests {
         assert_eq!(request.raw_text, "Senior frontend engineer");
         assert_eq!(
             request.preferences.preferred_roles,
-            vec![RoleId::FrontendDeveloper]
+            vec![RoleId::FrontendEngineer]
         );
         assert_eq!(request.preferences.allowed_sources, vec![SourceId::Djinni]);
     }
@@ -395,11 +395,11 @@ mod tests {
     #[test]
     fn serializes_search_profile_roles_as_snake_case_strings() {
         let response = super::SearchProfileResponse::from(SearchProfile {
-            primary_role: RoleId::ReactNativeDeveloper,
+            primary_role: RoleId::MobileEngineer,
             primary_role_confidence: Some(96),
-            target_roles: vec![RoleId::ReactNativeDeveloper, RoleId::FrontendDeveloper],
+            target_roles: vec![RoleId::MobileEngineer, RoleId::FrontendEngineer],
             role_candidates: vec![SearchRoleCandidate {
-                role: RoleId::ReactNativeDeveloper,
+                role: RoleId::MobileEngineer,
                 confidence: 96,
             }],
             seniority: "senior".to_string(),
@@ -412,13 +412,13 @@ mod tests {
             exclude_terms: vec!["gambling".to_string()],
         });
 
-        assert_eq!(response.primary_role, "react_native_developer");
+        assert_eq!(response.primary_role, "mobile_engineer");
         assert_eq!(response.primary_role_confidence, Some(96));
         assert_eq!(
             response.target_roles,
-            vec!["react_native_developer", "frontend_developer"]
+            vec!["mobile_engineer", "frontend_engineer"]
         );
-        assert_eq!(response.role_candidates[0].role, "react_native_developer");
+        assert_eq!(response.role_candidates[0].role, "mobile_engineer");
         assert_eq!(response.allowed_sources, vec!["djinni", "robota_ua"]);
     }
 }

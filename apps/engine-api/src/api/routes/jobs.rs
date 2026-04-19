@@ -580,7 +580,7 @@ mod tests {
                     .to_string(),
             analysis: Some(ProfileAnalysis {
                 summary: "Senior frontend engineer".to_string(),
-                primary_role: RoleId::FrontendDeveloper,
+                primary_role: RoleId::FrontendEngineer,
                 seniority: "senior".to_string(),
                 skills: vec!["react".to_string(), "typescript".to_string()],
                 keywords: vec!["frontend".to_string(), "design system".to_string()],

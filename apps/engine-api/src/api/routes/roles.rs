@@ -31,8 +31,8 @@ mod tests {
                 .iter()
                 .any(|role| role
                     == &json!({
-                        "id": "frontend_developer",
-                        "display_name": "Frontend Developer",
+                        "id": "frontend_engineer",
+                        "display_name": "Frontend Engineer",
                         "family": "engineering",
                         "is_fallback": false
                     }))

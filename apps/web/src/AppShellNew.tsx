@@ -33,6 +33,7 @@
  */
 
 import { Suspense, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import type { LucideIcon } from 'lucide-react';
@@ -54,6 +55,8 @@ import {
 } from 'lucide-react';
 import { cn } from './lib/cn';
 import { Button } from './components/ui/Button';
+import { getProfile } from './api';
+import { queryKeys } from './queryKeys';
 
 // ── Navigation config ──────────────────────────────────────────────────────────
 
@@ -150,6 +153,11 @@ export default function AppShellNew() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
+
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: queryKeys.profile.root(),
+    queryFn: getProfile,
+  });
 
   const activeNavItem = useMemo(() => {
     return (
@@ -250,9 +258,21 @@ export default function AppShellNew() {
                 <span className="text-sm font-medium">JC</span>
               </div>
               <div className="min-w-0 flex-1">
-                {/* TODO: replace with profile name/email from store */}
-                <p className="truncate text-sm font-medium text-sidebar-foreground">Job Copilot</p>
-                <p className="truncate text-xs text-sidebar-foreground/60">operator dashboard</p>
+                {profileLoading ? (
+                  <>
+                    <div className="mb-1 h-3.5 w-24 animate-pulse rounded bg-sidebar-accent" />
+                    <div className="h-3 w-32 animate-pulse rounded bg-sidebar-accent" />
+                  </>
+                ) : (
+                  <>
+                    <p className="truncate text-sm font-medium text-sidebar-foreground">
+                      {profile?.name ?? '—'}
+                    </p>
+                    <p className="truncate text-xs text-sidebar-foreground/60">
+                      {profile?.email ?? '—'}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>

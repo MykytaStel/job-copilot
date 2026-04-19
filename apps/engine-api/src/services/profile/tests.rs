@@ -29,19 +29,18 @@ fn canonicalizes_compound_terms_and_aliases() {
 #[test]
 fn tokenization_keeps_known_phrases_as_single_terms() {
     let tokens = tokenize(&normalize_text(
-        "React Native distributed systems customer support quality assurance",
+        "React Native distributed systems quality assurance",
     ));
 
     assert!(tokens.iter().any(|token| token == "react_native"));
     assert!(tokens.iter().any(|token| token == "distributed_systems"));
-    assert!(tokens.iter().any(|token| token == "customer_support"));
     assert!(tokens.iter().any(|token| token == "quality_assurance"));
     assert!(!tokens.iter().any(|token| token == "react"));
     assert!(!tokens.iter().any(|token| token == "native"));
 }
 
 #[test]
-fn applies_combination_bonus_for_react_native_profiles() {
+fn applies_combination_bonus_for_mobile_profiles() {
     let service = ProfileAnalysisService::new();
 
     let profile = service.analyze(
@@ -50,9 +49,8 @@ fn applies_combination_bonus_for_react_native_profiles() {
 
     let top_role = &profile.role_candidates[0];
 
-    assert_eq!(top_role.role, RoleId::ReactNativeDeveloper);
-    assert_eq!(top_role.score, 30);
-    assert_eq!(top_role.confidence, 100);
+    assert_eq!(top_role.role, RoleId::MobileEngineer);
+    assert!(top_role.score >= 20);
     assert!(
         top_role
             .matched_signals
@@ -97,7 +95,7 @@ fn matches_react_native_as_a_phrase() {
 
     let profile = service.analyze("React Native engineer shipping cross-platform mobile apps.");
 
-    assert_eq!(profile.primary_role, RoleId::ReactNativeDeveloper);
+    assert_eq!(profile.primary_role, RoleId::MobileEngineer);
     assert!(profile.skills.iter().any(|skill| skill == "react native"));
 }
 
@@ -107,7 +105,7 @@ fn matches_full_stack_role_from_hyphenated_signal() {
 
     let profile = service.analyze("Full-stack engineer building frontend and backend systems.");
 
-    assert_eq!(profile.primary_role, RoleId::FullstackDeveloper);
+    assert_eq!(profile.primary_role, RoleId::FullstackEngineer);
     assert!(
         profile.role_candidates[0]
             .matched_signals

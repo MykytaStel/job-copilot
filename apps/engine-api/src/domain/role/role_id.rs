@@ -5,21 +5,19 @@ use super::catalog::{find_role, find_role_by_key};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RoleId {
-    ReactNativeDeveloper,
-    MobileDeveloper,
-    FrontendDeveloper,
-    BackendDeveloper,
-    FullstackDeveloper,
-    QaEngineer,
+    FrontendEngineer,
+    BackendEngineer,
+    FullstackEngineer,
+    MobileEngineer,
     DevopsEngineer,
-    DataAnalyst,
-    UiUxDesigner,
+    DataEngineer,
+    MlEngineer,
+    QaEngineer,
+    ProductDesigner,
     ProductManager,
     ProjectManager,
-    MarketingSpecialist,
-    SalesManager,
-    CustomerSupportSpecialist,
-    Recruiter,
+    TechLead,
+    EngineeringManager,
     Generalist,
 }
 
@@ -79,27 +77,27 @@ mod tests {
 
     #[test]
     fn converts_to_canonical_snake_case() {
-        assert_eq!(
-            RoleId::ReactNativeDeveloper.canonical_key(),
-            "react_native_developer"
-        );
+        assert_eq!(RoleId::FrontendEngineer.canonical_key(), "frontend_engineer");
+        assert_eq!(RoleId::MobileEngineer.canonical_key(), "mobile_engineer");
         assert_eq!(RoleId::Generalist.canonical_key(), "generalist");
     }
 
     #[test]
     fn converts_to_display_name() {
-        assert_eq!(
-            RoleId::ReactNativeDeveloper.display_name(),
-            "React Native Developer"
-        );
+        assert_eq!(RoleId::FrontendEngineer.display_name(), "Frontend Engineer");
+        assert_eq!(RoleId::MlEngineer.display_name(), "ML Engineer");
         assert_eq!(RoleId::Generalist.display_name(), "Generalist");
     }
 
     #[test]
     fn parses_canonical_snake_case() {
         assert_eq!(
-            RoleId::parse_canonical_key("react_native_developer"),
-            Some(RoleId::ReactNativeDeveloper)
+            RoleId::parse_canonical_key("frontend_engineer"),
+            Some(RoleId::FrontendEngineer)
+        );
+        assert_eq!(
+            RoleId::parse_canonical_key("mobile_engineer"),
+            Some(RoleId::MobileEngineer)
         );
         assert_eq!(
             RoleId::parse_canonical_key("generalist"),
@@ -110,8 +108,9 @@ mod tests {
 
     #[test]
     fn exposes_catalog_metadata() {
-        assert_eq!(RoleId::ReactNativeDeveloper.family(), Some("engineering"));
-        assert!(!RoleId::ReactNativeDeveloper.is_fallback());
+        assert_eq!(RoleId::FrontendEngineer.family(), Some("engineering"));
+        assert_eq!(RoleId::DataEngineer.family(), Some("data"));
+        assert!(!RoleId::FrontendEngineer.is_fallback());
         assert!(RoleId::Generalist.is_fallback());
     }
 }

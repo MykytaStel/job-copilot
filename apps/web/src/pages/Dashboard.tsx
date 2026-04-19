@@ -236,6 +236,9 @@ export default function Dashboard() {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.feedback.profile(profileId),
         });
+        void queryClient.invalidateQueries({
+          queryKey: ['ml', 'rerank', profileId],
+        });
       }
       toast.success('Збережено в pipeline');
     },
@@ -255,6 +258,9 @@ export default function Dashboard() {
       if (profileId) {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.feedback.profile(profileId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ['ml', 'rerank', profileId],
         });
       }
       toast.success('Вакансію приховано');
@@ -276,6 +282,9 @@ export default function Dashboard() {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.feedback.profile(profileId),
         });
+        void queryClient.invalidateQueries({
+          queryKey: ['ml', 'rerank', profileId],
+        });
       }
       toast.success('Позначено як bad fit');
     },
@@ -295,6 +304,9 @@ export default function Dashboard() {
       if (profileId) {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.feedback.profile(profileId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ['ml', 'rerank', profileId],
         });
       }
       toast.success('Позначку bad fit знято');
@@ -336,6 +348,9 @@ export default function Dashboard() {
       if (profileId) {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.feedback.profile(profileId),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ['ml', 'rerank', profileId],
         });
       }
       toast.success('Оновлено список компанії');

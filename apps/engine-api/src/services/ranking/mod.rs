@@ -288,12 +288,12 @@ mod tests {
     fn make_candidate(skills: &[&str], seniority: &str) -> CandidateProfile {
         CandidateProfile {
             summary: String::new(),
-            primary_role: RoleId::FrontendDeveloper,
+            primary_role: RoleId::FrontendEngineer,
             seniority: seniority.to_string(),
             skills: skills.iter().map(|s| s.to_string()).collect(),
             keywords: vec![],
             role_candidates: vec![RoleScore {
-                role: RoleId::FrontendDeveloper,
+                role: RoleId::FrontendEngineer,
                 score: 10,
                 confidence: 80,
                 matched_signals: vec![],

@@ -932,9 +932,62 @@ class OpenAIEnrichmentProvider(_OpenAIJsonSchemaProvider):
         )
 
 
-def _build_enrichment_provider() -> TemplateEnrichmentProvider | OpenAIEnrichmentProvider:
+class OllamaEnrichmentProvider:
+    def __init__(self) -> None:
+        import httpx
+
+        self._client = httpx.AsyncClient()
+        self._base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        self._model = os.getenv("OLLAMA_MODEL", "mistral:7b")
+
+    async def _generate(self, prompt: str, error_type: type[Exception]) -> str:
+        import httpx
+
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/api/generate",
+                json={"model": self._model, "prompt": prompt, "stream": False},
+                timeout=120.0,
+            )
+            response.raise_for_status()
+            return response.json()["response"]
+        except Exception as exc:
+            raise error_type(f"Ollama request failed: {exc}") from exc
+
+    async def generate_profile_insights(
+        self, context: LlmContextRequest, prompt: ProfileInsightsPrompt
+    ) -> str:
+        return await self._generate(prompt.context_payload, ProfileInsightsProviderError)
+
+    async def generate_job_fit_explanation(
+        self, context: JobFitExplanationRequest, prompt: JobFitExplanationPrompt
+    ) -> str:
+        return await self._generate(prompt.context_payload, JobFitExplanationProviderError)
+
+    async def generate_application_coach(
+        self, context: ApplicationCoachRequest, prompt: ApplicationCoachPrompt
+    ) -> str:
+        return await self._generate(prompt.context_payload, ApplicationCoachProviderError)
+
+    async def generate_cover_letter_draft(
+        self, context: CoverLetterDraftRequest, prompt: CoverLetterDraftPrompt
+    ) -> str:
+        return await self._generate(prompt.context_payload, CoverLetterDraftProviderError)
+
+    async def generate_interview_prep(
+        self, context: InterviewPrepRequest, prompt: InterviewPrepPrompt
+    ) -> str:
+        return await self._generate(prompt.context_payload, InterviewPrepProviderError)
+
+    async def generate_weekly_guidance(
+        self, context: WeeklyGuidanceRequest, prompt: WeeklyGuidancePrompt
+    ) -> str:
+        return await self._generate(prompt.context_payload, WeeklyGuidanceProviderError)
+
+
+def _build_enrichment_provider() -> TemplateEnrichmentProvider | OpenAIEnrichmentProvider | OllamaEnrichmentProvider:
     configured = os.getenv("ML_LLM_PROVIDER", "").strip().lower()
-    provider_name = configured or ("openai" if os.getenv("OPENAI_API_KEY") else "template")
+    provider_name = configured or "template"
 
     if provider_name == "template":
         return TemplateEnrichmentProvider()
@@ -944,9 +997,12 @@ def _build_enrichment_provider() -> TemplateEnrichmentProvider | OpenAIEnrichmen
         if not api_key:
             raise ProfileInsightsProviderError("OPENAI_API_KEY is required when ML_LLM_PROVIDER=openai.")
 
-        model = os.getenv("OPENAI_MODEL", "gpt-5.4-mini").strip() or "gpt-5.4-mini"
+        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
         base_url = os.getenv("OPENAI_BASE_URL", "").strip() or None
         return OpenAIEnrichmentProvider(api_key=api_key, model=model, base_url=base_url)
+
+    if provider_name == "ollama":
+        return OllamaEnrichmentProvider()
 
     raise ProfileInsightsProviderError(f"Unsupported ML_LLM_PROVIDER: {provider_name}")
 
