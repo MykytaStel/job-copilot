@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::domain::job::model::{Job, JobView};
+use crate::domain::job::presentation::{JobTextQuality, assess_description_quality};
 use crate::domain::matching::JobFit;
 use crate::domain::role::RoleId;
 use crate::domain::role::catalog::ROLE_CATALOG;
@@ -55,6 +56,16 @@ pub struct SearchRunResult {
     pub filtered_out_company_blacklist: usize,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MatchQualitySummary {
+    pub low_evidence_jobs: usize,
+    pub weak_description_jobs: usize,
+    pub role_mismatch_jobs: usize,
+    pub seniority_mismatch_jobs: usize,
+    pub source_mismatch_jobs: usize,
+    pub top_missing_signals: Vec<String>,
+}
+
 #[derive(Clone, Default)]
 pub struct SearchMatchingService;
 
@@ -89,6 +100,7 @@ struct TermSpec {
 #[derive(Clone, Debug)]
 struct EvaluatedTerms {
     matched_terms: Vec<String>,
+    missing_terms: Vec<String>,
     matched_strength: f32,
     eligible_terms: usize,
 }
@@ -163,7 +175,14 @@ impl SearchMatchingService {
         let work_mode_match = compute_work_mode_match(search_profile, job);
         let region_match = compute_region_match(search_profile, &prepared_text, job);
         let seniority_alignment = compute_seniority_alignment(search_profile, job, &prepared_text);
-        let matched_exclude_terms = evaluate_terms(&prepared_text, &search_profile.exclude_terms, &[]);
+        let matched_exclude_terms =
+            evaluate_terms(&prepared_text, &search_profile.exclude_terms, &[]);
+        let missing_signals = collect_missing_signals(
+            &matched_profile_skills,
+            &matched_profile_keywords,
+            &matched_search_terms,
+        );
+        let description_quality = assess_description_quality(&job.job.description_text);
 
         let primary_role_score = role_alignment.primary_overlap
             * PRIMARY_ROLE_WEIGHT
@@ -243,6 +262,8 @@ impl SearchMatchingService {
             source_match,
             work_mode_match,
             region_match,
+            missing_signals,
+            description_quality,
             reasons,
         }
     }
@@ -368,11 +389,13 @@ fn evaluate_terms(
     ignored_terms: &[String],
 ) -> EvaluatedTerms {
     let mut matched_terms = Vec::new();
+    let mut missing_terms = Vec::new();
     let mut matched_strength = 0.0;
     let mut eligible_terms = 0usize;
 
     for term in build_term_specs(terms) {
-        if ignored_terms.contains(&term.normalized) || ignored_terms.contains(&term.canonical_normalized)
+        if ignored_terms.contains(&term.normalized)
+            || ignored_terms.contains(&term.canonical_normalized)
         {
             continue;
         }
@@ -380,6 +403,7 @@ fn evaluate_terms(
         eligible_terms += 1;
 
         let Some((output, strength)) = match_term(prepared_text, &term) else {
+            push_unique_string(&mut missing_terms, term.canonical_output.clone());
             continue;
         };
 
@@ -389,9 +413,33 @@ fn evaluate_terms(
 
     EvaluatedTerms {
         matched_terms,
+        missing_terms,
         matched_strength,
         eligible_terms,
     }
+}
+
+fn collect_missing_signals(
+    matched_profile_skills: &EvaluatedTerms,
+    matched_profile_keywords: &EvaluatedTerms,
+    matched_search_terms: &EvaluatedTerms,
+) -> Vec<String> {
+    let mut missing = Vec::new();
+
+    for term in &matched_profile_skills.missing_terms {
+        push_unique_string(&mut missing, term.clone());
+    }
+
+    for term in &matched_search_terms.missing_terms {
+        push_unique_string(&mut missing, term.clone());
+    }
+
+    for term in &matched_profile_keywords.missing_terms {
+        push_unique_string(&mut missing, term.clone());
+    }
+
+    missing.truncate(8);
+    missing
 }
 
 fn build_term_specs(terms: &[String]) -> Vec<TermSpec> {
@@ -592,11 +640,13 @@ fn role_family_overlap(left: RoleId, right: RoleId) -> f32 {
         (RoleId::BackendDeveloper, RoleId::FullstackDeveloper)
         | (RoleId::FullstackDeveloper, RoleId::BackendDeveloper) => 0.70,
         (RoleId::BackendDeveloper, RoleId::DevopsEngineer)
-        | (RoleId::DevopsEngineer, RoleId::BackendDeveloper) => 0.35,
+        | (RoleId::DevopsEngineer, RoleId::BackendDeveloper) => 0.45,
         (RoleId::MobileDeveloper, RoleId::FrontendDeveloper)
         | (RoleId::FrontendDeveloper, RoleId::MobileDeveloper) => 0.40,
+        (RoleId::MobileDeveloper, RoleId::FullstackDeveloper)
+        | (RoleId::FullstackDeveloper, RoleId::MobileDeveloper) => 0.35,
         (RoleId::FullstackDeveloper, RoleId::DevopsEngineer)
-        | (RoleId::DevopsEngineer, RoleId::FullstackDeveloper) => 0.30,
+        | (RoleId::DevopsEngineer, RoleId::FullstackDeveloper) => 0.40,
         _ if left.is_fallback() || right.is_fallback() => 0.0,
         _ if left.family().is_some() && left.family() == right.family() => 0.15,
         _ => 0.0,
@@ -1052,6 +1102,71 @@ fn push_ignored_term(target: &mut Vec<String>, value: &str) {
     }
 
     push_unique_string(target, canonical_tokens.join(" "));
+}
+
+pub fn summarize_match_quality(ranked_jobs: &[RankedJob]) -> MatchQualitySummary {
+    let mut low_evidence_jobs = 0usize;
+    let mut weak_description_jobs = 0usize;
+    let mut role_mismatch_jobs = 0usize;
+    let mut seniority_mismatch_jobs = 0usize;
+    let mut source_mismatch_jobs = 0usize;
+    let mut missing_counts = BTreeMap::<String, usize>::new();
+
+    for ranked in ranked_jobs {
+        let fit = &ranked.fit;
+
+        if fit.matched_roles.is_empty()
+            && fit.matched_skills.is_empty()
+            && fit.matched_keywords.is_empty()
+        {
+            low_evidence_jobs += 1;
+        }
+
+        if matches!(fit.description_quality, JobTextQuality::Weak) {
+            weak_description_jobs += 1;
+        }
+
+        if fit
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("Role mismatch penalty applied"))
+        {
+            role_mismatch_jobs += 1;
+        }
+
+        if fit
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("Seniority mismatch penalty applied"))
+        {
+            seniority_mismatch_jobs += 1;
+        }
+
+        if !fit.source_match {
+            source_mismatch_jobs += 1;
+        }
+
+        for signal in &fit.missing_signals {
+            *missing_counts.entry(signal.clone()).or_insert(0usize) += 1;
+        }
+    }
+
+    let mut top_missing_signals = missing_counts.into_iter().collect::<Vec<_>>();
+    top_missing_signals
+        .sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+
+    MatchQualitySummary {
+        low_evidence_jobs,
+        weak_description_jobs,
+        role_mismatch_jobs,
+        seniority_mismatch_jobs,
+        source_mismatch_jobs,
+        top_missing_signals: top_missing_signals
+            .into_iter()
+            .take(8)
+            .map(|(signal, _)| signal)
+            .collect(),
+    }
 }
 
 #[cfg(test)]
@@ -1581,7 +1696,11 @@ mod tests {
         let weak_fit = service.score_job(&profile, &weak_match);
 
         assert!(strong_fit.score > weak_fit.score);
-        assert!(strong_fit.matched_keywords.contains(&"frontend".to_string()));
+        assert!(
+            strong_fit
+                .matched_keywords
+                .contains(&"frontend".to_string())
+        );
         assert!(strong_fit.matched_skills.contains(&"react".to_string()));
     }
 
@@ -1621,5 +1740,62 @@ mod tests {
                 .iter()
                 .any(|reason| reason.contains("Matched search terms: frontend"))
         );
+    }
+
+    #[test]
+    fn backend_platform_overlap_prefers_engineering_stack_signals() {
+        let service = SearchMatchingService::new();
+        let profile = search_profile();
+        let platform_job = job_view(
+            "job-platform-1",
+            "Senior Platform Engineer",
+            "Remote EU platform role owning Rust APIs, Postgres, GraphQL, and distributed systems",
+            Some("remote"),
+            "djinni",
+        );
+        let generic_job = job_view(
+            "job-generic-1",
+            "Senior Software Engineer",
+            "Remote EU role collaborating across product teams and improving internal tools",
+            Some("remote"),
+            "djinni",
+        );
+
+        let platform_fit = service.score_job(&profile, &platform_job);
+        let generic_fit = service.score_job(&profile, &generic_job);
+
+        assert!(platform_fit.score > generic_fit.score);
+        assert!(platform_fit.matched_skills.contains(&"rust".to_string()));
+        assert!(
+            platform_fit
+                .matched_skills
+                .contains(&"postgres".to_string())
+        );
+        assert!(
+            platform_fit
+                .matched_keywords
+                .contains(&"distributed systems".to_string())
+        );
+    }
+
+    #[test]
+    fn missing_signals_stay_specific_and_drop_generic_noise() {
+        let service = SearchMatchingService::new();
+        let profile = frontend_profile();
+        let weak_job = job_view(
+            "job-frontend-gap",
+            "Senior UI Engineer",
+            "Remote EU role improving shared product experiences with design collaboration",
+            Some("remote"),
+            "djinni",
+        );
+
+        let fit = service.score_job(&profile, &weak_job);
+
+        assert!(fit.missing_signals.contains(&"react".to_string()));
+        assert!(fit.missing_signals.contains(&"typescript".to_string()));
+        assert!(fit.missing_signals.contains(&"design system".to_string()));
+        assert!(!fit.missing_signals.iter().any(|term| term == "developer"));
+        assert!(!fit.missing_signals.iter().any(|term| term == "engineer"));
     }
 }

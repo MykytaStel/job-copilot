@@ -135,6 +135,10 @@ export function JobCard({
   const company = p?.company ?? job.company;
   const source  = p?.sourceLabel ?? job.primaryVariant?.source ?? '';
   const badges  = p?.badges ?? [];
+  const summary = p?.summary;
+  const showSummary = Boolean(
+    summary && !p?.summaryFallback && p?.summaryQuality !== 'weak',
+  );
 
   const applicationStatus = application?.status;
 
@@ -198,13 +202,18 @@ export function JobCard({
             </div>
 
             {/* Skills / badges */}
-            {!compact && badges.length > 0 && (
+            {!compact && (badges.length > 0 || p?.descriptionQuality === 'weak') && (
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {badges.slice(0, 4).map((badge) => (
                   <Badge key={badge} variant="muted" className="text-xs px-2 py-0.5">
                     {badge}
                   </Badge>
                 ))}
+                {p?.descriptionQuality === 'weak' && (
+                  <Badge variant="danger" className="text-xs px-2 py-0.5">
+                    Description weak
+                  </Badge>
+                )}
                 {badges.length > 4 && (
                   <Badge variant="muted" className="text-xs px-2 py-0.5">
                     +{badges.length - 4}
@@ -214,10 +223,10 @@ export function JobCard({
             )}
 
             {/* Fit reasons / summary */}
-            {!compact && p?.summary && (
+            {!compact && showSummary && summary && (
               <div className="flex items-start gap-2 p-2 rounded-lg bg-surface-elevated/50 border border-edge-subtle mb-3">
                 <Sparkles className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
-                <p className="text-xs text-muted-foreground leading-relaxed">{p.summary}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{summary}</p>
               </div>
             )}
 

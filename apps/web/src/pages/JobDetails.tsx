@@ -299,6 +299,7 @@ export default function JobDetails() {
 
   const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency);
   const sourceLabel = job.primaryVariant?.source ? job.primaryVariant.source.replace('_', '.') : 'Unknown source';
+  const descriptionQuality = fit?.descriptionQuality ?? job.presentation?.descriptionQuality;
 
   const topBadges = [
     sourceLabel,
@@ -388,6 +389,9 @@ export default function JobDetails() {
                     ) : null}
                     {companyStatus === 'whitelist' ? (
                       <StatusBadge status="whitelist" label="company whitelisted" />
+                    ) : null}
+                    {descriptionQuality === 'weak' ? (
+                      <StatusBadge status="bad fit" label="description may be incomplete" />
                     ) : null}
                   </div>
 
@@ -596,6 +600,16 @@ export default function JobDetails() {
                   </div>
                 </div>
 
+                {descriptionQuality === 'weak' ? (
+                  <div className="rounded-2xl border border-content-warning/40 bg-content-warning/10 p-4">
+                    <p className="m-0 text-sm font-semibold text-card-foreground">Description quality warning</p>
+                    <p className="m-0 mt-3 text-sm leading-7 text-muted-foreground">
+                      This vacancy looks partially extracted or too short. Treat the fit score as lower-confidence
+                      until the source page or a richer reparse confirms the missing context.
+                    </p>
+                  </div>
+                ) : null}
+
                 {skillBadges.length > 0 ? (
                   <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
                     <p className="m-0 text-sm font-semibold text-card-foreground">Skills and signals</p>
@@ -623,9 +637,9 @@ export default function JobDetails() {
                   <div className="flex items-start gap-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
                     <FitScoreCircular score={fit.score} size="md" showLabel />
                     <p className="m-0 text-sm leading-7 text-muted-foreground">
-                      {fit.evidence.length > 0
-                        ? fit.evidence[0]
-                        : 'Fit analysis is based on the current profile, saved jobs, and explicit job signals.'}
+                      {fit.positiveReasons[0] ??
+                        fit.negativeReasons[0] ??
+                        'Fit analysis is based on canonical Rust matching over the stored profile and job signals.'}
                     </p>
                   </div>
 
@@ -635,9 +649,9 @@ export default function JobDetails() {
                         <CheckCircle2 className="h-4 w-4" />
                         Strengths
                       </p>
-                      {fit.evidence.length > 0 ? (
+                      {fit.positiveReasons.length > 0 ? (
                         <div className="space-y-3">
-                          {fit.evidence.map((entry) => (
+                          {fit.positiveReasons.map((entry) => (
                             <div key={entry} className="flex items-start gap-3">
                               <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-fit-excellent" />
                               <p className="m-0 text-sm leading-6 text-muted-foreground">{entry}</p>
@@ -652,20 +666,39 @@ export default function JobDetails() {
                     <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
                       <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-warning">
                         <AlertCircle className="h-4 w-4" />
-                        Missing signals
+                        Penalties and risks
                       </p>
-                      {fit.missingTerms.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {fit.missingTerms.map((term) => (
-                            <Badge key={term} variant="danger" className="px-3 py-1 text-xs">
-                              {term}
-                            </Badge>
+                      {fit.negativeReasons.length > 0 ? (
+                        <div className="space-y-3">
+                          {fit.negativeReasons.map((entry) => (
+                            <div key={entry} className="flex items-start gap-3">
+                              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-content-warning" />
+                              <p className="m-0 text-sm leading-6 text-muted-foreground">{entry}</p>
+                            </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="m-0 text-sm text-muted-foreground">No missing signals returned.</p>
+                        <p className="m-0 text-sm text-muted-foreground">No penalties returned.</p>
                       )}
                     </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                    <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-warning">
+                      <AlertCircle className="h-4 w-4" />
+                      Missing signals
+                    </p>
+                    {fit.missingTerms.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {fit.missingTerms.map((term) => (
+                          <Badge key={term} variant="danger" className="px-3 py-1 text-xs">
+                            {term}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="m-0 text-sm text-muted-foreground">No missing signals returned.</p>
+                    )}
                   </div>
 
                   <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">

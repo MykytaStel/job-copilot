@@ -25,6 +25,9 @@ pub struct JobPresentationResponse {
     pub title: String,
     pub company: String,
     pub summary: Option<String>,
+    pub summary_quality: Option<String>,
+    pub summary_fallback: bool,
+    pub description_quality: String,
     pub location_label: Option<String>,
     pub work_mode_label: Option<String>,
     pub source_label: Option<String>,
@@ -233,6 +236,11 @@ impl From<JobPresentation> for JobPresentationResponse {
             title: value.title,
             company: value.company,
             summary: value.summary,
+            summary_quality: value
+                .summary_quality
+                .map(|quality| quality.as_str().to_string()),
+            summary_fallback: value.summary_fallback,
+            description_quality: value.description_quality.as_str().to_string(),
             location_label: value.location_label,
             work_mode_label: value.work_mode_label,
             source_label: value.source_label,

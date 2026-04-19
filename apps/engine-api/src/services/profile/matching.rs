@@ -2,6 +2,8 @@ const RAW_ALIAS_REPLACEMENTS: &[(&str, &str)] = &[
     ("c++", " cpp "),
     ("c#", " csharp "),
     ("node.js", " nodejs "),
+    ("next.js", " nextjs "),
+    ("postgresql", " postgres "),
     ("react.js", " react "),
     ("reactnative", " react native "),
 ];
@@ -26,6 +28,12 @@ const PHRASE_REWRITES: &[(&[&str], &str)] = &[
     (&["full", "stack"], "fullstack"),
     (&["help", "desk"], "help_desk"),
     (&["node", "js"], "nodejs"),
+    (&["next", "js"], "nextjs"),
+    (&["rest", "api"], "rest_api"),
+    (
+        &["site", "reliability", "engineer"],
+        "site_reliability_engineer",
+    ),
     (&["power", "bi"], "power_bi"),
     (&["product", "company"], "product_company"),
     (&["product", "manager"], "product_manager"),
