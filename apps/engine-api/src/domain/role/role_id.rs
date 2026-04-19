@@ -55,6 +55,24 @@ impl RoleId {
     pub fn parse_canonical_key(value: &str) -> Option<Self> {
         find_role_by_key(value).map(|role| role.id)
     }
+
+    pub fn parse_compat_key(value: &str) -> Option<Self> {
+        let normalized = value.trim().to_lowercase();
+
+        Self::parse_canonical_key(&normalized).or(match normalized.as_str() {
+            "react_native_developer" => Some(Self::MobileEngineer),
+            "frontend_developer" => Some(Self::FrontendEngineer),
+            "backend_developer" => Some(Self::BackendEngineer),
+            "fullstack_developer" => Some(Self::FullstackEngineer),
+            "ui_ux_designer" => Some(Self::ProductDesigner),
+            "data_analyst" => Some(Self::DataEngineer),
+            "marketing_specialist"
+            | "sales_manager"
+            | "customer_support_specialist"
+            | "recruiter" => Some(Self::Generalist),
+            _ => None,
+        })
+    }
 }
 
 impl fmt::Display for RoleId {
@@ -107,6 +125,27 @@ mod tests {
             Some(RoleId::Generalist)
         );
         assert_eq!(RoleId::parse_canonical_key("unknown_role"), None);
+    }
+
+    #[test]
+    fn parses_legacy_compatibility_keys() {
+        assert_eq!(
+            RoleId::parse_compat_key("react_native_developer"),
+            Some(RoleId::MobileEngineer)
+        );
+        assert_eq!(
+            RoleId::parse_compat_key("frontend_developer"),
+            Some(RoleId::FrontendEngineer)
+        );
+        assert_eq!(
+            RoleId::parse_compat_key("ui_ux_designer"),
+            Some(RoleId::ProductDesigner)
+        );
+        assert_eq!(
+            RoleId::parse_compat_key("recruiter"),
+            Some(RoleId::Generalist)
+        );
+        assert_eq!(RoleId::parse_compat_key("unknown_role"), None);
     }
 
     #[test]

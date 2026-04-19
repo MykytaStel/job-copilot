@@ -93,6 +93,23 @@ pub async fn get_market_salary_trend(
     Ok(Json(trend.into()))
 }
 
+pub async fn get_market_salary_trends(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<MarketSalaryTrendResponse>>, ApiError> {
+    let trends = state
+        .jobs_service
+        .market_salary_trends()
+        .await
+        .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
+
+    Ok(Json(
+        trends
+            .into_iter()
+            .map(MarketSalaryTrendResponse::from)
+            .collect(),
+    ))
+}
+
 pub async fn get_market_role_demand(
     State(state): State<AppState>,
     Query(query): Query<MarketRolesQuery>,
@@ -127,6 +144,7 @@ mod tests {
     use super::{
         MarketCompaniesQuery, MarketRolesQuery, MarketSalaryQuery, get_market_companies,
         get_market_overview, get_market_role_demand, get_market_salary_trend,
+        get_market_salary_trends,
     };
     use crate::domain::market::model::{
         MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend,
@@ -304,6 +322,54 @@ mod tests {
 
         assert_eq!(payload["code"], json!("invalid_seniority"));
         assert_eq!(payload["details"]["field"], json!("seniority"));
+    }
+
+    #[tokio::test]
+    async fn market_salary_trends_returns_available_buckets() {
+        let state = test_state(JobsService::for_tests(
+            JobsServiceStub::default()
+                .with_market_salary_trend(MarketSalaryTrend {
+                    seniority: "senior".to_string(),
+                    p25: 4200,
+                    median: 5000,
+                    p75: 6200,
+                    sample_count: 8,
+                })
+                .with_market_salary_trend(MarketSalaryTrend {
+                    seniority: "junior".to_string(),
+                    p25: 1200,
+                    median: 1500,
+                    p75: 1800,
+                    sample_count: 6,
+                }),
+        ));
+
+        let payload = parse_json_response(
+            get_market_salary_trends(State(state))
+                .await
+                .expect("market salary trends should succeed"),
+        )
+        .await;
+
+        assert_eq!(
+            payload,
+            json!([
+                {
+                    "seniority": "junior",
+                    "p25": 1200,
+                    "median": 1500,
+                    "p75": 1800,
+                    "sample_count": 6
+                },
+                {
+                    "seniority": "senior",
+                    "p25": 4200,
+                    "median": 5000,
+                    "p75": 6200,
+                    "sample_count": 8
+                }
+            ])
+        );
     }
 
     #[tokio::test]

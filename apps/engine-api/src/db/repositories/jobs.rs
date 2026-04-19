@@ -486,6 +486,19 @@ impl JobsRepository {
         &self,
         seniority: &str,
     ) -> Result<Option<MarketSalaryTrend>, RepositoryError> {
+        let trends = self.fetch_market_salary_trends(Some(seniority)).await?;
+
+        Ok(trends.into_iter().next())
+    }
+
+    pub async fn market_salary_trends(&self) -> Result<Vec<MarketSalaryTrend>, RepositoryError> {
+        self.fetch_market_salary_trends(None).await
+    }
+
+    async fn fetch_market_salary_trends(
+        &self,
+        seniority: Option<&str>,
+    ) -> Result<Vec<MarketSalaryTrend>, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
@@ -499,7 +512,7 @@ impl JobsRepository {
             sample_count: i64,
         }
 
-        let row = sqlx::query_as::<_, MarketSalaryTrendRow>(
+        let rows = sqlx::query_as::<_, MarketSalaryTrendRow>(
             r#"
             WITH filtered_jobs AS (
                 SELECT
@@ -511,14 +524,26 @@ impl JobsRepository {
                   AND salary_min IS NOT NULL
                   AND seniority IS NOT NULL
                   AND last_seen_at >= NOW() - INTERVAL '30 days'
-                  AND LOWER(TRIM(seniority)) = $1
+                  AND ($1::text IS NULL OR LOWER(TRIM(seniority)) = $1)
             ),
-            dominant_currency AS (
-                SELECT salary_currency
+            ranked_currencies AS (
+                SELECT
+                    seniority,
+                    salary_currency,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY seniority
+                        ORDER BY COUNT(*) DESC, salary_currency ASC
+                    ) AS currency_rank
                 FROM filtered_jobs
-                GROUP BY salary_currency
-                ORDER BY COUNT(*) DESC, salary_currency ASC
-                LIMIT 1
+                GROUP BY seniority, salary_currency
+            ),
+            dominant_jobs AS (
+                SELECT filtered_jobs.*
+                FROM filtered_jobs
+                INNER JOIN ranked_currencies
+                    ON ranked_currencies.seniority = filtered_jobs.seniority
+                   AND ranked_currencies.salary_currency = filtered_jobs.salary_currency
+                WHERE ranked_currencies.currency_rank = 1
             )
             SELECT
                 seniority,
@@ -526,22 +551,35 @@ impl JobsRepository {
                 ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY salary_min))::integer AS median,
                 ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY salary_min))::integer AS p75,
                 COUNT(*)::bigint AS sample_count
-            FROM filtered_jobs
-            WHERE salary_currency = (SELECT salary_currency FROM dominant_currency)
+            FROM dominant_jobs
             GROUP BY seniority
+            ORDER BY
+                CASE seniority
+                    WHEN 'intern' THEN 0
+                    WHEN 'junior' THEN 1
+                    WHEN 'middle' THEN 2
+                    WHEN 'mid' THEN 2
+                    WHEN 'senior' THEN 3
+                    WHEN 'lead' THEN 4
+                    ELSE 5
+                END,
+                seniority ASC
             "#,
         )
-        .bind(seniority.trim().to_lowercase())
-        .fetch_optional(pool)
+        .bind(seniority.map(|value| value.trim().to_lowercase()))
+        .fetch_all(pool)
         .await?;
 
-        Ok(row.map(|row| MarketSalaryTrend {
-            seniority: row.seniority,
-            p25: row.p25,
-            median: row.median,
-            p75: row.p75,
-            sample_count: row.sample_count,
-        }))
+        Ok(rows
+            .into_iter()
+            .map(|row| MarketSalaryTrend {
+                seniority: row.seniority,
+                p25: row.p25,
+                median: row.median,
+                p75: row.p75,
+                sample_count: row.sample_count,
+            })
+            .collect())
     }
 
     pub async fn market_role_demand(

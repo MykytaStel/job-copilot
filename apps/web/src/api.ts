@@ -1721,27 +1721,26 @@ export async function getMarketSalaries(
     ),
   );
 
-  const results = await Promise.all(
-    buckets.map(async (seniority) => {
-      const response = await requestOptional<EngineMarketSalaryTrend>(
-        `/api/v1/market/salaries?seniority=${encodeURIComponent(seniority)}`,
-      );
-
-      if (!response) {
-        return null;
-      }
-
-      return {
-        seniority: response.seniority,
-        p25: response.p25,
-        median: response.median,
-        p75: response.p75,
-        sampleCount: response.sample_count,
-      } satisfies MarketSalaryTrend;
-    }),
+  const response = await request<EngineMarketSalaryTrend[]>(
+    '/api/v1/market/salary-trends',
   );
 
-  return results.filter((result): result is MarketSalaryTrend => result !== null);
+  const trendsBySeniority = new Map(
+    response.map((trend) => [
+      trend.seniority.toLowerCase(),
+      {
+        seniority: trend.seniority,
+        p25: trend.p25,
+        median: trend.median,
+        p75: trend.p75,
+        sampleCount: trend.sample_count,
+      } satisfies MarketSalaryTrend,
+    ]),
+  );
+
+  return buckets
+    .map((bucket) => trendsBySeniority.get(bucket))
+    .filter((result): result is MarketSalaryTrend => result !== undefined);
 }
 
 export async function getMarketRoles(period = 30): Promise<MarketRoleDemand[]> {

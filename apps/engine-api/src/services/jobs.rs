@@ -132,6 +132,14 @@ impl JobsService {
         }
     }
 
+    pub async fn market_salary_trends(&self) -> Result<Vec<MarketSalaryTrend>, RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => repository.market_salary_trends().await,
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_salary_trends(),
+        }
+    }
+
     pub async fn market_role_demand(
         &self,
         period_days: i32,
@@ -340,6 +348,28 @@ impl JobsServiceStub {
         }
 
         Ok(self.market_salary_trends.get(seniority).cloned())
+    }
+
+    fn market_salary_trends(&self) -> Result<Vec<MarketSalaryTrend>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let mut trends = self
+            .market_salary_trends
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        trends.sort_by_key(|trend| match trend.seniority.as_str() {
+            "intern" => (0, trend.seniority.clone()),
+            "junior" => (1, trend.seniority.clone()),
+            "middle" | "mid" => (2, trend.seniority.clone()),
+            "senior" => (3, trend.seniority.clone()),
+            "lead" => (4, trend.seniority.clone()),
+            _ => (5, trend.seniority.clone()),
+        });
+
+        Ok(trends)
     }
 
     fn market_role_demand(

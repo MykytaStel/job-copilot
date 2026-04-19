@@ -134,6 +134,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/market/salaries",
             get(market::get_market_salary_trend),
         )
+        .route(
+            "/api/v1/market/salary-trends",
+            get(market::get_market_salary_trends),
+        )
         .route("/api/v1/market/roles", get(market::get_market_role_demand))
         .route(
             "/api/v1/profiles/{id}/analytics/summary",
