@@ -37,6 +37,7 @@ export type EngineBuildSearchProfileResponse = Omit<
 export type EngineFitExplanation = {
   job_id: string;
   score: number;
+  score_breakdown?: EngineScoreBreakdown;
   matched_roles: string[];
   matched_skills: string[];
   matched_keywords: string[];
@@ -48,6 +49,22 @@ export type EngineFitExplanation = {
   positive_reasons: string[];
   negative_reasons: string[];
   reasons: string[];
+};
+
+export type EngineScoreBreakdown = {
+  total_score: number;
+  matching_score: number;
+  salary_score: number;
+  reranker_score: number;
+  freshness_score: number;
+  penalties: EngineScorePenalty[];
+  reranker_mode: 'deterministic' | 'learned' | 'trained' | 'fallback';
+};
+
+export type EngineScorePenalty = {
+  kind: string;
+  score_delta: number;
+  reason: string;
 };
 
 export type EngineRankedJobResult = {

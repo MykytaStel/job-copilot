@@ -25,6 +25,7 @@ import type {
   EngineMatchResult,
   EngineRecentJobsResponse,
   EngineRunSearchResponse,
+  EngineScoreBreakdown,
 } from './engine-types';
 import { mapJob, mapJobFeedSummary, mapMatchResult, uniquePreservingOrder } from './mappers';
 import type { SearchProfileBuildResult } from './profiles';
@@ -46,6 +47,7 @@ export type FitAnalysis = {
   profileId: string;
   jobId: string;
   score: number;
+  scoreBreakdown: ScoreBreakdown;
   matchedTerms: string[];
   matchedRoles: string[];
   matchedSkills: string[];
@@ -66,6 +68,7 @@ export type SearchRunRequest = {
 export type FitExplanation = {
   jobId: string;
   score: number;
+  scoreBreakdown: ScoreBreakdown;
   matchedRoles: string[];
   matchedSkills: string[];
   matchedKeywords: string[];
@@ -78,6 +81,53 @@ export type FitExplanation = {
   negativeReasons: string[];
   reasons: string[];
 };
+
+export type ScoreBreakdown = {
+  totalScore: number;
+  matchingScore: number;
+  salaryScore: number;
+  rerankerScore: number;
+  freshnessScore: number;
+  penalties: ScorePenalty[];
+  rerankerMode: 'deterministic' | 'learned' | 'trained' | 'fallback';
+};
+
+export type ScorePenalty = {
+  kind: string;
+  scoreDelta: number;
+  reason: string;
+};
+
+function mapScoreBreakdown(
+  score: number,
+  scoreBreakdown?: EngineScoreBreakdown,
+): ScoreBreakdown {
+  if (!scoreBreakdown) {
+    return {
+      totalScore: score,
+      matchingScore: score,
+      salaryScore: 0,
+      rerankerScore: 0,
+      freshnessScore: 0,
+      penalties: [],
+      rerankerMode: 'deterministic',
+    };
+  }
+
+  return {
+    totalScore: scoreBreakdown.total_score,
+    matchingScore: scoreBreakdown.matching_score,
+    salaryScore: scoreBreakdown.salary_score,
+    rerankerScore: scoreBreakdown.reranker_score,
+    freshnessScore: scoreBreakdown.freshness_score,
+    penalties: scoreBreakdown.penalties.map((penalty) => ({
+      kind: penalty.kind,
+      scoreDelta: penalty.score_delta,
+      reason: penalty.reason,
+    })),
+    rerankerMode: scoreBreakdown.reranker_mode,
+  };
+}
 
 export type RankedJobResult = {
   job: JobPosting;
@@ -177,6 +227,7 @@ export async function runSearch(payload: SearchRunRequest): Promise<SearchRunRes
       fit: {
         jobId: result.fit.job_id,
         score: result.fit.score,
+        scoreBreakdown: mapScoreBreakdown(result.fit.score, result.fit.score_breakdown),
         matchedRoles: result.fit.matched_roles,
         matchedSkills: result.fit.matched_skills,
         matchedKeywords: result.fit.matched_keywords,
@@ -257,6 +308,7 @@ export async function analyzeFit(profileId: string, jobId: string): Promise<FitA
     profileId,
     jobId: result.job_id,
     score: result.score,
+    scoreBreakdown: mapScoreBreakdown(result.score, result.score_breakdown),
     matchedTerms,
     matchedRoles: result.matched_roles,
     matchedSkills: result.matched_skills,

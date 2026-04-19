@@ -67,6 +67,8 @@ export type {
   EngineSearchRoleCandidate,
   EngineSearchProfile,
   EngineBuildSearchProfileResponse,
+  EngineScoreBreakdown,
+  EngineScorePenalty,
   EngineFitExplanation,
   EngineRankedJobResult,
   EngineSearchRunMeta,
