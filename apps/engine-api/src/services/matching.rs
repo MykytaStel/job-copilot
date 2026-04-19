@@ -23,6 +23,22 @@ const ROLE_MISMATCH_PENALTY_WEIGHT: f32 = 18.0;
 const WORK_MODE_MISMATCH_PENALTY_WEIGHT: f32 = 8.0;
 const SENIORITY_MISMATCH_PENALTY_WEIGHT: f32 = 8.0;
 const PARTIAL_ROLE_MATCH_THRESHOLD: f32 = 0.30;
+const LOW_SIGNAL_TERM_MATCH_WEIGHT: f32 = 0.80;
+const PARTIAL_PHRASE_MATCH_WEIGHT: f32 = 0.90;
+const LOW_SIGNAL_TERMS: &[&str] = &[
+    "developer",
+    "engineer",
+    "specialist",
+    "manager",
+    "experience",
+    "experienced",
+    "role",
+    "roles",
+    "work",
+    "working",
+    "team",
+    "teams",
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RankedJob {
@@ -59,6 +75,22 @@ struct SeniorityAlignment {
     normalized_job: Option<String>,
     score: f32,
     penalty: f32,
+}
+
+#[derive(Clone, Debug)]
+struct TermSpec {
+    normalized: String,
+    output: String,
+    canonical_normalized: String,
+    canonical_output: String,
+    significant_tokens: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct EvaluatedTerms {
+    matched_terms: Vec<String>,
+    matched_strength: f32,
+    eligible_terms: usize,
 }
 
 impl SearchMatchingService {
@@ -111,49 +143,45 @@ impl SearchMatchingService {
         let role_alignment = analyze_role_alignment(search_profile, &prepared_text, &target_roles);
         let role_terms = collect_role_terms(&target_roles);
         let matched_profile_skills =
-            collect_matched_terms(&prepared_text, &search_profile.profile_skills, &Vec::new());
-        let matched_profile_keywords = collect_matched_terms(
+            evaluate_terms(&prepared_text, &search_profile.profile_skills, &[]);
+        let matched_profile_keywords = evaluate_terms(
             &prepared_text,
             &search_profile.profile_keywords,
             &role_terms,
         );
         let ignored_search_terms = ignored_search_terms(search_profile, &role_terms);
-        let matched_search_terms = collect_matched_terms(
+        let matched_search_terms = evaluate_terms(
             &prepared_text,
             &search_profile.search_terms,
             &ignored_search_terms,
         );
-        let searchable_terms = normalized_terms(&search_profile.search_terms)
-            .into_iter()
-            .filter(|term| !ignored_search_terms.contains(term))
-            .collect::<Vec<_>>();
-        let matched_keywords = merge_terms(&matched_profile_keywords, &matched_search_terms);
+        let matched_keywords = merge_terms(
+            &matched_profile_keywords.matched_terms,
+            &matched_search_terms.matched_terms,
+        );
         let source_match = compute_source_match(search_profile, job);
         let work_mode_match = compute_work_mode_match(search_profile, job);
         let region_match = compute_region_match(search_profile, &prepared_text, job);
         let seniority_alignment = compute_seniority_alignment(search_profile, job, &prepared_text);
-        let matched_exclude_terms =
-            collect_matched_terms(&prepared_text, &search_profile.exclude_terms, &Vec::new());
+        let matched_exclude_terms = evaluate_terms(&prepared_text, &search_profile.exclude_terms, &[]);
 
         let primary_role_score = role_alignment.primary_overlap
             * PRIMARY_ROLE_WEIGHT
             * confidence_factor(search_profile.primary_role_confidence);
         let target_role_score = role_alignment.best_target_overlap * TARGET_ROLE_WEIGHT;
         let role_candidate_score = role_alignment.candidate_overlap * ROLE_CANDIDATE_WEIGHT;
-        let profile_skill_score = overlap_ratio(
-            matched_profile_skills.len(),
-            normalized_terms(&search_profile.profile_skills).len(),
+        let profile_skill_score = weighted_overlap_ratio(
+            matched_profile_skills.matched_strength,
+            matched_profile_skills.eligible_terms,
         ) * PROFILE_SKILL_WEIGHT;
-        let profile_keyword_score = overlap_ratio(
-            matched_profile_keywords.len(),
-            normalized_terms(&search_profile.profile_keywords)
-                .into_iter()
-                .filter(|term| !role_terms.contains(term))
-                .collect::<Vec<_>>()
-                .len(),
+        let profile_keyword_score = weighted_overlap_ratio(
+            matched_profile_keywords.matched_strength,
+            matched_profile_keywords.eligible_terms,
         ) * PROFILE_KEYWORD_WEIGHT;
-        let search_term_score =
-            overlap_ratio(matched_search_terms.len(), searchable_terms.len()) * SEARCH_TERM_WEIGHT;
+        let search_term_score = weighted_overlap_ratio(
+            matched_search_terms.matched_strength,
+            matched_search_terms.eligible_terms,
+        ) * SEARCH_TERM_WEIGHT;
         let source_score = if source_match && !search_profile.allowed_sources.is_empty() {
             SOURCE_WEIGHT
         } else {
@@ -168,9 +196,9 @@ impl SearchMatchingService {
             None => 0.0,
         };
         let seniority_score = seniority_alignment.score;
-        let exclude_penalty = overlap_ratio(
-            matched_exclude_terms.len(),
-            normalized_terms(&search_profile.exclude_terms).len(),
+        let exclude_penalty = weighted_overlap_ratio(
+            matched_exclude_terms.matched_strength,
+            matched_exclude_terms.eligible_terms,
         ) * EXCLUDE_PENALTY_WEIGHT;
         let work_mode_penalty = matches!(work_mode_match, Some(false))
             .then_some(WORK_MODE_MISMATCH_PENALTY_WEIGHT)
@@ -197,10 +225,10 @@ impl SearchMatchingService {
             search_profile,
             job,
             &role_alignment,
-            &matched_profile_skills,
-            &matched_profile_keywords,
-            &matched_search_terms,
-            &matched_exclude_terms,
+            &matched_profile_skills.matched_terms,
+            &matched_profile_keywords.matched_terms,
+            &matched_search_terms.matched_terms,
+            &matched_exclude_terms.matched_terms,
             work_mode_match,
             region_match,
             &seniority_alignment,
@@ -210,7 +238,7 @@ impl SearchMatchingService {
             job_id: job.job.id.clone(),
             score,
             matched_roles: role_alignment.matched_roles,
-            matched_skills: matched_profile_skills.clone(),
+            matched_skills: matched_profile_skills.matched_terms.clone(),
             matched_keywords,
             source_match,
             work_mode_match,
@@ -324,53 +352,127 @@ fn ignored_search_terms(search_profile: &SearchProfile, role_terms: &[String]) -
     let mut ignored = role_terms.to_vec();
 
     for term in &search_profile.profile_skills {
-        push_unique_string(&mut ignored, normalize_text(term));
+        push_ignored_term(&mut ignored, term);
     }
 
     for term in &search_profile.profile_keywords {
-        push_unique_string(&mut ignored, normalize_text(term));
+        push_ignored_term(&mut ignored, term);
     }
 
     ignored
 }
 
-fn collect_matched_terms(
+fn evaluate_terms(
     prepared_text: &PreparedText,
     terms: &[String],
     ignored_terms: &[String],
-) -> Vec<String> {
+) -> EvaluatedTerms {
     let mut matched_terms = Vec::new();
+    let mut matched_strength = 0.0;
+    let mut eligible_terms = 0usize;
 
-    for term in terms {
-        let normalized = normalize_text(term);
-        let output = normalize_term_for_output(term);
-
-        if normalized.is_empty() || ignored_terms.contains(&normalized) {
+    for term in build_term_specs(terms) {
+        if ignored_terms.contains(&term.normalized) || ignored_terms.contains(&term.canonical_normalized)
+        {
             continue;
         }
 
-        if prepared_text.matches_signal(&normalized) {
-            push_unique_string(&mut matched_terms, output);
-        }
+        eligible_terms += 1;
+
+        let Some((output, strength)) = match_term(prepared_text, &term) else {
+            continue;
+        };
+
+        matched_strength += strength;
+        push_unique_string(&mut matched_terms, output);
     }
 
-    matched_terms
+    EvaluatedTerms {
+        matched_terms,
+        matched_strength,
+        eligible_terms,
+    }
 }
 
-fn normalized_terms(terms: &[String]) -> Vec<String> {
-    let mut normalized_terms = Vec::new();
+fn build_term_specs(terms: &[String]) -> Vec<TermSpec> {
+    let mut specs = Vec::new();
 
     for term in terms {
         let normalized = normalize_text(term);
-
         if normalized.is_empty() {
             continue;
         }
 
-        push_unique_string(&mut normalized_terms, normalized);
+        let significant_tokens = extract_significant_tokens(&normalized);
+        if significant_tokens.is_empty() {
+            continue;
+        }
+
+        let canonical_normalized = significant_tokens.join(" ");
+        if specs
+            .iter()
+            .any(|spec: &TermSpec| spec.canonical_normalized == canonical_normalized)
+        {
+            continue;
+        }
+
+        specs.push(TermSpec {
+            output: normalize_term_for_output(term),
+            canonical_output: canonical_normalized.replace('_', " "),
+            normalized,
+            canonical_normalized,
+            significant_tokens,
+        });
     }
 
-    normalized_terms
+    specs
+}
+
+fn extract_significant_tokens(normalized: &str) -> Vec<String> {
+    normalized
+        .split_whitespace()
+        .filter(|token| !is_low_signal_term(token))
+        .map(str::to_string)
+        .collect()
+}
+
+fn match_term(prepared_text: &PreparedText, term: &TermSpec) -> Option<(String, f32)> {
+    if prepared_text.matches_signal(&term.normalized) {
+        return Some((term.output.clone(), 1.0));
+    }
+
+    if term.significant_tokens.len() == 1 {
+        let token = &term.significant_tokens[0];
+        if prepared_text.matches_signal(token) {
+            let output = if term.normalized == term.canonical_normalized {
+                term.output.clone()
+            } else {
+                term.canonical_output.clone()
+            };
+            let weight = if term.normalized == term.canonical_normalized {
+                1.0
+            } else {
+                LOW_SIGNAL_TERM_MATCH_WEIGHT
+            };
+            return Some((output, weight));
+        }
+
+        return None;
+    }
+
+    if term
+        .significant_tokens
+        .iter()
+        .all(|token| prepared_text.matches_signal(token))
+    {
+        return Some((term.canonical_output.clone(), PARTIAL_PHRASE_MATCH_WEIGHT));
+    }
+
+    None
+}
+
+fn is_low_signal_term(token: &str) -> bool {
+    !token.contains('_') && LOW_SIGNAL_TERMS.iter().any(|value| value == &token)
 }
 
 fn merge_terms(left: &[String], right: &[String]) -> Vec<String> {
@@ -907,11 +1009,11 @@ fn confidence_factor(confidence: Option<u8>) -> f32 {
     }
 }
 
-fn overlap_ratio(matched: usize, total: usize) -> f32 {
+fn weighted_overlap_ratio(matched_strength: f32, total: usize) -> f32 {
     if total == 0 {
         0.0
     } else {
-        (matched as f32 / total as f32).min(1.0)
+        (matched_strength / total as f32).min(1.0)
     }
 }
 
@@ -933,6 +1035,23 @@ fn push_unique_string(target: &mut Vec<String>, value: String) {
     }
 
     target.push(value);
+}
+
+fn push_ignored_term(target: &mut Vec<String>, value: &str) {
+    let normalized = normalize_text(value);
+
+    if normalized.is_empty() {
+        return;
+    }
+
+    push_unique_string(target, normalized.clone());
+
+    let canonical_tokens = extract_significant_tokens(&normalized);
+    if canonical_tokens.is_empty() {
+        return;
+    }
+
+    push_unique_string(target, canonical_tokens.join(" "));
 }
 
 #[cfg(test)]
@@ -1436,6 +1555,71 @@ mod tests {
             fit.reasons
                 .iter()
                 .any(|reason| reason.contains("Matched profile skills: react native, typescript"))
+        );
+    }
+
+    #[test]
+    fn frontend_react_overlap_beats_generic_engineering_overlap() {
+        let service = SearchMatchingService::new();
+        let profile = frontend_profile();
+        let strong_match = job_view(
+            "job-frontend-strong",
+            "Senior Front-end React Developer",
+            "Remote EU role shipping frontend design system work with React and TypeScript",
+            Some("remote"),
+            "djinni",
+        );
+        let weak_match = job_view(
+            "job-frontend-weak",
+            "Senior UI Engineer",
+            "Remote EU role improving shared product experiences and collaborating with design",
+            Some("remote"),
+            "djinni",
+        );
+
+        let strong_fit = service.score_job(&profile, &strong_match);
+        let weak_fit = service.score_job(&profile, &weak_match);
+
+        assert!(strong_fit.score > weak_fit.score);
+        assert!(strong_fit.matched_keywords.contains(&"frontend".to_string()));
+        assert!(strong_fit.matched_skills.contains(&"react".to_string()));
+    }
+
+    #[test]
+    fn non_contiguous_frontend_search_phrase_matches_canonical_frontend_term() {
+        let service = SearchMatchingService::new();
+        let profile = SearchProfile {
+            primary_role: RoleId::FrontendDeveloper,
+            primary_role_confidence: Some(96),
+            target_roles: vec![RoleId::FrontendDeveloper],
+            role_candidates: vec![SearchRoleCandidate {
+                role: RoleId::FrontendDeveloper,
+                confidence: 96,
+            }],
+            seniority: "senior".to_string(),
+            target_regions: vec![TargetRegion::EuRemote],
+            work_modes: vec![WorkMode::Remote],
+            allowed_sources: vec![SourceId::Djinni],
+            profile_skills: vec!["react".to_string()],
+            profile_keywords: vec!["design system".to_string()],
+            search_terms: vec!["frontend specialist".to_string()],
+            exclude_terms: vec![],
+        };
+        let job = job_view(
+            "job-frontend-search-term",
+            "Senior Front-end React Developer",
+            "Remote EU role shipping frontend design system work with React",
+            Some("remote"),
+            "djinni",
+        );
+
+        let fit = service.score_job(&profile, &job);
+
+        assert!(fit.score >= 70);
+        assert!(
+            fit.reasons
+                .iter()
+                .any(|reason| reason.contains("Matched search terms: frontend"))
         );
     }
 }
