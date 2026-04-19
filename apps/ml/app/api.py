@@ -1,9 +1,5 @@
-import asyncio
-
-import httpx
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 
 from app.application_coach import (
     ApplicationCoachProviderError,
@@ -11,18 +7,13 @@ from app.application_coach import (
     ApplicationCoachResponse,
     http_error_from_application_coach_error,
 )
-from app.bootstrap_training import DEFAULT_MODEL_PATH, bootstrap_and_retrain
 from app.cover_letter_draft import (
     CoverLetterDraftProviderError,
     CoverLetterDraftRequest,
     CoverLetterDraftResponse,
     http_error_from_cover_letter_draft_error,
 )
-from app.engine_api_client import (
-    EngineApiClient,
-    engine_api_base_url,
-    engine_api_timeout_seconds,
-)
+from app.engine_api_client import engine_api_base_url
 from app.interview_prep import (
     InterviewPrepProviderError,
     InterviewPrepRequest,
@@ -35,13 +26,14 @@ from app.job_fit_explanation import (
     JobFitExplanationResponse,
     http_error_from_job_fit_explanation_error,
 )
+from app.models import HealthResponse
 from app.profile_insights import (
     LlmContextRequest,
     ProfileInsightsProviderError,
     ProfileInsightsResponse,
     http_error_from_provider_error,
 )
-from app.scoring import score_job, unique_preserving_order
+from app.scoring_routes import router as scoring_router
 from app.service_dependencies import (
     get_application_coach_service,
     get_cover_letter_draft_service,
@@ -57,58 +49,6 @@ from app.weekly_guidance import (
     WeeklyGuidanceResponse,
     http_error_from_weekly_guidance_error,
 )
-
-
-class HealthResponse(BaseModel):
-    status: str
-    service: str
-    engine_api_base_url: str
-
-
-class FitAnalyzeRequest(BaseModel):
-    profile_id: str = Field(min_length=1)
-    job_id: str = Field(min_length=1)
-
-
-class FitAnalyzeResponse(BaseModel):
-    profile_id: str
-    job_id: str
-    score: int
-    matched_terms: list[str]
-    missing_terms: list[str]
-    evidence: list[str]
-
-
-class RerankRequest(BaseModel):
-    profile_id: str = Field(min_length=1)
-    job_ids: list[str] = Field(min_length=1, max_length=50)
-
-
-class RerankedJob(BaseModel):
-    job_id: str
-    title: str
-    company_name: str
-    score: int
-    matched_terms: list[str]
-    evidence: list[str]
-
-
-class RerankResponse(BaseModel):
-    profile_id: str
-    jobs: list[RerankedJob]
-
-
-class BootstrapRequest(BaseModel):
-    profile_id: str = Field(min_length=1)
-    min_examples: int = Field(default=30, ge=1)
-
-
-class BootstrapResponse(BaseModel):
-    retrained: bool
-    example_count: int
-    reason: str | None = None
-    model_path: str | None = None
-    training: dict | None = None
 
 
 def create_app() -> FastAPI:
@@ -128,6 +68,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    application.include_router(scoring_router)
+
     @application.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         return HealthResponse(
@@ -135,60 +77,6 @@ def create_app() -> FastAPI:
             service="ml",
             engine_api_base_url=engine_api_base_url(),
         )
-
-    @application.post("/api/v1/fit/analyze", response_model=FitAnalyzeResponse)
-    async def analyze_fit(payload: FitAnalyzeRequest) -> FitAnalyzeResponse:
-        timeout = httpx.Timeout(engine_api_timeout_seconds())
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            engine_api = EngineApiClient(client)
-            profile = await engine_api.fetch_profile(payload.profile_id)
-            job = await engine_api.fetch_job_lifecycle(payload.job_id)
-
-        score, matched_terms, missing_terms, evidence = score_job(profile, job)
-        return FitAnalyzeResponse(
-            profile_id=payload.profile_id,
-            job_id=payload.job_id,
-            score=score,
-            matched_terms=matched_terms,
-            missing_terms=missing_terms,
-            evidence=evidence,
-        )
-
-    @application.post("/api/v1/rerank", response_model=RerankResponse)
-    async def rerank_jobs(payload: RerankRequest) -> RerankResponse:
-        unique_job_ids = unique_preserving_order(
-            [job_id.strip() for job_id in payload.job_ids if job_id.strip()]
-        )
-        if not unique_job_ids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="job_ids must contain at least one non-empty id",
-            )
-
-        timeout = httpx.Timeout(engine_api_timeout_seconds())
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            engine_api = EngineApiClient(client)
-            profile = await engine_api.fetch_profile(payload.profile_id)
-            jobs = await asyncio.gather(
-                *(engine_api.fetch_job_lifecycle(job_id) for job_id in unique_job_ids)
-            )
-
-        ranked_jobs: list[RerankedJob] = []
-        for job in jobs:
-            score, matched_terms, _, evidence = score_job(profile, job)
-            ranked_jobs.append(
-                RerankedJob(
-                    job_id=job.id,
-                    title=job.title,
-                    company_name=job.company_name,
-                    score=score,
-                    matched_terms=matched_terms,
-                    evidence=evidence,
-                )
-            )
-
-        ranked_jobs.sort(key=lambda item: (-item.score, item.title.lower(), item.job_id))
-        return RerankResponse(profile_id=payload.profile_id, jobs=ranked_jobs)
 
     @application.post("/v1/enrichment/profile-insights", response_model=ProfileInsightsResponse)
     @application.post("/api/v1/enrichment/profile-insights", response_model=ProfileInsightsResponse)
@@ -273,26 +161,6 @@ def create_app() -> FastAPI:
             return await service.enrich(payload)
         except WeeklyGuidanceProviderError as exc:
             raise http_error_from_weekly_guidance_error(exc) from exc
-
-    @application.post("/api/v1/reranker/bootstrap", response_model=BootstrapResponse)
-    async def bootstrap_reranker(payload: BootstrapRequest) -> BootstrapResponse:
-        try:
-            result = await bootstrap_and_retrain(
-                profile_id=payload.profile_id,
-                min_examples=payload.min_examples,
-                model_path=DEFAULT_MODEL_PATH,
-            )
-        except httpx.HTTPStatusError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"engine-api error: {exc.response.status_code}",
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"engine-api unreachable: {exc}",
-            ) from exc
-        return BootstrapResponse(**result)
 
     return application
 
