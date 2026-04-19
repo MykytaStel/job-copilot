@@ -59,7 +59,7 @@ mod tests {
                 preferences: SearchPreferencesRequest {
                     target_regions: vec![crate::domain::search::profile::TargetRegion::Ua],
                     work_modes: vec![crate::domain::search::profile::WorkMode::Remote],
-                    preferred_roles: vec!["frontend_developer".to_string()],
+                    preferred_roles: vec!["frontend_engineer".to_string()],
                     allowed_sources: vec!["djinni".to_string(), "work_ua".to_string()],
                     include_keywords: vec!["product company".to_string()],
                     exclude_keywords: vec!["gambling".to_string()],
@@ -80,7 +80,7 @@ mod tests {
 
         assert_eq!(
             payload["analyzed_profile"]["primary_role"],
-            json!("react_native_developer")
+            json!("mobile_engineer")
         );
         assert_eq!(
             payload["search_profile"]["allowed_sources"],
@@ -90,7 +90,7 @@ mod tests {
             payload["search_profile"]["target_roles"]
                 .as_array()
                 .expect("target_roles should be an array")
-                .contains(&json!("frontend_developer"))
+                .contains(&json!("frontend_engineer"))
         );
     }
 

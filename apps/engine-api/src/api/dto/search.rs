@@ -464,12 +464,12 @@ mod tests {
         let input = RunSearchRequest {
             profile_id: None,
             search_profile: SearchProfileRequest {
-                primary_role: "backend_developer".to_string(),
+                primary_role: "backend_engineer".to_string(),
                 primary_role_confidence: Some(92),
                 target_roles: vec!["devops_engineer".to_string()],
                 role_candidates: vec![
                     super::SearchRoleCandidateRequest {
-                        role: "backend_developer".to_string(),
+                        role: "backend_engineer".to_string(),
                         confidence: 92,
                     },
                     super::SearchRoleCandidateRequest {
@@ -492,7 +492,7 @@ mod tests {
         .expect("request should validate");
 
         assert_eq!(input.limit, 25);
-        assert_eq!(input.search_profile.primary_role, RoleId::BackendDeveloper);
+        assert_eq!(input.search_profile.primary_role, RoleId::BackendEngineer);
         assert_eq!(input.search_profile.primary_role_confidence, Some(92));
         assert!(
             input
@@ -538,7 +538,7 @@ mod tests {
         let fit = JobFit {
             job_id: "job-1".to_string(),
             score: 88,
-            matched_roles: vec![RoleId::BackendDeveloper],
+            matched_roles: vec![RoleId::BackendEngineer],
             matched_skills: vec!["rust".to_string()],
             matched_keywords: vec!["platform".to_string()],
             source_match: true,
@@ -546,7 +546,7 @@ mod tests {
             region_match: Some(true),
             missing_signals: vec!["graphql".to_string()],
             description_quality: JobTextQuality::Strong,
-            reasons: vec!["Matched target roles: backend_developer".to_string()],
+            reasons: vec!["Matched target roles: backend_engineer".to_string()],
         };
 
         let response =
@@ -557,7 +557,7 @@ mod tests {
         assert_eq!(response["description_quality"], json!("strong"));
         assert_eq!(
             response["reasons"],
-            json!(["Matched target roles: backend_developer"])
+            json!(["Matched target roles: backend_engineer"])
         );
     }
 

@@ -89,6 +89,12 @@ services:
     environment:
       ENGINE_API_BASE_URL: http://engine-api:8080
       PORT: "8000"
+      # ML_LLM_PROVIDER: "ollama"       # options: template (default), openai, ollama
+      # OPENAI_API_KEY: ""
+      # OPENAI_MODEL: "gpt-4o-mini"
+      # OPENAI_BASE_URL: ""
+      # OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+      # OLLAMA_MODEL: "mistral:7b"
     ports:
       - "8000:8000"
     depends_on:

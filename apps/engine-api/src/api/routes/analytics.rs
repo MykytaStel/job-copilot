@@ -323,7 +323,7 @@ mod tests {
             raw_text: "Senior Rust backend engineer".to_string(),
             analysis: Some(ProfileAnalysis {
                 summary: "Senior backend engineer with Rust expertise".to_string(),
-                primary_role: RoleId::BackendDeveloper,
+                primary_role: RoleId::BackendEngineer,
                 seniority: "senior".to_string(),
                 skills: vec!["rust".to_string(), "postgres".to_string()],
                 keywords: vec!["backend".to_string(), "distributed".to_string()],
@@ -563,7 +563,7 @@ mod tests {
             .await
             .expect("analytics summary should succeed");
 
-        assert_eq!(summary.top_matched_roles, vec!["backend_developer"]);
+        assert_eq!(summary.top_matched_roles, vec!["backend_engineer"]);
         assert_eq!(summary.top_matched_skills, vec!["rust", "postgres"]);
         assert_eq!(summary.top_matched_keywords, vec!["backend", "distributed"]);
     }
@@ -708,7 +708,7 @@ mod tests {
         let analysis = ctx
             .analyzed_profile
             .expect("analyzed_profile should be present");
-        assert_eq!(analysis.primary_role, "backend_developer");
+        assert_eq!(analysis.primary_role, "backend_engineer");
         assert_eq!(analysis.seniority, "senior");
         assert!(analysis.skills.contains(&"rust".to_string()));
     }

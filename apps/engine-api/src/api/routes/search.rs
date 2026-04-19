@@ -774,9 +774,9 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(91),
-                    target_roles: vec!["backend_developer".to_string()],
+                    target_roles: vec!["backend_engineer".to_string()],
                     role_candidates: vec![],
                     seniority: "senior".to_string(),
                     target_regions: vec![TargetRegion::Ua],
@@ -833,9 +833,9 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(91),
-                    target_roles: vec!["backend_developer".to_string()],
+                    target_roles: vec!["backend_engineer".to_string()],
                     role_candidates: vec![],
                     seniority: "senior".to_string(),
                     target_regions: vec![TargetRegion::Ua],
@@ -889,12 +889,12 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: None,
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec!["devops_engineer".to_string()],
                     role_candidates: vec![
                         crate::api::dto::search::SearchRoleCandidateRequest {
-                            role: "backend_developer".to_string(),
+                            role: "backend_engineer".to_string(),
                             confidence: 95,
                         },
                         crate::api::dto::search::SearchRoleCandidateRequest {
@@ -989,7 +989,7 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec![],
                     role_candidates: vec![],
@@ -1062,7 +1062,7 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec![],
                     role_candidates: vec![],
@@ -1140,7 +1140,7 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec![],
                     role_candidates: vec![],
@@ -1237,7 +1237,7 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec![],
                     role_candidates: vec![],
@@ -1345,7 +1345,7 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec![],
                     role_candidates: vec![],
@@ -1429,7 +1429,7 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec![],
                     role_candidates: vec![],
@@ -1522,7 +1522,7 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec![],
                     role_candidates: vec![],
@@ -1621,7 +1621,7 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec![],
                     role_candidates: vec![],
@@ -1912,7 +1912,7 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec![],
                     role_candidates: vec![],
@@ -2086,7 +2086,7 @@ mod tests {
             ApiJson(RunSearchRequest {
                 profile_id: Some("profile-1".to_string()),
                 search_profile: SearchProfileRequest {
-                    primary_role: "backend_developer".to_string(),
+                    primary_role: "backend_engineer".to_string(),
                     primary_role_confidence: Some(95),
                     target_roles: vec![],
                     role_candidates: vec![],
@@ -2159,7 +2159,7 @@ mod tests {
         let request = || RunSearchRequest {
             profile_id: Some("profile-1".to_string()),
             search_profile: SearchProfileRequest {
-                primary_role: "backend_developer".to_string(),
+                primary_role: "backend_engineer".to_string(),
                 primary_role_confidence: Some(95),
                 target_roles: vec![],
                 role_candidates: vec![],

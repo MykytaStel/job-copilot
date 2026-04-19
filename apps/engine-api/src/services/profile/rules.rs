@@ -34,17 +34,15 @@ pub(crate) const KNOWN_SKILLS: &[&str] = &[
     "design system",
     "linux",
     "figma",
-    "seo",
-    "google ads",
-    "salesforce",
     "jira",
     "excel",
     "power bi",
     "testing",
     "qa",
-    "customer support",
-    "recruiting",
-    "sourcing",
+    "machine learning",
+    "pytorch",
+    "tensorflow",
+    "scikit-learn",
 ];
 
 pub(crate) const KNOWN_KEYWORDS: &[&str] = &[
@@ -64,10 +62,8 @@ pub(crate) const KNOWN_KEYWORDS: &[&str] = &[
     "design",
     "product",
     "analytics",
-    "marketing",
-    "sales",
-    "support",
-    "hiring",
+    "data",
+    "machine learning",
     "remote",
 ];
 
@@ -90,12 +86,14 @@ pub(crate) struct SignalGroup {
 
 pub(crate) const ROLE_RULES: &[RoleRule] = &[
     RoleRule {
-        role: RoleId::ReactNativeDeveloper,
+        role: RoleId::MobileEngineer,
         signals: &[
             ("react native", 10),
             ("mobile", 4),
             ("ios", 3),
             ("android", 3),
+            ("swift", 3),
+            ("kotlin", 3),
             ("typescript", 2),
             ("react", 2),
         ],
@@ -109,7 +107,7 @@ pub(crate) const ROLE_RULES: &[RoleRule] = &[
         }],
     },
     RoleRule {
-        role: RoleId::FrontendDeveloper,
+        role: RoleId::FrontendEngineer,
         signals: &[
             ("frontend", 5),
             ("react", 3),
@@ -123,7 +121,7 @@ pub(crate) const ROLE_RULES: &[RoleRule] = &[
         combination_bonuses: &[],
     },
     RoleRule {
-        role: RoleId::BackendDeveloper,
+        role: RoleId::BackendEngineer,
         signals: &[
             ("backend", 5),
             ("api", 3),
@@ -141,7 +139,7 @@ pub(crate) const ROLE_RULES: &[RoleRule] = &[
         combination_bonuses: &[],
     },
     RoleRule {
-        role: RoleId::FullstackDeveloper,
+        role: RoleId::FullstackEngineer,
         signals: &[
             ("fullstack", 6),
             ("full-stack", 6),
@@ -169,6 +167,79 @@ pub(crate) const ROLE_RULES: &[RoleRule] = &[
         }],
     },
     RoleRule {
+        role: RoleId::DevopsEngineer,
+        signals: &[
+            ("devops", 6),
+            ("docker", 3),
+            ("kubernetes", 3),
+            ("aws", 3),
+            ("terraform", 3),
+            ("helm", 2),
+            ("platform", 2),
+            ("infrastructure", 2),
+            ("linux", 2),
+            ("ci/cd", 3),
+        ],
+        combination_bonuses: &[],
+    },
+    RoleRule {
+        role: RoleId::DataEngineer,
+        signals: &[
+            ("data engineer", 8),
+            ("etl", 5),
+            ("data pipeline", 5),
+            ("analytics", 4),
+            ("sql", 3),
+            ("spark", 4),
+            ("airflow", 4),
+            ("data warehouse", 4),
+            ("excel", 2),
+            ("power bi", 3),
+        ],
+        combination_bonuses: &[CombinationBonusRule {
+            label: "bonus: etl/pipeline + sql/spark",
+            required_groups: &[
+                SignalGroup {
+                    signals: &["etl", "data pipeline", "airflow"],
+                    min_matches: 1,
+                },
+                SignalGroup {
+                    signals: &["sql", "spark", "data warehouse"],
+                    min_matches: 1,
+                },
+            ],
+            bonus: 5,
+        }],
+    },
+    RoleRule {
+        role: RoleId::MlEngineer,
+        signals: &[
+            ("machine learning", 8),
+            ("ml", 5),
+            ("deep learning", 6),
+            ("pytorch", 5),
+            ("tensorflow", 5),
+            ("scikit-learn", 4),
+            ("model training", 4),
+            ("python", 2),
+            ("data scientist", 5),
+        ],
+        combination_bonuses: &[CombinationBonusRule {
+            label: "bonus: ml framework + python",
+            required_groups: &[
+                SignalGroup {
+                    signals: &["pytorch", "tensorflow", "scikit-learn"],
+                    min_matches: 1,
+                },
+                SignalGroup {
+                    signals: &["python"],
+                    min_matches: 1,
+                },
+            ],
+            bonus: 5,
+        }],
+    },
+    RoleRule {
         role: RoleId::QaEngineer,
         signals: &[
             ("qa", 5),
@@ -193,42 +264,16 @@ pub(crate) const ROLE_RULES: &[RoleRule] = &[
         }],
     },
     RoleRule {
-        role: RoleId::DevopsEngineer,
+        role: RoleId::ProductDesigner,
         signals: &[
-            ("devops", 6),
-            ("docker", 3),
-            ("kubernetes", 3),
-            ("aws", 3),
-            ("terraform", 3),
-            ("helm", 2),
-            ("platform", 2),
-            ("infrastructure", 2),
-            ("linux", 2),
-            ("ci/cd", 3),
-        ],
-        combination_bonuses: &[],
-    },
-    RoleRule {
-        role: RoleId::DataAnalyst,
-        signals: &[
-            ("data analyst", 6),
-            ("analytics", 4),
-            ("sql", 3),
-            ("excel", 2),
-            ("power bi", 3),
-            ("dashboard", 2),
-        ],
-        combination_bonuses: &[],
-    },
-    RoleRule {
-        role: RoleId::UiUxDesigner,
-        signals: &[
+            ("product designer", 8),
             ("ui", 4),
             ("ux", 4),
             ("figma", 4),
             ("design system", 3),
             ("prototype", 2),
             ("wireframe", 2),
+            ("user research", 3),
         ],
         combination_bonuses: &[],
     },
@@ -270,57 +315,43 @@ pub(crate) const ROLE_RULES: &[RoleRule] = &[
         combination_bonuses: &[],
     },
     RoleRule {
-        role: RoleId::MarketingSpecialist,
+        role: RoleId::TechLead,
         signals: &[
-            ("marketing", 5),
-            ("seo", 4),
-            ("google ads", 4),
-            ("campaign", 3),
-            ("content", 2),
-            ("social media", 2),
+            ("tech lead", 8),
+            ("technical lead", 8),
+            ("lead engineer", 7),
+            ("lead developer", 7),
+            ("architecture", 4),
+            ("mentoring", 3),
+            ("code review", 3),
+            ("technical decisions", 3),
         ],
         combination_bonuses: &[CombinationBonusRule {
-            label: "bonus: seo/google ads/campaign/analytics mix",
-            required_groups: &[SignalGroup {
-                signals: &["seo", "google ads", "campaign", "analytics"],
-                min_matches: 2,
-            }],
+            label: "bonus: lead title + architecture/mentoring",
+            required_groups: &[
+                SignalGroup {
+                    signals: &["tech lead", "technical lead", "lead engineer", "lead developer"],
+                    min_matches: 1,
+                },
+                SignalGroup {
+                    signals: &["architecture", "mentoring", "technical decisions"],
+                    min_matches: 1,
+                },
+            ],
             bonus: 5,
         }],
     },
     RoleRule {
-        role: RoleId::SalesManager,
+        role: RoleId::EngineeringManager,
         signals: &[
-            ("sales", 5),
-            ("lead generation", 4),
-            ("crm", 3),
-            ("negotiation", 3),
-            ("pipeline", 2),
-            ("salesforce", 3),
-        ],
-        combination_bonuses: &[],
-    },
-    RoleRule {
-        role: RoleId::CustomerSupportSpecialist,
-        signals: &[
-            ("customer support", 6),
-            ("support", 4),
-            ("client support", 4),
-            ("ticket", 2),
-            ("help desk", 3),
-            ("communication", 1),
-        ],
-        combination_bonuses: &[],
-    },
-    RoleRule {
-        role: RoleId::Recruiter,
-        signals: &[
-            ("recruiter", 6),
-            ("recruiting", 5),
-            ("sourcing", 4),
-            ("candidate screening", 3),
-            ("talent acquisition", 5),
-            ("interviewing", 2),
+            ("engineering manager", 9),
+            ("head of engineering", 8),
+            ("vp of engineering", 8),
+            ("people management", 5),
+            ("team lead", 4),
+            ("hiring", 3),
+            ("performance review", 3),
+            ("engineering org", 3),
         ],
         combination_bonuses: &[],
     },

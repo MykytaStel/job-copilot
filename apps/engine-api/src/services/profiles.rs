@@ -273,7 +273,7 @@ mod tests {
                 &created.id,
                 ProfileAnalysis {
                     summary: "Experienced frontend engineer".to_string(),
-                    primary_role: RoleId::FrontendDeveloper,
+                    primary_role: RoleId::FrontendEngineer,
                     seniority: "senior".to_string(),
                     skills: vec!["react".to_string()],
                     keywords: vec!["frontend".to_string()],

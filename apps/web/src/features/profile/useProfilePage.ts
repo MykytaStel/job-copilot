@@ -88,6 +88,8 @@ export function useProfilePage() {
       }),
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.profile.root(), updated);
+      void queryClient.invalidateQueries({ queryKey: ['ml', 'rerank', updated.id] });
+      void queryClient.invalidateQueries({ queryKey: ['analytics'] });
       toast.success('Profile saved');
     },
     onError: (error: unknown) =>
@@ -108,6 +110,11 @@ export function useProfilePage() {
               }
             : current,
       );
+      const profileId = (queryClient.getQueryData(queryKeys.profile.root()) as { id?: string } | undefined)?.id;
+      if (profileId) {
+        void queryClient.invalidateQueries({ queryKey: ['ml', 'rerank', profileId] });
+        void queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      }
       toast.success('Profile analyzed');
     },
     onError: (error: unknown) =>

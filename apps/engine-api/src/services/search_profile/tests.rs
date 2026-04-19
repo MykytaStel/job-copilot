@@ -14,7 +14,7 @@ fn builds_search_profile_from_profile_and_preferences() {
     let preferences = SearchPreferences {
         target_regions: vec![TargetRegion::Ua, TargetRegion::EuRemote],
         work_modes: vec![WorkMode::Remote, WorkMode::Hybrid],
-        preferred_roles: vec![RoleId::FrontendDeveloper],
+        preferred_roles: vec![RoleId::FrontendEngineer],
         allowed_sources: vec![SourceId::Djinni, SourceId::WorkUa],
         include_keywords: vec!["product company".to_string()],
         exclude_keywords: vec!["gambling".to_string()],
@@ -22,16 +22,12 @@ fn builds_search_profile_from_profile_and_preferences() {
 
     let search_profile = service.build(&analyzed_profile, &preferences);
 
-    assert_eq!(search_profile.primary_role, RoleId::ReactNativeDeveloper);
+    assert_eq!(search_profile.primary_role, RoleId::MobileEngineer);
     assert_eq!(search_profile.primary_role_confidence, Some(100));
     assert_eq!(search_profile.seniority, "senior");
     assert_eq!(
         search_profile.target_roles,
-        vec![
-            RoleId::ReactNativeDeveloper,
-            RoleId::MobileDeveloper,
-            RoleId::FrontendDeveloper,
-        ]
+        vec![RoleId::MobileEngineer, RoleId::FrontendEngineer,]
     );
     assert_eq!(
         search_profile.target_regions,
@@ -47,16 +43,10 @@ fn builds_search_profile_from_profile_and_preferences() {
     );
     assert_eq!(
         search_profile.role_candidates,
-        vec![
-            SearchRoleCandidate {
-                role: RoleId::ReactNativeDeveloper,
-                confidence: 100,
-            },
-            SearchRoleCandidate {
-                role: RoleId::MobileDeveloper,
-                confidence: 72,
-            },
-        ]
+        vec![SearchRoleCandidate {
+            role: RoleId::MobileEngineer,
+            confidence: 100,
+        },]
     );
     assert_eq!(
         search_profile.profile_skills,
@@ -66,10 +56,9 @@ fn builds_search_profile_from_profile_and_preferences() {
     assert_eq!(
         search_profile.search_terms,
         vec![
-            "react native developer",
-            "senior react native developer",
             "mobile engineer",
-            "frontend developer",
+            "senior mobile engineer",
+            "frontend engineer",
             "product company",
         ]
     );
@@ -81,11 +70,7 @@ fn merges_preferred_roles_without_duplicates() {
     let service = SearchProfileService::new();
     let analyzed_profile = sample_profile();
     let preferences = SearchPreferences {
-        preferred_roles: vec![
-            RoleId::MobileDeveloper,
-            RoleId::ReactNativeDeveloper,
-            RoleId::FrontendDeveloper,
-        ],
+        preferred_roles: vec![RoleId::MobileEngineer, RoleId::FrontendEngineer],
         ..SearchPreferences::default()
     };
 
@@ -93,20 +78,14 @@ fn merges_preferred_roles_without_duplicates() {
 
     assert_eq!(
         search_profile.target_roles,
-        vec![
-            RoleId::ReactNativeDeveloper,
-            RoleId::MobileDeveloper,
-            RoleId::FrontendDeveloper,
-        ]
+        vec![RoleId::MobileEngineer, RoleId::FrontendEngineer,]
     );
     assert_eq!(
         search_profile.search_terms,
         vec![
-            "react native developer",
-            "senior react native developer",
             "mobile engineer",
-            "mobile developer",
-            "frontend developer",
+            "senior mobile engineer",
+            "frontend engineer",
         ]
     );
 }
@@ -134,9 +113,8 @@ fn merges_include_and_exclude_keywords_correctly() {
     assert_eq!(
         search_profile.search_terms,
         vec![
-            "react native developer",
-            "senior react native developer",
             "mobile engineer",
+            "senior mobile engineer",
             "product company",
             "remote-first",
         ]
@@ -160,15 +138,11 @@ fn works_when_preferences_are_mostly_empty() {
     assert_eq!(search_profile.primary_role_confidence, Some(100));
     assert_eq!(
         search_profile.target_roles,
-        vec![RoleId::ReactNativeDeveloper, RoleId::MobileDeveloper]
+        vec![RoleId::MobileEngineer]
     );
     assert_eq!(
         search_profile.search_terms,
-        vec![
-            "react native developer",
-            "senior react native developer",
-            "mobile engineer",
-        ]
+        vec!["mobile engineer", "senior mobile engineer",]
     );
     assert!(search_profile.exclude_terms.is_empty());
 }
@@ -177,38 +151,29 @@ fn works_when_preferences_are_mostly_empty() {
 fn preserves_analyzed_profile_primary_role() {
     let service = SearchProfileService::new();
     let mut analyzed_profile = sample_profile();
-    analyzed_profile.primary_role = RoleId::FrontendDeveloper;
+    analyzed_profile.primary_role = RoleId::FrontendEngineer;
 
     let search_profile = service.build(&analyzed_profile, &SearchPreferences::default());
 
-    assert_eq!(search_profile.primary_role, RoleId::FrontendDeveloper);
+    assert_eq!(search_profile.primary_role, RoleId::FrontendEngineer);
 }
 
 fn sample_profile() -> CandidateProfile {
     CandidateProfile {
         summary: "Senior mobile candidate".to_string(),
-        primary_role: RoleId::ReactNativeDeveloper,
+        primary_role: RoleId::MobileEngineer,
         seniority: "senior".to_string(),
         skills: vec!["react native".to_string(), "typescript".to_string()],
         keywords: vec!["mobile".to_string()],
-        role_candidates: vec![
-            RoleScore {
-                role: RoleId::ReactNativeDeveloper,
-                score: 30,
-                confidence: 100,
-                matched_signals: vec!["react native".to_string()],
-            },
-            RoleScore {
-                role: RoleId::MobileDeveloper,
-                score: 18,
-                confidence: 72,
-                matched_signals: vec!["mobile".to_string()],
-            },
-        ],
+        role_candidates: vec![RoleScore {
+            role: RoleId::MobileEngineer,
+            score: 30,
+            confidence: 100,
+            matched_signals: vec!["react native".to_string()],
+        }],
         suggested_search_terms: vec![
-            "react native developer".to_string(),
-            "senior react native developer".to_string(),
             "mobile engineer".to_string(),
+            "senior mobile engineer".to_string(),
         ],
     }
 }

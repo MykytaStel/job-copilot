@@ -219,7 +219,7 @@ mod tests {
         let payload: Value =
             serde_json::from_slice(&body).expect("response body should be valid json");
 
-        assert_eq!(payload["primary_role"], json!("react_native_developer"));
+        assert_eq!(payload["primary_role"], json!("mobile_engineer"));
     }
 
     #[tokio::test]
@@ -247,7 +247,7 @@ mod tests {
             Path("profile_test_001".to_string()),
             ApiJson(BuildStoredSearchProfileRequest {
                 preferences: crate::api::dto::search_profile::SearchPreferencesRequest {
-                    preferred_roles: vec!["frontend_developer".to_string()],
+                    preferred_roles: vec!["frontend_engineer".to_string()],
                     ..Default::default()
                 },
             }),
@@ -266,7 +266,7 @@ mod tests {
             payload["search_profile"]["target_roles"]
                 .as_array()
                 .expect("target_roles should be an array")
-                .contains(&json!("frontend_developer"))
+                .contains(&json!("frontend_engineer"))
         );
     }
 
