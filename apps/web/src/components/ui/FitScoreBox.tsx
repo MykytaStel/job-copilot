@@ -20,10 +20,30 @@ function getFitLabel(band: FitBand): string {
 }
 
 const bandClasses: Record<FitBand, { bg: string; text: string; ring: string; bar: string }> = {
-  excellent: { bg: 'bg-fit-excellent/15', text: 'text-fit-excellent', ring: 'ring-fit-excellent/30', bar: 'bg-fit-excellent' },
-  good:      { bg: 'bg-fit-good/15',      text: 'text-fit-good',      ring: 'ring-fit-good/30',      bar: 'bg-fit-good' },
-  fair:      { bg: 'bg-fit-fair/15',      text: 'text-fit-fair',      ring: 'ring-fit-fair/30',      bar: 'bg-fit-fair' },
-  poor:      { bg: 'bg-fit-poor/15',      text: 'text-fit-poor',      ring: 'ring-fit-poor/30',      bar: 'bg-fit-poor' },
+  excellent: {
+    bg: 'bg-fit-excellent/15',
+    text: 'text-fit-excellent',
+    ring: 'ring-fit-excellent/30',
+    bar: 'bg-fit-excellent',
+  },
+  good: {
+    bg: 'bg-fit-good/15',
+    text: 'text-fit-good',
+    ring: 'ring-fit-good/30',
+    bar: 'bg-fit-good',
+  },
+  fair: {
+    bg: 'bg-fit-fair/15',
+    text: 'text-fit-fair',
+    ring: 'ring-fit-fair/30',
+    bar: 'bg-fit-fair',
+  },
+  poor: {
+    bg: 'bg-fit-poor/15',
+    text: 'text-fit-poor',
+    ring: 'ring-fit-poor/30',
+    bar: 'bg-fit-poor',
+  },
 };
 
 export interface FitScoreBoxProps {
@@ -46,7 +66,12 @@ const labelSizeClasses = {
 };
 
 /** Badge-style score box (square with rounded corners). */
-export function FitScoreBox({ score, size = 'md', showLabel = false, className }: FitScoreBoxProps) {
+export function FitScoreBox({
+  score,
+  size = 'md',
+  showLabel = false,
+  className,
+}: FitScoreBoxProps) {
   const band = getFitBand(score);
   const c = bandClasses[band];
 
@@ -55,7 +80,9 @@ export function FitScoreBox({ score, size = 'md', showLabel = false, className }
       <div
         className={cn(
           'flex items-center justify-center rounded-xl ring-1',
-          c.bg, c.text, c.ring,
+          c.bg,
+          c.text,
+          c.ring,
           sizeClasses[size],
         )}
       >
@@ -71,7 +98,12 @@ export function FitScoreBox({ score, size = 'md', showLabel = false, className }
 }
 
 /** Circular SVG progress variant. */
-export function FitScoreCircular({ score, size = 'md', showLabel = false, className }: FitScoreBoxProps) {
+export function FitScoreCircular({
+  score,
+  size = 'md',
+  showLabel = false,
+  className,
+}: FitScoreBoxProps) {
   const band = getFitBand(score);
   const c = bandClasses[band];
 
@@ -104,16 +136,17 @@ export function FitScoreCircular({ score, size = 'md', showLabel = false, classN
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={circumference - progress}
-            className={cn('transition-all duration-500 ease-out', c.text.replace('text-', 'stroke-'))}
+            className={cn(
+              'transition-all duration-500 ease-out',
+              c.text.replace('text-', 'stroke-'),
+            )}
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
           <span className={cn('font-bold', c.text, textSizeClasses[size])}>{score}</span>
         </div>
       </div>
-      {showLabel && (
-        <span className={cn('font-medium text-xs', c.text)}>{getFitLabel(band)}</span>
-      )}
+      {showLabel && <span className={cn('font-medium text-xs', c.text)}>{getFitLabel(band)}</span>}
     </div>
   );
 }

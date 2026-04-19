@@ -4,12 +4,7 @@ import type {
   ResumeUploadInput,
   ResumeVersion,
 } from '@job-copilot/shared';
-import {
-  json,
-  readStoredProfileId,
-  request,
-  writeStoredProfileId,
-} from './client';
+import { json, readStoredProfileId, request, writeStoredProfileId } from './client';
 import type {
   EngineAnalyzeProfile,
   EngineBuildSearchProfileResponse,
@@ -35,14 +30,7 @@ export type RoleCatalogItem = {
   isFallback: boolean;
 };
 
-export type SearchTargetRegion =
-  | 'ua'
-  | 'eu'
-  | 'eu_remote'
-  | 'poland'
-  | 'germany'
-  | 'uk'
-  | 'us';
+export type SearchTargetRegion = 'ua' | 'eu' | 'eu_remote' | 'poland' | 'germany' | 'uk' | 'us';
 
 export type SearchWorkMode = 'remote' | 'hybrid' | 'onsite';
 
@@ -98,10 +86,7 @@ export async function analyzeStoredProfile(): Promise<EngineAnalyzeProfile> {
     throw new Error('Create a profile first');
   }
 
-  return request<EngineAnalyzeProfile>(
-    `/api/v1/profiles/${profileId}/analyze`,
-    json('POST', {}),
-  );
+  return request<EngineAnalyzeProfile>(`/api/v1/profiles/${profileId}/analyze`, json('POST', {}));
 }
 
 export async function getProfile(): Promise<CandidateProfile | undefined> {
@@ -130,10 +115,7 @@ export async function saveProfile(
   };
 
   const profile = profileId
-    ? await request<EngineProfile>(
-        `/api/v1/profiles/${profileId}`,
-        json('PATCH', body),
-      )
+    ? await request<EngineProfile>(`/api/v1/profiles/${profileId}`, json('PATCH', body))
     : await request<EngineProfile>('/api/v1/profiles', json('POST', body));
 
   writeStoredProfileId(profile.id);
@@ -142,10 +124,13 @@ export async function saveProfile(
   // has an active resume to work with (resumes and profiles are separate records).
   const [analyzed] = await Promise.all([
     request<EngineAnalyzeProfile>(`/api/v1/profiles/${profile.id}/analyze`, json('POST', {})),
-    request<EngineResume>('/api/v1/resume/upload', json('POST', {
-      filename: 'profile.md',
-      raw_text: payload.rawText,
-    })).catch(() => null),
+    request<EngineResume>(
+      '/api/v1/resume/upload',
+      json('POST', {
+        filename: 'profile.md',
+        raw_text: payload.rawText,
+      }),
+    ).catch(() => null),
   ]);
 
   return {
@@ -165,9 +150,7 @@ export async function getActiveResume(): Promise<ResumeVersion> {
   return mapResume(resume);
 }
 
-export async function uploadResume(
-  payload: ResumeUploadInput,
-): Promise<ResumeVersion> {
+export async function uploadResume(payload: ResumeUploadInput): Promise<ResumeVersion> {
   const resume = await request<EngineResume>(
     '/api/v1/resume/upload',
     json('POST', {
@@ -179,10 +162,7 @@ export async function uploadResume(
 }
 
 export async function activateResume(id: string): Promise<ResumeVersion> {
-  const resume = await request<EngineResume>(
-    `/api/v1/resumes/${id}/activate`,
-    json('POST', {}),
-  );
+  const resume = await request<EngineResume>(`/api/v1/resumes/${id}/activate`, json('POST', {}));
   return mapResume(resume);
 }
 
@@ -235,8 +215,7 @@ export async function buildSearchProfile(
     },
     searchProfile: {
       primaryRole: response.search_profile.primary_role,
-      primaryRoleConfidence:
-        response.search_profile.primary_role_confidence ?? undefined,
+      primaryRoleConfidence: response.search_profile.primary_role_confidence ?? undefined,
       targetRoles: response.search_profile.target_roles,
       roleCandidates: response.search_profile.role_candidates ?? [],
       seniority: normalizeMissingString(response.search_profile.seniority) ?? '',

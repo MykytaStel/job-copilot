@@ -5,10 +5,7 @@ import type {
   EngineUnreadNotificationsCountResponse,
 } from './engine-types';
 
-export type AppNotificationType =
-  | 'new_jobs_found'
-  | 'job_reactivated'
-  | 'application_due_soon';
+export type AppNotificationType = 'new_jobs_found' | 'job_reactivated' | 'application_due_soon';
 
 export type AppNotification = {
   id: string;
@@ -68,9 +65,7 @@ export async function getUnreadCount(profileId?: string): Promise<number> {
   }
 
   const response = await request<EngineUnreadNotificationsCountResponse>(
-    `/api/v1/notifications/unread-count?profile_id=${encodeURIComponent(
-      resolvedId,
-    )}`,
+    `/api/v1/notifications/unread-count?profile_id=${encodeURIComponent(resolvedId)}`,
   );
 
   return response.unread_count;

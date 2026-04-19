@@ -9,10 +9,7 @@ import {
   extractPdfTextFromItems,
 } from '../src/features/profile/profile.utils';
 
-const FIXTURES_DIR = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  './fixtures',
-);
+const FIXTURES_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), './fixtures');
 
 describe('extractPdfTextFromItems', () => {
   it('keeps tight fragments together and preserves line breaks', () => {

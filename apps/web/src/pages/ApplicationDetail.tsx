@@ -17,6 +17,18 @@ import { useApplicationDetail } from '../features/application-detail/useApplicat
 
 export default function ApplicationDetail() {
   const { id } = useParams<{ id: string }>();
+
+  if (!id)
+    return (
+      <Page>
+        <EmptyState message="Application not found" />
+      </Page>
+    );
+
+  return <ApplicationDetailContent key={id} id={id} />;
+}
+
+function ApplicationDetailContent({ id }: { id: string }) {
   const {
     detailQuery,
     contactsQuery,
@@ -30,16 +42,18 @@ export default function ApplicationDetail() {
     offerForm,
   } = useApplicationDetail(id);
 
-  if (!id) return <Page><EmptyState message="Application not found" /></Page>;
-  if (detailQuery.isLoading) return <Page><EmptyState message="Loading..." /></Page>;
+  if (detailQuery.isLoading)
+    return (
+      <Page>
+        <EmptyState message="Loading..." />
+      </Page>
+    );
   if (detailQuery.error || !detail) {
     return (
       <Page>
         <EmptyState
           message={
-            detailQuery.error instanceof Error
-              ? detailQuery.error.message
-              : 'Application not found'
+            detailQuery.error instanceof Error ? detailQuery.error.message : 'Application not found'
           }
         />
       </Page>

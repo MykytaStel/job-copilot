@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { analyzeFit, rerankJobs, runSearch } from '../src/api';
 
-const ENGINE_API_URL =
-  import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
+const ENGINE_API_URL = import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
 
 function jsonResponse(body: unknown) {
   return Promise.resolve({
@@ -82,42 +81,43 @@ describe('canonical matching api', () => {
   });
 
   it('rerankJobs uses engine-api bulk match endpoint and maps diagnostics', async () => {
-    vi.mocked(fetch).mockImplementationOnce(() =>
-      jsonResponse({
-        profile_id: 'profile-1',
-        results: [
-          {
-            job_id: 'job-b',
-            score: 61,
-            matched_roles: ['frontend_developer'],
-            matched_skills: ['react'],
-            matched_keywords: ['typescript'],
-            missing_signals: ['design system'],
-            source_match: true,
-            work_mode_match: true,
-            region_match: true,
-            description_quality: 'mixed',
-            positive_reasons: ['Matched 1 target role'],
-            negative_reasons: ['Missing design system'],
-            reasons: ['Matched 1 target role', 'Missing design system'],
-          },
-          {
-            job_id: 'job-a',
-            score: 92,
-            matched_roles: ['frontend_developer'],
-            matched_skills: ['react', 'typescript'],
-            matched_keywords: ['design system', 'react'],
-            missing_signals: [],
-            source_match: true,
-            work_mode_match: true,
-            region_match: true,
-            description_quality: 'strong',
-            positive_reasons: ['Matched 2 strong frontend skills'],
-            negative_reasons: [],
-            reasons: ['Matched 2 strong frontend skills'],
-          },
-        ],
-      }) as ReturnType<typeof fetch>,
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        jsonResponse({
+          profile_id: 'profile-1',
+          results: [
+            {
+              job_id: 'job-b',
+              score: 61,
+              matched_roles: ['frontend_developer'],
+              matched_skills: ['react'],
+              matched_keywords: ['typescript'],
+              missing_signals: ['design system'],
+              source_match: true,
+              work_mode_match: true,
+              region_match: true,
+              description_quality: 'mixed',
+              positive_reasons: ['Matched 1 target role'],
+              negative_reasons: ['Missing design system'],
+              reasons: ['Matched 1 target role', 'Missing design system'],
+            },
+            {
+              job_id: 'job-a',
+              score: 92,
+              matched_roles: ['frontend_developer'],
+              matched_skills: ['react', 'typescript'],
+              matched_keywords: ['design system', 'react'],
+              missing_signals: [],
+              source_match: true,
+              work_mode_match: true,
+              region_match: true,
+              description_quality: 'strong',
+              positive_reasons: ['Matched 2 strong frontend skills'],
+              negative_reasons: [],
+              reasons: ['Matched 2 strong frontend skills'],
+            },
+          ],
+        }) as ReturnType<typeof fetch>,
     );
 
     const result = await rerankJobs('profile-1', ['job-b', 'job-a', 'job-b']);
@@ -139,22 +139,23 @@ describe('canonical matching api', () => {
   });
 
   it('analyzeFit uses engine-api job match endpoint and prefers positive reasons as evidence', async () => {
-    vi.mocked(fetch).mockImplementationOnce(() =>
-      jsonResponse({
-        job_id: 'job-1',
-        score: 88,
-        matched_roles: ['frontend_developer'],
-        matched_skills: ['react', 'typescript'],
-        matched_keywords: ['design system'],
-        missing_signals: ['storybook'],
-        source_match: true,
-        work_mode_match: true,
-        region_match: true,
-        description_quality: 'strong',
-        positive_reasons: ['Matched 2 target frontend skills'],
-        negative_reasons: ['Missing storybook'],
-        reasons: ['Matched 2 target frontend skills', 'Missing storybook'],
-      }) as ReturnType<typeof fetch>,
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        jsonResponse({
+          job_id: 'job-1',
+          score: 88,
+          matched_roles: ['frontend_developer'],
+          matched_skills: ['react', 'typescript'],
+          matched_keywords: ['design system'],
+          missing_signals: ['storybook'],
+          source_match: true,
+          work_mode_match: true,
+          region_match: true,
+          description_quality: 'strong',
+          positive_reasons: ['Matched 2 target frontend skills'],
+          negative_reasons: ['Missing storybook'],
+          reasons: ['Matched 2 target frontend skills', 'Missing storybook'],
+        }) as ReturnType<typeof fetch>,
     );
 
     const result = await analyzeFit('profile-1', 'job-1');
@@ -178,43 +179,44 @@ describe('canonical matching api', () => {
   });
 
   it('runSearch maps canonical telemetry and fit diagnostics', async () => {
-    vi.mocked(fetch).mockImplementationOnce(() =>
-      jsonResponse({
-        results: [
-          {
-            job: buildEngineJob(),
-            fit: {
-              job_id: 'job-1',
-              score: 84,
-              matched_roles: ['frontend_developer'],
-              matched_skills: ['react'],
-              matched_keywords: ['typescript'],
-              missing_signals: ['storybook'],
-              source_match: true,
-              work_mode_match: true,
-              region_match: true,
-              description_quality: 'strong',
-              positive_reasons: ['Matched 1 target role'],
-              negative_reasons: ['Missing storybook'],
-              reasons: ['Matched 1 target role', 'Missing storybook'],
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        jsonResponse({
+          results: [
+            {
+              job: buildEngineJob(),
+              fit: {
+                job_id: 'job-1',
+                score: 84,
+                matched_roles: ['frontend_developer'],
+                matched_skills: ['react'],
+                matched_keywords: ['typescript'],
+                missing_signals: ['storybook'],
+                source_match: true,
+                work_mode_match: true,
+                region_match: true,
+                description_quality: 'strong',
+                positive_reasons: ['Matched 1 target role'],
+                negative_reasons: ['Missing storybook'],
+                reasons: ['Matched 1 target role', 'Missing storybook'],
+              },
             },
+          ],
+          meta: {
+            total_candidates: 14,
+            filtered_out_by_source: 2,
+            filtered_out_hidden: 1,
+            filtered_out_company_blacklist: 1,
+            scored_jobs: 10,
+            returned_jobs: 1,
+            low_evidence_jobs: 3,
+            weak_description_jobs: 2,
+            role_mismatch_jobs: 1,
+            seniority_mismatch_jobs: 1,
+            source_mismatch_jobs: 2,
+            top_missing_signals: ['storybook', 'design system'],
           },
-        ],
-        meta: {
-          total_candidates: 14,
-          filtered_out_by_source: 2,
-          filtered_out_hidden: 1,
-          filtered_out_company_blacklist: 1,
-          scored_jobs: 10,
-          returned_jobs: 1,
-          low_evidence_jobs: 3,
-          weak_description_jobs: 2,
-          role_mismatch_jobs: 1,
-          seniority_mismatch_jobs: 1,
-          source_mismatch_jobs: 2,
-          top_missing_signals: ['storybook', 'design system'],
-        },
-      }) as ReturnType<typeof fetch>,
+        }) as ReturnType<typeof fetch>,
     );
 
     const result = await runSearch({

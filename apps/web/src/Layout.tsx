@@ -28,9 +28,7 @@ export default function Layout() {
               <NavLink
                 to={link.to}
                 end={link.to === '/'}
-                className={({ isActive }) =>
-                  isActive ? 'navLink active' : 'navLink'
-                }
+                className={({ isActive }) => (isActive ? 'navLink active' : 'navLink')}
                 style={{ display: 'flex', alignItems: 'center', gap: 8 }}
               >
                 <link.icon size={16} style={{ flexShrink: 0 }} />

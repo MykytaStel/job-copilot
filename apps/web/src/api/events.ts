@@ -27,10 +27,7 @@ type UserEventLogInput = {
   payloadJson?: Record<string, unknown>;
 };
 
-export async function logUserEvent(
-  profileId: string,
-  input: UserEventLogInput,
-): Promise<void> {
+export async function logUserEvent(profileId: string, input: UserEventLogInput): Promise<void> {
   await request<void>(
     `/api/v1/profiles/${profileId}/events`,
     json('POST', {

@@ -49,7 +49,10 @@ export function AIInsightPanel({
             </div>
             {title}
           </CardTitle>
-          <Badge variant="muted" className="rounded-full px-2 py-1 text-[10px] uppercase tracking-wide">
+          <Badge
+            variant="muted"
+            className="rounded-full px-2 py-1 text-[10px] uppercase tracking-wide"
+          >
             {insights.length} items
           </Badge>
         </div>
@@ -73,10 +76,16 @@ export function AIInsightPanel({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="m-0 text-sm font-medium text-card-foreground">{insight.title}</p>
-                <p className="m-0 mt-1 text-xs leading-6 text-muted-foreground">{insight.description}</p>
+                <p className="m-0 mt-1 text-xs leading-6 text-muted-foreground">
+                  {insight.description}
+                </p>
                 {insight.action && (
                   <Link to={insight.action.href} className="mt-2 inline-block no-underline">
-                    <Button variant="ghost" size="sm" className="px-0 text-xs text-primary hover:text-primary">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="px-0 text-xs text-primary hover:text-primary"
+                    >
                       {insight.action.label}
                       <ChevronRight className="ml-1 h-3 w-3" />
                     </Button>

@@ -19,10 +19,7 @@ export type EngineSearchRoleCandidate = {
   confidence: number;
 };
 
-export type EngineSearchProfile = Omit<
-  SharedEngineSearchProfileResponse,
-  'role_candidates'
-> & {
+export type EngineSearchProfile = Omit<SharedEngineSearchProfileResponse, 'role_candidates'> & {
   primary_role_confidence?: number | null;
   role_candidates: EngineSearchRoleCandidate[];
   profile_skills?: string[] | null;

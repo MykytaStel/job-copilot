@@ -51,12 +51,8 @@ export async function linkContact(
   };
 }
 
-export const updateContact = (
-  _id: string,
-  _payload: Partial<ContactInput>,
-): Promise<Contact> => unsupported('Contacts');
+export const updateContact = (_id: string, _payload: Partial<ContactInput>): Promise<Contact> =>
+  unsupported('Contacts');
 export const deleteContact = (_id: string): Promise<void> => unsupported('Contacts');
-export const unlinkContact = (
-  _applicationId: string,
-  _linkId: string,
-): Promise<void> => unsupported('Application contacts');
+export const unlinkContact = (_applicationId: string, _linkId: string): Promise<void> =>
+  unsupported('Application contacts');

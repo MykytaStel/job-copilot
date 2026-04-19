@@ -308,75 +308,66 @@ export function buildWeeklyGuidancePayload(payload: {
     },
     behavior_summary: {
       search_run_count: payload.behaviorSummary.searchRunCount,
-      top_positive_sources: payload.behaviorSummary.topPositiveSources.map(
-        (signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        }),
-      ),
-      top_negative_sources: payload.behaviorSummary.topNegativeSources.map(
-        (signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        }),
-      ),
-      top_positive_role_families:
-        payload.behaviorSummary.topPositiveRoleFamilies.map((signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        })),
-      top_negative_role_families:
-        payload.behaviorSummary.topNegativeRoleFamilies.map((signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        })),
-      source_signal_counts: payload.behaviorSummary.sourceSignalCounts.map(
-        (signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        }),
-      ),
-      role_family_signal_counts:
-        payload.behaviorSummary.roleFamilySignalCounts.map((signal) => ({
-          key: signal.key,
-          save_count: signal.saveCount,
-          hide_count: signal.hideCount,
-          bad_fit_count: signal.badFitCount,
-          application_created_count: signal.applicationCreatedCount,
-          positive_count: signal.positiveCount,
-          negative_count: signal.negativeCount,
-          net_score: signal.netScore,
-        })),
+      top_positive_sources: payload.behaviorSummary.topPositiveSources.map((signal) => ({
+        key: signal.key,
+        save_count: signal.saveCount,
+        hide_count: signal.hideCount,
+        bad_fit_count: signal.badFitCount,
+        application_created_count: signal.applicationCreatedCount,
+        positive_count: signal.positiveCount,
+        negative_count: signal.negativeCount,
+        net_score: signal.netScore,
+      })),
+      top_negative_sources: payload.behaviorSummary.topNegativeSources.map((signal) => ({
+        key: signal.key,
+        save_count: signal.saveCount,
+        hide_count: signal.hideCount,
+        bad_fit_count: signal.badFitCount,
+        application_created_count: signal.applicationCreatedCount,
+        positive_count: signal.positiveCount,
+        negative_count: signal.negativeCount,
+        net_score: signal.netScore,
+      })),
+      top_positive_role_families: payload.behaviorSummary.topPositiveRoleFamilies.map((signal) => ({
+        key: signal.key,
+        save_count: signal.saveCount,
+        hide_count: signal.hideCount,
+        bad_fit_count: signal.badFitCount,
+        application_created_count: signal.applicationCreatedCount,
+        positive_count: signal.positiveCount,
+        negative_count: signal.negativeCount,
+        net_score: signal.netScore,
+      })),
+      top_negative_role_families: payload.behaviorSummary.topNegativeRoleFamilies.map((signal) => ({
+        key: signal.key,
+        save_count: signal.saveCount,
+        hide_count: signal.hideCount,
+        bad_fit_count: signal.badFitCount,
+        application_created_count: signal.applicationCreatedCount,
+        positive_count: signal.positiveCount,
+        negative_count: signal.negativeCount,
+        net_score: signal.netScore,
+      })),
+      source_signal_counts: payload.behaviorSummary.sourceSignalCounts.map((signal) => ({
+        key: signal.key,
+        save_count: signal.saveCount,
+        hide_count: signal.hideCount,
+        bad_fit_count: signal.badFitCount,
+        application_created_count: signal.applicationCreatedCount,
+        positive_count: signal.positiveCount,
+        negative_count: signal.negativeCount,
+        net_score: signal.netScore,
+      })),
+      role_family_signal_counts: payload.behaviorSummary.roleFamilySignalCounts.map((signal) => ({
+        key: signal.key,
+        save_count: signal.saveCount,
+        hide_count: signal.hideCount,
+        bad_fit_count: signal.badFitCount,
+        application_created_count: signal.applicationCreatedCount,
+        positive_count: signal.positiveCount,
+        negative_count: signal.negativeCount,
+        net_score: signal.netScore,
+      })),
     },
     funnel_summary: {
       impression_count: payload.funnelSummary.impressionCount,
@@ -385,27 +376,19 @@ export function buildWeeklyGuidancePayload(payload: {
       hide_count: payload.funnelSummary.hideCount,
       bad_fit_count: payload.funnelSummary.badFitCount,
       application_created_count: payload.funnelSummary.applicationCreatedCount,
-      fit_explanation_requested_count:
-        payload.funnelSummary.fitExplanationRequestedCount,
-      application_coach_requested_count:
-        payload.funnelSummary.applicationCoachRequestedCount,
-      cover_letter_draft_requested_count:
-        payload.funnelSummary.coverLetterDraftRequestedCount,
-      interview_prep_requested_count:
-        payload.funnelSummary.interviewPrepRequestedCount,
+      fit_explanation_requested_count: payload.funnelSummary.fitExplanationRequestedCount,
+      application_coach_requested_count: payload.funnelSummary.applicationCoachRequestedCount,
+      cover_letter_draft_requested_count: payload.funnelSummary.coverLetterDraftRequestedCount,
+      interview_prep_requested_count: payload.funnelSummary.interviewPrepRequestedCount,
       conversion_rates: {
-        open_rate_from_impressions:
-          payload.funnelSummary.conversionRates.openRateFromImpressions,
+        open_rate_from_impressions: payload.funnelSummary.conversionRates.openRateFromImpressions,
         save_rate_from_opens: payload.funnelSummary.conversionRates.saveRateFromOpens,
-        application_rate_from_saves:
-          payload.funnelSummary.conversionRates.applicationRateFromSaves,
+        application_rate_from_saves: payload.funnelSummary.conversionRates.applicationRateFromSaves,
       },
-      impressions_by_source: payload.funnelSummary.impressionsBySource.map(
-        (entry) => ({
-          source: entry.source,
-          count: entry.count,
-        }),
-      ),
+      impressions_by_source: payload.funnelSummary.impressionsBySource.map((entry) => ({
+        source: entry.source,
+        count: entry.count,
+      })),
       opens_by_source: payload.funnelSummary.opensBySource.map((entry) => ({
         source: entry.source,
         count: entry.count,
@@ -414,12 +397,10 @@ export function buildWeeklyGuidancePayload(payload: {
         source: entry.source,
         count: entry.count,
       })),
-      applications_by_source: payload.funnelSummary.applicationsBySource.map(
-        (entry) => ({
-          source: entry.source,
-          count: entry.count,
-        }),
-      ),
+      applications_by_source: payload.funnelSummary.applicationsBySource.map((entry) => ({
+        source: entry.source,
+        count: entry.count,
+      })),
     },
     llm_context: buildProfileInsightsPayload(payload.llmContext),
   };
@@ -456,9 +437,7 @@ export function buildJobFitExplanationPayload(payload: {
   };
 }
 
-export function mapJobFitExplanationResponse(
-  response: MlJobFitExplanationResponse,
-) {
+export function mapJobFitExplanationResponse(response: MlJobFitExplanationResponse) {
   return {
     fitSummary: response.fit_summary,
     whyItMatches: response.why_it_matches,
@@ -757,28 +736,20 @@ export type InterviewPrepRequest = {
   rawProfileText?: string | null;
 };
 
-export async function getProfileInsights(
-  context: LlmContext,
-): Promise<ProfileInsights> {
-  const response = await mlRequest<MlProfileInsightsResponse>(
-    '/v1/enrichment/profile-insights',
-    {
-      method: 'POST',
-      body: JSON.stringify(buildProfileInsightsPayload(context)),
-    });
+export async function getProfileInsights(context: LlmContext): Promise<ProfileInsights> {
+  const response = await mlRequest<MlProfileInsightsResponse>('/v1/enrichment/profile-insights', {
+    method: 'POST',
+    body: JSON.stringify(buildProfileInsightsPayload(context)),
+  });
 
   return mapProfileInsightsResponse(response);
 }
 
-export async function getWeeklyGuidance(
-  payload: WeeklyGuidanceRequest,
-): Promise<WeeklyGuidance> {
-  const response = await mlRequest<MlWeeklyGuidanceResponse>(
-    '/v1/enrichment/weekly-guidance',
-    {
-      method: 'POST',
-      body: JSON.stringify(buildWeeklyGuidancePayload(payload)),
-    });
+export async function getWeeklyGuidance(payload: WeeklyGuidanceRequest): Promise<WeeklyGuidance> {
+  const response = await mlRequest<MlWeeklyGuidanceResponse>('/v1/enrichment/weekly-guidance', {
+    method: 'POST',
+    body: JSON.stringify(buildWeeklyGuidancePayload(payload)),
+  });
 
   return mapWeeklyGuidanceResponse(response);
 }
@@ -802,7 +773,8 @@ export async function getJobFitExplanation(
     {
       method: 'POST',
       body: JSON.stringify(buildJobFitExplanationPayload(payload)),
-    });
+    },
+  );
 
   return mapJobFitExplanationResponse(response);
 }
@@ -821,12 +793,10 @@ export async function getApplicationCoach(
     },
   }).catch(() => null);
 
-  const response = await mlRequest<MlApplicationCoachResponse>(
-    '/v1/enrichment/application-coach',
-    {
-      method: 'POST',
-      body: JSON.stringify(buildApplicationCoachPayload(payload)),
-    });
+  const response = await mlRequest<MlApplicationCoachResponse>('/v1/enrichment/application-coach', {
+    method: 'POST',
+    body: JSON.stringify(buildApplicationCoachPayload(payload)),
+  });
 
   return mapApplicationCoachResponse(response);
 }
@@ -851,14 +821,13 @@ export async function getCoverLetterDraft(
     {
       method: 'POST',
       body: JSON.stringify(buildCoverLetterDraftPayload(payload)),
-    });
+    },
+  );
 
   return mapCoverLetterDraftResponse(response);
 }
 
-export async function getInterviewPrep(
-  payload: InterviewPrepRequest,
-): Promise<InterviewPrep> {
+export async function getInterviewPrep(payload: InterviewPrepRequest): Promise<InterviewPrep> {
   void logUserEvent(payload.profileId, {
     eventType: 'interview_prep_requested',
     jobId: payload.rankedJob.id,
@@ -872,12 +841,10 @@ export async function getInterviewPrep(
     },
   }).catch(() => null);
 
-  const response = await mlRequest<MlInterviewPrepResponse>(
-    '/v1/enrichment/interview-prep',
-    {
-      method: 'POST',
-      body: JSON.stringify(buildInterviewPrepPayload(payload)),
-    });
+  const response = await mlRequest<MlInterviewPrepResponse>('/v1/enrichment/interview-prep', {
+    method: 'POST',
+    body: JSON.stringify(buildInterviewPrepPayload(payload)),
+  });
 
   return mapInterviewPrepResponse(response);
 }

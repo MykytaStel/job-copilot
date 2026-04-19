@@ -13,6 +13,7 @@ export const queryKeys = {
   },
   profile: {
     root: () => ['profile'] as const,
+    rawText: () => ['profile', 'rawText'] as const,
     suggestedSkills: () => ['profile', 'suggestedSkills'] as const,
   },
   resumes: {
@@ -56,10 +57,12 @@ export const queryKeys = {
     due: () => ['tasks', 'due'] as const,
   },
   coverLetters: {
-    all: (jobId?: string) => (jobId ? ['coverLetters', jobId] : ['coverLetters']) as readonly string[],
+    all: (jobId?: string) =>
+      (jobId ? ['coverLetters', jobId] : ['coverLetters']) as readonly string[],
   },
   interviewQA: {
-    all: (jobId?: string) => (jobId ? ['interviewQA', jobId] : ['interviewQA']) as readonly string[],
+    all: (jobId?: string) =>
+      (jobId ? ['interviewQA', jobId] : ['interviewQA']) as readonly string[],
   },
   offers: {
     all: () => ['offers'] as const,
@@ -71,8 +74,7 @@ export const queryKeys = {
     profile: (profileId: string) => ['feedback', profileId] as const,
   },
   ml: {
-    rerank: (profileId: string, jobsKey: string) =>
-      ['ml', 'rerank', profileId, jobsKey] as const,
+    rerank: (profileId: string, jobsKey: string) => ['ml', 'rerank', profileId, jobsKey] as const,
     fit: (profileId: string, jobId: string) => ['ml', 'fit', profileId, jobId] as const,
   },
   analytics: {

@@ -35,7 +35,9 @@ export function Button({
           'h-auto rounded-none p-0 text-sm text-primary underline-offset-4 hover:underline',
         variant === 'outline' &&
           'border border-border bg-transparent text-muted-foreground hover:bg-white/[0.05] hover:text-foreground',
-        variant === 'outline' && active && 'border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground',
+        variant === 'outline' &&
+          active &&
+          'border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground',
         className,
       )}
       {...props}

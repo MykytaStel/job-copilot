@@ -31,8 +31,7 @@
 
   --gradient-app:
     radial-gradient(circle at top right, rgba(80, 92, 255, 0.2), transparent 30%),
-    radial-gradient(circle at left top, rgba(46, 196, 182, 0.14), transparent 20%),
-    #0d1320;
+    radial-gradient(circle at left top, rgba(46, 196, 182, 0.14), transparent 20%), #0d1320;
   --gradient-button: linear-gradient(135deg, #536dfe, #6c63ff);
 
   --shadow-card: 0 24px 60px rgba(0, 0, 0, 0.35);

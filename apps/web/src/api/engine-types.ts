@@ -1,7 +1,4 @@
-export type {
-  EngineApiError,
-  EngineHealthResponse,
-} from './engine-types/health';
+export type { EngineApiError, EngineHealthResponse } from './engine-types/health';
 
 export type {
   InternalAppNotificationType,
@@ -26,10 +23,7 @@ export type {
   EngineMarketRoleDemandEntry,
 } from './engine-types/market';
 
-export type {
-  EngineContact,
-  EngineContactsResponse,
-} from './engine-types/contacts';
+export type { EngineContact, EngineContactsResponse } from './engine-types/contacts';
 
 export type {
   EngineResume,

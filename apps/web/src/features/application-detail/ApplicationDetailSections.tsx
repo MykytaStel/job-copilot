@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   BriefcaseBusiness,
   CalendarClock,
-  ContactRound,
   FileText,
   Handshake,
   ListTodo,
@@ -75,13 +74,7 @@ function InnerPanel({
   );
 }
 
-function SummaryMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
+function SummaryMetric({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
       <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
@@ -122,7 +115,9 @@ export function ApplicationHeader({ detail }: { detail: ApplicationDetail }) {
                   </Badge>
                 </div>
                 <div>
-                  <h1 className="m-0 text-2xl font-bold text-card-foreground">{detail.job.title}</h1>
+                  <h1 className="m-0 text-2xl font-bold text-card-foreground">
+                    {detail.job.title}
+                  </h1>
                   <p className="m-0 mt-2 text-base text-muted-foreground">{detail.job.company}</p>
                 </div>
               </div>
@@ -190,7 +185,10 @@ export function ApplicationFormSection({
         <div className="grid gap-4 md:grid-cols-2">
           <label>
             Status
-            <select value={status} onChange={(event) => setStatus(event.target.value as ApplicationStatus)}>
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value as ApplicationStatus)}
+            >
               {APPLICATION_STATUS_OPTIONS.map((value) => (
                 <option key={value} value={value}>
                   {formatEnumLabel(value)}
@@ -255,11 +253,16 @@ export function JobDetailsSection({ detail }: { detail: ApplicationDetail }) {
           </InnerPanel>
         ) : null}
 
-        <InnerPanel title="Posting timeline" description="Current metadata from the linked job record.">
+        <InnerPanel
+          title="Posting timeline"
+          description="Current metadata from the linked job record."
+        >
           <div className="space-y-2 text-sm text-muted-foreground">
             <div className="flex items-center justify-between gap-3">
               <span>Created</span>
-              <span className="font-medium text-card-foreground">{formatDate(job.createdAt) ?? 'n/a'}</span>
+              <span className="font-medium text-card-foreground">
+                {formatDate(job.createdAt) ?? 'n/a'}
+              </span>
             </div>
           </div>
         </InnerPanel>
@@ -598,7 +601,10 @@ export function OfferSection({
         <div className="grid gap-4 md:grid-cols-2">
           <label>
             Status
-            <select value={status} onChange={(event) => setStatus(event.target.value as OfferStatus)}>
+            <select
+              value={status}
+              onChange={(event) => setStatus(event.target.value as OfferStatus)}
+            >
               {OFFER_STATUS_OPTIONS.map((value) => (
                 <option key={value} value={value}>
                   {formatEnumLabel(value)}
@@ -686,7 +692,9 @@ export function ActivitiesSection({ activities }: { activities: ApplicationDetai
               </Badge>
               <div className="min-w-0">
                 <p className="m-0 text-sm leading-6 text-card-foreground">{activity.description}</p>
-                <p className="m-0 mt-2 text-xs text-muted-foreground">{formatDate(activity.happenedAt)}</p>
+                <p className="m-0 mt-2 text-xs text-muted-foreground">
+                  {formatDate(activity.happenedAt)}
+                </p>
               </div>
             </div>
           ))}
@@ -770,14 +778,11 @@ function ContactCard({ item }: { item: ApplicationContact }) {
     <div className="rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="m-0 text-sm font-semibold text-card-foreground">{contact.name}</p>
-        <Badge
-          variant="muted"
-          className="px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]"
-        >
+        <Badge variant="muted" className="px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]">
           {formatEnumLabel(item.relationship)}
         </Badge>
       </div>
-      {(contact.role || contact.company) ? (
+      {contact.role || contact.company ? (
         <p className="m-0 mt-2 text-sm text-muted-foreground">
           {[contact.role, contact.company].filter(Boolean).join(' at ')}
         </p>

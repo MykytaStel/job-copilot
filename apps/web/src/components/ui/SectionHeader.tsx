@@ -99,7 +99,10 @@ export function PageHeader({
             <span key={`${item.label}-${index}`} className="flex items-center gap-1">
               {index > 0 && <ChevronRight className="h-3 w-3" />}
               {item.href ? (
-                <Link to={item.href} className="transition-colors hover:text-foreground no-underline">
+                <Link
+                  to={item.href}
+                  className="transition-colors hover:text-foreground no-underline"
+                >
                   {item.label}
                 </Link>
               ) : (
@@ -112,7 +115,11 @@ export function PageHeader({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="m-0 text-2xl font-bold tracking-tight text-foreground">{title}</h1>
-          {description && <p className="mt-2 mb-0 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>}
+          {description && (
+            <p className="mt-2 mb-0 max-w-3xl text-sm leading-6 text-muted-foreground">
+              {description}
+            </p>
+          )}
         </div>
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
