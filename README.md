@@ -17,8 +17,8 @@ job-copilot-ua-starter/
   apps/
     engine-api/ # canonical backend API
     ingestion/  # ingestion service
-    ml/         # ML/LLM service
-    web/        # frontend
+    ml/         # ML sidecar; app wiring in app/api.py, scoring in app/scoring.py
+    web/        # frontend; public API entrypoint in src/api.ts, internal helpers in src/api/
   packages/
     contracts/
   docs/
