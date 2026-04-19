@@ -54,6 +54,56 @@ export interface MarketInsights {
   salaryMentions: string[];
 }
 
+export type MarketTrend = 'up' | 'down' | 'stable';
+
+export type MarketOverview = {
+  newJobsThisWeek: number;
+  activeCompaniesCount: number;
+  activeJobsCount: number;
+  remotePercentage: number;
+};
+
+export type MarketCompany = {
+  companyName: string;
+  activeJobs: number;
+  thisWeek: number;
+  prevWeek: number;
+  velocity: number;
+};
+
+export type MarketSalaryTrend = {
+  seniority: string;
+  p25: number;
+  median: number;
+  p75: number;
+  sampleCount: number;
+};
+
+export type MarketRoleDemand = {
+  roleGroup: string;
+  thisPeriod: number;
+  prevPeriod: number;
+  trend: MarketTrend;
+};
+
+export type AppNotificationType =
+  | 'new_jobs_found'
+  | 'job_reactivated'
+  | 'application_due_soon';
+
+export type AppNotification = {
+  id: string;
+  profileId: string;
+  type: AppNotificationType;
+  title: string;
+  body?: string;
+  payload?: Record<string, unknown>;
+  readAt?: string;
+  createdAt: string;
+};
+
+const DEFAULT_MARKET_SENIORITY_BUCKETS = ['junior', 'middle', 'senior', 'lead'] as const;
+
 type EngineApiError = {
   code?: string;
   message?: string;
@@ -126,6 +176,60 @@ type EngineFeedbackOverviewResponse = {
     whitelisted_companies_count: number;
     blacklisted_companies_count: number;
   };
+};
+
+type EngineMarketOverview = {
+  new_jobs_this_week: number;
+  active_companies_count: number;
+  active_jobs_count: number;
+  remote_percentage: number;
+};
+
+type EngineMarketCompanyEntry = {
+  company_name: string;
+  active_jobs: number;
+  this_week: number;
+  prev_week: number;
+  velocity: number;
+};
+
+type EngineMarketCompaniesResponse = {
+  companies: EngineMarketCompanyEntry[];
+};
+
+type EngineMarketSalaryTrend = {
+  seniority: string;
+  p25: number;
+  median: number;
+  p75: number;
+  sample_count: number;
+};
+
+type EngineMarketRoleDemandEntry = {
+  role_group: string;
+  this_period: number;
+  prev_period: number;
+  trend: MarketTrend;
+};
+
+type EngineNotification = {
+  id: string;
+  profile_id: string;
+  type: AppNotificationType;
+  title: string;
+  body?: string | null;
+  payload?: Record<string, unknown> | null;
+  read_at?: string | null;
+  created_at: string;
+};
+
+type EngineNotificationsResponse = {
+  notifications: EngineNotification[];
+};
+
+type EngineUnreadNotificationsCountResponse = {
+  profile_id: string;
+  unread_count: number;
 };
 
 type EngineContactsResponse = {
@@ -668,6 +772,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+async function requestOptional<T>(path: string, init?: RequestInit): Promise<T | undefined> {
+  const res = await fetch(`${API_URL}${path}`, init);
+  if (res.status === 404) {
+    return undefined;
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as EngineApiError;
+    throw new Error(body.message ?? body.code ?? `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return undefined;
+  return res.json();
+}
+
 function json(method: string, body: unknown): RequestInit {
   return {
     method,
@@ -688,6 +805,10 @@ function unsupportedPromise<T>(feature: string): Promise<T> {
 
 function readStoredProfileId() {
   return window.localStorage.getItem(PROFILE_ID_KEY);
+}
+
+function resolveProfileId(profileId?: string) {
+  return profileId ?? readStoredProfileId() ?? undefined;
 }
 
 function writeStoredProfileId(profileId: string) {
@@ -820,6 +941,19 @@ function mapApplication(application: EngineApplication): Application {
     appliedAt: application.applied_at ?? undefined,
     dueDate: application.due_date ?? undefined,
     updatedAt: application.updated_at,
+  };
+}
+
+function mapNotification(notification: EngineNotification): AppNotification {
+  return {
+    id: notification.id,
+    profileId: notification.profile_id,
+    type: notification.type,
+    title: notification.title,
+    body: notification.body ?? undefined,
+    payload: notification.payload ?? undefined,
+    readAt: notification.read_at ?? undefined,
+    createdAt: notification.created_at,
   };
 }
 
@@ -1259,6 +1393,48 @@ export async function getApplications(): Promise<Application[]> {
   return response.applications.map(mapApplication);
 }
 
+export async function getNotifications(
+  profileId?: string,
+  limit: number = 20,
+): Promise<AppNotification[]> {
+  const resolvedProfileId = resolveProfileId(profileId);
+  if (!resolvedProfileId) {
+    return [];
+  }
+
+  const response = await request<EngineNotificationsResponse>(
+    `/api/v1/notifications?profile_id=${encodeURIComponent(
+      resolvedProfileId,
+    )}&limit=${encodeURIComponent(String(limit))}`,
+  );
+
+  return response.notifications.map(mapNotification);
+}
+
+export async function markNotificationRead(id: string): Promise<AppNotification> {
+  const notification = await request<EngineNotification>(
+    `/api/v1/notifications/${encodeURIComponent(id)}/read`,
+    json('POST', {}),
+  );
+
+  return mapNotification(notification);
+}
+
+export async function getUnreadCount(profileId?: string): Promise<number> {
+  const resolvedProfileId = resolveProfileId(profileId);
+  if (!resolvedProfileId) {
+    return 0;
+  }
+
+  const response = await request<EngineUnreadNotificationsCountResponse>(
+    `/api/v1/notifications/unread-count?profile_id=${encodeURIComponent(
+      resolvedProfileId,
+    )}`,
+  );
+
+  return response.unread_count;
+}
+
 export async function getProfile(): Promise<CandidateProfile | undefined> {
   const profileId = readStoredProfileId();
   if (!profileId) return undefined;
@@ -1477,6 +1653,79 @@ export async function addNote(
     createdAt: note.created_at,
   };
 }
+
+export async function getMarketOverview(): Promise<MarketOverview> {
+  const response = await request<EngineMarketOverview>('/api/v1/market/overview');
+
+  return {
+    newJobsThisWeek: response.new_jobs_this_week,
+    activeCompaniesCount: response.active_companies_count,
+    activeJobsCount: response.active_jobs_count,
+    remotePercentage: response.remote_percentage,
+  };
+}
+
+export async function getMarketCompanies(limit = 10): Promise<MarketCompany[]> {
+  const response = await request<EngineMarketCompaniesResponse>(
+    `/api/v1/market/companies?limit=${encodeURIComponent(String(limit))}`,
+  );
+
+  return response.companies.map((company) => ({
+    companyName: company.company_name,
+    activeJobs: company.active_jobs,
+    thisWeek: company.this_week,
+    prevWeek: company.prev_week,
+    velocity: company.velocity,
+  }));
+}
+
+export async function getMarketSalaries(
+  seniorityBuckets: readonly string[] = DEFAULT_MARKET_SENIORITY_BUCKETS,
+): Promise<MarketSalaryTrend[]> {
+  const buckets = Array.from(
+    new Set(
+      seniorityBuckets
+        .map((bucket) => bucket.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
+
+  const results = await Promise.all(
+    buckets.map(async (seniority) => {
+      const response = await requestOptional<EngineMarketSalaryTrend>(
+        `/api/v1/market/salaries?seniority=${encodeURIComponent(seniority)}`,
+      );
+
+      if (!response) {
+        return null;
+      }
+
+      return {
+        seniority: response.seniority,
+        p25: response.p25,
+        median: response.median,
+        p75: response.p75,
+        sampleCount: response.sample_count,
+      } satisfies MarketSalaryTrend;
+    }),
+  );
+
+  return results.filter((result): result is MarketSalaryTrend => result !== null);
+}
+
+export async function getMarketRoles(period = 30): Promise<MarketRoleDemand[]> {
+  const response = await request<EngineMarketRoleDemandEntry[]>(
+    `/api/v1/market/roles?period=${encodeURIComponent(String(period))}`,
+  );
+
+  return response.map((entry) => ({
+    roleGroup: entry.role_group,
+    thisPeriod: entry.this_period,
+    prevPeriod: entry.prev_period,
+    trend: entry.trend,
+  }));
+}
+
 export const updateJobNote = (_id: string, _note: string): Promise<JobPosting> =>
   unsupported('Job notes');
 export const deleteJob = (_id: string): Promise<void> => unsupported('Job deletion');

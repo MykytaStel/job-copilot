@@ -6,6 +6,9 @@ use std::sync::Arc;
 use crate::db::repositories::{JobsRepository, RepositoryError};
 use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
+use crate::domain::market::model::{
+    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend,
+};
 
 #[derive(Clone)]
 enum JobsServiceBackend {
@@ -98,6 +101,51 @@ impl JobsService {
         }
     }
 
+    pub async fn market_overview(&self) -> Result<MarketOverview, RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => repository.market_overview().await,
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_overview(),
+        }
+    }
+
+    pub async fn market_companies(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<MarketCompanyEntry>, RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => repository.market_companies(limit).await,
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_companies(limit),
+        }
+    }
+
+    pub async fn market_salary_trend(
+        &self,
+        seniority: &str,
+    ) -> Result<Option<MarketSalaryTrend>, RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => {
+                repository.market_salary_trend(seniority).await
+            }
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_salary_trend(seniority),
+        }
+    }
+
+    pub async fn market_role_demand(
+        &self,
+        period_days: i32,
+    ) -> Result<Vec<MarketRoleDemandEntry>, RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => {
+                repository.market_role_demand(period_days).await
+            }
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_role_demand(period_days),
+        }
+    }
+
     #[cfg(test)]
     pub fn for_tests(stub: JobsServiceStub) -> Self {
         Self {
@@ -114,6 +162,10 @@ pub struct JobsServiceStub {
     search_jobs: Vec<Job>,
     feed_summary: JobFeedSummary,
     source_counts: Vec<JobSourceCount>,
+    market_overview: MarketOverview,
+    market_companies: Vec<MarketCompanyEntry>,
+    market_salary_trends: HashMap<String, MarketSalaryTrend>,
+    market_role_demand: Vec<MarketRoleDemandEntry>,
     database_disabled: bool,
 }
 
@@ -139,6 +191,27 @@ impl JobsServiceStub {
 
     pub fn with_jobs_by_source(mut self, counts: Vec<JobSourceCount>) -> Self {
         self.source_counts = counts;
+        self
+    }
+
+    pub fn with_market_overview(mut self, overview: MarketOverview) -> Self {
+        self.market_overview = overview;
+        self
+    }
+
+    pub fn with_market_companies(mut self, companies: Vec<MarketCompanyEntry>) -> Self {
+        self.market_companies = companies;
+        self
+    }
+
+    pub fn with_market_salary_trend(mut self, trend: MarketSalaryTrend) -> Self {
+        self.market_salary_trends
+            .insert(trend.seniority.clone(), trend);
+        self
+    }
+
+    pub fn with_market_role_demand(mut self, entries: Vec<MarketRoleDemandEntry>) -> Self {
+        self.market_role_demand = entries;
         self
     }
 
@@ -238,6 +311,49 @@ impl JobsServiceStub {
 
         Ok(self.source_counts.clone())
     }
+
+    fn market_overview(&self) -> Result<MarketOverview, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self.market_overview.clone())
+    }
+
+    fn market_companies(&self, limit: i64) -> Result<Vec<MarketCompanyEntry>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self
+            .market_companies
+            .iter()
+            .take(limit as usize)
+            .cloned()
+            .collect())
+    }
+
+    fn market_salary_trend(
+        &self,
+        seniority: &str,
+    ) -> Result<Option<MarketSalaryTrend>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self.market_salary_trends.get(seniority).cloned())
+    }
+
+    fn market_role_demand(
+        &self,
+        _period_days: i32,
+    ) -> Result<Vec<MarketRoleDemandEntry>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self.market_role_demand.clone())
+    }
 }
 
 #[cfg(test)]
@@ -255,6 +371,15 @@ impl Default for JobsServiceStub {
                 reactivated_jobs: 0,
             },
             source_counts: Vec::new(),
+            market_overview: MarketOverview {
+                new_jobs_this_week: 0,
+                active_companies_count: 0,
+                active_jobs_count: 0,
+                remote_percentage: 0.0,
+            },
+            market_companies: Vec::new(),
+            market_salary_trends: HashMap::new(),
+            market_role_demand: Vec::new(),
             database_disabled: false,
         }
     }

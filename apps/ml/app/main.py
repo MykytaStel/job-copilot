@@ -56,6 +56,7 @@ from app.profile_insights import (
     http_error_from_provider_error,
 )
 from app.profile_insights_service import ProfileInsightsService
+from app.bootstrap_training import DEFAULT_MODEL_PATH, bootstrap_and_retrain
 from app.text_normalization import normalize_term_for_output, normalize_text, tokenize
 from app.weekly_guidance import (
     WeeklyGuidanceProviderError,
@@ -381,6 +382,19 @@ def score_job(
     return score, matched_terms[:10], missing_terms, evidence
 
 
+class BootstrapRequest(BaseModel):
+    profile_id: str = Field(min_length=1)
+    min_examples: int = Field(default=30, ge=1)
+
+
+class BootstrapResponse(BaseModel):
+    retrained: bool
+    example_count: int
+    reason: str | None = None
+    model_path: str | None = None
+    training: dict | None = None
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse(
@@ -514,3 +528,24 @@ async def enrich_weekly_guidance(
         return await service.enrich(payload)
     except WeeklyGuidanceProviderError as exc:
         raise http_error_from_weekly_guidance_error(exc) from exc
+
+
+@app.post("/api/v1/reranker/bootstrap", response_model=BootstrapResponse)
+async def bootstrap_reranker(payload: BootstrapRequest) -> BootstrapResponse:
+    try:
+        result = await bootstrap_and_retrain(
+            profile_id=payload.profile_id,
+            min_examples=payload.min_examples,
+            model_path=DEFAULT_MODEL_PATH,
+        )
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"engine-api error: {exc.response.status_code}",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"engine-api unreachable: {exc}",
+        ) from exc
+    return BootstrapResponse(**result)

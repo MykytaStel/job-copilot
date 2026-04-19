@@ -93,10 +93,11 @@ pub async fn upsert_batch(pool: &PgPool, batch: &IngestionBatch) -> Result<Upser
     }
 
     if preserve_lifecycle && !affected_job_ids.is_empty() {
-        let reconcile =
-            reconcile_jobs(&mut tx, &affected_job_ids.into_iter().collect::<Vec<_>>()).await?;
+        let affected_job_ids = affected_job_ids.into_iter().collect::<Vec<_>>();
+        let reconcile = reconcile_jobs(&mut tx, &affected_job_ids).await?;
         summary.jobs_inactivated = reconcile.jobs_inactivated;
         summary.jobs_reactivated = reconcile.jobs_reactivated;
+        create_profile_notifications(&mut tx, &affected_job_ids).await?;
     }
 
     tx.commit()
@@ -513,6 +514,28 @@ struct InactivationResult {
     job_ids: Vec<String>,
 }
 
+const PROFILE_NOTIFICATION_MATCH_SQL: &str = r#"
+(
+    (
+        p.primary_role IS NOT NULL
+        AND BTRIM(p.primary_role) <> ''
+        AND j.haystack LIKE '%' || REPLACE(LOWER(p.primary_role), '_', ' ') || '%'
+    )
+    OR EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(p.skills) AS skill(value)
+        WHERE LENGTH(BTRIM(skill.value)) >= 2
+          AND j.haystack LIKE '%' || LOWER(skill.value) || '%'
+    )
+    OR EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(p.keywords) AS keyword(value)
+        WHERE LENGTH(BTRIM(keyword.value)) >= 2
+          AND j.haystack LIKE '%' || LOWER(keyword.value) || '%'
+    )
+)
+"#;
+
 async fn mark_missing_variants_inactive(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     source: &str,
@@ -604,6 +627,141 @@ async fn reconcile_jobs(
             .filter(|(was_active, is_active_now)| !*was_active && *is_active_now)
             .count(),
     })
+}
+
+async fn create_profile_notifications(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    job_ids: &[String],
+) -> Result<(), String> {
+    if job_ids.is_empty() {
+        return Ok(());
+    }
+
+    insert_new_job_notifications(tx, job_ids).await?;
+    insert_reactivated_job_notifications(tx, job_ids).await?;
+
+    Ok(())
+}
+
+async fn insert_new_job_notifications(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    job_ids: &[String],
+) -> Result<(), String> {
+    let query = format!(
+        r#"
+        WITH candidate_jobs AS (
+            SELECT
+                id,
+                title,
+                company_name,
+                first_seen_at,
+                last_seen_at,
+                LOWER(CONCAT_WS(' ', title, company_name, COALESCE(location, ''), description_text)) AS haystack
+            FROM jobs
+            WHERE id = ANY($1::text[])
+              AND first_seen_at = last_seen_at
+        ),
+        matched AS (
+            SELECT
+                p.id AS profile_id,
+                COUNT(*)::int AS matched_count,
+                ARRAY_AGG(j.id ORDER BY j.last_seen_at DESC) AS job_ids,
+                (ARRAY_AGG(j.title ORDER BY j.last_seen_at DESC))[1] AS sample_title,
+                (ARRAY_AGG(j.company_name ORDER BY j.last_seen_at DESC))[1] AS sample_company
+            FROM profiles p
+            INNER JOIN candidate_jobs j ON TRUE
+            WHERE {PROFILE_NOTIFICATION_MATCH_SQL}
+            GROUP BY p.id
+        )
+        INSERT INTO notifications (id, profile_id, type, title, body, payload)
+        SELECT
+            md5(profile_id || ':new_jobs_found:' || clock_timestamp()::text),
+            profile_id,
+            'new_jobs_found',
+            CASE
+                WHEN matched_count = 1 THEN 'New job matched your profile'
+                ELSE matched_count::text || ' new jobs matched your profile'
+            END,
+            CASE
+                WHEN matched_count = 1 THEN sample_title || ' at ' || sample_company || ' matched your current profile.'
+                ELSE sample_title || ' at ' || sample_company || ' matched your current profile, plus ' || (matched_count - 1)::text || ' more.'
+            END,
+            jsonb_build_object(
+                'count', matched_count,
+                'job_ids', job_ids
+            )
+        FROM matched
+        "#,
+    );
+
+    sqlx::query(&query)
+        .bind(job_ids)
+        .execute(&mut **tx)
+        .await
+        .map_err(|error| format!("failed to create new job notifications: {error}"))?;
+
+    Ok(())
+}
+
+async fn insert_reactivated_job_notifications(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    job_ids: &[String],
+) -> Result<(), String> {
+    let query = format!(
+        r#"
+        WITH candidate_jobs AS (
+            SELECT
+                id,
+                title,
+                company_name,
+                last_seen_at,
+                reactivated_at,
+                LOWER(CONCAT_WS(' ', title, company_name, COALESCE(location, ''), description_text)) AS haystack
+            FROM jobs
+            WHERE id = ANY($1::text[])
+              AND reactivated_at IS NOT NULL
+              AND reactivated_at = last_seen_at
+        ),
+        matched AS (
+            SELECT
+                p.id AS profile_id,
+                COUNT(*)::int AS matched_count,
+                ARRAY_AGG(j.id ORDER BY j.last_seen_at DESC) AS job_ids,
+                (ARRAY_AGG(j.title ORDER BY j.last_seen_at DESC))[1] AS sample_title,
+                (ARRAY_AGG(j.company_name ORDER BY j.last_seen_at DESC))[1] AS sample_company
+            FROM profiles p
+            INNER JOIN candidate_jobs j ON TRUE
+            WHERE {PROFILE_NOTIFICATION_MATCH_SQL}
+            GROUP BY p.id
+        )
+        INSERT INTO notifications (id, profile_id, type, title, body, payload)
+        SELECT
+            md5(profile_id || ':job_reactivated:' || clock_timestamp()::text),
+            profile_id,
+            'job_reactivated',
+            CASE
+                WHEN matched_count = 1 THEN 'A job reactivated for your profile'
+                ELSE matched_count::text || ' jobs reactivated for your profile'
+            END,
+            CASE
+                WHEN matched_count = 1 THEN sample_title || ' at ' || sample_company || ' is active again.'
+                ELSE sample_title || ' at ' || sample_company || ' is active again, plus ' || (matched_count - 1)::text || ' more.'
+            END,
+            jsonb_build_object(
+                'count', matched_count,
+                'job_ids', job_ids
+            )
+        FROM matched
+        "#,
+    );
+
+    sqlx::query(&query)
+        .bind(job_ids)
+        .execute(&mut **tx)
+        .await
+        .map_err(|error| format!("failed to create reactivated job notifications: {error}"))?;
+
+    Ok(())
 }
 
 fn build_source_refreshes(batch: &IngestionBatch) -> BTreeMap<String, SourceRefresh> {

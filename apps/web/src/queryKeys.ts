@@ -28,6 +28,16 @@ export const queryKeys = {
   },
   market: {
     insights: () => ['market', 'insights'] as const,
+    overview: () => ['market', 'overview'] as const,
+    companies: () => ['market', 'companies'] as const,
+    salaries: () => ['market', 'salaries'] as const,
+    roles: () => ['market', 'roles'] as const,
+  },
+  notifications: {
+    all: () => ['notifications'] as const,
+    list: (profileId: string, limit: number) =>
+      ['notifications', 'list', profileId, limit] as const,
+    unreadCount: (profileId: string) => ['notifications', 'unreadCount', profileId] as const,
   },
   alerts: {
     all: () => ['alerts'] as const,

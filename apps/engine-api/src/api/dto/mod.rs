@@ -4,6 +4,8 @@ pub mod behavior;
 pub mod events;
 pub mod feedback;
 pub mod jobs;
+pub mod market;
+pub mod notifications;
 pub mod profile;
 pub mod ranking;
 pub mod reranker_dataset;

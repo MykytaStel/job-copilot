@@ -7,6 +7,7 @@ pub mod funnel;
 pub mod jobs;
 pub mod learned_reranker;
 pub mod matching;
+pub mod notifications;
 pub mod outcome_dataset;
 pub mod profile;
 pub mod profiles;

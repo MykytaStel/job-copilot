@@ -4,6 +4,10 @@ use crate::domain::analytics::model::{JobSourceCount, SalaryBucket};
 use crate::domain::job::model::{
     Job, JobFeedSummary, JobLifecycleStage, JobSourceVariant, JobView,
 };
+use crate::domain::market::model::{
+    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend,
+    MarketTrendDirection,
+};
 use sqlx::FromRow;
 
 #[derive(Clone)]
@@ -363,6 +367,319 @@ impl JobsRepository {
         .await?;
 
         Ok(rows.into_iter().map(Job::from).collect())
+    }
+
+    pub async fn market_overview(&self) -> Result<MarketOverview, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(sqlx::FromRow)]
+        struct MarketOverviewRow {
+            new_jobs_this_week: i64,
+            active_companies_count: i64,
+            active_jobs_count: i64,
+            remote_jobs_count: i64,
+        }
+
+        let row = sqlx::query_as::<_, MarketOverviewRow>(
+            r#"
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE is_active AND first_seen_at >= NOW() - INTERVAL '7 days'
+                )::bigint AS new_jobs_this_week,
+                COUNT(DISTINCT company_name) FILTER (WHERE is_active)::bigint AS active_companies_count,
+                COUNT(*) FILTER (WHERE is_active)::bigint AS active_jobs_count,
+                COUNT(*) FILTER (
+                    WHERE is_active AND LOWER(remote_type) LIKE '%remote%'
+                )::bigint AS remote_jobs_count
+            FROM jobs
+            "#,
+        )
+        .fetch_one(pool)
+        .await?;
+
+        let remote_percentage = if row.active_jobs_count > 0 {
+            row.remote_jobs_count as f64 / row.active_jobs_count as f64 * 100.0
+        } else {
+            0.0
+        };
+
+        Ok(MarketOverview {
+            new_jobs_this_week: row.new_jobs_this_week,
+            active_companies_count: row.active_companies_count,
+            active_jobs_count: row.active_jobs_count,
+            remote_percentage,
+        })
+    }
+
+    pub async fn market_companies(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<MarketCompanyEntry>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(sqlx::FromRow)]
+        struct MarketCompanyRow {
+            company_name: String,
+            active_jobs: i64,
+            this_week: i64,
+            prev_week: i64,
+        }
+
+        let rows = sqlx::query_as::<_, MarketCompanyRow>(
+            r#"
+            SELECT
+                company_name,
+                COUNT(*) FILTER (WHERE is_active)::bigint AS active_jobs,
+                COUNT(*) FILTER (
+                    WHERE is_active AND first_seen_at >= NOW() - INTERVAL '7 days'
+                )::bigint AS this_week,
+                COUNT(*) FILTER (
+                    WHERE is_active
+                      AND first_seen_at >= NOW() - INTERVAL '14 days'
+                      AND first_seen_at < NOW() - INTERVAL '7 days'
+                )::bigint AS prev_week
+            FROM jobs
+            GROUP BY company_name
+            HAVING COUNT(*) FILTER (WHERE is_active) > 0
+            ORDER BY active_jobs DESC
+            LIMIT $1
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| MarketCompanyEntry {
+                company_name: r.company_name,
+                active_jobs: r.active_jobs,
+                this_week: r.this_week,
+                prev_week: r.prev_week,
+            })
+            .collect())
+    }
+
+    pub async fn market_salary_trend(
+        &self,
+        seniority: &str,
+    ) -> Result<Option<MarketSalaryTrend>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(sqlx::FromRow)]
+        struct MarketSalaryTrendRow {
+            seniority: String,
+            p25: i32,
+            median: i32,
+            p75: i32,
+            sample_count: i64,
+        }
+
+        let row = sqlx::query_as::<_, MarketSalaryTrendRow>(
+            r#"
+            WITH filtered_jobs AS (
+                SELECT
+                    LOWER(TRIM(seniority)) AS seniority,
+                    COALESCE(NULLIF(UPPER(TRIM(salary_currency)), ''), 'UNKNOWN') AS salary_currency,
+                    salary_min
+                FROM jobs
+                WHERE is_active
+                  AND salary_min IS NOT NULL
+                  AND seniority IS NOT NULL
+                  AND last_seen_at >= NOW() - INTERVAL '30 days'
+                  AND LOWER(TRIM(seniority)) = $1
+            ),
+            dominant_currency AS (
+                SELECT salary_currency
+                FROM filtered_jobs
+                GROUP BY salary_currency
+                ORDER BY COUNT(*) DESC, salary_currency ASC
+                LIMIT 1
+            )
+            SELECT
+                seniority,
+                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY salary_min))::integer AS p25,
+                ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY salary_min))::integer AS median,
+                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY salary_min))::integer AS p75,
+                COUNT(*)::bigint AS sample_count
+            FROM filtered_jobs
+            WHERE salary_currency = (SELECT salary_currency FROM dominant_currency)
+            GROUP BY seniority
+            "#,
+        )
+        .bind(seniority.trim().to_lowercase())
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(row.map(|row| MarketSalaryTrend {
+            seniority: row.seniority,
+            p25: row.p25,
+            median: row.median,
+            p75: row.p75,
+            sample_count: row.sample_count,
+        }))
+    }
+
+    pub async fn market_role_demand(
+        &self,
+        period_days: i32,
+    ) -> Result<Vec<MarketRoleDemandEntry>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(sqlx::FromRow)]
+        struct MarketRoleDemandRow {
+            role_group: String,
+            this_period: i64,
+            prev_period: i64,
+        }
+
+        let rows = sqlx::query_as::<_, MarketRoleDemandRow>(
+            r#"
+            WITH role_groups(role_group) AS (
+                VALUES
+                    ('Frontend'),
+                    ('Backend'),
+                    ('Fullstack'),
+                    ('DevOps'),
+                    ('Data/ML'),
+                    ('QA'),
+                    ('Design'),
+                    ('Management')
+            ),
+            classified_jobs AS (
+                SELECT
+                    CASE
+                        WHEN title ILIKE '%engineering manager%'
+                          OR title ILIKE '%product manager%'
+                          OR title ILIKE '%project manager%'
+                          OR title ILIKE '%program manager%'
+                          OR title ILIKE '%delivery manager%'
+                          OR title ILIKE '%product owner%'
+                          OR title ILIKE '%tech lead%'
+                          OR title ILIKE '%technical lead%'
+                          OR title ILIKE '%head of engineering%'
+                          OR title ILIKE '%vp of engineering%'
+                        THEN 'Management'
+                        WHEN title ILIKE '%product designer%'
+                          OR title ILIKE '%ui/ux designer%'
+                          OR title ILIKE '%ux designer%'
+                          OR title ILIKE '%ui designer%'
+                          OR title ILIKE '%interaction designer%'
+                          OR title ILIKE '%graphic designer%'
+                        THEN 'Design'
+                        WHEN title ~* '(^|[^a-z])(qa|sdet|tester)([^a-z]|$)'
+                          OR title ILIKE '%quality assurance%'
+                          OR title ILIKE '%test engineer%'
+                          OR title ILIKE '%automation qa%'
+                        THEN 'QA'
+                        WHEN title ILIKE '%devops%'
+                          OR title ILIKE '%site reliability%'
+                          OR title ~* '(^|[^a-z])sre([^a-z]|$)'
+                          OR title ILIKE '%cloud engineer%'
+                          OR title ILIKE '%cloud architect%'
+                          OR title ILIKE '%infrastructure%'
+                          OR title ILIKE '%platform engineer%'
+                        THEN 'DevOps'
+                        WHEN title ILIKE '%machine learning%'
+                          OR title ILIKE '%ml engineer%'
+                          OR title ILIKE '%ai engineer%'
+                          OR title ILIKE '%data scientist%'
+                          OR title ILIKE '%data engineer%'
+                          OR title ILIKE '%data analyst%'
+                          OR title ILIKE '%analytics engineer%'
+                          OR title ILIKE '%analyst%'
+                        THEN 'Data/ML'
+                        WHEN title ILIKE '%fullstack%'
+                          OR title ILIKE '%full-stack%'
+                          OR title ILIKE '%full stack%'
+                        THEN 'Fullstack'
+                        WHEN title ILIKE '%frontend%'
+                          OR title ILIKE '%front-end%'
+                          OR title ILIKE '%front end%'
+                          OR title ILIKE '%react%'
+                          OR title ILIKE '%vue%'
+                          OR title ILIKE '%angular%'
+                          OR title ILIKE '%next.js%'
+                          OR title ILIKE '%nextjs%'
+                          OR title ILIKE '%typescript%'
+                          OR title ILIKE '%javascript%'
+                        THEN 'Frontend'
+                        WHEN title ILIKE '%backend%'
+                          OR title ILIKE '%back-end%'
+                          OR title ILIKE '%back end%'
+                          OR title ILIKE '%server-side%'
+                          OR title ILIKE '%api developer%'
+                          OR title ILIKE '%rust engineer%'
+                          OR title ILIKE '%rust developer%'
+                          OR title ILIKE '%golang%'
+                          OR title ILIKE '%go developer%'
+                          OR title ILIKE '%java developer%'
+                          OR title ILIKE '%python developer%'
+                          OR title ILIKE '%php developer%'
+                          OR title ILIKE '%node.js%'
+                          OR title ILIKE '%nodejs%'
+                        THEN 'Backend'
+                        ELSE NULL
+                    END AS role_group,
+                    first_seen_at
+                FROM jobs
+                WHERE is_active
+            ),
+            counts AS (
+                SELECT
+                    role_group,
+                    COUNT(*) FILTER (
+                        WHERE first_seen_at >= NOW() - make_interval(days => CAST($1 AS integer))
+                    )::bigint AS this_period,
+                    COUNT(*) FILTER (
+                        WHERE first_seen_at >= NOW() - make_interval(days => CAST($1 * 2 AS integer))
+                          AND first_seen_at < NOW() - make_interval(days => CAST($1 AS integer))
+                    )::bigint AS prev_period
+                FROM classified_jobs
+                WHERE role_group IS NOT NULL
+                GROUP BY role_group
+            )
+            SELECT
+                role_groups.role_group,
+                COALESCE(counts.this_period, 0)::bigint AS this_period,
+                COALESCE(counts.prev_period, 0)::bigint AS prev_period
+            FROM role_groups
+            LEFT JOIN counts USING (role_group)
+            ORDER BY ARRAY_POSITION(
+                ARRAY['Frontend', 'Backend', 'Fullstack', 'DevOps', 'Data/ML', 'QA', 'Design', 'Management']::text[],
+                role_groups.role_group
+            )
+            "#,
+        )
+        .bind(period_days)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| MarketRoleDemandEntry {
+                trend: compare_market_counts(row.this_period, row.prev_period),
+                role_group: row.role_group,
+                this_period: row.this_period,
+                prev_period: row.prev_period,
+            })
+            .collect())
+    }
+}
+
+fn compare_market_counts(this_period: i64, prev_period: i64) -> MarketTrendDirection {
+    match this_period.cmp(&prev_period) {
+        std::cmp::Ordering::Greater => MarketTrendDirection::Up,
+        std::cmp::Ordering::Less => MarketTrendDirection::Down,
+        std::cmp::Ordering::Equal => MarketTrendDirection::Stable,
     }
 }
 

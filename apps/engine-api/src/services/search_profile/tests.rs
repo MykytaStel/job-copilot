@@ -136,10 +136,7 @@ fn works_when_preferences_are_mostly_empty() {
     assert_eq!(search_profile.work_modes, Vec::<WorkMode>::new());
     assert_eq!(search_profile.allowed_sources, Vec::<SourceId>::new());
     assert_eq!(search_profile.primary_role_confidence, Some(100));
-    assert_eq!(
-        search_profile.target_roles,
-        vec![RoleId::MobileEngineer]
-    );
+    assert_eq!(search_profile.target_roles, vec![RoleId::MobileEngineer]);
     assert_eq!(
         search_profile.search_terms,
         vec!["mobile engineer", "senior mobile engineer",]
