@@ -31,6 +31,11 @@ export function useProfilePage() {
   const [email, setEmail] = useState('');
   const [location, setLocation] = useState('');
   const [rawText, setRawText] = useState('');
+  const [yearsOfExperience, setYearsOfExperience] = useState('');
+  const [salaryMin, setSalaryMin] = useState('');
+  const [salaryMax, setSalaryMax] = useState('');
+  const [salaryCurrency, setSalaryCurrency] = useState('USD');
+  const [languages, setLanguages] = useState<string[]>([]);
   const [targetRegions, setTargetRegions] = useState<SearchProfileBuildResult['searchProfile']['targetRegions']>([]);
   const [workModes, setWorkModes] = useState<SearchProfileBuildResult['searchProfile']['workModes']>([]);
   const [preferredRoles, setPreferredRoles] = useState<string[]>([]);
@@ -65,6 +70,11 @@ export function useProfilePage() {
     setName(profileQuery.data.name);
     setEmail(profileQuery.data.email);
     setLocation(profileQuery.data.location ?? '');
+    setYearsOfExperience(profileQuery.data.yearsOfExperience?.toString() ?? '');
+    setSalaryMin(profileQuery.data.salaryMin?.toString() ?? '');
+    setSalaryMax(profileQuery.data.salaryMax?.toString() ?? '');
+    setSalaryCurrency(profileQuery.data.salaryCurrency ?? 'USD');
+    setLanguages(profileQuery.data.languages ?? []);
 
     void getStoredProfileRawText()
       .then(setRawText)
@@ -77,12 +87,22 @@ export function useProfilePage() {
       email: string;
       location?: string;
       rawText: string;
+      yearsOfExperience?: number;
+      salaryMin?: number;
+      salaryMax?: number;
+      salaryCurrency: string;
+      languages: string[];
     }) =>
       saveProfile({
         name: vars.name,
         email: vars.email,
         location: vars.location,
         rawText: vars.rawText,
+        yearsOfExperience: vars.yearsOfExperience,
+        salaryMin: vars.salaryMin,
+        salaryMax: vars.salaryMax,
+        salaryCurrency: vars.salaryCurrency,
+        languages: vars.languages,
         summary: undefined,
         skills: [],
       }),
@@ -212,6 +232,11 @@ export function useProfilePage() {
       email,
       location: location || undefined,
       rawText,
+      yearsOfExperience: parseOptionalNumber(yearsOfExperience),
+      salaryMin: parseOptionalNumber(salaryMin),
+      salaryMax: parseOptionalNumber(salaryMax),
+      salaryCurrency,
+      languages,
     });
   }
 
@@ -229,6 +254,11 @@ export function useProfilePage() {
     email,
     location,
     rawText,
+    yearsOfExperience,
+    salaryMin,
+    salaryMax,
+    salaryCurrency,
+    languages,
     targetRegions,
     workModes,
     preferredRoles,
@@ -246,8 +276,13 @@ export function useProfilePage() {
     setEmail,
     setLocation,
     setRawText,
+    setYearsOfExperience,
+    setSalaryMin,
+    setSalaryMax,
+    setSalaryCurrency,
     setIncludeKeywordsInput,
     setExcludeKeywordsInput,
+    toggleLanguage: (value: string) => setLanguages((current) => toggleValue(current, value)),
     toggleTargetRegion: (value: SearchProfileBuildResult['searchProfile']['targetRegions'][number]) =>
       setTargetRegions((current) => toggleValue(current, value)),
     toggleWorkMode: (value: SearchProfileBuildResult['searchProfile']['workModes'][number]) =>
@@ -263,4 +298,14 @@ export function useProfilePage() {
     openFilePicker: () => fileInputRef.current?.click(),
     handleFileChange,
   };
+}
+
+function parseOptionalNumber(value: string): number | undefined {
+  const normalized = value.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }

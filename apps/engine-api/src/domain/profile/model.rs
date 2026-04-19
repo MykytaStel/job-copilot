@@ -8,8 +8,11 @@ pub struct Profile {
     pub location: Option<String>,
     pub raw_text: String,
     pub analysis: Option<ProfileAnalysis>,
-    pub salary_min_usd: Option<i32>,
-    pub salary_max_usd: Option<i32>,
+    pub years_of_experience: Option<i32>,
+    pub salary_min: Option<i32>,
+    pub salary_max: Option<i32>,
+    pub salary_currency: String,
+    pub languages: Vec<String>,
     pub preferred_work_mode: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -31,6 +34,11 @@ pub struct CreateProfile {
     pub email: String,
     pub location: Option<String>,
     pub raw_text: String,
+    pub years_of_experience: Option<i32>,
+    pub salary_min: Option<i32>,
+    pub salary_max: Option<i32>,
+    pub salary_currency: String,
+    pub languages: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -39,4 +47,9 @@ pub struct UpdateProfile {
     pub email: Option<String>,
     pub location: Option<Option<String>>,
     pub raw_text: Option<String>,
+    pub years_of_experience: Option<Option<i32>>,
+    pub salary_min: Option<Option<i32>>,
+    pub salary_max: Option<Option<i32>>,
+    pub salary_currency: Option<String>,
+    pub languages: Option<Vec<String>>,
 }

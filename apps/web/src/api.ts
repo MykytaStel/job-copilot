@@ -428,6 +428,11 @@ type EngineProfile = {
   email: string;
   location?: string | null;
   raw_text: string;
+  years_of_experience?: number | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  salary_currency?: string | null;
+  languages?: string[] | null;
   analysis?: {
     summary: string;
     primary_role: string;
@@ -994,6 +999,11 @@ function mapProfile(profile: EngineProfile): CandidateProfile {
     name: profile.name,
     email: profile.email,
     location: profile.location ?? undefined,
+    yearsOfExperience: profile.years_of_experience ?? undefined,
+    salaryMin: profile.salary_min ?? undefined,
+    salaryMax: profile.salary_max ?? undefined,
+    salaryCurrency: profile.salary_currency ?? 'USD',
+    languages: profile.languages ?? [],
     summary: profile.analysis?.summary,
     skills: profile.analysis?.skills ?? [],
     updatedAt: profile.updated_at,
@@ -1482,8 +1492,13 @@ export async function saveProfile(
   const body = {
     name: payload.name,
     email: payload.email,
-    location: payload.location,
+    location: payload.location ?? null,
     raw_text: payload.rawText,
+    years_of_experience: payload.yearsOfExperience ?? null,
+    salary_min: payload.salaryMin ?? null,
+    salary_max: payload.salaryMax ?? null,
+    salary_currency: payload.salaryCurrency ?? null,
+    languages: payload.languages,
   };
 
   const profile = profileId
@@ -1506,13 +1521,9 @@ export async function saveProfile(
   ]);
 
   return {
-    id: profile.id,
-    name: profile.name,
-    email: profile.email,
-    location: profile.location ?? undefined,
+    ...mapProfile(profile),
     summary: analyzed.summary,
     skills: analyzed.skills,
-    updatedAt: profile.updated_at,
   };
 }
 

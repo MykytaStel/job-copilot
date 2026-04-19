@@ -112,8 +112,11 @@ impl ProfilesServiceStub {
             location: input.location,
             raw_text: input.raw_text,
             analysis: None,
-            salary_min_usd: None,
-            salary_max_usd: None,
+            years_of_experience: input.years_of_experience,
+            salary_min: input.salary_min,
+            salary_max: input.salary_max,
+            salary_currency: input.salary_currency,
+            languages: input.languages,
             preferred_work_mode: None,
             created_at: "2026-04-11T00:00:00+00:00".to_string(),
             updated_at: "2026-04-11T00:00:00+00:00".to_string(),
@@ -167,6 +170,21 @@ impl ProfilesServiceStub {
             profile.raw_text = raw_text;
             profile.analysis = None;
             profile.skills_updated_at = None;
+        }
+        if let Some(years_of_experience) = input.years_of_experience {
+            profile.years_of_experience = years_of_experience;
+        }
+        if let Some(salary_min) = input.salary_min {
+            profile.salary_min = salary_min;
+        }
+        if let Some(salary_max) = input.salary_max {
+            profile.salary_max = salary_max;
+        }
+        if let Some(salary_currency) = input.salary_currency {
+            profile.salary_currency = salary_currency;
+        }
+        if let Some(languages) = input.languages {
+            profile.languages = languages;
         }
 
         profile.updated_at = "2026-04-11T00:00:01+00:00".to_string();
@@ -246,6 +264,11 @@ mod tests {
                 email: "jane@example.com".to_string(),
                 location: Some("Kyiv".to_string()),
                 raw_text: "Senior frontend engineer".to_string(),
+                years_of_experience: None,
+                salary_min: None,
+                salary_max: None,
+                salary_currency: "USD".to_string(),
+                languages: vec![],
             })
             .await
             .expect("stub should create a profile");
@@ -264,6 +287,11 @@ mod tests {
                 email: "jane@example.com".to_string(),
                 location: Some("Kyiv".to_string()),
                 raw_text: "Senior frontend engineer".to_string(),
+                years_of_experience: None,
+                salary_min: None,
+                salary_max: None,
+                salary_currency: "USD".to_string(),
+                languages: vec![],
             })
             .await
             .expect("stub should create a profile");
