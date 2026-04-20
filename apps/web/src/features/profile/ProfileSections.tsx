@@ -652,6 +652,15 @@ function SearchResultsSection({
     result.meta.filteredOutBySource > 0
       ? ` ${result.meta.filteredOutBySource} filtered out by source.`
       : '';
+  const rerankerModeRequested = result.meta.rerankerModeRequested?.trim() || null;
+  const rerankerModeActive = result.meta.rerankerModeActive?.trim() || null;
+  const rerankerFallbackReason = result.meta.rerankerFallbackReason?.trim() || null;
+  const showRerankerRuntime =
+    import.meta.env.DEV ||
+    Boolean(rerankerFallbackReason) ||
+    (Boolean(rerankerModeRequested) &&
+      Boolean(rerankerModeActive) &&
+      rerankerModeRequested !== rerankerModeActive);
 
   useEffect(() => {
     void logJobImpressionsOnce({
@@ -667,6 +676,37 @@ function SearchResultsSection({
         {summary}
         {filteredSummary}
       </p>
+
+      {showRerankerRuntime && (
+        <div className="rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-border bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Debug
+            </span>
+            <span className="text-xs font-medium text-card-foreground">Reranker runtime</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+            {rerankerModeRequested && (
+              <span>
+                Requested <code className="font-mono text-[11px] text-card-foreground">{rerankerModeRequested}</code>
+              </span>
+            )}
+            {rerankerModeActive && (
+              <span>
+                Active <code className="font-mono text-[11px] text-card-foreground">{rerankerModeActive}</code>
+              </span>
+            )}
+            {(rerankerFallbackReason || import.meta.env.DEV) && (
+              <span>
+                Fallback{' '}
+                <code className="font-mono text-[11px] text-card-foreground">
+                  {rerankerFallbackReason ?? 'none'}
+                </code>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {result.results.length === 0 ? (
         <EmptyState message="No active jobs matched this search profile." />
