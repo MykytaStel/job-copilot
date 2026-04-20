@@ -97,6 +97,7 @@ Metrics are defensive and deterministic:
 
 - top-k positives
 - average label score in the top N
+- average training weight in the top N
 - positive hit rate over all positive examples
 
 Empty datasets and datasets with no positives return zero-valued metrics instead of failing.
@@ -118,10 +119,23 @@ Feature inputs are explicit numeric or boolean fields already present in the exp
 
 The model does not use text embeddings and does not call an LLM.
 
+Default ML-side outcome weights stay conservative and inspectable:
+
+- `applied = 1.0`
+- `saved_only = 0.6`
+- `viewed_only = 0.4`
+- `dismissed = 0.0`
+- `medium_default = 0.5` only as a fallback for legacy exports that do not include
+  enough signal detail to distinguish save-only from view-only examples
+
+`apps/ml/app/reranker_signal_weights.py` is the single config/helper entry point for this
+mapping, and trained artifacts record the policy version plus the exact weights used.
+
 The saved artifact is JSON and includes:
 
 - `artifact_version = trained_reranker_v2`
 - `model_type = logistic_regression`
+- signal weight policy version and exact signal weights
 - feature names and feature transforms
 - feature weights and intercept
 - training counts and loss

@@ -4,6 +4,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.reranker_signal_weights import (
+    DEFAULT_OUTCOME_SIGNAL_WEIGHTS,
+    OutcomeSignalWeightConfig,
+    signal_weight_config_from_payload,
+    training_target_for_example,
+)
+
 
 RankingVariant = Literal[
     "deterministic",
@@ -24,12 +31,31 @@ class OutcomeRankingFeatures(BaseModel):
     matched_keyword_count: int = Field(default=0, ge=0)
 
 
+class OutcomeSignals(BaseModel):
+    viewed: bool = False
+    saved: bool = False
+    hidden: bool = False
+    bad_fit: bool = False
+    applied: bool = False
+    dismissed: bool = False
+    explicit_feedback: bool = False
+    explicit_saved: bool = False
+    explicit_hidden: bool = False
+    explicit_bad_fit: bool = False
+    viewed_event_count: int = Field(default=0, ge=0)
+    saved_event_count: int = Field(default=0, ge=0)
+    applied_event_count: int = Field(default=0, ge=0)
+    dismissed_event_count: int = Field(default=0, ge=0)
+
+
 class OutcomeExample(BaseModel):
     job_id: str = Field(min_length=1)
     source: str | None = None
     role_family: str | None = None
     label: Literal["positive", "medium", "negative"]
     label_score: int = Field(ge=0, le=2)
+    label_reasons: list[str] = Field(default_factory=list)
+    signals: OutcomeSignals | None = None
     ranking: OutcomeRankingFeatures
 
 
@@ -45,12 +71,14 @@ class RankingVariantMetrics(BaseModel):
     ordered_job_ids: list[str]
     top_k_positives: int
     average_label_score_top_n: float
+    average_training_weight_top_n: float
     positive_hit_rate: float
 
 
 class RerankerEvaluationSummary(BaseModel):
     profile_id: str
     label_policy_version: str
+    signal_weight_policy_version: str
     example_count: int
     positive_count: int
     top_n: int
@@ -61,6 +89,7 @@ def evaluate_dataset(
     dataset: OutcomeDataset | dict,
     top_n: int = 10,
     trained_model: Any | None = None,
+    signal_weights: OutcomeSignalWeightConfig | None = None,
 ) -> RerankerEvaluationSummary:
     parsed = (
         dataset
@@ -69,15 +98,32 @@ def evaluate_dataset(
     )
     safe_top_n = max(1, top_n)
     positive_count = sum(1 for example in parsed.examples if example.label == "positive")
+    effective_signal_weights = resolve_signal_weights(
+        signal_weights=signal_weights,
+        trained_model=trained_model,
+    )
 
     variants = [
-        evaluate_variant(parsed.examples, "deterministic", safe_top_n, positive_count),
-        evaluate_variant(parsed.examples, "deterministic_behavior", safe_top_n, positive_count),
+        evaluate_variant(
+            parsed.examples,
+            "deterministic",
+            safe_top_n,
+            positive_count,
+            signal_weights=effective_signal_weights,
+        ),
+        evaluate_variant(
+            parsed.examples,
+            "deterministic_behavior",
+            safe_top_n,
+            positive_count,
+            signal_weights=effective_signal_weights,
+        ),
         evaluate_variant(
             parsed.examples,
             "deterministic_behavior_learned",
             safe_top_n,
             positive_count,
+            signal_weights=effective_signal_weights,
         ),
     ]
     if trained_model is not None:
@@ -88,12 +134,14 @@ def evaluate_dataset(
                 safe_top_n,
                 positive_count,
                 trained_model=trained_model,
+                signal_weights=effective_signal_weights,
             )
         )
 
     return RerankerEvaluationSummary(
         profile_id=parsed.profile_id,
         label_policy_version=parsed.label_policy_version,
+        signal_weight_policy_version=effective_signal_weights.policy_version,
         example_count=len(parsed.examples),
         positive_count=positive_count,
         top_n=safe_top_n,
@@ -107,6 +155,7 @@ def evaluate_variant(
     top_n: int,
     positive_count: int,
     trained_model: Any | None = None,
+    signal_weights: OutcomeSignalWeightConfig = DEFAULT_OUTCOME_SIGNAL_WEIGHTS,
 ) -> RankingVariantMetrics:
     ordered = sorted(
         examples,
@@ -115,7 +164,11 @@ def evaluate_variant(
     top_examples = ordered[:top_n]
     top_positive_count = sum(1 for example in top_examples if example.label == "positive")
     label_score_sum = sum(example.label_score for example in top_examples)
+    training_weight_sum = sum(
+        training_target_for_example(example, signal_weights) for example in top_examples
+    )
     average_label_score = safe_ratio(label_score_sum, len(top_examples))
+    average_training_weight = safe_ratio(training_weight_sum, len(top_examples))
 
     return RankingVariantMetrics(
         variant=variant,
@@ -123,6 +176,7 @@ def evaluate_variant(
         ordered_job_ids=[example.job_id for example in ordered],
         top_k_positives=top_positive_count,
         average_label_score_top_n=round(average_label_score, 6),
+        average_training_weight_top_n=round(average_training_weight, 6),
         positive_hit_rate=round(safe_ratio(top_positive_count, positive_count), 6),
     )
 
@@ -147,6 +201,24 @@ def safe_ratio(numerator: int | float, denominator: int) -> float:
     if denominator == 0:
         return 0.0
     return float(numerator) / denominator
+
+
+def resolve_signal_weights(
+    *,
+    signal_weights: OutcomeSignalWeightConfig | None,
+    trained_model: Any | None,
+) -> OutcomeSignalWeightConfig:
+    if signal_weights is not None:
+        return signal_weights
+
+    artifact = getattr(trained_model, "artifact", None)
+    if artifact is None:
+        return DEFAULT_OUTCOME_SIGNAL_WEIGHTS
+
+    return signal_weight_config_from_payload(
+        getattr(artifact, "signal_weights", None),
+        policy_version=getattr(artifact, "signal_weight_policy_version", None),
+    )
 
 
 def main() -> None:

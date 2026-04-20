@@ -8,6 +8,12 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.reranker_evaluation import OutcomeDataset, OutcomeExample, evaluate_dataset
+from app.reranker_signal_weights import (
+    DEFAULT_OUTCOME_SIGNAL_WEIGHTS,
+    OutcomeSignalWeightConfig,
+    resolve_example_signal_bucket,
+    training_target_for_example,
+)
 
 
 ARTIFACT_VERSION = "trained_reranker_v2"
@@ -43,6 +49,9 @@ class TrainingSummary(BaseModel):
     positive_count: int
     medium_count: int
     negative_count: int
+    saved_only_count: int = 0
+    viewed_only_count: int = 0
+    medium_default_count: int = 0
     epochs: int
     learning_rate: float
     l2: float
@@ -53,6 +62,10 @@ class TrainedRerankerArtifact(BaseModel):
     artifact_version: str = ARTIFACT_VERSION
     model_type: str = MODEL_TYPE
     label_policy_version: str
+    signal_weight_policy_version: str = DEFAULT_OUTCOME_SIGNAL_WEIGHTS.policy_version
+    signal_weights: dict[str, float] = Field(
+        default_factory=DEFAULT_OUTCOME_SIGNAL_WEIGHTS.as_dict
+    )
     feature_names: list[str]
     feature_transforms: dict[str, str]
     weights: dict[str, float]
@@ -144,6 +157,7 @@ def train_model(
     learning_rate: float = 0.08,
     l2: float = 0.01,
     max_score_delta: int = 8,
+    signal_weights: OutcomeSignalWeightConfig = DEFAULT_OUTCOME_SIGNAL_WEIGHTS,
 ) -> TrainedRerankerModel:
     examples: list[OutcomeExample] = []
     policy_versions: set[str] = set()
@@ -171,7 +185,10 @@ def train_model(
         [extract_features(example)[feature_name] for feature_name in feature_names]
         for example in examples
     ]
-    labels = [example.label_score / 2.0 for example in examples]
+    labels = [
+        training_target_for_example(example, signal_weights)
+        for example in examples
+    ]
     weights = [0.0 for _ in feature_names]
     intercept = smoothed_logit(sum(labels) / len(labels))
 
@@ -188,11 +205,22 @@ def train_model(
     positive_count = sum(1 for example in examples if example.label == "positive")
     medium_count = sum(1 for example in examples if example.label == "medium")
     negative_count = sum(1 for example in examples if example.label == "negative")
+    bucket_counts = {
+        "saved_only": 0,
+        "viewed_only": 0,
+        "medium_default": 0,
+    }
+    for example in examples:
+        bucket = resolve_example_signal_bucket(example)
+        if bucket in bucket_counts:
+            bucket_counts[bucket] += 1
     label_policy_version = (
         next(iter(policy_versions)) if len(policy_versions) == 1 else "mixed"
     )
     artifact = TrainedRerankerArtifact(
         label_policy_version=label_policy_version,
+        signal_weight_policy_version=signal_weights.policy_version,
+        signal_weights=signal_weights.as_dict(),
         feature_names=feature_names,
         feature_transforms=dict(FEATURE_TRANSFORMS),
         weights={
@@ -206,6 +234,9 @@ def train_model(
             positive_count=positive_count,
             medium_count=medium_count,
             negative_count=negative_count,
+            saved_only_count=bucket_counts["saved_only"],
+            viewed_only_count=bucket_counts["viewed_only"],
+            medium_default_count=bucket_counts["medium_default"],
             epochs=safe_epochs,
             learning_rate=safe_learning_rate,
             l2=safe_l2,
@@ -297,7 +328,11 @@ def main() -> None:
         label_policy_version=model.artifact.label_policy_version,
         examples=[example for dataset in datasets for example in dataset.examples],
     )
-    summary = evaluate_dataset(merged, top_n=args.top_n, trained_model=model)
+    summary = evaluate_dataset(
+        merged,
+        top_n=args.top_n,
+        trained_model=model,
+    )
     print(
         json.dumps(
             {
