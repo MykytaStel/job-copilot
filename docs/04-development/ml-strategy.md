@@ -43,19 +43,31 @@
 
 ```python
 # apps/ml/app/bootstrap_training.py
-# Генерує labeled examples з user_events таблиці:
+# Працює з export dataset від engine-api, а не з сирим event→label маппінгом.
+# export already uses label_policy_version = outcome_label_v2
 
-event_to_label = {
-    'job_saved':     +1.0,   # позитивний
-    'job_applied':   +1.0,   # сильний позитивний
-    'job_hidden':    -1.0,   # негативний
-    'job_bad_fit':   -1.0,   # сильний негативний
+example["signals"] = {
+    "viewed": True,
+    "saved": True,
+    "hidden": False,
+    "bad_fit": False,
+    "applied": False,
+    "dismissed": False,
+    "explicit_feedback": True,
+    "explicit_saved": True,
+    "explicit_hidden": False,
+    "explicit_bad_fit": False,
+    "viewed_event_count": 1,
+    "saved_event_count": 1,
+    "applied_event_count": 0,
+    "dismissed_event_count": 0,
 }
-# Відправляє до trained_reranker.train()
+# label_reasons: ["saved"] / ["viewed"] / ["applied"] / ["dismissed", ...]
+# Далі передає готові normalized examples в trained_reranker.train()
 ```
 
 **Коли retrain:**
-- Порогова умова: ≥ 30 labeled examples (save+hide+badfit)
+- Порогова умова: ≥ 30 labelable outcome examples після v2 normalization
 - Тригер: ручний виклик `POST /api/v1/reranker/retrain` або CLI
 - Зберігати нову модель в `models/trained-reranker-v2.json`
 
