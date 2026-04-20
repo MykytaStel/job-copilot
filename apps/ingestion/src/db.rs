@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+use tracing::{info, warn};
 
 use crate::models::{IngestionBatch, JobVariant, NormalizedJob};
 
@@ -29,6 +30,16 @@ struct ReconcileSummary {
     jobs_reactivated: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+struct ExistingVariantState {
+    job_id: String,
+    dedupe_key: String,
+    raw_hash: String,
+    last_seen_at: String,
+    fetched_at: String,
+    is_active: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum VariantWriteResult {
     Created,
@@ -54,6 +65,8 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), String> {
 }
 
 pub async fn upsert_batch(pool: &PgPool, batch: &IngestionBatch) -> Result<UpsertSummary, String> {
+    batch.validate()?;
+
     let mut tx = pool
         .begin()
         .await
@@ -112,29 +125,51 @@ async fn resolve_batch(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     batch: &IngestionBatch,
 ) -> Result<IngestionBatch, String> {
+    batch.validate()?;
+
     if batch.job_variants.is_empty() {
         return Ok(batch.clone());
-    }
-
-    if batch.jobs.len() != batch.job_variants.len() {
-        return Err(format!(
-            "adapter-backed batches must contain one job per variant; got {} jobs and {} variants",
-            batch.jobs.len(),
-            batch.job_variants.len()
-        ));
     }
 
     let mut jobs_by_id = BTreeMap::<String, NormalizedJob>::new();
     let mut variants = Vec::with_capacity(batch.job_variants.len());
     let mut dedupe_job_ids = BTreeMap::<String, String>::new();
+    let mut stale_variants_skipped = 0usize;
 
     for (job, variant) in batch.jobs.iter().zip(batch.job_variants.iter()) {
+        let existing_variant =
+            existing_variant_state(tx, &variant.source, &variant.source_job_id).await?;
+
+        if should_skip_stale_variant(existing_variant.as_ref(), variant) {
+            stale_variants_skipped += 1;
+            warn!(
+                source = %variant.source,
+                source_job_id = %variant.source_job_id,
+                incoming_last_seen_at = %variant.last_seen_at,
+                incoming_fetched_at = %variant.fetched_at,
+                existing_last_seen_at = existing_variant
+                    .as_ref()
+                    .map(|state| state.last_seen_at.as_str())
+                    .unwrap_or(""),
+                existing_fetched_at = existing_variant
+                    .as_ref()
+                    .map(|state| state.fetched_at.as_str())
+                    .unwrap_or(""),
+                incoming_is_active = variant.is_active,
+                existing_is_active = existing_variant.as_ref().map(|state| state.is_active),
+                "skipping stale source variant update"
+            );
+            continue;
+        }
+
+        if let Some(existing_variant) = existing_variant.as_ref() {
+            validate_dedupe_transition(tx, existing_variant, variant).await?;
+        }
+
         let resolved_job_id = if let Some(job_id) = dedupe_job_ids.get(&variant.dedupe_key) {
             job_id.clone()
-        } else if let Some(job_id) =
-            existing_job_id_for_variant(tx, &variant.source, &variant.source_job_id).await?
-        {
-            job_id
+        } else if let Some(existing_variant) = existing_variant.as_ref() {
+            existing_variant.job_id.clone()
         } else if let Some(job_id) = existing_job_id_for_dedupe_key(tx, &variant.dedupe_key).await?
         {
             job_id
@@ -156,20 +191,33 @@ async fn resolve_batch(
         variants.push(resolved_variant);
     }
 
+    if stale_variants_skipped > 0 {
+        info!(
+            stale_variants_skipped,
+            "adapter-backed batch skipped stale source variants"
+        );
+    }
+
     Ok(IngestionBatch {
         jobs: jobs_by_id.into_values().collect(),
         job_variants: variants,
     })
 }
 
-async fn existing_job_id_for_variant(
+async fn existing_variant_state(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     source: &str,
     source_job_id: &str,
-) -> Result<Option<String>, String> {
-    sqlx::query_scalar::<_, String>(
+) -> Result<Option<ExistingVariantState>, String> {
+    sqlx::query_as::<_, ExistingVariantState>(
         r#"
-        SELECT job_id
+        SELECT
+            job_id,
+            dedupe_key,
+            raw_hash,
+            TO_CHAR(last_seen_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_seen_at,
+            TO_CHAR(fetched_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS fetched_at,
+            is_active
         FROM job_variants
         WHERE source = $1 AND source_job_id = $2
         LIMIT 1
@@ -182,6 +230,82 @@ async fn existing_job_id_for_variant(
     .map_err(|error| {
         format!("failed to resolve existing variant '{source}:{source_job_id}': {error}")
     })
+}
+
+fn should_skip_stale_variant(
+    existing_variant: Option<&ExistingVariantState>,
+    incoming_variant: &JobVariant,
+) -> bool {
+    let Some(existing_variant) = existing_variant else {
+        return false;
+    };
+
+    let incoming_last_seen = chrono::DateTime::parse_from_rfc3339(&incoming_variant.last_seen_at);
+    let existing_last_seen = chrono::DateTime::parse_from_rfc3339(&existing_variant.last_seen_at);
+    let incoming_fetched_at = chrono::DateTime::parse_from_rfc3339(&incoming_variant.fetched_at);
+    let existing_fetched_at = chrono::DateTime::parse_from_rfc3339(&existing_variant.fetched_at);
+
+    match (
+        incoming_last_seen,
+        existing_last_seen,
+        incoming_fetched_at,
+        existing_fetched_at,
+    ) {
+        (
+            Ok(incoming_last_seen),
+            Ok(existing_last_seen),
+            Ok(incoming_fetched_at),
+            Ok(existing_fetched_at),
+        ) => {
+            if incoming_last_seen < existing_last_seen {
+                return true;
+            }
+
+            incoming_last_seen == existing_last_seen
+                && incoming_fetched_at <= existing_fetched_at
+                && (incoming_variant.is_active != existing_variant.is_active
+                    || incoming_variant.dedupe_key != existing_variant.dedupe_key
+                    || incoming_variant.raw_hash != existing_variant.raw_hash)
+        }
+        _ => incoming_variant.last_seen_at < existing_variant.last_seen_at,
+    }
+}
+
+async fn validate_dedupe_transition(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    existing_variant: &ExistingVariantState,
+    incoming_variant: &JobVariant,
+) -> Result<(), String> {
+    if existing_variant.dedupe_key == incoming_variant.dedupe_key {
+        return Ok(());
+    }
+
+    if let Some(conflict_job_id) =
+        existing_job_id_for_dedupe_key(tx, &incoming_variant.dedupe_key).await?
+    {
+        if conflict_job_id != existing_variant.job_id {
+            return Err(format!(
+                "source variant '{}:{}' changed dedupe fingerprint from '{}' to '{}' but the new fingerprint already belongs to canonical job '{}' instead of '{}'",
+                incoming_variant.source,
+                incoming_variant.source_job_id,
+                existing_variant.dedupe_key,
+                incoming_variant.dedupe_key,
+                conflict_job_id,
+                existing_variant.job_id
+            ));
+        }
+    }
+
+    warn!(
+        source = %incoming_variant.source,
+        source_job_id = %incoming_variant.source_job_id,
+        job_id = %existing_variant.job_id,
+        previous_dedupe_key = %existing_variant.dedupe_key,
+        incoming_dedupe_key = %incoming_variant.dedupe_key,
+        "source variant dedupe fingerprint changed"
+    );
+
+    Ok(())
 }
 
 async fn existing_job_id_for_dedupe_key(
@@ -362,12 +486,17 @@ async fn upsert_job(
             posted_at = EXCLUDED.posted_at,
             first_seen_at = LEAST(jobs.first_seen_at, EXCLUDED.first_seen_at),
             last_seen_at = GREATEST(jobs.last_seen_at, EXCLUDED.last_seen_at),
-            is_active = EXCLUDED.is_active,
+            is_active = CASE
+                WHEN EXCLUDED.last_seen_at < jobs.last_seen_at THEN jobs.is_active
+                ELSE EXCLUDED.is_active
+            END,
             inactivated_at = CASE
+                WHEN EXCLUDED.last_seen_at < jobs.last_seen_at THEN jobs.inactivated_at
                 WHEN EXCLUDED.is_active THEN NULL
                 ELSE COALESCE(jobs.inactivated_at, EXCLUDED.last_seen_at)
             END,
             reactivated_at = CASE
+                WHEN EXCLUDED.last_seen_at < jobs.last_seen_at THEN jobs.reactivated_at
                 WHEN NOT jobs.is_active AND EXCLUDED.is_active THEN EXCLUDED.last_seen_at
                 ELSE jobs.reactivated_at
             END
@@ -416,7 +545,11 @@ async fn upsert_job_variant(
                 $11::boolean AS is_active
         ),
         existing AS (
-            SELECT raw_hash
+            SELECT
+                raw_hash,
+                dedupe_key,
+                is_active,
+                last_seen_at::text AS last_seen_at
             FROM job_variants
             WHERE source = $4 AND source_job_id = $5
         ),
@@ -454,16 +587,41 @@ async fn upsert_job_variant(
             FROM incoming
             ON CONFLICT (source, source_job_id)
             DO UPDATE SET
-                id = EXCLUDED.id,
-                job_id = EXCLUDED.job_id,
-                dedupe_key = EXCLUDED.dedupe_key,
-                source_url = EXCLUDED.source_url,
-                raw_hash = EXCLUDED.raw_hash,
-                raw_payload = EXCLUDED.raw_payload,
-                fetched_at = EXCLUDED.fetched_at,
+                id = CASE
+                    WHEN EXCLUDED.last_seen_at < job_variants.last_seen_at THEN job_variants.id
+                    ELSE EXCLUDED.id
+                END,
+                job_id = CASE
+                    WHEN EXCLUDED.last_seen_at < job_variants.last_seen_at THEN job_variants.job_id
+                    ELSE EXCLUDED.job_id
+                END,
+                dedupe_key = CASE
+                    WHEN EXCLUDED.last_seen_at < job_variants.last_seen_at THEN job_variants.dedupe_key
+                    ELSE EXCLUDED.dedupe_key
+                END,
+                source_url = CASE
+                    WHEN EXCLUDED.last_seen_at < job_variants.last_seen_at THEN job_variants.source_url
+                    ELSE EXCLUDED.source_url
+                END,
+                raw_hash = CASE
+                    WHEN EXCLUDED.last_seen_at < job_variants.last_seen_at THEN job_variants.raw_hash
+                    ELSE EXCLUDED.raw_hash
+                END,
+                raw_payload = CASE
+                    WHEN EXCLUDED.last_seen_at < job_variants.last_seen_at THEN job_variants.raw_payload
+                    ELSE EXCLUDED.raw_payload
+                END,
+                fetched_at = CASE
+                    WHEN EXCLUDED.last_seen_at < job_variants.last_seen_at THEN job_variants.fetched_at
+                    ELSE GREATEST(job_variants.fetched_at, EXCLUDED.fetched_at)
+                END,
                 last_seen_at = GREATEST(job_variants.last_seen_at, EXCLUDED.last_seen_at),
-                is_active = EXCLUDED.is_active,
+                is_active = CASE
+                    WHEN EXCLUDED.last_seen_at < job_variants.last_seen_at THEN job_variants.is_active
+                    ELSE EXCLUDED.is_active
+                END,
                 inactivated_at = CASE
+                    WHEN EXCLUDED.last_seen_at < job_variants.last_seen_at THEN job_variants.inactivated_at
                     WHEN EXCLUDED.is_active THEN NULL
                     ELSE COALESCE(job_variants.inactivated_at, EXCLUDED.last_seen_at)
                 END
@@ -471,7 +629,18 @@ async fn upsert_job_variant(
         )
         SELECT CASE
             WHEN NOT EXISTS (SELECT 1 FROM existing) THEN 'created'
-            WHEN EXISTS (SELECT 1 FROM existing WHERE raw_hash = $7) THEN 'unchanged'
+            WHEN EXISTS (
+                SELECT 1
+                FROM existing
+                WHERE $10::timestamptz < last_seen_at::timestamptz
+            ) THEN 'unchanged'
+            WHEN EXISTS (
+                SELECT 1
+                FROM existing
+                WHERE raw_hash = $7
+                  AND dedupe_key = $3
+                  AND is_active = $11
+            ) THEN 'unchanged'
             ELSE 'updated'
         END
         FROM upserted
@@ -563,6 +732,15 @@ async fn mark_missing_variants_inactive(
         format!("failed to mark missing variants inactive for source '{source}': {error}")
     })?;
 
+    if !rows.is_empty() {
+        info!(
+            source,
+            refreshed_at,
+            variants_inactivated = rows.len(),
+            "marked missing source variants inactive"
+        );
+    }
+
     Ok(InactivationResult {
         variants_inactivated: rows.len(),
         job_ids: rows,
@@ -617,7 +795,7 @@ async fn reconcile_jobs(
     .await
     .map_err(|error| format!("failed to reconcile canonical jobs: {error}"))?;
 
-    Ok(ReconcileSummary {
+    let summary = ReconcileSummary {
         jobs_inactivated: rows
             .iter()
             .filter(|(was_active, is_active_now)| *was_active && !*is_active_now)
@@ -626,7 +804,17 @@ async fn reconcile_jobs(
             .iter()
             .filter(|(was_active, is_active_now)| !*was_active && *is_active_now)
             .count(),
-    })
+    };
+
+    if summary.jobs_inactivated > 0 || summary.jobs_reactivated > 0 {
+        info!(
+            jobs_inactivated = summary.jobs_inactivated,
+            jobs_reactivated = summary.jobs_reactivated,
+            "reconciled canonical job lifecycle state"
+        );
+    }
+
+    Ok(summary)
 }
 
 async fn create_profile_notifications(
@@ -809,9 +997,25 @@ impl Default for UpsertSummary {
 
 #[cfg(test)]
 mod tests {
-    use crate::models::{JobVariant, NormalizedJob};
+    use std::env;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{SourceRefresh, build_source_refreshes, merge_job};
+    use sqlx::PgPool;
+    use sqlx::postgres::PgPoolOptions;
+
+    use crate::adapters::SourceAdapter;
+    use crate::adapters::mock_source::MockSourceAdapter;
+    use crate::models::{
+        IngestionBatch, JobVariant, MockSourceInput, NormalizedJob, canonical_job_id,
+        compute_dedupe_key,
+    };
+
+    use super::{SourceRefresh, build_source_refreshes, merge_job, run_migrations, upsert_batch};
+
+    const DEFAULT_TEST_DATABASE_URL: &str =
+        "postgres://jobcopilot:jobcopilot@127.0.0.1:5432/jobcopilot";
 
     fn variant(source_job_id: &str, fetched_at: &str) -> JobVariant {
         JobVariant {
@@ -892,5 +1096,486 @@ mod tests {
         assert_eq!(current.posted_at.as_deref(), Some("2026-04-14T08:00:00Z"));
         assert_eq!(current.last_seen_at, "2026-04-16T09:00:00Z");
         assert!(current.is_active);
+    }
+
+    #[derive(Debug)]
+    struct TestDatabase {
+        admin_database_url: String,
+        database_name: String,
+        pool: PgPool,
+    }
+
+    impl TestDatabase {
+        async fn try_new() -> Option<Self> {
+            let base_database_url = env::var("DATABASE_URL")
+                .ok()
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| DEFAULT_TEST_DATABASE_URL.to_string());
+            let admin_database_url = match with_database_name(&base_database_url, "postgres") {
+                Ok(value) => value,
+                Err(error) => {
+                    eprintln!("skipping ingestion db integration tests: {error}");
+                    return None;
+                }
+            };
+            let database_name = format!(
+                "ingestion_test_{}_{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("system time should be after epoch")
+                    .as_nanos()
+            );
+
+            let admin_pool = match PgPoolOptions::new()
+                .max_connections(1)
+                .connect(&admin_database_url)
+                .await
+            {
+                Ok(pool) => pool,
+                Err(error) => {
+                    eprintln!(
+                        "skipping ingestion db integration tests: failed to connect to Postgres at '{admin_database_url}': {error}"
+                    );
+                    return None;
+                }
+            };
+
+            if let Err(error) = sqlx::query(&format!("CREATE DATABASE \"{database_name}\""))
+                .execute(&admin_pool)
+                .await
+            {
+                eprintln!(
+                    "skipping ingestion db integration tests: failed to create database '{database_name}': {error}"
+                );
+                admin_pool.close().await;
+                return None;
+            }
+
+            admin_pool.close().await;
+
+            let database_url = match with_database_name(&base_database_url, &database_name) {
+                Ok(value) => value,
+                Err(error) => {
+                    eprintln!("skipping ingestion db integration tests: {error}");
+                    return None;
+                }
+            };
+            let pool = match PgPoolOptions::new()
+                .max_connections(5)
+                .connect(&database_url)
+                .await
+            {
+                Ok(pool) => pool,
+                Err(error) => {
+                    eprintln!(
+                        "skipping ingestion db integration tests: failed to connect to test database '{database_name}': {error}"
+                    );
+                    let _ = cleanup_database(&admin_database_url, &database_name).await;
+                    return None;
+                }
+            };
+
+            if let Err(error) = run_migrations(&pool).await {
+                eprintln!(
+                    "skipping ingestion db integration tests: failed to run migrations in '{database_name}': {error}"
+                );
+                pool.close().await;
+                let _ = cleanup_database(&admin_database_url, &database_name).await;
+                return None;
+            }
+
+            Some(Self {
+                admin_database_url,
+                database_name,
+                pool,
+            })
+        }
+
+        async fn cleanup(self) {
+            self.pool.close().await;
+            let _ = cleanup_database(&self.admin_database_url, &self.database_name).await;
+        }
+    }
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct VariantState {
+        job_id: String,
+        dedupe_key: String,
+        raw_hash: String,
+        last_seen_at: String,
+        is_active: bool,
+        inactivated_at: Option<String>,
+    }
+
+    #[derive(Debug, sqlx::FromRow)]
+    struct JobState {
+        id: String,
+        title: String,
+        last_seen_at: String,
+        is_active: bool,
+        inactivated_at: Option<String>,
+        reactivated_at: Option<String>,
+    }
+
+    fn with_database_name(database_url: &str, database_name: &str) -> Result<String, String> {
+        let (prefix, query_suffix) = match database_url.split_once('?') {
+            Some((prefix, query)) => (prefix, format!("?{query}")),
+            None => (database_url, String::new()),
+        };
+        let slash_index = prefix.rfind('/').ok_or_else(|| {
+            format!("database URL '{database_url}' does not contain a database name")
+        })?;
+
+        if slash_index + 1 >= prefix.len() {
+            return Err(format!(
+                "database URL '{database_url}' does not contain a database name"
+            ));
+        }
+
+        Ok(format!(
+            "{}{}{}",
+            &prefix[..=slash_index],
+            database_name,
+            query_suffix
+        ))
+    }
+
+    async fn cleanup_database(admin_database_url: &str, database_name: &str) -> Result<(), String> {
+        let admin_pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(admin_database_url)
+            .await
+            .map_err(|error| {
+                format!("failed to reconnect to admin database '{admin_database_url}': {error}")
+            })?;
+
+        sqlx::query(
+            r#"
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE datname = $1
+              AND pid <> pg_backend_pid()
+            "#,
+        )
+        .bind(database_name)
+        .execute(&admin_pool)
+        .await
+        .map_err(|error| {
+            format!("failed to terminate connections for '{database_name}': {error}")
+        })?;
+
+        sqlx::query(&format!("DROP DATABASE IF EXISTS \"{database_name}\""))
+            .execute(&admin_pool)
+            .await
+            .map_err(|error| format!("failed to drop database '{database_name}': {error}"))?;
+
+        admin_pool.close().await;
+        Ok(())
+    }
+
+    fn load_mock_source_fixture(name: &str) -> IngestionBatch {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join(name);
+        let raw = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("failed to read fixture '{}': {error}", path.display()));
+        let payload = serde_json::from_str::<MockSourceInput>(&raw).unwrap_or_else(|error| {
+            panic!("failed to parse fixture '{}': {error}", path.display())
+        });
+        let adapter = MockSourceAdapter;
+        let normalized = adapter.normalize(payload).unwrap_or_else(|error| {
+            panic!("failed to normalize fixture '{}': {error}", path.display())
+        });
+
+        IngestionBatch::from_normalization_results(normalized).unwrap_or_else(|error| {
+            panic!(
+                "failed to build batch from fixture '{}': {error}",
+                path.display()
+            )
+        })
+    }
+
+    async fn fetch_variant_state(pool: &PgPool, source_job_id: &str) -> VariantState {
+        sqlx::query_as::<_, VariantState>(
+            r#"
+            SELECT
+                job_id,
+                dedupe_key,
+                raw_hash,
+                TO_CHAR(last_seen_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_seen_at,
+                is_active,
+                TO_CHAR(inactivated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS inactivated_at
+            FROM job_variants
+            WHERE source = 'mock_source'
+              AND source_job_id = $1
+            "#,
+        )
+        .bind(source_job_id)
+        .fetch_one(pool)
+        .await
+        .unwrap_or_else(|error| {
+            panic!("failed to fetch variant state for '{source_job_id}': {error}")
+        })
+    }
+
+    async fn fetch_job_state(pool: &PgPool, job_id: &str) -> JobState {
+        sqlx::query_as::<_, JobState>(
+            r#"
+            SELECT
+                id,
+                title,
+                TO_CHAR(last_seen_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_seen_at,
+                is_active,
+                TO_CHAR(inactivated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS inactivated_at,
+                TO_CHAR(reactivated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS reactivated_at
+            FROM jobs
+            WHERE id = $1
+            "#,
+        )
+        .bind(job_id)
+        .fetch_one(pool)
+        .await
+        .unwrap_or_else(|error| panic!("failed to fetch job state for '{job_id}': {error}"))
+    }
+
+    async fn count_active_variants(pool: &PgPool) -> i64 {
+        sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM job_variants
+            WHERE is_active = TRUE
+            "#,
+        )
+        .fetch_one(pool)
+        .await
+        .expect("active variant count should query")
+    }
+
+    #[tokio::test]
+    async fn unchanged_rerun_keeps_source_variants_unchanged() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        let initial_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        let first_summary = upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("initial batch should upsert");
+        let second_summary = upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("unchanged rerun should upsert");
+
+        assert_eq!(first_summary.variants_created, 2);
+        assert_eq!(first_summary.variants_updated, 0);
+        assert_eq!(first_summary.variants_unchanged, 0);
+        assert_eq!(second_summary.variants_created, 0);
+        assert_eq!(second_summary.variants_updated, 0);
+        assert_eq!(second_summary.variants_unchanged, 2);
+        assert_eq!(second_summary.variants_inactivated, 0);
+        assert_eq!(second_summary.jobs_inactivated, 0);
+        assert_eq!(second_summary.jobs_reactivated, 0);
+        assert_eq!(count_active_variants(&test_db.pool).await, 2);
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn updated_source_payload_updates_variant_without_flipping_lifecycle() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        let initial_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("initial batch should upsert");
+
+        let before = fetch_variant_state(&test_db.pool, "data-002").await;
+        let update_batch = load_mock_source_fixture("mock_source_jobs_payload_updated.json");
+        let summary = upsert_batch(&test_db.pool, &update_batch)
+            .await
+            .expect("payload update should upsert");
+        let after = fetch_variant_state(&test_db.pool, "data-002").await;
+
+        assert_eq!(summary.variants_created, 0);
+        assert_eq!(summary.variants_updated, 1);
+        assert_eq!(summary.variants_unchanged, 1);
+        assert_eq!(summary.variants_inactivated, 0);
+        assert_eq!(summary.jobs_inactivated, 0);
+        assert_eq!(summary.jobs_reactivated, 0);
+        assert_eq!(before.job_id, after.job_id);
+        assert_eq!(before.dedupe_key, after.dedupe_key);
+        assert_ne!(before.raw_hash, after.raw_hash);
+        assert_eq!(after.last_seen_at, before.last_seen_at);
+        assert!(after.is_active);
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn missing_source_variant_inactivates_canonical_job() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        let initial_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("initial batch should upsert");
+
+        let platform_before = fetch_variant_state(&test_db.pool, "platform-001").await;
+        let inactivation_batch = load_mock_source_fixture("mock_source_jobs_inactivated.json");
+        let summary = upsert_batch(&test_db.pool, &inactivation_batch)
+            .await
+            .expect("inactivation batch should upsert");
+        let platform_after = fetch_variant_state(&test_db.pool, "platform-001").await;
+        let job_after = fetch_job_state(&test_db.pool, &platform_before.job_id).await;
+
+        assert_eq!(summary.variants_created, 0);
+        assert_eq!(summary.variants_updated, 1);
+        assert_eq!(summary.variants_inactivated, 1);
+        assert_eq!(summary.jobs_inactivated, 1);
+        assert_eq!(summary.jobs_reactivated, 0);
+        assert!(!platform_after.is_active);
+        assert_eq!(
+            platform_after.inactivated_at.as_deref(),
+            Some("2026-04-16T09:00:00Z")
+        );
+        assert_eq!(job_after.id, platform_before.job_id);
+        assert!(!job_after.is_active);
+        assert_eq!(job_after.last_seen_at, "2026-04-14T10:00:00Z");
+        assert_eq!(
+            job_after.inactivated_at.as_deref(),
+            Some("2026-04-16T09:00:00Z")
+        );
+        assert_eq!(job_after.reactivated_at, None);
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn returning_source_variant_reactivates_canonical_job() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        let initial_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("initial batch should upsert");
+        let platform_before = fetch_variant_state(&test_db.pool, "platform-001").await;
+
+        let inactivation_batch = load_mock_source_fixture("mock_source_jobs_inactivated.json");
+        upsert_batch(&test_db.pool, &inactivation_batch)
+            .await
+            .expect("inactivation batch should upsert");
+
+        let reactivation_batch = load_mock_source_fixture("mock_source_jobs_reactivated.json");
+        let summary = upsert_batch(&test_db.pool, &reactivation_batch)
+            .await
+            .expect("reactivation batch should upsert");
+        let platform_after = fetch_variant_state(&test_db.pool, "platform-001").await;
+        let job_after = fetch_job_state(&test_db.pool, &platform_before.job_id).await;
+
+        assert_eq!(summary.variants_created, 0);
+        assert_eq!(summary.variants_updated, 2);
+        assert_eq!(summary.variants_inactivated, 0);
+        assert_eq!(summary.jobs_inactivated, 0);
+        assert_eq!(summary.jobs_reactivated, 1);
+        assert!(platform_after.is_active);
+        assert_eq!(platform_after.inactivated_at, None);
+        assert_eq!(platform_after.last_seen_at, "2026-04-17T09:00:00Z");
+        assert_eq!(job_after.id, platform_before.job_id);
+        assert!(job_after.is_active);
+        assert_eq!(job_after.title, "Senior Platform Ingestion Engineer");
+        assert_eq!(job_after.last_seen_at, "2026-04-17T09:00:00Z");
+        assert_eq!(job_after.inactivated_at, None);
+        assert_eq!(
+            job_after.reactivated_at.as_deref(),
+            Some("2026-04-17T09:00:00Z")
+        );
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn stale_source_snapshot_does_not_reactivate_newer_inactivation() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        let initial_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("initial batch should upsert");
+        let platform_before = fetch_variant_state(&test_db.pool, "platform-001").await;
+
+        let inactivation_batch = load_mock_source_fixture("mock_source_jobs_inactivated.json");
+        upsert_batch(&test_db.pool, &inactivation_batch)
+            .await
+            .expect("inactivation batch should upsert");
+
+        let stale_summary = upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("stale batch should be ignored safely");
+        let platform_after = fetch_variant_state(&test_db.pool, "platform-001").await;
+        let job_after = fetch_job_state(&test_db.pool, &platform_before.job_id).await;
+
+        assert_eq!(stale_summary.jobs_written, 0);
+        assert_eq!(stale_summary.variants_created, 0);
+        assert_eq!(stale_summary.variants_updated, 0);
+        assert_eq!(stale_summary.variants_unchanged, 0);
+        assert_eq!(stale_summary.variants_inactivated, 0);
+        assert_eq!(stale_summary.jobs_inactivated, 0);
+        assert_eq!(stale_summary.jobs_reactivated, 0);
+        assert!(!platform_after.is_active);
+        assert_eq!(
+            platform_after.inactivated_at.as_deref(),
+            Some("2026-04-16T09:00:00Z")
+        );
+        assert_eq!(job_after.id, platform_before.job_id);
+        assert!(!job_after.is_active);
+        assert_eq!(job_after.reactivated_at, None);
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn dedupe_collision_on_source_variant_update_fails_fast() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        let initial_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("initial batch should upsert");
+
+        let mut conflicting_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        let target_job = conflicting_batch.jobs[1].clone();
+        let conflicting_job = &mut conflicting_batch.jobs[0];
+        conflicting_job.title = target_job.title.clone();
+        conflicting_job.company_name = target_job.company_name.clone();
+        conflicting_job.location = target_job.location.clone();
+        conflicting_job.remote_type = target_job.remote_type.clone();
+        conflicting_job.seniority = target_job.seniority.clone();
+        conflicting_job.posted_at = target_job.posted_at.clone();
+        conflicting_job.id = canonical_job_id(&compute_dedupe_key(conflicting_job));
+
+        let conflicting_variant = &mut conflicting_batch.job_variants[0];
+        conflicting_variant.dedupe_key = compute_dedupe_key(conflicting_job);
+        conflicting_variant.job_id = conflicting_job.id.clone();
+
+        let error = upsert_batch(&test_db.pool, &conflicting_batch)
+            .await
+            .expect_err("dedupe collision should be rejected");
+
+        assert!(error.contains("changed dedupe fingerprint"));
+        assert!(error.contains("already belongs to canonical job"));
+
+        test_db.cleanup().await;
     }
 }
