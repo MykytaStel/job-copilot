@@ -163,11 +163,20 @@ behavior scoring, and learned reranker v1 remain intact.
 
 The layer is gated separately and defaults to disabled:
 
+- `RERANKER_RUNTIME_MODE=deterministic|learned|trained`
 - `TRAINED_RERANKER_ENABLED=false`
 - `TRAINED_RERANKER_MODEL_PATH=/path/to/trained-reranker-v2.json`
 
-When enabled and loaded, `/api/v1/search/run` meta includes:
+`RERANKER_RUNTIME_MODE` selects the requested live path. If `trained` is requested but the
+artifact is missing or invalid, `engine-api` now falls back to `learned` when that layer is
+available, otherwise to deterministic ranking. The response meta reports both requested and active
+mode plus the fallback reason.
 
+`/api/v1/search/run` meta includes:
+
+- `reranker_mode_requested`
+- `reranker_mode_active`
+- `reranker_fallback_reason`
 - `trained_reranker_enabled`
 - `trained_reranker_adjusted_jobs`
 

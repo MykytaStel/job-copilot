@@ -168,6 +168,10 @@ pub struct SearchRunMetaResponse {
     pub seniority_mismatch_jobs: usize,
     pub source_mismatch_jobs: usize,
     pub top_missing_signals: Vec<String>,
+    pub reranker_mode_requested: String,
+    pub reranker_mode_active: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reranker_fallback_reason: Option<String>,
     pub learned_reranker_enabled: bool,
     pub learned_reranker_adjusted_jobs: usize,
     pub trained_reranker_enabled: bool,
@@ -266,6 +270,9 @@ impl RunSearchResponse {
                 seniority_mismatch_jobs: 0,
                 source_mismatch_jobs: 0,
                 top_missing_signals: Vec::new(),
+                reranker_mode_requested: "deterministic".to_string(),
+                reranker_mode_active: "deterministic".to_string(),
+                reranker_fallback_reason: None,
                 learned_reranker_enabled: false,
                 learned_reranker_adjusted_jobs: 0,
                 trained_reranker_enabled: false,
@@ -650,5 +657,14 @@ mod tests {
         assert_eq!(payload["meta"]["filtered_out_company_blacklist"], json!(1));
         assert_eq!(payload["meta"]["scored_jobs"], json!(4));
         assert_eq!(payload["meta"]["returned_jobs"], json!(0));
+        assert_eq!(
+            payload["meta"]["reranker_mode_requested"],
+            json!("deterministic")
+        );
+        assert_eq!(
+            payload["meta"]["reranker_mode_active"],
+            json!("deterministic")
+        );
+        assert_eq!(payload["meta"].get("reranker_fallback_reason"), None);
     }
 }
