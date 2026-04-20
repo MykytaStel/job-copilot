@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "noEmit": true,
+    "paths": {
+      "@job-copilot/shared": ["src/index.ts"],
+      "@job-copilot/shared/*": ["src/*"]
+    }
+  },
+  "include": ["src", "tests"]
+}

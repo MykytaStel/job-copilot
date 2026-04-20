@@ -12,7 +12,8 @@
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@job-copilot/shared": ["packages/contracts/src/index.ts"]
+      "@job-copilot/shared": ["packages/contracts/src/index.ts"],
+      "@job-copilot/shared/*": ["packages/contracts/src/*"]
     }
   }
 }

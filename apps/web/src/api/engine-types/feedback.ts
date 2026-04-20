@@ -1,4 +1,4 @@
-import type { CompanyFeedbackStatus } from '@job-copilot/shared';
+import type { CompanyFeedbackStatus } from '@job-copilot/shared/feedback';
 
 export type EngineJobFeedbackState = {
   saved: boolean;

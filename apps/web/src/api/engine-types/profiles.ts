@@ -1,7 +1,7 @@
 import type {
   EngineAnalyzeProfileResponse as SharedEngineAnalyzeProfileResponse,
   EngineRoleCandidateResponse,
-} from '@job-copilot/shared';
+} from '@job-copilot/shared/profiles';
 
 export type EngineResume = {
   id: string;
