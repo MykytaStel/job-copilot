@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use axum::extract::{Path, Query, State};
 use serde::Deserialize;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::api::dto::jobs::{JobResponse, MlJobLifecycleResponse, RecentJobsResponse};
 use crate::api::dto::ranking::FitScoreResponse;
@@ -14,10 +14,12 @@ use crate::api::routes::search::{
     apply_trained_reranking, load_learning_aggregates, score_by_job_id,
 };
 use crate::domain::feedback::model::{CompanyFeedbackRecord, JobFeedbackRecord, JobFeedbackState};
+use crate::domain::matching::RerankerMode;
 use crate::domain::search::profile::SearchPreferences;
 use crate::domain::source::SourceId;
 use crate::services::feedback::FeedbackService;
 use crate::services::matching::{RankedJob, summarize_match_quality};
+use crate::services::ranking::runtime::{ResolvedRerankerRuntime, resolve_reranker_runtime};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -61,6 +63,16 @@ pub struct BulkProfileJobMatchMeta {
     pub seniority_mismatch_jobs: usize,
     pub source_mismatch_jobs: usize,
     pub top_missing_signals: Vec<String>,
+    pub reranker_mode_requested: String,
+    pub reranker_mode_active: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reranker_fallback_reason: Option<String>,
+}
+
+#[derive(Debug)]
+struct ProfileRankedJobsResult {
+    ranked_jobs: Vec<RankedJob>,
+    reranker_runtime: ResolvedRerankerRuntime,
 }
 
 impl BulkProfileJobMatchRequest {
@@ -187,7 +199,14 @@ pub async fn get_profile_job_match(
     State(state): State<AppState>,
     Path((profile_id, job_id)): Path<(String, String)>,
 ) -> Result<axum::Json<JobFitResponse>, ApiError> {
-    let ranked_jobs = load_profile_ranked_jobs(&state, &profile_id, &[job_id.clone()]).await?;
+    let ranked_jobs = load_profile_ranked_jobs(
+        &state,
+        &profile_id,
+        &[job_id.clone()],
+        "get_profile_job_match",
+    )
+    .await?
+    .ranked_jobs;
     let Some(ranked) = ranked_jobs
         .into_iter()
         .find(|ranked| ranked.job.job.id == job_id)
@@ -207,9 +226,16 @@ pub async fn bulk_profile_job_match(
     ApiJson(payload): ApiJson<BulkProfileJobMatchRequest>,
 ) -> Result<axum::Json<BulkProfileJobMatchResponse>, ApiError> {
     let input = payload.validate()?;
-    let ranked_jobs = load_profile_ranked_jobs(&state, &profile_id, &input.job_ids).await?;
-    let quality = summarize_match_quality(&ranked_jobs);
-    let results = ranked_jobs
+    let ranked = load_profile_ranked_jobs(
+        &state,
+        &profile_id,
+        &input.job_ids,
+        "bulk_profile_job_match",
+    )
+    .await?;
+    let quality = summarize_match_quality(&ranked.ranked_jobs);
+    let results = ranked
+        .ranked_jobs
         .into_iter()
         .map(|ranked| JobFitResponse::from(ranked.fit))
         .collect::<Vec<_>>();
@@ -224,6 +250,9 @@ pub async fn bulk_profile_job_match(
             seniority_mismatch_jobs: quality.seniority_mismatch_jobs,
             source_mismatch_jobs: quality.source_mismatch_jobs,
             top_missing_signals: quality.top_missing_signals,
+            reranker_mode_requested: ranked.reranker_runtime.requested_mode.as_str().to_string(),
+            reranker_mode_active: ranked.reranker_runtime.active_mode.as_str().to_string(),
+            reranker_fallback_reason: ranked.reranker_runtime.fallback_reason,
         },
         results,
     }))
@@ -233,7 +262,8 @@ async fn load_profile_ranked_jobs(
     state: &AppState,
     profile_id: &str,
     job_ids: &[String],
-) -> Result<Vec<RankedJob>, ApiError> {
+    entrypoint: &'static str,
+) -> Result<ProfileRankedJobsResult, ApiError> {
     ensure_profile_exists(state, profile_id).await?;
 
     let profile = state
@@ -287,8 +317,14 @@ async fn load_profile_ranked_jobs(
     }
 
     let behavior_score_by_job_id = score_by_job_id(&adjusted_jobs);
+    let reranker_runtime = resolve_reranker_runtime(
+        state.reranker_runtime_mode,
+        state.learned_reranker_enabled,
+        learning_aggregates.is_some(),
+        &state.trained_reranker_availability,
+    );
 
-    if state.learned_reranker_enabled {
+    if reranker_runtime.apply_learned {
         if let Some(aggregates) = learning_aggregates.as_ref() {
             let (reranked_jobs, _adjusted_count) = apply_learned_reranking(
                 state,
@@ -302,7 +338,7 @@ async fn load_profile_ranked_jobs(
         }
     }
 
-    if state.trained_reranker_enabled {
+    if reranker_runtime.apply_trained {
         let (reranked_jobs, _adjusted_count) = apply_trained_reranking(
             state,
             adjusted_jobs,
@@ -312,7 +348,42 @@ async fn load_profile_ranked_jobs(
         adjusted_jobs = reranked_jobs;
     }
 
-    Ok(adjusted_jobs)
+    if matches!(
+        reranker_runtime.active_mode,
+        crate::services::ranking::runtime::RerankerRuntimeMode::Deterministic
+    ) {
+        if let Some(reason) = reranker_runtime.fallback_reason.as_deref() {
+            mark_reranker_fallback(&mut adjusted_jobs, reason);
+        }
+    }
+
+    info!(
+        entrypoint,
+        profile_id,
+        requested_reranker_mode = reranker_runtime.requested_mode.as_str(),
+        active_reranker_mode = reranker_runtime.active_mode.as_str(),
+        reranker_fallback_reason = reranker_runtime
+            .fallback_reason
+            .as_deref()
+            .unwrap_or("none"),
+        "jobs reranker path resolved"
+    );
+
+    Ok(ProfileRankedJobsResult {
+        ranked_jobs: adjusted_jobs,
+        reranker_runtime,
+    })
+}
+
+fn mark_reranker_fallback(ranked_jobs: &mut [RankedJob], reason: &str) {
+    for ranked in ranked_jobs {
+        if matches!(
+            ranked.fit.score_breakdown.reranker_mode,
+            RerankerMode::Deterministic | RerankerMode::Fallback
+        ) {
+            ranked.fit.mark_reranker_fallback(reason.to_string());
+        }
+    }
 }
 
 /// Read the persisted fit score for a job (previously computed via GET /fit or POST /match).
@@ -527,7 +598,9 @@ mod tests {
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
+    use crate::services::ranking::runtime::RerankerRuntimeMode;
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
+    use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
     use crate::state::AppState;
 
     use super::{
@@ -595,6 +668,17 @@ mod tests {
             updated_at: "2026-04-14T08:00:00Z".to_string(),
             skills_updated_at: Some("2026-04-14T08:00:00Z".to_string()),
         }
+    }
+
+    fn profile_match_state(job_view: JobView) -> AppState {
+        AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(JobsServiceStub::default().with_job_view(job_view)),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
     }
 
     #[tokio::test]
@@ -760,6 +844,134 @@ mod tests {
         assert_eq!(response.results[0].job_id, "job-frontend-strong");
         assert!(response.results[0].score > response.results[1].score);
         assert!(response.meta.low_evidence_jobs <= response.meta.returned_jobs);
+    }
+
+    #[tokio::test]
+    async fn bulk_profile_job_match_uses_deterministic_runtime_when_requested() {
+        let state = profile_match_state(sample_job_view("job-runtime-deterministic"))
+            .with_reranker_runtime_mode(RerankerRuntimeMode::Deterministic);
+
+        let Json(response) = bulk_profile_job_match(
+            State(state),
+            Path("profile-1".to_string()),
+            ApiJson(BulkProfileJobMatchRequest {
+                job_ids: vec!["job-runtime-deterministic".to_string()],
+            }),
+        )
+        .await
+        .expect("bulk profile match should succeed");
+
+        assert_eq!(response.meta.reranker_mode_requested, "deterministic");
+        assert_eq!(response.meta.reranker_mode_active, "deterministic");
+        assert_eq!(response.meta.reranker_fallback_reason, None);
+        assert_eq!(
+            response.results[0].score_breakdown.reranker_mode,
+            "deterministic"
+        );
+    }
+
+    #[tokio::test]
+    async fn bulk_profile_job_match_falls_back_from_learned_to_deterministic() {
+        let state = profile_match_state(sample_job_view("job-runtime-learned-fallback"))
+            .with_user_events_service(UserEventsService::for_tests(
+                UserEventsServiceStub::default().with_database_disabled(),
+            ));
+
+        let Json(response) = bulk_profile_job_match(
+            State(state),
+            Path("profile-1".to_string()),
+            ApiJson(BulkProfileJobMatchRequest {
+                job_ids: vec!["job-runtime-learned-fallback".to_string()],
+            }),
+        )
+        .await
+        .expect("bulk profile match should succeed");
+
+        assert_eq!(response.meta.reranker_mode_requested, "learned");
+        assert_eq!(response.meta.reranker_mode_active, "deterministic");
+        assert!(
+            response
+                .meta
+                .reranker_fallback_reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("Learned reranker unavailable"))
+        );
+        assert_eq!(
+            response.results[0].score_breakdown.reranker_mode,
+            "fallback"
+        );
+        assert!(
+            response.results[0]
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("Learned reranker unavailable"))
+        );
+    }
+
+    #[tokio::test]
+    async fn bulk_profile_job_match_falls_back_from_trained_to_learned() {
+        let state = profile_match_state(sample_job_view("job-runtime-trained-to-learned"))
+            .with_trained_reranker(true, None)
+            .with_reranker_runtime_mode(RerankerRuntimeMode::Trained);
+
+        let Json(response) = bulk_profile_job_match(
+            State(state),
+            Path("profile-1".to_string()),
+            ApiJson(BulkProfileJobMatchRequest {
+                job_ids: vec!["job-runtime-trained-to-learned".to_string()],
+            }),
+        )
+        .await
+        .expect("bulk profile match should succeed");
+
+        assert_eq!(response.meta.reranker_mode_requested, "trained");
+        assert_eq!(response.meta.reranker_mode_active, "learned");
+        assert!(
+            response
+                .meta
+                .reranker_fallback_reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("fell back to learned reranker"))
+        );
+        assert_eq!(response.results[0].score_breakdown.reranker_mode, "learned");
+    }
+
+    #[tokio::test]
+    async fn bulk_profile_job_match_falls_back_from_trained_to_deterministic_without_safe_layer() {
+        let state = profile_match_state(sample_job_view("job-runtime-trained-to-deterministic"))
+            .with_learned_reranker_enabled(false)
+            .with_trained_reranker(true, None)
+            .with_reranker_runtime_mode(RerankerRuntimeMode::Trained);
+
+        let Json(response) = bulk_profile_job_match(
+            State(state),
+            Path("profile-1".to_string()),
+            ApiJson(BulkProfileJobMatchRequest {
+                job_ids: vec!["job-runtime-trained-to-deterministic".to_string()],
+            }),
+        )
+        .await
+        .expect("bulk profile match should succeed");
+
+        assert_eq!(response.meta.reranker_mode_requested, "trained");
+        assert_eq!(response.meta.reranker_mode_active, "deterministic");
+        assert!(
+            response
+                .meta
+                .reranker_fallback_reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("kept deterministic ranking"))
+        );
+        assert_eq!(
+            response.results[0].score_breakdown.reranker_mode,
+            "fallback"
+        );
+        assert!(
+            response.results[0]
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("Trained reranker unavailable"))
+        );
     }
 
     #[tokio::test]
