@@ -160,9 +160,19 @@ reranker v1.
 
 The layer is disabled by default:
 
+- `RERANKER_RUNTIME_MODE=deterministic|learned|trained`
 - `TRAINED_RERANKER_ENABLED=false`
 - `TRAINED_RERANKER_MODEL_PATH=/path/to/trained-reranker-v2.json`
 
 When enabled and loaded, the model applies only a bounded additive score delta and appends a
 reason containing `Trained reranker v2`. It does not replace deterministic ranking and does not
 remove learned reranker v1.
+
+For rollout safety, live search now reports:
+
+- `reranker_mode_requested`
+- `reranker_mode_active`
+- `reranker_fallback_reason`
+
+If `trained` is requested but the artifact cannot be loaded, `engine-api` falls back to
+`learned` when available and otherwise keeps deterministic ranking.

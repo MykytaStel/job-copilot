@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use axum::extract::{Query, State};
 use serde::Deserialize;
 use serde_json::json;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::api::dto::search::{RunSearchRequest, RunSearchResponse, SearchResponse};
 use crate::api::error::{ApiError, ApiJson};
@@ -16,6 +16,7 @@ use crate::services::behavior::{BehaviorService, ProfileBehaviorAggregates};
 use crate::services::funnel::{FunnelService, ProfileFunnelAggregates};
 use crate::services::learned_reranker::LearnedRerankerService;
 use crate::services::matching::{RankedJob, summarize_match_quality};
+use crate::services::ranking::runtime::{RerankerRuntimeMode, resolve_reranker_runtime};
 use crate::services::salary::{SearchSalaryExpectation, score_search_salary};
 use crate::services::trained_reranker::TrainedRerankerFeatures;
 use crate::state::AppState;
@@ -130,8 +131,14 @@ pub async fn run_search(
         adjusted_jobs = apply_behavior_scoring(&state, adjusted_jobs, &aggregates.behavior);
     }
     let behavior_score_by_job_id = score_by_job_id(&adjusted_jobs);
+    let reranker_runtime = resolve_reranker_runtime(
+        state.reranker_runtime_mode,
+        state.learned_reranker_enabled,
+        learning_aggregates.is_some(),
+        &state.trained_reranker_availability,
+    );
     let mut learned_reranker_adjusted_jobs = 0usize;
-    if state.learned_reranker_enabled {
+    if reranker_runtime.apply_learned {
         if let Some(aggregates) = learning_aggregates.as_ref() {
             let (reranked_jobs, adjusted_count) = apply_learned_reranking(
                 &state,
@@ -143,15 +150,10 @@ pub async fn run_search(
             );
             adjusted_jobs = reranked_jobs;
             learned_reranker_adjusted_jobs = adjusted_count;
-        } else if input.profile_id.is_some() {
-            mark_reranker_fallback(
-                &mut adjusted_jobs,
-                "Learned reranker unavailable; kept deterministic ranking",
-            );
         }
     }
     let mut trained_reranker_adjusted_jobs = 0usize;
-    if state.trained_reranker_enabled {
+    if reranker_runtime.apply_trained {
         let (reranked_jobs, adjusted_count) = apply_trained_reranking(
             &state,
             adjusted_jobs,
@@ -160,11 +162,13 @@ pub async fn run_search(
         );
         adjusted_jobs = reranked_jobs;
         trained_reranker_adjusted_jobs = adjusted_count;
-        if state.trained_reranker_model.is_none() {
-            mark_reranker_fallback(
-                &mut adjusted_jobs,
-                "Trained reranker unavailable; kept current ranking",
-            );
+    }
+    if matches!(
+        reranker_runtime.active_mode,
+        RerankerRuntimeMode::Deterministic
+    ) {
+        if let Some(reason) = reranker_runtime.fallback_reason.as_deref() {
+            mark_reranker_fallback(&mut adjusted_jobs, reason);
         }
     }
     adjusted_jobs.truncate(input.limit as usize);
@@ -202,12 +206,24 @@ pub async fn run_search(
         seniority_mismatch_jobs: quality.seniority_mismatch_jobs,
         source_mismatch_jobs: quality.source_mismatch_jobs,
         top_missing_signals: quality.top_missing_signals,
+        reranker_mode_requested: reranker_runtime.requested_mode.as_str().to_string(),
+        reranker_mode_active: reranker_runtime.active_mode.as_str().to_string(),
+        reranker_fallback_reason: reranker_runtime.fallback_reason.clone(),
         learned_reranker_enabled: state.learned_reranker_enabled,
         learned_reranker_adjusted_jobs,
-        trained_reranker_enabled: state.trained_reranker_enabled
-            && state.trained_reranker_model.is_some(),
+        trained_reranker_enabled: state.trained_reranker_availability.is_ready(),
         trained_reranker_adjusted_jobs,
     };
+
+    info!(
+        profile_id = input.profile_id.as_deref().unwrap_or(""),
+        requested_reranker_mode = meta.reranker_mode_requested.as_str(),
+        active_reranker_mode = meta.reranker_mode_active.as_str(),
+        reranker_fallback_reason = meta.reranker_fallback_reason.as_deref().unwrap_or("none"),
+        learned_reranker_adjusted_jobs = meta.learned_reranker_adjusted_jobs,
+        trained_reranker_adjusted_jobs = meta.trained_reranker_adjusted_jobs,
+        "search reranker path resolved"
+    );
 
     if let Some(profile_id) = input.profile_id.clone() {
         let allowed_sources = input
@@ -256,6 +272,9 @@ pub async fn run_search(
                         "filtered_out_company_blacklist": meta.filtered_out_company_blacklist,
                         "scored_jobs": meta.scored_jobs,
                         "returned_jobs": meta.returned_jobs,
+                        "reranker_mode_requested": meta.reranker_mode_requested.as_str(),
+                        "reranker_mode_active": meta.reranker_mode_active.as_str(),
+                        "reranker_fallback_reason": meta.reranker_fallback_reason.as_deref(),
                         "learned_reranker_enabled": meta.learned_reranker_enabled,
                         "learned_reranker_adjusted_jobs": meta.learned_reranker_adjusted_jobs,
                         "trained_reranker_enabled": meta.trained_reranker_enabled,
@@ -599,6 +618,7 @@ mod tests {
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::matching::RankedJob;
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
+    use crate::services::ranking::runtime::RerankerRuntimeMode;
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
     use crate::services::trained_reranker::TrainedRerankerModel;
     use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
@@ -2302,6 +2322,14 @@ mod tests {
 
         assert_eq!(payload["meta"]["learned_reranker_enabled"], json!(false));
         assert_eq!(payload["meta"]["learned_reranker_adjusted_jobs"], json!(0));
+        assert_eq!(
+            payload["meta"]["reranker_mode_requested"],
+            json!("deterministic")
+        );
+        assert_eq!(
+            payload["meta"]["reranker_mode_active"],
+            json!("deterministic")
+        );
         assert!(
             payload["results"]
                 .as_array()
@@ -2370,6 +2398,11 @@ mod tests {
             payload["results"][0]["fit"]["score_breakdown"]["reranker_mode"],
             json!("fallback")
         );
+        assert_eq!(payload["meta"]["reranker_mode_requested"], json!("learned"));
+        assert_eq!(
+            payload["meta"]["reranker_mode_active"],
+            json!("deterministic")
+        );
         assert!(
             payload["results"][0]["fit"]["reasons"]
                 .as_array()
@@ -2379,6 +2412,12 @@ mod tests {
                     .as_str()
                     .is_some_and(|value| value.contains("Learned reranker unavailable"))),
             "fallback reason should be exposed for debugging"
+        );
+        assert!(
+            payload["meta"]["reranker_fallback_reason"]
+                .as_str()
+                .is_some_and(|value| value.contains("Learned reranker unavailable")),
+            "meta should report the request-level fallback"
         );
     }
 
@@ -2467,6 +2506,14 @@ mod tests {
             json!(0)
         );
         assert_eq!(
+            disabled_payload["meta"]["reranker_mode_requested"],
+            json!("deterministic")
+        );
+        assert_eq!(
+            disabled_payload["meta"]["reranker_mode_active"],
+            json!("deterministic")
+        );
+        assert_eq!(
             disabled_payload["results"], baseline_payload["results"],
             "disabled trained reranker must leave live ranking unchanged"
         );
@@ -2500,7 +2547,8 @@ mod tests {
             ResumesService::for_tests(ResumesServiceStub::default()),
         )
         .with_learned_reranker_enabled(false)
-        .with_trained_reranker(true, None);
+        .with_trained_reranker(true, None)
+        .with_reranker_runtime_mode(RerankerRuntimeMode::Trained);
 
         let response = run_search(
             State(state),
@@ -2537,6 +2585,11 @@ mod tests {
             payload["results"][0]["fit"]["score_breakdown"]["reranker_mode"],
             json!("fallback")
         );
+        assert_eq!(payload["meta"]["reranker_mode_requested"], json!("trained"));
+        assert_eq!(
+            payload["meta"]["reranker_mode_active"],
+            json!("deterministic")
+        );
         assert!(
             payload["results"][0]["fit"]["reasons"]
                 .as_array()
@@ -2546,6 +2599,76 @@ mod tests {
                     .as_str()
                     .is_some_and(|value| value.contains("Trained reranker unavailable"))),
             "trained fallback reason should be exposed for debugging"
+        );
+        assert!(
+            payload["meta"]["reranker_fallback_reason"]
+                .as_str()
+                .is_some_and(|value| value.contains("kept deterministic ranking")),
+            "meta should explain why deterministic ranking handled the request"
+        );
+    }
+
+    #[tokio::test]
+    async fn trained_runtime_mode_falls_back_to_learned_when_artifact_is_missing() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(JobsServiceStub::default().with_job_view(sample_job_view(
+                "job-1",
+                "Senior Backend Developer",
+                "Remote role working with Rust and Postgres",
+                Some("remote"),
+                "djinni",
+            ))),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_trained_reranker(true, None)
+        .with_reranker_runtime_mode(RerankerRuntimeMode::Trained);
+
+        let response = run_search(
+            State(state),
+            ApiJson(RunSearchRequest {
+                profile_id: Some("profile-1".to_string()),
+                search_profile: SearchProfileRequest {
+                    primary_role: "backend_engineer".to_string(),
+                    primary_role_confidence: Some(95),
+                    target_roles: vec![],
+                    role_candidates: vec![],
+                    seniority: "senior".to_string(),
+                    target_regions: vec![TargetRegion::EuRemote],
+                    work_modes: vec![WorkMode::Remote],
+                    allowed_sources: vec!["djinni".to_string()],
+                    profile_skills: vec!["rust".to_string()],
+                    profile_keywords: vec!["backend".to_string()],
+                    search_terms: vec!["rust".to_string()],
+                    exclude_terms: vec![],
+                },
+                limit: Some(10),
+            }),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(payload["meta"]["reranker_mode_requested"], json!("trained"));
+        assert_eq!(payload["meta"]["reranker_mode_active"], json!("learned"));
+        assert_eq!(
+            payload["results"][0]["fit"]["score_breakdown"]["reranker_mode"],
+            json!("learned")
+        );
+        assert!(
+            payload["meta"]["reranker_fallback_reason"]
+                .as_str()
+                .is_some_and(|value| value.contains("fell back to learned reranker")),
+            "meta should make the safe fallback explicit"
         );
     }
 }
