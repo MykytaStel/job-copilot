@@ -218,6 +218,15 @@ impl AppState {
     }
 
     #[cfg(test)]
+    pub fn with_trained_reranker_availability(
+        mut self,
+        availability: TrainedRerankerAvailability,
+    ) -> Self {
+        self.trained_reranker_availability = availability;
+        self
+    }
+
+    #[cfg(test)]
     pub fn with_reranker_runtime_mode(mut self, mode: RerankerRuntimeMode) -> Self {
         self.reranker_runtime_mode = mode;
         self
