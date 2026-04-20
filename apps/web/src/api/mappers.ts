@@ -1,17 +1,20 @@
 import type {
   Application,
   ApplicationDetail,
-  CandidateProfile,
-  CompanyFeedbackRecord,
   Contact,
+  Offer,
+} from '@job-copilot/shared/applications';
+import type { CandidateProfile, ResumeVersion } from '@job-copilot/shared/profiles';
+import type {
+  CompanyFeedbackRecord,
   JobFeedbackRecord,
   JobFeedbackState,
+} from '@job-copilot/shared/feedback';
+import type {
   JobFeedSummary,
   JobPosting,
   MatchResult,
-  Offer,
-  ResumeVersion,
-} from '@job-copilot/shared';
+} from '@job-copilot/shared/jobs';
 
 import type {
   EngineApplication,

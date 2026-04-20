@@ -7,8 +7,8 @@ import type {
   JobPosting,
   JobPostingInput,
   MatchResult,
-  ResumeVersion,
-} from '@job-copilot/shared';
+} from '@job-copilot/shared/jobs';
+import type { ResumeVersion } from '@job-copilot/shared/profiles';
 import {
   RECENT_JOBS_LIMIT_MAX,
   json,

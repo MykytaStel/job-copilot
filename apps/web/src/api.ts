@@ -1,4 +1,4 @@
-import type { HealthResponse } from '@job-copilot/shared';
+import type { HealthResponse } from '@job-copilot/shared/health';
 import { request } from './api/client';
 import type { EngineHealthResponse } from './api/engine-types';
 

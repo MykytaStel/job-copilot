@@ -1,4 +1,4 @@
-import type { ApplicationContact, Contact, ContactInput } from '@job-copilot/shared';
+import type { ApplicationContact, Contact, ContactInput } from '@job-copilot/shared/applications';
 
 import { json, request, unsupported } from './client';
 import type { EngineContact, EngineContactsResponse } from './engine-types';

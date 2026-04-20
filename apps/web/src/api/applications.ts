@@ -8,14 +8,14 @@ import type {
   ApplicationStatus,
   CoverLetter,
   CoverLetterInput,
-  DashboardStats,
   InterviewQA,
   InterviewQAInput,
   Offer,
   OfferInput,
   Task,
   TaskInput,
-} from '@job-copilot/shared';
+} from '@job-copilot/shared/applications';
+import type { DashboardStats } from '@job-copilot/shared/analytics';
 
 import { json, readStoredProfileId, request, unsupported } from './client';
 import type {

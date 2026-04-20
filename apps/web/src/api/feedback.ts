@@ -2,7 +2,7 @@ import type {
   CompanyFeedbackRecord,
   FeedbackOverview,
   JobFeedbackRecord,
-} from '@job-copilot/shared';
+} from '@job-copilot/shared/feedback';
 import { json, request } from './client';
 import type {
   EngineCompanyFeedbackRecord,

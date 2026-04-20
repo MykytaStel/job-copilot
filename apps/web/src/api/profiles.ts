@@ -3,7 +3,7 @@ import type {
   CandidateProfileInput,
   ResumeUploadInput,
   ResumeVersion,
-} from '@job-copilot/shared';
+} from '@job-copilot/shared/profiles';
 import { json, readStoredProfileId, request, writeStoredProfileId } from './client';
 import type {
   EngineAnalyzeProfile,

@@ -2,7 +2,7 @@ import type {
   EngineRoleCatalogItemResponse,
   EngineRoleCatalogResponse as SharedEngineRoleCatalogResponse,
   EngineSourceId,
-} from '@job-copilot/shared';
+} from '@job-copilot/shared/search';
 
 export type EngineSourceCatalogItem = {
   id: EngineSourceId;
