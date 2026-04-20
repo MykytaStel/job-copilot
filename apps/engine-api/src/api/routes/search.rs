@@ -1011,7 +1011,8 @@ mod tests {
             ),
             ApplicationsService::for_tests(ApplicationsServiceStub::default()),
             ResumesService::for_tests(ResumesServiceStub::default()),
-        );
+        )
+        .with_reranker_runtime_mode(RerankerRuntimeMode::Deterministic);
 
         let response = run_search(
             State(state),

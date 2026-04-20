@@ -1,6 +1,7 @@
 pub mod analytics;
 pub mod applications;
 pub mod behavior;
+pub mod debug;
 pub mod events;
 pub mod feedback;
 pub mod health;
@@ -23,6 +24,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/health", get(health::health))
         .route("/api/v1/ping", get(health::ping))
+        .route(
+            "/api/v1/debug/reranker-status",
+            get(debug::get_reranker_status),
+        )
         .route(
             "/api/v1/applications/recent",
             get(applications::get_recent_applications),

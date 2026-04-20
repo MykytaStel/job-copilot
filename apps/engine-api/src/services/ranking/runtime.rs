@@ -47,6 +47,15 @@ impl TrainedRerankerAvailability {
         matches!(self, Self::Ready)
     }
 
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::DisabledByFlag => "disabled_by_flag",
+            Self::Ready => "ready",
+            Self::MissingPath => "missing_path",
+            Self::InvalidArtifact(_) => "invalid_artifact",
+        }
+    }
+
     fn unavailable_detail(&self) -> Option<String> {
         match self {
             Self::DisabledByFlag => Some("TRAINED_RERANKER_ENABLED is false".to_string()),
@@ -247,6 +256,23 @@ mod tests {
                 .fallback_reason
                 .as_deref()
                 .is_some_and(|reason| reason.contains("learning aggregates were unavailable"))
+        );
+    }
+
+    #[test]
+    fn availability_serializes_to_stable_status_values() {
+        assert_eq!(
+            TrainedRerankerAvailability::DisabledByFlag.as_str(),
+            "disabled_by_flag"
+        );
+        assert_eq!(TrainedRerankerAvailability::Ready.as_str(), "ready");
+        assert_eq!(
+            TrainedRerankerAvailability::MissingPath.as_str(),
+            "missing_path"
+        );
+        assert_eq!(
+            TrainedRerankerAvailability::InvalidArtifact("bad json".to_string()).as_str(),
+            "invalid_artifact"
         );
     }
 }
