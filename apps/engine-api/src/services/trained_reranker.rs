@@ -175,7 +175,7 @@ mod tests {
         r#"{
           "artifact_version": "trained_reranker_v2",
           "model_type": "logistic_regression",
-          "label_policy_version": "outcome_label_v1",
+          "label_policy_version": "outcome_label_v2",
           "feature_names": ["deterministic_score", "matched_skill_count"],
           "feature_transforms": {},
           "weights": {
