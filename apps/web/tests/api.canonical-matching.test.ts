@@ -215,6 +215,9 @@ describe('canonical matching api', () => {
             seniority_mismatch_jobs: 1,
             source_mismatch_jobs: 2,
             top_missing_signals: ['storybook', 'design system'],
+            reranker_mode_requested: 'trained',
+            reranker_mode_active: 'learned',
+            reranker_fallback_reason: 'trained_artifact_unavailable',
           },
         }) as ReturnType<typeof fetch>,
     );
@@ -254,6 +257,9 @@ describe('canonical matching api', () => {
       seniorityMismatchJobs: 1,
       sourceMismatchJobs: 2,
       topMissingSignals: ['storybook', 'design system'],
+      rerankerModeRequested: 'trained',
+      rerankerModeActive: 'learned',
+      rerankerFallbackReason: 'trained_artifact_unavailable',
     });
     expect(result.results[0].fit).toMatchObject({
       jobId: 'job-1',

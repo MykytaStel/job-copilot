@@ -85,6 +85,9 @@ export type EngineSearchRunMeta = {
   seniority_mismatch_jobs: number;
   source_mismatch_jobs: number;
   top_missing_signals: string[];
+  reranker_mode_requested?: string;
+  reranker_mode_active?: string;
+  reranker_fallback_reason?: string | null;
 };
 
 export type EngineRunSearchResponse = {

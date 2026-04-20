@@ -150,6 +150,9 @@ export type SearchRunResult = {
     seniorityMismatchJobs: number;
     sourceMismatchJobs: number;
     topMissingSignals: string[];
+    rerankerModeRequested?: string;
+    rerankerModeActive?: string;
+    rerankerFallbackReason?: string | null;
   };
 };
 
@@ -254,6 +257,9 @@ export async function runSearch(payload: SearchRunRequest): Promise<SearchRunRes
       seniorityMismatchJobs: response.meta.seniority_mismatch_jobs,
       sourceMismatchJobs: response.meta.source_mismatch_jobs,
       topMissingSignals: response.meta.top_missing_signals,
+      rerankerModeRequested: response.meta.reranker_mode_requested,
+      rerankerModeActive: response.meta.reranker_mode_active,
+      rerankerFallbackReason: response.meta.reranker_fallback_reason ?? null,
     },
   };
 }
