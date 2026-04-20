@@ -66,3 +66,27 @@ jobs:
 
       - name: Cargo check ingestion
         run: cargo check --manifest-path apps/ingestion/Cargo.toml
+
+      - name: Cargo test engine-api
+        run: cargo test --manifest-path apps/engine-api/Cargo.toml
+
+  ml-sidecar:
+    name: ML sidecar checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/ml/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r apps/ml/requirements-dev.txt
+
+      - name: Run ML tests
+        run: pytest apps/ml/tests/ -v --tb=short

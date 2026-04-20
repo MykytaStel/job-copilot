@@ -1,4 +1,5 @@
 use axum::extract::{Path, State};
+use tracing::warn;
 
 use crate::api::dto::analytics::{
     AnalyticsSummaryResponse, FeedbackSummarySection, FunnelSummaryResponse,
@@ -7,7 +8,7 @@ use crate::api::dto::analytics::{
 };
 use crate::api::error::ApiError;
 use crate::api::routes::feedback::ensure_profile_exists;
-use crate::domain::feedback::model::CompanyFeedbackStatus;
+use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackRecord};
 use crate::domain::search::profile::SearchPreferences;
 use crate::services::funnel::FunnelService;
 use crate::services::matching::summarize_match_quality;
@@ -204,45 +205,43 @@ pub async fn get_llm_context(
             .count(),
     };
 
-    let top_positive_evidence: Vec<LlmContextEvidenceEntry> = job_feedback
-        .iter()
-        .filter(|j| j.saved)
-        .take(10)
-        .map(|j| LlmContextEvidenceEntry {
-            entry_type: "saved_job".to_string(),
-            label: j.job_id.clone(),
-        })
-        .chain(
-            company_feedback
-                .iter()
-                .filter(|c| c.status == CompanyFeedbackStatus::Whitelist)
-                .take(10)
-                .map(|c| LlmContextEvidenceEntry {
-                    entry_type: "whitelisted_company".to_string(),
-                    label: c.company_name.clone(),
-                }),
-        )
-        .collect();
+    let top_positive_evidence = build_job_feedback_evidence_entries(
+        &state,
+        job_feedback.iter().filter(|j| j.saved).take(10).collect(),
+        "saved_job",
+    )
+    .await
+    .into_iter()
+    .chain(
+        company_feedback
+            .iter()
+            .filter(|c| c.status == CompanyFeedbackStatus::Whitelist)
+            .take(10)
+            .map(|c| LlmContextEvidenceEntry {
+                entry_type: "whitelisted_company".to_string(),
+                label: c.company_name.clone(),
+            }),
+    )
+    .collect();
 
-    let top_negative_evidence: Vec<LlmContextEvidenceEntry> = job_feedback
-        .iter()
-        .filter(|j| j.bad_fit)
-        .take(10)
-        .map(|j| LlmContextEvidenceEntry {
-            entry_type: "bad_fit_job".to_string(),
-            label: j.job_id.clone(),
-        })
-        .chain(
-            company_feedback
-                .iter()
-                .filter(|c| c.status == CompanyFeedbackStatus::Blacklist)
-                .take(10)
-                .map(|c| LlmContextEvidenceEntry {
-                    entry_type: "blacklisted_company".to_string(),
-                    label: c.company_name.clone(),
-                }),
-        )
-        .collect();
+    let top_negative_evidence = build_job_feedback_evidence_entries(
+        &state,
+        job_feedback.iter().filter(|j| j.bad_fit).take(10).collect(),
+        "bad_fit_job",
+    )
+    .await
+    .into_iter()
+    .chain(
+        company_feedback
+            .iter()
+            .filter(|c| c.status == CompanyFeedbackStatus::Blacklist)
+            .take(10)
+            .map(|c| LlmContextEvidenceEntry {
+                entry_type: "blacklisted_company".to_string(),
+                label: c.company_name.clone(),
+            }),
+    )
+    .collect();
 
     Ok(axum::Json(LlmContextResponse {
         profile_id,
@@ -259,6 +258,59 @@ pub async fn get_llm_context(
         top_positive_evidence,
         top_negative_evidence,
     }))
+}
+
+async fn build_job_feedback_evidence_entries(
+    state: &AppState,
+    job_feedback: Vec<&JobFeedbackRecord>,
+    entry_type: &str,
+) -> Vec<LlmContextEvidenceEntry> {
+    let mut entries = Vec::with_capacity(job_feedback.len());
+
+    for feedback in job_feedback {
+        entries.push(LlmContextEvidenceEntry {
+            entry_type: entry_type.to_string(),
+            label: resolve_job_feedback_label(state, &feedback.job_id).await,
+        });
+    }
+
+    entries
+}
+
+async fn resolve_job_feedback_label(state: &AppState, job_id: &str) -> String {
+    match state.jobs_service.get_view_by_id(job_id).await {
+        Ok(Some(job_view)) => format_job_feedback_label(
+            job_view.job.title.as_str(),
+            job_view.job.company_name.as_str(),
+        )
+        .unwrap_or_else(|| job_id.to_string()),
+        Ok(None) => job_id.to_string(),
+        Err(error) => {
+            warn!(
+                error = %error,
+                job_id,
+                "failed to resolve job feedback label; falling back to job id"
+            );
+            job_id.to_string()
+        }
+    }
+}
+
+fn format_job_feedback_label(title: &str, company_name: &str) -> Option<String> {
+    let title = title.trim();
+    let company_name = company_name.trim();
+
+    if !title.is_empty() && !company_name.is_empty() {
+        return Some(format!("{title} at {company_name}"));
+    }
+    if !title.is_empty() {
+        return Some(title.to_string());
+    }
+    if !company_name.is_empty() {
+        return Some(company_name.to_string());
+    }
+
+    None
 }
 
 async fn build_search_quality_summary(
@@ -300,7 +352,7 @@ mod tests {
     use crate::domain::feedback::model::{
         CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackRecord,
     };
-    use crate::domain::job::model::JobFeedSummary;
+    use crate::domain::job::model::{Job, JobFeedSummary, JobLifecycleStage, JobView};
     use crate::domain::profile::model::{Profile, ProfileAnalysis};
     use crate::domain::role::RoleId;
     use crate::domain::user_event::model::{UserEventRecord, UserEventType};
@@ -347,6 +399,12 @@ mod tests {
             ),
             JobsService::for_tests(
                 JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        "NovaLedger",
+                    ))
+                    .with_job_view(sample_job_view("job-2", "Legacy Support Engineer", "OldCo"))
                     .with_feed_summary(JobFeedSummary {
                         total_jobs: 10,
                         active_jobs: 6,
@@ -367,6 +425,31 @@ mod tests {
             ApplicationsService::for_tests(ApplicationsServiceStub::default()),
             ResumesService::for_tests(ResumesServiceStub::default()),
         )
+    }
+
+    fn sample_job_view(id: &str, title: &str, company_name: &str) -> JobView {
+        JobView {
+            job: Job {
+                id: id.to_string(),
+                title: title.to_string(),
+                company_name: company_name.to_string(),
+                location: None,
+                remote_type: Some("remote".to_string()),
+                seniority: Some("senior".to_string()),
+                description_text: "Rust and Postgres".to_string(),
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                posted_at: Some("2026-04-12T09:00:00Z".to_string()),
+                last_seen_at: "2026-04-14T09:00:00Z".to_string(),
+                is_active: true,
+            },
+            first_seen_at: "2026-04-12T09:00:00Z".to_string(),
+            inactivated_at: None,
+            reactivated_at: None,
+            lifecycle_stage: JobLifecycleStage::Active,
+            primary_variant: None,
+        }
     }
 
     fn with_feedback(state: AppState) -> AppState {
@@ -666,7 +749,10 @@ mod tests {
             .find(|e| e.entry_type == "whitelisted_company");
 
         assert!(saved.is_some(), "should include saved job evidence");
-        assert_eq!(saved.unwrap().label, "job-1");
+        assert_eq!(
+            saved.unwrap().label,
+            "Senior Backend Developer at NovaLedger"
+        );
         assert!(
             whitelisted.is_some(),
             "should include whitelisted company evidence"
@@ -692,7 +778,7 @@ mod tests {
             .find(|e| e.entry_type == "blacklisted_company");
 
         assert!(bad_fit.is_some(), "should include bad fit job evidence");
-        assert_eq!(bad_fit.unwrap().label, "job-2");
+        assert_eq!(bad_fit.unwrap().label, "Legacy Support Engineer at OldCo");
         assert!(
             blacklisted.is_some(),
             "should include blacklisted company evidence"

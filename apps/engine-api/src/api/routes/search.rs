@@ -5,7 +5,11 @@ use serde::Deserialize;
 use serde_json::json;
 use tracing::{info, warn};
 
-use crate::api::dto::search::{RunSearchRequest, RunSearchResponse, SearchResponse};
+use crate::api::dto::search::{
+    RunSearchRequest, RunSearchResponse, SearchRerankerComparisonInput,
+    SearchRerankerComparisonItemResponse, SearchRerankerComparisonModeResponse,
+    SearchRerankerComparisonResponse, SearchResponse,
+};
 use crate::api::error::{ApiError, ApiJson};
 use crate::api::routes::events::log_user_event_softly;
 use crate::api::routes::jobs::load_feedback_state;
@@ -16,7 +20,10 @@ use crate::services::behavior::{BehaviorService, ProfileBehaviorAggregates};
 use crate::services::funnel::{FunnelService, ProfileFunnelAggregates};
 use crate::services::learned_reranker::LearnedRerankerService;
 use crate::services::matching::{RankedJob, summarize_match_quality};
-use crate::services::ranking::runtime::{RerankerRuntimeMode, resolve_reranker_runtime};
+use crate::services::ranking::runtime::{
+    RerankerRuntimeMode, ResolvedRerankerRuntime, resolve_reranker_runtime,
+    resolve_reranker_runtime_comparison,
+};
 use crate::services::salary::{SearchSalaryExpectation, score_search_salary};
 use crate::services::trained_reranker::TrainedRerankerFeatures;
 use crate::state::AppState;
@@ -131,6 +138,7 @@ pub async fn run_search(
         adjusted_jobs = apply_behavior_scoring(&state, adjusted_jobs, &aggregates.behavior);
     }
     let behavior_score_by_job_id = score_by_job_id(&adjusted_jobs);
+    let deterministic_ranked_jobs = adjusted_jobs.clone();
     let reranker_runtime = resolve_reranker_runtime(
         state.reranker_runtime_mode,
         state.learned_reranker_enabled,
@@ -171,6 +179,19 @@ pub async fn run_search(
             mark_reranker_fallback(&mut adjusted_jobs, reason);
         }
     }
+    let reranker_comparison = input.reranker_comparison.as_ref().map(|comparison| {
+        build_reranker_comparison(
+            &state,
+            comparison,
+            &reranker_runtime,
+            &deterministic_ranked_jobs,
+            &adjusted_jobs,
+            learning_aggregates.as_ref(),
+            &feedback_by_job_id,
+            &deterministic_score_by_job_id,
+            &behavior_score_by_job_id,
+        )
+    });
     adjusted_jobs.truncate(input.limit as usize);
     let quality = summarize_match_quality(&adjusted_jobs);
     let ranked_jobs: Vec<crate::api::dto::search::RankedJobResponse> = adjusted_jobs
@@ -213,6 +234,7 @@ pub async fn run_search(
         learned_reranker_adjusted_jobs,
         trained_reranker_enabled: state.trained_reranker_availability.is_ready(),
         trained_reranker_adjusted_jobs,
+        reranker_comparison,
     };
 
     info!(
@@ -581,6 +603,132 @@ pub(crate) fn score_by_job_id(ranked_jobs: &[RankedJob]) -> HashMap<String, u8> 
         .collect()
 }
 
+fn build_reranker_comparison(
+    state: &AppState,
+    comparison: &SearchRerankerComparisonInput,
+    live_runtime: &ResolvedRerankerRuntime,
+    baseline_ranked_jobs: &[RankedJob],
+    _live_ranked_jobs: &[RankedJob],
+    learning_aggregates: Option<&SearchLearningAggregates>,
+    feedback_by_job_id: &HashMap<String, JobFeedbackState>,
+    deterministic_score_by_job_id: &HashMap<String, u8>,
+    behavior_score_by_job_id: &HashMap<String, u8>,
+) -> SearchRerankerComparisonResponse {
+    let runtime_comparison = resolve_reranker_runtime_comparison(
+        state.learned_reranker_enabled,
+        learning_aggregates.is_some(),
+        &state.trained_reranker_availability,
+    );
+    let learned_ranked_jobs = apply_reranker_runtime_path(
+        state,
+        baseline_ranked_jobs.to_vec(),
+        &runtime_comparison.learned,
+        learning_aggregates,
+        feedback_by_job_id,
+        deterministic_score_by_job_id,
+        behavior_score_by_job_id,
+    );
+    let trained_ranked_jobs = apply_reranker_runtime_path(
+        state,
+        baseline_ranked_jobs.to_vec(),
+        &runtime_comparison.trained,
+        learning_aggregates,
+        feedback_by_job_id,
+        deterministic_score_by_job_id,
+        behavior_score_by_job_id,
+    );
+
+    SearchRerankerComparisonResponse {
+        baseline_mode: runtime_comparison.baseline.active_mode.as_str().to_string(),
+        active_mode: live_runtime.active_mode.as_str().to_string(),
+        top_n: comparison.top_n,
+        baseline_top: top_reranker_comparison_items(baseline_ranked_jobs, comparison.top_n),
+        learned: build_reranker_comparison_mode(
+            &runtime_comparison.learned,
+            baseline_ranked_jobs,
+            &learned_ranked_jobs,
+            comparison.top_n,
+        ),
+        trained: build_reranker_comparison_mode(
+            &runtime_comparison.trained,
+            baseline_ranked_jobs,
+            &trained_ranked_jobs,
+            comparison.top_n,
+        ),
+    }
+}
+
+fn build_reranker_comparison_mode(
+    runtime: &ResolvedRerankerRuntime,
+    baseline_ranked_jobs: &[RankedJob],
+    compared_ranked_jobs: &[RankedJob],
+    top_n: usize,
+) -> SearchRerankerComparisonModeResponse {
+    SearchRerankerComparisonModeResponse {
+        active_mode: runtime.active_mode.as_str().to_string(),
+        would_differ_from_baseline: ranked_jobs_differ(baseline_ranked_jobs, compared_ranked_jobs),
+        fallback_reason: runtime.fallback_reason.clone(),
+        top: top_reranker_comparison_items(compared_ranked_jobs, top_n),
+    }
+}
+
+fn apply_reranker_runtime_path(
+    state: &AppState,
+    mut ranked_jobs: Vec<RankedJob>,
+    runtime: &ResolvedRerankerRuntime,
+    learning_aggregates: Option<&SearchLearningAggregates>,
+    feedback_by_job_id: &HashMap<String, JobFeedbackState>,
+    deterministic_score_by_job_id: &HashMap<String, u8>,
+    behavior_score_by_job_id: &HashMap<String, u8>,
+) -> Vec<RankedJob> {
+    if runtime.apply_learned {
+        if let Some(aggregates) = learning_aggregates {
+            let (reranked_jobs, _) = apply_learned_reranking(
+                state,
+                ranked_jobs,
+                &aggregates.behavior,
+                &aggregates.funnel,
+                feedback_by_job_id,
+                deterministic_score_by_job_id,
+            );
+            ranked_jobs = reranked_jobs;
+        }
+    }
+
+    if runtime.apply_trained {
+        let (reranked_jobs, _) = apply_trained_reranking(
+            state,
+            ranked_jobs,
+            deterministic_score_by_job_id,
+            behavior_score_by_job_id,
+        );
+        ranked_jobs = reranked_jobs;
+    }
+
+    ranked_jobs
+}
+
+fn top_reranker_comparison_items(
+    ranked_jobs: &[RankedJob],
+    top_n: usize,
+) -> Vec<SearchRerankerComparisonItemResponse> {
+    ranked_jobs
+        .iter()
+        .take(top_n)
+        .map(|ranked| SearchRerankerComparisonItemResponse {
+            job_id: ranked.job.job.id.clone(),
+            score: ranked.fit.score,
+        })
+        .collect()
+}
+
+fn ranked_jobs_differ(left: &[RankedJob], right: &[RankedJob]) -> bool {
+    left.len() != right.len()
+        || left.iter().zip(right.iter()).any(|(left, right)| {
+            left.job.job.id != right.job.job.id || left.fit.score != right.fit.score
+        })
+}
+
 fn mark_reranker_fallback(ranked_jobs: &mut [RankedJob], reason: &str) {
     for ranked in ranked_jobs {
         if matches!(
@@ -601,7 +749,9 @@ mod tests {
     use axum::{Json, body};
     use serde_json::{Value, json};
 
-    use crate::api::dto::search::{RunSearchRequest, SearchProfileRequest};
+    use crate::api::dto::search::{
+        RunSearchRequest, SearchProfileRequest, SearchRerankerComparisonRequest,
+    };
     use crate::api::error::ApiJson;
     use crate::domain::feedback::model::{
         CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackRecord,
@@ -775,6 +925,80 @@ mod tests {
         .expect("test artifact should load")
     }
 
+    fn reranker_comparison_request(
+        comparison: Option<SearchRerankerComparisonRequest>,
+    ) -> RunSearchRequest {
+        RunSearchRequest {
+            profile_id: Some("profile-1".to_string()),
+            search_profile: SearchProfileRequest {
+                primary_role: "backend_engineer".to_string(),
+                primary_role_confidence: Some(95),
+                target_roles: vec![],
+                role_candidates: vec![],
+                seniority: "senior".to_string(),
+                target_regions: vec![TargetRegion::EuRemote],
+                work_modes: vec![WorkMode::Remote],
+                allowed_sources: vec!["djinni".to_string(), "work_ua".to_string()],
+                profile_skills: vec!["rust".to_string()],
+                profile_keywords: vec!["backend".to_string()],
+                search_terms: vec!["rust".to_string()],
+                exclude_terms: vec![],
+            },
+            limit: Some(10),
+            reranker_comparison: comparison,
+        }
+    }
+
+    fn reranker_comparison_state() -> AppState {
+        let shared_desc = "Remote EU role working with Rust and Postgres backend systems";
+        let events = UserEventsServiceStub::default()
+            .with_event(user_event(
+                "evt-1",
+                UserEventType::JobSaved,
+                Some("djinni"),
+                Some("engineering"),
+            ))
+            .with_event(user_event(
+                "evt-2",
+                UserEventType::JobSaved,
+                Some("djinni"),
+                Some("engineering"),
+            ))
+            .with_event(user_event(
+                "evt-3",
+                UserEventType::ApplicationCreated,
+                Some("djinni"),
+                Some("engineering"),
+            ));
+
+        AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(
+                JobsServiceStub::default()
+                    .with_job_view(sample_job_view(
+                        "job-1",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "work_ua",
+                    ))
+                    .with_job_view(sample_job_view(
+                        "job-2",
+                        "Senior Backend Developer",
+                        shared_desc,
+                        Some("remote"),
+                        "djinni",
+                    )),
+            ),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_user_events_service(UserEventsService::for_tests(events))
+        .with_reranker_runtime_mode(RerankerRuntimeMode::Deterministic)
+    }
+
     #[tokio::test]
     async fn rejects_empty_query() {
         let response = search(
@@ -917,6 +1141,7 @@ mod tests {
                     exclude_terms: vec!["php".to_string()],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -976,6 +1201,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await;
@@ -1042,6 +1268,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -1128,6 +1355,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -1210,6 +1438,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -1283,6 +1512,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -1361,6 +1591,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -1458,6 +1689,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -1566,6 +1798,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(1),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -1650,6 +1883,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(1),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -1743,6 +1977,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -1842,6 +2077,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -1945,6 +2181,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -2042,6 +2279,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -2133,6 +2371,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -2309,6 +2548,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -2383,6 +2623,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -2473,6 +2714,7 @@ mod tests {
                 exclude_terms: vec![],
             },
             limit: Some(10),
+            reranker_comparison: None,
         };
 
         let baseline = run_search(State(build_state()), ApiJson(request()))
@@ -2570,6 +2812,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -2647,6 +2890,7 @@ mod tests {
                     exclude_terms: vec![],
                 },
                 limit: Some(10),
+                reranker_comparison: None,
             }),
         )
         .await
@@ -2670,6 +2914,149 @@ mod tests {
                 .as_str()
                 .is_some_and(|value| value.contains("fell back to learned reranker")),
             "meta should make the safe fallback explicit"
+        );
+    }
+
+    #[tokio::test]
+    async fn reranker_comparison_mode_is_absent_when_not_requested() {
+        let response = run_search(
+            State(reranker_comparison_state()),
+            ApiJson(reranker_comparison_request(None)),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(
+            payload["meta"]["reranker_mode_active"],
+            json!("deterministic")
+        );
+        assert_eq!(payload["meta"].get("reranker_comparison"), None);
+    }
+
+    #[tokio::test]
+    async fn reranker_comparison_mode_reports_learned_diff_without_changing_live_results() {
+        let baseline = run_search(
+            State(reranker_comparison_state()),
+            ApiJson(reranker_comparison_request(None)),
+        )
+        .await
+        .expect("baseline search should succeed")
+        .into_response();
+        let response = run_search(
+            State(reranker_comparison_state()),
+            ApiJson(reranker_comparison_request(Some(
+                SearchRerankerComparisonRequest { top_n: Some(2) },
+            ))),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let baseline_body = body::to_bytes(baseline.into_body(), usize::MAX)
+            .await
+            .expect("baseline body should be readable");
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let baseline_payload: Value =
+            serde_json::from_slice(&baseline_body).expect("baseline body should be valid JSON");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(
+            payload["meta"]["reranker_mode_active"],
+            json!("deterministic")
+        );
+        assert_eq!(payload["results"], baseline_payload["results"]);
+        assert_eq!(
+            payload["meta"]["reranker_comparison"]["baseline_mode"],
+            json!("deterministic")
+        );
+        assert_eq!(
+            payload["meta"]["reranker_comparison"]["active_mode"],
+            json!("deterministic")
+        );
+        assert_eq!(
+            payload["meta"]["reranker_comparison"]["learned"]["active_mode"],
+            json!("learned")
+        );
+        assert_eq!(
+            payload["meta"]["reranker_comparison"]["learned"]["would_differ_from_baseline"],
+            json!(true)
+        );
+        assert_ne!(
+            payload["meta"]["reranker_comparison"]["baseline_top"],
+            payload["meta"]["reranker_comparison"]["learned"]["top"]
+        );
+    }
+
+    #[tokio::test]
+    async fn reranker_comparison_mode_reports_trained_fallbacks_safely() {
+        let baseline = run_search(
+            State(
+                reranker_comparison_state()
+                    .with_trained_reranker(true, None)
+                    .with_reranker_runtime_mode(RerankerRuntimeMode::Deterministic),
+            ),
+            ApiJson(reranker_comparison_request(None)),
+        )
+        .await
+        .expect("baseline search should succeed")
+        .into_response();
+        let response = run_search(
+            State(
+                reranker_comparison_state()
+                    .with_trained_reranker(true, None)
+                    .with_reranker_runtime_mode(RerankerRuntimeMode::Deterministic),
+            ),
+            ApiJson(reranker_comparison_request(Some(
+                SearchRerankerComparisonRequest { top_n: Some(2) },
+            ))),
+        )
+        .await
+        .expect("run search should succeed")
+        .into_response();
+
+        let baseline_body = body::to_bytes(baseline.into_body(), usize::MAX)
+            .await
+            .expect("baseline body should be readable");
+        let body = body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let baseline_payload: Value =
+            serde_json::from_slice(&baseline_body).expect("baseline body should be valid JSON");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid JSON");
+
+        assert_eq!(
+            payload["meta"]["reranker_mode_active"],
+            json!("deterministic")
+        );
+        assert_eq!(payload["results"], baseline_payload["results"]);
+        assert_eq!(
+            payload["meta"]["reranker_comparison"]["trained"]["active_mode"],
+            json!("learned")
+        );
+        assert_eq!(
+            payload["meta"]["reranker_comparison"]["trained"]["would_differ_from_baseline"],
+            json!(true)
+        );
+        assert_eq!(
+            payload["meta"]["reranker_comparison"]["trained"]["top"],
+            payload["meta"]["reranker_comparison"]["learned"]["top"]
+        );
+        assert!(
+            payload["meta"]["reranker_comparison"]["trained"]["fallback_reason"]
+                .as_str()
+                .is_some_and(|reason| reason.contains("fell back to learned reranker")),
+            "comparison metadata should explain the trained fallback"
         );
     }
 }

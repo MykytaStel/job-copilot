@@ -174,5 +174,6 @@ describe('enrichment api payloads', () => {
         top_positive_evidence: [{ type: 'saved_job', label: 'job-1' }],
       },
     });
+    expect(body.llm_context.profile_id).toBeUndefined();
   });
 });
