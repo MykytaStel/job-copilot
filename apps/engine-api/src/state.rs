@@ -15,6 +15,7 @@ use crate::services::notifications::NotificationsService;
 use crate::services::profile::service::ProfileAnalysisService;
 use crate::services::profiles::ProfilesService;
 use crate::services::ranking::RankingService;
+use crate::services::ranking::runtime::{RerankerRuntimeMode, TrainedRerankerAvailability};
 use crate::services::resumes::ResumesService;
 use crate::services::salary::SalaryService;
 use crate::services::search_profile::service::SearchProfileService;
@@ -42,8 +43,10 @@ pub struct AppState {
     pub notifications_service: NotificationsService,
     pub salary_service: SalaryService,
     pub user_events_service: UserEventsService,
+    pub reranker_runtime_mode: RerankerRuntimeMode,
     pub learned_reranker_enabled: bool,
     pub trained_reranker_enabled: bool,
+    pub trained_reranker_availability: TrainedRerankerAvailability,
     pub trained_reranker_model: Option<TrainedRerankerModel>,
 }
 
@@ -53,24 +56,27 @@ impl AppState {
     }
 
     pub fn new_with_config(database: Database, config: &Config) -> Self {
-        let trained_reranker_model = if config.trained_reranker_enabled {
-            load_trained_reranker_model(config.trained_reranker_model_path.as_deref())
-        } else {
-            None
-        };
+        let (trained_reranker_model, trained_reranker_availability) = load_trained_reranker_model(
+            config.trained_reranker_enabled,
+            config.trained_reranker_model_path.as_deref(),
+        );
 
         Self::new_with_rerankers(
             database,
+            config.reranker_runtime_mode,
             config.learned_reranker_enabled,
             config.trained_reranker_enabled,
+            trained_reranker_availability,
             trained_reranker_model,
         )
     }
 
     fn new_with_rerankers(
         database: Database,
+        reranker_runtime_mode: RerankerRuntimeMode,
         learned_reranker_enabled: bool,
         trained_reranker_enabled: bool,
+        trained_reranker_availability: TrainedRerankerAvailability,
         trained_reranker_model: Option<TrainedRerankerModel>,
     ) -> Self {
         let profiles_repository = ProfilesRepository::new(database.clone());
@@ -105,8 +111,10 @@ impl AppState {
             notifications_service: NotificationsService::new(notifications_repository),
             salary_service: SalaryService::new(salary_jobs_repository),
             user_events_service: UserEventsService::new(user_events_repository),
+            reranker_runtime_mode,
             learned_reranker_enabled,
             trained_reranker_enabled,
+            trained_reranker_availability,
             trained_reranker_model,
         }
     }
@@ -152,8 +160,10 @@ impl AppState {
             user_events_service: UserEventsService::for_tests(
                 crate::services::user_events::UserEventsServiceStub::default(),
             ),
+            reranker_runtime_mode: RerankerRuntimeMode::Learned,
             learned_reranker_enabled: true,
             trained_reranker_enabled: false,
+            trained_reranker_availability: TrainedRerankerAvailability::DisabledByFlag,
             trained_reranker_model: None,
         }
     }
@@ -181,6 +191,8 @@ impl AppState {
 
     #[cfg(test)]
     pub fn with_learned_reranker_enabled(mut self, enabled: bool) -> Self {
+        self.reranker_runtime_mode =
+            RerankerRuntimeMode::default_from_flags(enabled, self.trained_reranker_enabled);
         self.learned_reranker_enabled = enabled;
         self
     }
@@ -191,27 +203,49 @@ impl AppState {
         enabled: bool,
         model: Option<TrainedRerankerModel>,
     ) -> Self {
+        self.reranker_runtime_mode =
+            RerankerRuntimeMode::default_from_flags(self.learned_reranker_enabled, enabled);
         self.trained_reranker_enabled = enabled;
+        self.trained_reranker_availability = if !enabled {
+            TrainedRerankerAvailability::DisabledByFlag
+        } else if model.is_some() {
+            TrainedRerankerAvailability::Ready
+        } else {
+            TrainedRerankerAvailability::MissingPath
+        };
         self.trained_reranker_model = model;
+        self
+    }
+
+    #[cfg(test)]
+    pub fn with_reranker_runtime_mode(mut self, mode: RerankerRuntimeMode) -> Self {
+        self.reranker_runtime_mode = mode;
         self
     }
 }
 
-fn load_trained_reranker_model(path: Option<&str>) -> Option<TrainedRerankerModel> {
+fn load_trained_reranker_model(
+    enabled: bool,
+    path: Option<&str>,
+) -> (Option<TrainedRerankerModel>, TrainedRerankerAvailability) {
+    if !enabled {
+        return (None, TrainedRerankerAvailability::DisabledByFlag);
+    }
+
     let Some(path) = path else {
         warn!("TRAINED_RERANKER_ENABLED is set but TRAINED_RERANKER_MODEL_PATH is empty");
-        return None;
+        return (None, TrainedRerankerAvailability::MissingPath);
     };
 
     match TrainedRerankerModel::load(path) {
-        Ok(model) => Some(model),
+        Ok(model) => (Some(model), TrainedRerankerAvailability::Ready),
         Err(error) => {
             warn!(
                 error = %error,
                 model_path = path,
                 "failed to load trained reranker artifact; continuing without v2 layer"
             );
-            None
+            (None, TrainedRerankerAvailability::InvalidArtifact(error))
         }
     }
 }

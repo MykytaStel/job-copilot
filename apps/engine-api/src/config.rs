@@ -1,8 +1,13 @@
+use tracing::warn;
+
+use crate::services::ranking::runtime::RerankerRuntimeMode;
+
 pub struct Config {
     pub port: u16,
     pub database_url: Option<String>,
     pub database_max_connections: u32,
     pub run_db_migrations: bool,
+    pub reranker_runtime_mode: RerankerRuntimeMode,
     pub learned_reranker_enabled: bool,
     pub trained_reranker_enabled: bool,
     pub trained_reranker_model_path: Option<String>,
@@ -37,6 +42,27 @@ impl Config {
             .as_deref()
             .map(parse_bool)
             .unwrap_or(false);
+        let reranker_runtime_mode = std::env::var("RERANKER_RUNTIME_MODE")
+            .ok()
+            .and_then(|value| {
+                let trimmed = value.trim().to_string();
+                let parsed = RerankerRuntimeMode::parse(&trimmed);
+
+                if parsed.is_none() {
+                    warn!(
+                        mode = trimmed,
+                        "invalid RERANKER_RUNTIME_MODE; falling back to feature-flag derived mode"
+                    );
+                }
+
+                parsed
+            })
+            .unwrap_or_else(|| {
+                RerankerRuntimeMode::default_from_flags(
+                    learned_reranker_enabled,
+                    trained_reranker_enabled,
+                )
+            });
         let trained_reranker_model_path = std::env::var("TRAINED_RERANKER_MODEL_PATH")
             .ok()
             .map(|value| value.trim().to_string())
@@ -47,6 +73,7 @@ impl Config {
             database_url,
             database_max_connections,
             run_db_migrations,
+            reranker_runtime_mode,
             learned_reranker_enabled,
             trained_reranker_enabled,
             trained_reranker_model_path,
@@ -63,6 +90,8 @@ fn parse_bool(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use crate::services::ranking::runtime::RerankerRuntimeMode;
+
     use super::parse_bool;
 
     #[test]
@@ -73,5 +102,22 @@ mod tests {
         assert!(parse_bool("on"));
         assert!(!parse_bool("false"));
         assert!(!parse_bool("0"));
+    }
+
+    #[test]
+    fn parses_runtime_mode_values() {
+        assert_eq!(
+            RerankerRuntimeMode::parse("deterministic"),
+            Some(RerankerRuntimeMode::Deterministic)
+        );
+        assert_eq!(
+            RerankerRuntimeMode::parse("learned"),
+            Some(RerankerRuntimeMode::Learned)
+        );
+        assert_eq!(
+            RerankerRuntimeMode::parse("trained"),
+            Some(RerankerRuntimeMode::Trained)
+        );
+        assert_eq!(RerankerRuntimeMode::parse("mystery"), None);
     }
 }
