@@ -120,6 +120,10 @@ is valid for evaluation, but it cannot train a model. Create profile/job outcome
 by saving a job, hiding a job, marking a job bad-fit, or creating an application, then export
 `GET /api/v1/profiles/:id/reranker-dataset` again.
 
+Current exports use `label_policy_version = outcome_label_v2` with normalized `signals`
+(`viewed`, `saved`, `applied`, `dismissed`), explicit feedback flags, and per-signal event
+counts. The canonical shape is documented in `docs/03-domain/reranker-outcomes.md`.
+
 Automated local training loop from the repo root:
 
 ```bash

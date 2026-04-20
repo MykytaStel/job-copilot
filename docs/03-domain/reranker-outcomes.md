@@ -24,13 +24,9 @@ Each example contains:
 - `job_id`, title, company, source, inferred `role_family`
 - `label`, `label_score`, `label_reasons`
 - outcome signals from profile events and current feedback:
-  - viewed
-  - saved
-  - applied
-  - dismissed
-  - hidden
-  - bad_fit
-  - explicit feedback flags
+  - `viewed`, `saved`, `applied`, `dismissed`, `hidden`, `bad_fit`
+  - `explicit_feedback`, `explicit_saved`, `explicit_hidden`, `explicit_bad_fit`
+  - `viewed_event_count`, `saved_event_count`, `applied_event_count`, `dismissed_event_count`
 - ranking features:
   - `deterministic_score`
   - `behavior_score_delta`
@@ -39,6 +35,56 @@ Each example contains:
   - `learned_reranker_score`
   - matched role / skill / keyword counts
   - deterministic fit, behavior, and learned-reranker reasons
+
+Small v2 example:
+
+```json
+{
+  "profile_id": "profile-1",
+  "label_policy_version": "outcome_label_v2",
+  "examples": [
+    {
+      "job_id": "job-123",
+      "title": "Senior Backend Engineer",
+      "company_name": "NovaLedger",
+      "source": "djinni",
+      "role_family": "engineering",
+      "label": "positive",
+      "label_score": 2,
+      "label_reasons": ["applied"],
+      "signals": {
+        "viewed": true,
+        "saved": true,
+        "hidden": false,
+        "bad_fit": false,
+        "applied": true,
+        "dismissed": false,
+        "explicit_feedback": true,
+        "explicit_saved": true,
+        "explicit_hidden": false,
+        "explicit_bad_fit": false,
+        "viewed_event_count": 1,
+        "saved_event_count": 1,
+        "applied_event_count": 1,
+        "dismissed_event_count": 0
+      },
+      "ranking": {
+        "deterministic_score": 78,
+        "behavior_score_delta": 4,
+        "behavior_score": 82,
+        "learned_reranker_score_delta": 3,
+        "learned_reranker_score": 85,
+        "matched_role_count": 1,
+        "matched_skill_count": 5,
+        "matched_keyword_count": 4,
+        "fit_reasons": ["Role match"],
+        "behavior_reasons": ["Saved similar jobs"],
+        "learned_reasons": ["Learned reranker boosted this source"]
+      }
+    }
+  ]
+}
+```
 
 ## Label policy v2
 
@@ -182,7 +228,7 @@ When enabled and loaded, the model applies only a bounded additive score delta a
 reason containing `Trained reranker v2`. It does not replace deterministic ranking and does not
 remove learned reranker v1.
 
-For rollout safety, live search now reports:
+For rollout safety, live search now reports the requested mode, the active mode, and any fallback reason:
 
 - `reranker_mode_requested`
 - `reranker_mode_active`

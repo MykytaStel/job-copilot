@@ -138,11 +138,12 @@ Job Copilot monorepo. ML сервіс на Python FastAPI.
 - Engine-API має endpoint для export dataset — перевір `apps/engine-api/src/api/` (шукай reranker_dataset)
 - Файл: `apps/ml/app/engine_api_client.py` — клієнт до engine-api
 
-Маппінг подій до labels:
-- event_type = 'job_saved' → label = 1 (позитивний)
-- event_type = 'job_applied' → label = 1 (позитивний)
-- event_type = 'job_hidden' → label = 0 (негативний)
-- event_type = 'job_bad_fit' → label = 0 (негативний)
+Нормалізація labels already lives in engine-api export:
+- `label_policy_version = outcome_label_v2`
+- `applied` → `positive`
+- `dismissed` (`hidden` / `bad_fit`) → `negative`
+- `saved` or viewed-only → `medium`
+- export `signals` already includes `viewed`, `saved`, `applied`, `dismissed`, explicit feedback flags, and event-count fields
 
 Що зробити:
 1. Прочитай `apps/ml/app/trained_reranker.py` — зрозумій формат labeled examples (які features потрібні)

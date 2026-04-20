@@ -190,6 +190,12 @@ Label policy is documented in `docs/03-domain/reranker-outcomes.md`:
 - `medium` = saved or viewed-only
 - `negative` = dismissed (`hidden` / `bad_fit`)
 
-The export also normalizes reversal events (`unsaved`, `unhidden`, `bad_fit_removed`) before labeling, so current-state feedback and immutable event history resolve into one deterministic training shape.
+The export normalizes reversal events (`unsaved`, `unhidden`, `bad_fit_removed`) before labeling, so current-state feedback and immutable event history resolve into one deterministic training shape.
+
+The exported `signals` shape is v2-oriented and mirrors runtime normalization:
+
+- booleans: `viewed`, `saved`, `applied`, `dismissed`, `hidden`, `bad_fit`
+- explicit feedback flags: `explicit_feedback`, `explicit_saved`, `explicit_hidden`, `explicit_bad_fit`
+- event counters: `viewed_event_count`, `saved_event_count`, `applied_event_count`, `dismissed_event_count`
 
 `apps/ml/app/reranker_evaluation.py` can compare deterministic, behavior-adjusted, and learned-reranker-adjusted score orderings with simple offline metrics.
