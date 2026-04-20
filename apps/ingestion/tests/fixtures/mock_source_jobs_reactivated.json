@@ -1,0 +1,41 @@
+{
+  "fetched_at": "2026-04-17T09:00:00Z",
+  "jobs": [
+    {
+      "source_job_id": "platform-001",
+      "source_url": "https://mock-source.example/jobs/platform-001",
+      "position": "Senior Platform Ingestion Engineer",
+      "employer": "SignalHire",
+      "city": "Kyiv",
+      "work_mode": "remote",
+      "seniority": "senior",
+      "description": "Return a previously inactive source variant back into the canonical feed without breaking lifecycle state.",
+      "compensation": {
+        "min": 5400,
+        "max": 7000,
+        "currency": "USD"
+      },
+      "posted_at": "2026-04-14T08:00:00Z",
+      "last_seen_at": "2026-04-17T09:00:00Z",
+      "active": true
+    },
+    {
+      "source_job_id": "data-002",
+      "source_url": "https://mock-source.example/jobs/data-002",
+      "position": "Search Data Engineer",
+      "employer": "NovaLedger",
+      "city": "Lviv",
+      "work_mode": "remote",
+      "seniority": "middle",
+      "description": "Own ingestion-safe search inputs, ranking features, and lifecycle-safe variant refresh diagnostics.",
+      "compensation": {
+        "min": 3600,
+        "max": 4900,
+        "currency": "USD"
+      },
+      "posted_at": "2026-04-14T07:20:00Z",
+      "last_seen_at": "2026-04-17T09:00:00Z",
+      "active": true
+    }
+  ]
+}

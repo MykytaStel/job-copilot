@@ -310,6 +310,15 @@ impl ScrapeSource {
 // ── Batch loaders ────────────────────────────────────────────────────────────
 
 fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
+    info!(
+        input_path = %mode.input_path.display(),
+        input_format = match mode.input_format {
+            InputFormat::Normalized => "normalized",
+            InputFormat::MockSource => "mock-source",
+        },
+        "loading ingestion batch from file"
+    );
+
     let raw = fs::read_to_string(&mode.input_path)
         .map_err(|e| format!("failed to read {}: {e}", mode.input_path.display()))?;
 
@@ -317,19 +326,50 @@ fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
         InputFormat::Normalized => {
             let payload = serde_json::from_str::<InputDocument>(&raw)
                 .map_err(|e| format!("failed to parse {}: {e}", mode.input_path.display()))?;
-            Ok(IngestionBatch::from_jobs(payload.into_jobs()))
+            let batch = IngestionBatch::from_jobs(payload.into_jobs());
+            info!(
+                input_path = %mode.input_path.display(),
+                jobs = batch.jobs.len(),
+                "loaded normalized ingestion batch"
+            );
+            Ok(batch)
         }
         InputFormat::MockSource => {
             let payload = serde_json::from_str::<MockSourceInput>(&raw)
                 .map_err(|e| format!("failed to parse {}: {e}", mode.input_path.display()))?;
             let adapter = MockSourceAdapter;
-            let normalized = adapter.normalize(payload)?;
-            IngestionBatch::from_normalization_results(normalized)
+            let normalized = adapter.normalize(payload).map_err(|error| {
+                format!(
+                    "failed to normalize {} as mock-source input: {error}",
+                    mode.input_path.display()
+                )
+            })?;
+            let batch =
+                IngestionBatch::from_normalization_results(normalized).map_err(|error| {
+                    format!(
+                        "failed to build ingestion batch from {}: {error}",
+                        mode.input_path.display()
+                    )
+                })?;
+            info!(
+                input_path = %mode.input_path.display(),
+                jobs = batch.jobs.len(),
+                variants = batch.job_variants.len(),
+                "loaded adapter-backed ingestion batch"
+            );
+            Ok(batch)
         }
     }
 }
 
 async fn run_scraper(mode: &ScrapeMode) -> Result<IngestionBatch, String> {
+    info!(
+        source = mode.source.name(),
+        pages = mode.pages,
+        keyword = mode.keyword.as_deref().unwrap_or(""),
+        "starting scrape"
+    );
+
     let config = ScraperConfig {
         pages: mode.pages,
         keyword: mode.keyword.clone(),
@@ -362,7 +402,21 @@ async fn run_scraper(mode: &ScrapeMode) -> Result<IngestionBatch, String> {
         );
     }
 
-    IngestionBatch::from_normalization_results(results)
+    let batch = IngestionBatch::from_normalization_results(results).map_err(|error| {
+        format!(
+            "scraper '{}' returned invalid normalization results: {error}",
+            mode.source.name()
+        )
+    })?;
+
+    info!(
+        source = mode.source.name(),
+        jobs = batch.jobs.len(),
+        variants = batch.job_variants.len(),
+        "scrape finished"
+    );
+
+    Ok(batch)
 }
 
 // ── Daemon loop ──────────────────────────────────────────────────────────────

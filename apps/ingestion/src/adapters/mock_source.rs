@@ -16,10 +16,21 @@ impl SourceAdapter for MockSourceAdapter {
     }
 
     fn normalize(&self, input: Self::Input) -> Result<Vec<NormalizationResult>, String> {
+        let fetched_at = trim_required("fetched_at", input.fetched_at)?;
         input
             .jobs
             .into_iter()
-            .map(|job| self.normalize_job(&input.fetched_at, job))
+            .enumerate()
+            .map(|(index, job)| {
+                let source_job_id = job.source_job_id.clone();
+                self.normalize_job(&fetched_at, job).map_err(|error| {
+                    format!(
+                        "mock_source job #{} ('{}') failed normalization: {error}",
+                        index + 1,
+                        source_job_id.trim()
+                    )
+                })
+            })
             .collect()
     }
 }
