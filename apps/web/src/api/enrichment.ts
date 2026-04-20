@@ -1,4 +1,5 @@
-import type { JobFeedbackState, JobPosting } from '@job-copilot/shared';
+import type { JobFeedbackState } from '@job-copilot/shared/feedback';
+import type { JobPosting } from '@job-copilot/shared/jobs';
 
 import type {
   AnalyticsFeedbackSummary,

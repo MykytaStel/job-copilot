@@ -6,7 +6,8 @@
     "types": ["vite/client"],
     "paths": {
       "@/*": ["./src/*"],
-      "@job-copilot/shared": ["../../packages/contracts/src/index.ts"]
+      "@job-copilot/shared": ["../../packages/contracts/src/index.ts"],
+      "@job-copilot/shared/*": ["../../packages/contracts/src/*"]
     }
   },
   "include": ["src"]

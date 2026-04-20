@@ -4,7 +4,7 @@ import type {
   EngineSearchProfileResponse as SharedEngineSearchProfileResponse,
   EngineTargetRegion,
   EngineWorkMode,
-} from '@job-copilot/shared';
+} from '@job-copilot/shared/search';
 
 import type { EngineGlobalSearchApplication } from './applications';
 import type { EngineJob } from './jobs';

@@ -3,7 +3,7 @@ import type {
   ApplicationStatus,
   ContactRelationship,
   OfferStatus,
-} from '@job-copilot/shared';
+} from '@job-copilot/shared/applications';
 
 import type { EngineContact } from './contacts';
 import type { EngineJob } from './jobs';
