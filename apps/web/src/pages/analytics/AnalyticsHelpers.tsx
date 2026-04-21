@@ -1,0 +1,322 @@
+/* eslint-disable react-refresh/only-export-components */
+
+import type { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
+
+import type { BehaviorSignalCount } from '../../api/analytics';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { cn } from '../../lib/cn';
+
+export type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'muted';
+
+export const toneClasses: Record<Tone, string> = {
+  primary: 'bg-primary/15 text-primary border-primary/25',
+  success: 'bg-fit-excellent/15 text-fit-excellent border-fit-excellent/25',
+  warning: 'bg-fit-fair/15 text-fit-fair border-fit-fair/25',
+  danger: 'bg-destructive/15 text-destructive border-destructive/25',
+  muted: 'bg-white/[0.05] text-muted-foreground border-border',
+};
+
+export const barToneClasses: Record<Tone, string> = {
+  primary: 'bg-primary',
+  success: 'bg-fit-excellent',
+  warning: 'bg-fit-fair',
+  danger: 'bg-destructive',
+  muted: 'bg-muted-foreground',
+};
+
+export function Section({
+  title,
+  description,
+  icon: Icon,
+  eyebrow,
+  action,
+  children,
+  className,
+}: {
+  title: string;
+  description?: string;
+  icon: LucideIcon;
+  eyebrow?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className={cn('border-border bg-card', className)}>
+      <CardHeader className="gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
+              <Icon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              {eyebrow ? (
+                <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  {eyebrow}
+                </p>
+              ) : null}
+              <CardTitle className="mt-1 text-base font-semibold">{title}</CardTitle>
+              {description ? (
+                <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+              ) : null}
+            </div>
+          </div>
+          {action}
+        </div>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
+export function HeroMetric({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  icon: LucideIcon;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+            {label}
+          </p>
+          <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">{value}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function BarList({
+  items,
+  emptyMessage,
+}: {
+  items: { label: string; value: number; tone?: Tone }[];
+  emptyMessage: string;
+}) {
+  const maxValue = Math.max(...items.map((item) => item.value), 1);
+
+  if (items.length === 0) {
+    return <EmptyState message={emptyMessage} className="px-4 py-4 text-left" />;
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((item) => {
+        const width = `${Math.round((item.value / maxValue) * 100)}%`;
+        const tone = item.tone ?? 'primary';
+
+        return (
+          <div key={item.label} className="grid grid-cols-[minmax(0,1fr)_56px] items-center gap-3">
+            <div className="min-w-0 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="m-0 truncate text-sm text-card-foreground">{item.label}</p>
+                <span className="text-xs text-muted-foreground">{item.value}</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-[width] duration-300',
+                    barToneClasses[tone],
+                  )}
+                  style={{ width }}
+                />
+              </div>
+            </div>
+            <p className="m-0 text-right text-sm font-semibold text-card-foreground">
+              {item.value}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function ConversionCard({
+  label,
+  rate,
+  numerator,
+  denominator,
+  tone,
+}: {
+  label: string;
+  rate: number;
+  numerator: number;
+  denominator: number;
+  tone: Tone;
+}) {
+  const width = `${Math.max(0, Math.min(rate, 1)) * 100}%`;
+
+  return (
+    <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="m-0 text-xs text-muted-foreground">{label}</p>
+        <span
+          className={cn(
+            'text-lg font-bold',
+            tone === 'danger'
+              ? 'text-destructive'
+              : tone === 'warning'
+                ? 'text-fit-fair'
+                : tone === 'success'
+                  ? 'text-fit-excellent'
+                  : 'text-primary',
+          )}
+        >
+          {Math.round(rate * 100)}%
+        </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+        <div
+          className={cn(
+            'h-full rounded-full transition-[width] duration-300',
+            barToneClasses[tone],
+          )}
+          style={{ width }}
+        />
+      </div>
+      <p className="m-0 mt-2 text-xs text-muted-foreground">
+        {numerator} / {denominator || 0}
+      </p>
+    </div>
+  );
+}
+
+export function SignalList({
+  title,
+  description,
+  items,
+  tone,
+}: {
+  title: string;
+  description: string;
+  items: BehaviorSignalCount[];
+  tone: Tone;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+        <p className="m-0 text-sm font-semibold text-card-foreground">{title}</p>
+        <p className="m-0 mt-1 text-xs leading-6 text-muted-foreground">{description}</p>
+        <EmptyState message="No signal data yet." className="px-4 py-4 text-left" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+      <p className="m-0 text-sm font-semibold text-card-foreground">{title}</p>
+      <p className="m-0 mt-1 text-xs leading-6 text-muted-foreground">{description}</p>
+      <div className="mt-4 space-y-3">
+        {items.slice(0, 6).map((item) => (
+          <div
+            key={item.key}
+            className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-3"
+          >
+            <div className="min-w-0">
+              <p className="m-0 truncate text-sm font-medium text-card-foreground">{item.key}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="rounded-full border border-border bg-white/[0.04] px-2 py-1 text-[11px] text-muted-foreground">
+                  saves {item.saveCount}
+                </span>
+                <span className="rounded-full border border-border bg-white/[0.04] px-2 py-1 text-[11px] text-muted-foreground">
+                  applies {item.applicationCreatedCount}
+                </span>
+                <span className="rounded-full border border-border bg-white/[0.04] px-2 py-1 text-[11px] text-muted-foreground">
+                  bad fit {item.badFitCount}
+                </span>
+              </div>
+            </div>
+            <span
+              className={cn(
+                'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]',
+                toneClasses[tone],
+              )}
+            >
+              net {item.netScore}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function PillCloud({
+  title,
+  items,
+  emptyMessage,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  emptyMessage: string;
+  tone: Tone;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+      <p className="m-0 text-sm font-semibold text-card-foreground">{title}</p>
+      {items.length === 0 ? (
+        <EmptyState message={emptyMessage} className="px-4 py-4 text-left" />
+      ) : (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {items.map((item) => (
+            <span
+              key={item}
+              className={cn(
+                'inline-flex items-center rounded-full border px-3 py-1.5 text-xs',
+                toneClasses[tone],
+              )}
+            >
+              {item}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function TextList({
+  title,
+  items,
+  emptyMessage,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  emptyMessage: string;
+  tone: Tone;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+      <p className="m-0 text-sm font-semibold text-card-foreground">{title}</p>
+      {items.length === 0 ? (
+        <EmptyState message={emptyMessage} className="px-4 py-4 text-left" />
+      ) : (
+        <div className="mt-4 space-y-3">
+          {items.map((item) => (
+            <div
+              key={item}
+              className="flex items-start gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-3"
+            >
+              <span className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', barToneClasses[tone])} />
+              <p className="m-0 text-sm leading-6 text-card-foreground">{item}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
