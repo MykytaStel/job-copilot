@@ -221,16 +221,36 @@ pub(super) fn is_low_signal_term(token: &str) -> bool {
     !token.contains('_') && LOW_SIGNAL_TERMS.iter().any(|value| value == &token)
 }
 
-pub(super) fn days_since_last_seen(last_seen_at: &str) -> i64 {
-    let job_day = parse_days_since_epoch(last_seen_at).unwrap_or(0);
-    (current_days_since_epoch() - job_day).max(0)
+pub(super) struct FreshnessDecayConfig {
+    pub grace_days: i64,
+    pub half_life_days: f32,
+    pub floor: f32,
 }
 
-pub(super) fn compute_freshness_decay(days_old: i64) -> f32 {
-    if days_old <= 14 {
+impl Default for FreshnessDecayConfig {
+    fn default() -> Self {
+        Self { grace_days: 7, half_life_days: 21.0, floor: 0.45 }
+    }
+}
+
+pub(super) fn days_since_posting(job: &super::JobView) -> (i64, &'static str) {
+    let (date_str, source) = if let Some(posted) = job.job.posted_at.as_deref() {
+        (posted, "posted_at")
+    } else {
+        (job.first_seen_at.as_str(), "first_seen_at")
+    };
+    let job_day = parse_days_since_epoch(date_str).unwrap_or(0);
+    ((current_days_since_epoch() - job_day).max(0), source)
+}
+
+pub(super) fn compute_freshness_decay(days_old: i64, cfg: &FreshnessDecayConfig) -> f32 {
+    if days_old <= cfg.grace_days {
         return 1.0;
     }
-    (1.0 - (days_old as f32 - 14.0) / 30.0).max(0.7)
+    let decay_days = (days_old - cfg.grace_days) as f32;
+    let lambda = 2f32.ln() / cfg.half_life_days;
+    let decay = (-lambda * decay_days).exp();
+    cfg.floor + (1.0 - cfg.floor) * decay
 }
 
 fn parse_days_since_epoch(datetime_str: &str) -> Option<i64> {
@@ -257,4 +277,52 @@ fn current_days_since_epoch() -> i64 {
         .unwrap_or_default()
         .as_secs() as i64
         / 86400
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn freshness_decay_grace_period() {
+        let cfg = FreshnessDecayConfig::default();
+        assert_eq!(compute_freshness_decay(0, &cfg), 1.0);
+        assert_eq!(compute_freshness_decay(7, &cfg), 1.0);
+    }
+
+    #[test]
+    fn freshness_decay_just_past_grace() {
+        let cfg = FreshnessDecayConfig::default();
+        let just_past = compute_freshness_decay(8, &cfg);
+        assert!(just_past < 1.0);
+        assert!(just_past > cfg.floor);
+    }
+
+    #[test]
+    fn freshness_decay_at_half_life() {
+        let cfg = FreshnessDecayConfig::default();
+        // At grace + half_life days, the non-floor portion halves
+        let at_half_life = compute_freshness_decay(cfg.grace_days + cfg.half_life_days as i64, &cfg);
+        let expected = cfg.floor + (1.0 - cfg.floor) * 0.5;
+        assert!((at_half_life - expected).abs() < 0.005);
+    }
+
+    #[test]
+    fn freshness_decay_approaches_floor() {
+        let cfg = FreshnessDecayConfig::default();
+        let old = compute_freshness_decay(365, &cfg);
+        assert!(old >= cfg.floor);
+        assert!(old < cfg.floor + 0.01);
+    }
+
+    #[test]
+    fn freshness_decay_monotonically_decreasing() {
+        let cfg = FreshnessDecayConfig::default();
+        let mut prev = compute_freshness_decay(0, &cfg);
+        for days in 1..=180i64 {
+            let curr = compute_freshness_decay(days, &cfg);
+            assert!(curr <= prev, "decay increased at day {days}");
+            prev = curr;
+        }
+    }
 }
