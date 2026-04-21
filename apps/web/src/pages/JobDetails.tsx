@@ -60,6 +60,11 @@ import { Page, PageGrid } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { cn } from '../lib/cn';
+import {
+  invalidateApplicationSummaryQueries,
+  invalidateFeedbackViewQueries,
+  invalidateJobAiQueries,
+} from '../lib/queryInvalidation';
 import { queryKeys } from '../queryKeys';
 
 function readProfileId() {
@@ -266,12 +271,8 @@ export default function JobDetails() {
   const companyStatus = job?.feedback?.companyStatus;
 
   const invalidateFeedbackQueries = () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
-    if (profileId && id) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.ml.fit(profileId, id) });
-      void queryClient.invalidateQueries({ queryKey: ['ml', 'rerank', profileId] });
-    }
+    void invalidateFeedbackViewQueries(queryClient, profileId);
+    void invalidateJobAiQueries(queryClient, profileId, id);
   };
 
   const saveMutation = useMutation({
@@ -282,8 +283,7 @@ export default function JobDetails() {
     },
     onSuccess: () => {
       invalidateFeedbackQueries();
-      void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
+      void invalidateApplicationSummaryQueries(queryClient);
       toast.success('Збережено в pipeline');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
