@@ -607,23 +607,33 @@ fn backend_platform_overlap_prefers_engineering_stack_signals() {
 fn stale_job_scores_lower_than_fresh_identical_job() {
     let service = SearchMatchingService::new();
     let profile = search_profile();
-    let fresh_job = job_view(
+    // Pin fresh job to a far-future date so it always lands in the grace period
+    // regardless of when the test runs.
+    let base = job_view(
         "job-fresh",
         "Senior Backend Developer",
         "Remote EU role with Rust and Postgres",
         Some("remote"),
         "djinni",
     );
-    // Job posted years ago — well past the grace period.
-    // All three date fields must be old so days_since_posting() picks the stale date.
+    let fresh_job = JobView {
+        job: Job {
+            posted_at: Some("2099-01-01T00:00:00Z".to_string()),
+            last_seen_at: "2099-01-01T00:00:00Z".to_string(),
+            ..base.job.clone()
+        },
+        first_seen_at: "2099-01-01T00:00:00Z".to_string(),
+        ..base.clone()
+    };
+    // Stale job: all date fields set to a distant past date.
     let stale_job = JobView {
         job: Job {
             posted_at: Some("2020-01-01T00:00:00Z".to_string()),
             last_seen_at: "2020-01-01T00:00:00Z".to_string(),
-            ..fresh_job.job.clone()
+            ..base.job.clone()
         },
         first_seen_at: "2020-01-01T00:00:00Z".to_string(),
-        ..fresh_job.clone()
+        ..base.clone()
     };
 
     let fresh_fit = service.score_job(&profile, &fresh_job);
