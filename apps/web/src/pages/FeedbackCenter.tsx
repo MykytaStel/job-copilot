@@ -22,6 +22,7 @@ import { PageHeader } from '../components/ui/SectionHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { invalidateFeedbackViewQueries } from '../lib/queryInvalidation';
 import { cn } from '../lib/cn';
+import { readProfileId } from '../lib/profileSession';
 import { queryKeys } from '../queryKeys';
 import {
   FEEDBACK_SUMMARY_CARDS,
@@ -35,10 +36,6 @@ import {
   HiddenJobsSection,
   SavedJobsSection,
 } from './feedback/FeedbackCenterSections';
-
-function readProfileId() {
-  return window.localStorage.getItem('engine_api_profile_id');
-}
 
 export default function FeedbackCenter() {
   const profileId = readProfileId();

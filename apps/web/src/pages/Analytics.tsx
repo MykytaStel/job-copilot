@@ -1,5 +1,3 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   BarChart2,
@@ -20,13 +18,6 @@ import {
   Zap,
 } from 'lucide-react';
 
-import {
-  getAnalyticsSummary,
-  getBehaviorSummary,
-  getFunnelSummary,
-  getLlmContext,
-} from '../api/analytics';
-import { getProfileInsights, getWeeklyGuidance } from '../api/enrichment';
 import { AIInsightPanel } from '../components/ui/AIInsightPanel';
 import { Badge } from '../components/ui/Badge';
 import { Card, CardContent } from '../components/ui/Card';
@@ -34,7 +25,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Page, PageGrid } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { AnalyticsCard, StatCard } from '../components/ui/StatCard';
-import { queryKeys } from '../queryKeys';
+import { useAnalyticsPage } from '../features/analytics/useAnalyticsPage';
 import {
   BarList,
   ConversionCard,
@@ -44,89 +35,28 @@ import {
   SignalList,
 } from './analytics/AnalyticsHelpers';
 import {
-  buildInsights,
   FunnelBySource,
   LlmContextPanel,
   ProfileInsightsPanel,
   WeeklyGuidancePanel,
 } from './analytics/AnalyticsPanels';
 
-function readProfileId() {
-  return window.localStorage.getItem('engine_api_profile_id');
-}
-
 export default function Analytics() {
-  const profileId = readProfileId();
-
-  const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: queryKeys.analytics.summary(profileId ?? ''),
-    queryFn: () => getAnalyticsSummary(profileId!),
-    enabled: !!profileId,
-  });
-
-  const { data: behavior, isLoading: behaviorLoading } = useQuery({
-    queryKey: queryKeys.analytics.behavior(profileId ?? ''),
-    queryFn: () => getBehaviorSummary(profileId!),
-    enabled: !!profileId,
-  });
-
-  const { data: funnel, isLoading: funnelLoading } = useQuery({
-    queryKey: queryKeys.analytics.funnel(profileId ?? ''),
-    queryFn: () => getFunnelSummary(profileId!),
-    enabled: !!profileId,
-  });
-
-  const { data: llmCtx, isLoading: ctxLoading } = useQuery({
-    queryKey: queryKeys.analytics.llmContext(profileId ?? ''),
-    queryFn: () => getLlmContext(profileId!),
-    enabled: !!profileId,
-  });
-
-  const enrichmentContextVersion = llmCtx ? JSON.stringify(llmCtx) : '';
   const {
-    data: profileInsights,
-    isLoading: insightsLoading,
-    error: insightsError,
-  } = useQuery({
-    queryKey: queryKeys.analytics.profileInsights(profileId ?? '', enrichmentContextVersion),
-    queryFn: () => getProfileInsights(llmCtx!),
-    enabled: !!profileId && !!llmCtx,
-    retry: 0,
-  });
-
-  const weeklyGuidanceContextVersion =
-    summary && behavior && funnel && llmCtx
-      ? JSON.stringify({ summary, behavior, funnel, llmCtx })
-      : '';
-  const {
-    data: weeklyGuidance,
-    isLoading: weeklyGuidanceLoading,
-    error: weeklyGuidanceError,
-  } = useQuery({
-    queryKey: queryKeys.analytics.weeklyGuidance(profileId ?? '', weeklyGuidanceContextVersion),
-    queryFn: () =>
-      getWeeklyGuidance({
-        profileId: profileId!,
-        analyticsSummary: summary!,
-        behaviorSummary: behavior!,
-        funnelSummary: funnel!,
-        llmContext: llmCtx!,
-      }),
-    enabled: !!profileId && !!summary && !!behavior && !!funnel && !!llmCtx,
-    retry: 0,
-  });
-
-  const aiInsights = useMemo(
-    () =>
-      summary
-        ? buildInsights({
-            summary,
-            profileInsights,
-            weeklyGuidance,
-          })
-        : [],
-    [summary, profileInsights, weeklyGuidance],
-  );
+    profileId,
+    summary,
+    behavior,
+    funnel,
+    llmCtx,
+    profileInsights,
+    weeklyGuidance,
+    aiInsights,
+    isLoading,
+    insightsLoading,
+    insightsError,
+    weeklyGuidanceLoading,
+    weeklyGuidanceError,
+  } = useAnalyticsPage();
 
   if (!profileId) {
     return (
@@ -135,8 +65,6 @@ export default function Analytics() {
       </Page>
     );
   }
-
-  const isLoading = summaryLoading || behaviorLoading || funnelLoading || ctxLoading;
 
   return (
     <Page>
