@@ -614,12 +614,15 @@ fn stale_job_scores_lower_than_fresh_identical_job() {
         Some("remote"),
         "djinni",
     );
-    // Job last seen 365 days ago — well past the 14-day freshness threshold.
+    // Job posted years ago — well past the grace period.
+    // All three date fields must be old so days_since_posting() picks the stale date.
     let stale_job = JobView {
         job: Job {
+            posted_at: Some("2020-01-01T00:00:00Z".to_string()),
             last_seen_at: "2020-01-01T00:00:00Z".to_string(),
             ..fresh_job.job.clone()
         },
+        first_seen_at: "2020-01-01T00:00:00Z".to_string(),
         ..fresh_job.clone()
     };
 
