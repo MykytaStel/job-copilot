@@ -3,6 +3,9 @@ name = "ingestion"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+mock = []
+
 [dependencies]
 chrono = "0.4.38"
 reqwest = { version = "0.12", default-features = false, features = [

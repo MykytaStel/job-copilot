@@ -10,9 +10,13 @@ use std::time::Duration;
 
 use tracing::{error, info, warn};
 
+#[cfg(any(feature = "mock", test))]
 use crate::adapters::SourceAdapter;
+#[cfg(any(feature = "mock", test))]
 use crate::adapters::mock_source::MockSourceAdapter;
-use crate::models::{IngestionBatch, InputDocument, MockSourceInput};
+use crate::models::{IngestionBatch, InputDocument};
+#[cfg(any(feature = "mock", test))]
+use crate::models::MockSourceInput;
 use crate::scrapers::ScraperConfig;
 use crate::scrapers::djinni::DjinniScraper;
 use crate::scrapers::dou_ua::DouUaScraper;
@@ -54,6 +58,7 @@ struct DaemonMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum InputFormat {
     Normalized,
+    #[cfg(any(feature = "mock", test))]
     MockSource,
 }
 
@@ -268,17 +273,23 @@ impl Config {
 }
 
 fn usage_error() -> String {
-    "usage:\n  cargo run -- --input <path> [--input-format normalized|mock-source]\n  cargo run -- --source <djinni|douua|workua|robotaua> [--pages <n>] [--keyword <kw>]\n  cargo run -- --daemon [--sources all|djinni|douua|workua|robotaua] [--pages <n>] [--interval-minutes <m>] [--keyword <kw>]"
-        .to_string()
+    #[cfg(any(feature = "mock", test))]
+    let fmt = "normalized|mock-source";
+    #[cfg(not(any(feature = "mock", test)))]
+    let fmt = "normalized";
+    format!(
+        "usage:\n  cargo run -- --input <path> [--input-format {fmt}]\n  cargo run -- --source <djinni|douua|workua|robotaua> [--pages <n>] [--keyword <kw>]\n  cargo run -- --daemon [--sources all|djinni|douua|workua|robotaua] [--pages <n>] [--interval-minutes <m>] [--keyword <kw>]"
+    )
 }
 
 impl InputFormat {
     fn from_cli(value: &str) -> Result<Self, String> {
         match value.trim() {
             "normalized" => Ok(Self::Normalized),
+            #[cfg(any(feature = "mock", test))]
             "mock-source" => Ok(Self::MockSource),
             other => Err(format!(
-                "unsupported input format '{other}', expected 'normalized' or 'mock-source'"
+                "unsupported input format '{other}', expected 'normalized'"
             )),
         }
     }
@@ -314,6 +325,7 @@ fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
         input_path = %mode.input_path.display(),
         input_format = match mode.input_format {
             InputFormat::Normalized => "normalized",
+            #[cfg(any(feature = "mock", test))]
             InputFormat::MockSource => "mock-source",
         },
         "loading ingestion batch from file"
@@ -334,6 +346,7 @@ fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
             );
             Ok(batch)
         }
+        #[cfg(any(feature = "mock", test))]
         InputFormat::MockSource => {
             let payload = serde_json::from_str::<MockSourceInput>(&raw)
                 .map_err(|e| format!("failed to parse {}: {e}", mode.input_path.display()))?;

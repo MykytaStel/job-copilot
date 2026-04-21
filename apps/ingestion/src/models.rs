@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+#[cfg(any(feature = "mock", test))]
+use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -70,12 +72,14 @@ pub enum InputDocument {
     Wrapped(IngestionInput),
 }
 
+#[cfg(any(feature = "mock", test))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct MockSourceInput {
     pub fetched_at: String,
     pub jobs: Vec<MockSourceJob>,
 }
 
+#[cfg(any(feature = "mock", test))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct MockSourceJob {
     pub source_job_id: String,
@@ -93,6 +97,7 @@ pub struct MockSourceJob {
     pub active: bool,
 }
 
+#[cfg(any(feature = "mock", test))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct MockCompensation {
     pub min: Option<i32>,
