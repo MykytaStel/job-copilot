@@ -36,47 +36,19 @@ export {
   addNote,
   getDashboardStats,
   createOffer,
-  deleteApplication,
-  getActivities,
-  createActivity,
-  deleteActivity,
-  getTasks,
-  getDueTasks,
-  createTask,
-  patchTask,
-  deleteTask,
-  getCoverLetters,
-  createCoverLetter,
-  updateCoverLetter,
-  deleteCoverLetter,
-  getInterviewQA,
-  createInterviewQA,
-  updateInterviewQA,
-  deleteInterviewQA,
-  getOffers,
-  deleteOffer,
 } from './api/applications';
 export type { GlobalSearchApplicationResult } from './api/applications';
 
-export {
-  getContacts,
-  createContact,
-  updateContact,
-  deleteContact,
-  linkContact,
-  unlinkContact,
-} from './api/contacts';
+export { getContacts, createContact, linkContact } from './api/contacts';
 
 export {
   getMarketOverview,
   getMarketCompanies,
   getMarketSalaries,
   getMarketRoles,
-  getMarketInsights,
 } from './api/market';
 export type {
   SkillStat,
-  MarketInsights,
   MarketTrend,
   MarketOverview,
   MarketCompany,
@@ -116,19 +88,6 @@ export {
   runMatch,
   getMatch,
   globalSearch,
-  createJob,
-  fetchJobUrl,
-  uploadResumeFile,
-  updateJobNote,
-  deleteJob,
-  getAlerts,
-  createAlert,
-  toggleAlert,
-  deleteAlert,
-  getSuggestedSkills,
-  importBatch,
-  downloadBackup,
-  restoreBackup,
 } from './api/jobs';
 export type {
   RankedJob,

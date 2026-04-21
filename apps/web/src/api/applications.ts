@@ -1,23 +1,15 @@
 import type {
-  Activity,
-  ActivityInput,
   Application,
   ApplicationDetail,
   ApplicationInput,
   ApplicationNote,
   ApplicationStatus,
-  CoverLetter,
-  CoverLetterInput,
-  InterviewQA,
-  InterviewQAInput,
   Offer,
   OfferInput,
-  Task,
-  TaskInput,
 } from '@job-copilot/shared/applications';
 import type { DashboardStats } from '@job-copilot/shared/analytics';
 
-import { json, readStoredProfileId, request, unsupported } from './client';
+import { json, readStoredProfileId, request } from './client';
 import type {
   EngineApplication,
   EngineApplicationDetail,
@@ -168,39 +160,3 @@ export async function createOffer(payload: OfferInput): Promise<Offer> {
   return mapOffer(offer);
 }
 
-export const deleteApplication = (_id: string): Promise<void> =>
-  unsupported('Application deletion');
-export const getActivities = (_applicationId: string): Promise<Activity[]> =>
-  unsupported('Activities');
-export const createActivity = (
-  _applicationId: string,
-  _payload: ActivityInput,
-): Promise<Activity> => unsupported('Activities');
-export const deleteActivity = (_id: string): Promise<void> => unsupported('Activities');
-export const getTasks = (_applicationId: string): Promise<Task[]> => unsupported('Tasks');
-export const getDueTasks = (): Promise<Task[]> => unsupported('Tasks');
-export const createTask = (_applicationId: string, _payload: TaskInput): Promise<Task> =>
-  unsupported('Tasks');
-export const patchTask = (
-  _id: string,
-  _patch: { title?: string; remindAt?: string | null; done?: boolean },
-): Promise<Task> => unsupported('Tasks');
-export const deleteTask = (_id: string): Promise<void> => unsupported('Tasks');
-export const getCoverLetters = (_jobId?: string): Promise<CoverLetter[]> =>
-  unsupported('Cover letters');
-export const createCoverLetter = (_payload: CoverLetterInput): Promise<CoverLetter> =>
-  unsupported('Cover letters');
-export const updateCoverLetter = (_id: string, _content: string): Promise<CoverLetter> =>
-  unsupported('Cover letters');
-export const deleteCoverLetter = (_id: string): Promise<void> => unsupported('Cover letters');
-export const getInterviewQA = (_jobId?: string): Promise<InterviewQA[]> =>
-  unsupported('Interview Q&A');
-export const createInterviewQA = (_payload: InterviewQAInput): Promise<InterviewQA> =>
-  unsupported('Interview Q&A');
-export const updateInterviewQA = (
-  _id: string,
-  _patch: { question?: string; answer?: string },
-): Promise<InterviewQA> => unsupported('Interview Q&A');
-export const deleteInterviewQA = (_id: string): Promise<void> => unsupported('Interview Q&A');
-export const getOffers = (): Promise<Offer[]> => unsupported('Offers');
-export const deleteOffer = (_id: string): Promise<void> => unsupported('Offers');

@@ -1,6 +1,6 @@
 # Job Copilot — Master Plan
 
-> Last updated: 2026-04-18
+> Last updated: 2026-04-21
 
 ## 1. Що таке Job Copilot
 
@@ -58,20 +58,21 @@ ingestion (Rust) ─→ PostgreSQL ←─ engine-api (Rust) ←─ web (React)
 
 ## 4. AI стратегія (без платного API)
 
-### Зараз (безкоштовно)
+### Зараз (активно)
 - Детермінований scoring в Rust — головний двигун
-- Покращені шаблони в Python — структуровані пояснення без LLM
-- Bootstrap ML з реальних feedbacks юзера
+- Template enrichment provider в Python — структуровані пояснення без LLM (`ml/app/llm_provider_template.py`)
+- **Ollama provider активний** — `OllamaEnrichmentProvider` є default (`ML_LLM_PROVIDER=ollama`); використовує `llama3.1:8b` через `/api/chat` з `format: json` (`ml/app/llm_provider_remote.py`)
+- Bootstrap ML з реальних feedbacks юзера (`ml/app/bootstrap_training.py`)
+- Всі 6 enrichment endpoints доступні: fit explanation, cover letter, interview prep, profile insights, coaching, weekly guidance
 
-### Наступний крок (self-hosted)
-- Ollama + Mistral 7B / Qwen 2.5 3B на сервері
-- ~$10-15/міс VPS замість per-call API
-- Провайдер: `OllamaEnrichmentProvider` в `llm_provider.py`
+### Наступний крок
+- Market snapshot aggregation job — наповнення `market_snapshots` реальними агрегатами
+- CV Tailoring endpoint (адаптація CV під конкретну JD)
+- Перемикання провайдера через `ML_LLM_PROVIDER` env var (template / ollama / openai)
 
 ### Платна підписка (майбутнє)
 - Claude Haiku / GPT-4o-mini для CV tailoring, cover letter, interview prep
-- Перемикання провайдера через `ML_LLM_PROVIDER` env var
-- Tier free → self-hosted, Tier paid → real API
+- Tier free → Ollama self-hosted, Tier paid → real API
 
 Детально: `docs/04-development/ml-strategy.md`
 

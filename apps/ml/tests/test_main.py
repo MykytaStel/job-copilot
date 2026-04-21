@@ -4,7 +4,8 @@ from app.engine_api_client import (
     EngineJobPresentation,
     EngineProfile,
 )
-from app.main import normalize_text, score_job, tokenize
+from app.scoring import score_job
+from app.text_normalization import normalize_text, tokenize
 
 
 def test_score_job_uses_lifecycle_payload():

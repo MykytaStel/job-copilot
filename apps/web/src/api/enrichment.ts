@@ -251,9 +251,11 @@ function buildFeedbackStatePayload(feedbackState?: FeedbackStateInput | null) {
   };
 }
 
-export function buildProfileInsightsPayload(context: LlmContext) {
-  return {
-    profile_id: context.profileId,
+function buildLlmContextPayload(
+  context: LlmContext,
+  options?: { includeProfileId?: boolean },
+) {
+  const payload = {
     analyzed_profile: buildAnalyzedProfilePayload(context.analyzedProfile),
     profile_skills: context.profileSkills,
     profile_keywords: context.profileKeywords,
@@ -267,6 +269,19 @@ export function buildProfileInsightsPayload(context: LlmContext) {
     top_positive_evidence: buildEvidencePayload(context.topPositiveEvidence),
     top_negative_evidence: buildEvidencePayload(context.topNegativeEvidence),
   };
+
+  if (options?.includeProfileId === false) {
+    return payload;
+  }
+
+  return {
+    profile_id: context.profileId,
+    ...payload,
+  };
+}
+
+export function buildProfileInsightsPayload(context: LlmContext) {
+  return buildLlmContextPayload(context);
 }
 
 export function mapProfileInsightsResponse(response: MlProfileInsightsResponse) {
@@ -403,7 +418,9 @@ export function buildWeeklyGuidancePayload(payload: {
         count: entry.count,
       })),
     },
-    llm_context: buildProfileInsightsPayload(payload.llmContext),
+    llm_context: buildLlmContextPayload(payload.llmContext, {
+      includeProfileId: false,
+    }),
   };
 }
 

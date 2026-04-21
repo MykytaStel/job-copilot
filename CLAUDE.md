@@ -25,13 +25,13 @@ Job Copilot is not a simple job board. It is a candidate intelligence and action
 - Prefer explicit DTOs, small services, testable helpers, and stable contracts.
 
 ## Immediate priorities
-1. Canonical role catalog in domain.
-2. Search preferences + search profile.
-3. Source filtering for parsed jobs (which sources to ingest/search from).
-4. Fix web navigation stale-data behavior so pages refresh correctly on transitions.
-5. Ranking v2: deterministic baseline + explainable fit.
-6. Lists and controls: saved, hidden, bad, whitelist, blacklist.
-7. ML/LLM enrichment with strict validation back in Rust.
+1. ~~Canonical role catalog in domain.~~ — DONE (`domain/role/catalog.rs`)
+2. Search profile persistence — struct exists, no DB table yet.
+3. ~~Source filtering for parsed jobs.~~ — DONE (`domain/source/catalog.rs`, `services/matching/filters.rs`)
+4. ~~Fix web navigation stale-data behavior.~~ — DONE (TanStack Query invalidation in place)
+5. ~~Ranking v2: deterministic baseline + explainable fit.~~ — DONE (scoring.rs, salary.rs, reranking.rs)
+6. ~~Lists and controls: saved, hidden, bad, whitelist, blacklist.~~ — DONE (FeedbackCenter + ApplicationBoard)
+7. ML/LLM enrichment with strict Rust-side validation — enrichment works end-to-end; Rust-side output validation not yet added.
 
 ## UX direction
 Quiet operator dashboard:
@@ -57,9 +57,9 @@ Quiet operator dashboard:
 - Prefer maintainability over cleverness.
 
 ## Good next slices
-- canonical role catalog
-- search-profile/build
-- source filters for search + ingestion
-- web query invalidation / route refresh fixes
-- company list statuses and job list labels
-- analytics endpoints for timeline / charts
+- market snapshot aggregation job (populate `market_snapshots` from `jobs` table)
+- CV tailoring endpoint in ML sidecar + web modal
+- settings page (`/settings` route — profile prefs + notification prefs)
+- search profile persistence (DB table + save/load in UI)
+- Rust-side validation of LLM enrichment output before storing
+- profile completion indicator (%)

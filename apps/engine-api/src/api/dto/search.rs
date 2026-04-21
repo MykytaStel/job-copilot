@@ -64,6 +64,8 @@ pub struct RunSearchRequest {
     pub profile_id: Option<String>,
     pub search_profile: SearchProfileRequest,
     pub limit: Option<i64>,
+    #[serde(default)]
+    pub reranker_comparison: Option<SearchRerankerComparisonRequest>,
 }
 
 #[derive(Debug)]
@@ -71,6 +73,18 @@ pub struct RunSearchInput {
     pub profile_id: Option<String>,
     pub search_profile: SearchProfile,
     pub limit: i64,
+    pub reranker_comparison: Option<SearchRerankerComparisonInput>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SearchRerankerComparisonRequest {
+    #[serde(default)]
+    pub top_n: Option<i64>,
+}
+
+#[derive(Debug)]
+pub struct SearchRerankerComparisonInput {
+    pub top_n: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -176,6 +190,33 @@ pub struct SearchRunMetaResponse {
     pub learned_reranker_adjusted_jobs: usize,
     pub trained_reranker_enabled: bool,
     pub trained_reranker_adjusted_jobs: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reranker_comparison: Option<SearchRerankerComparisonResponse>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SearchRerankerComparisonResponse {
+    pub baseline_mode: String,
+    pub active_mode: String,
+    pub top_n: usize,
+    pub baseline_top: Vec<SearchRerankerComparisonItemResponse>,
+    pub learned: SearchRerankerComparisonModeResponse,
+    pub trained: SearchRerankerComparisonModeResponse,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SearchRerankerComparisonModeResponse {
+    pub active_mode: String,
+    pub would_differ_from_baseline: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback_reason: Option<String>,
+    pub top: Vec<SearchRerankerComparisonItemResponse>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SearchRerankerComparisonItemResponse {
+    pub job_id: String,
+    pub score: u8,
 }
 
 impl RunSearchRequest {
@@ -193,6 +234,27 @@ impl RunSearchRequest {
                 .filter(|value| !value.is_empty()),
             search_profile: self.search_profile.validate()?,
             limit,
+            reranker_comparison: self
+                .reranker_comparison
+                .map(|comparison| comparison.validate(limit))
+                .transpose()?,
+        })
+    }
+}
+
+impl SearchRerankerComparisonRequest {
+    pub fn validate(self, limit: i64) -> Result<SearchRerankerComparisonInput, ApiError> {
+        let top_n = self.top_n.unwrap_or(5);
+
+        if !(1..=10).contains(&top_n) {
+            return Err(ApiError::bad_request(
+                "invalid_reranker_comparison_top_n",
+                "reranker_comparison.top_n must be between 1 and 10",
+            ));
+        }
+
+        Ok(SearchRerankerComparisonInput {
+            top_n: top_n.min(limit) as usize,
         })
     }
 }
@@ -277,6 +339,7 @@ impl RunSearchResponse {
                 learned_reranker_adjusted_jobs: 0,
                 trained_reranker_enabled: false,
                 trained_reranker_adjusted_jobs: 0,
+                reranker_comparison: None,
             },
         }
     }
@@ -529,7 +592,10 @@ mod tests {
     use crate::domain::role::RoleId;
     use crate::services::matching::{RankedJob, SearchRunResult};
 
-    use super::{JobFitResponse, RunSearchRequest, RunSearchResponse, SearchProfileRequest};
+    use super::{
+        JobFitResponse, RunSearchRequest, RunSearchResponse, SearchProfileRequest,
+        SearchRerankerComparisonRequest,
+    };
 
     #[test]
     fn validates_run_search_request() {
@@ -559,11 +625,20 @@ mod tests {
                 exclude_terms: vec![],
             },
             limit: Some(25),
+            reranker_comparison: Some(SearchRerankerComparisonRequest { top_n: Some(8) }),
         }
         .validate()
         .expect("request should validate");
 
         assert_eq!(input.limit, 25);
+        assert_eq!(
+            input
+                .reranker_comparison
+                .as_ref()
+                .expect("comparison input should be present")
+                .top_n,
+            8
+        );
         assert_eq!(input.search_profile.primary_role, RoleId::BackendEngineer);
         assert_eq!(input.search_profile.primary_role_confidence, Some(92));
         assert!(
@@ -597,6 +672,7 @@ mod tests {
                 exclude_terms: vec![],
             },
             limit: None,
+            reranker_comparison: None,
         }
         .validate()
         .expect_err("request should reject unknown role");
@@ -666,5 +742,6 @@ mod tests {
             json!("deterministic")
         );
         assert_eq!(payload["meta"].get("reranker_fallback_reason"), None);
+        assert_eq!(payload["meta"].get("reranker_comparison"), None);
     }
 }

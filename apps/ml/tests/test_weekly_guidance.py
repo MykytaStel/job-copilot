@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
-from app.main import app, get_weekly_guidance_service
+from app.api import app
+from app.service_dependencies import get_weekly_guidance_service
 from app.weekly_guidance import (
     MalformedWeeklyGuidanceOutputError,
     WeeklyGuidanceRequest,

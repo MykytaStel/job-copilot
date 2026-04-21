@@ -1,37 +1,47 @@
-# Current Focus — 2026-04-18
+# Current Focus — 2026-04-21
 
-## Зараз робимо (Фаза 1)
+## ✅ Завершено (Фаза 1 — всі пункти)
 
-### Критичні фікси
-1. **Sidebar profile** — показати реальне ім'я/email з API замість hardcoded тексту
-   - Файл: `apps/web/src/AppShellNew.tsx:253`
+1. **Sidebar profile** — реальне ім'я/email з API (`AppShellNew.tsx:288-313`)
+2. **Query invalidation** — web-side TanStack invalidation після feedback (`JobDetails.tsx:270-276`); ML reranker stateless, server-side не потрібен
+3. **Canonical role catalog** — `RoleId` enum, display_name, aliases, підключено до scoring (`domain/role/catalog.rs`, `role_id.rs`)
+4. **Bootstrap training data** — скрипт генерує labeled examples з user_events (`ml/app/bootstrap_training.py`)
+5. **LLM provider** — правильні model names (`gpt-4o-mini`, `llama3.1:8b`); Ollama є default провайдером (`docker-compose.yml`)
+6. **Freshness decay** — jobs > 14 днів зменшують score; `compute_freshness_decay()` (`services/matching/scoring.rs`)
 
-2. **Query invalidation** — після save/hide/badFit інвалідувати ML rerank ключі; після profile save — downstream
-   - Файли: `apps/web/src/pages/Dashboard.tsx`, `useProfilePage.ts`
+## ✅ Завершено (Фаза 2 — Market Intelligence)
 
-3. **Canonical role catalog** — `RoleId` enum, display_name, aliases, підключити до scoring
-   - Файл: `apps/engine-api/src/domain/role/catalog.rs` (новий)
+- `market_snapshots` таблиця (`migrations/20260416000000_add_market_snapshots.sql`)
+- API endpoints: overview, companies, salary trends, role demand (`api/routes/market.rs`)
+- Web сторінка `/market` з усіма секціями (`pages/Market.tsx`)
+- **⚠️ Відкрито:** job що пише агрегати в `market_snapshots` — відсутній (таблиця є, даних нема)
 
-### ML без платного API
-4. **Bootstrap training data** — скрипт що генерує labeled examples з `user_events` (save=positive, hide=negative, badfit=strong negative)
-   - Файл: `apps/ml/app/bootstrap_training.py` (новий)
+## ✅ Завершено (Фаза 3 — часткова)
 
-5. **Виправити LLM provider** — `gpt-5.4-mini` → правильний model name, підготувати Ollama path
-   - Файл: `apps/ml/app/llm_provider.py`
+- **Notifications (3.1)** — таблиця + 3 API endpoints + UI + bell icon + ingestion trigger (`notifications.rs`, `Notifications.tsx`, `ingestion/src/db.rs`)
+- **Global search (3.2)** — Cmd+K overlay з debounced search (`GlobalSearch.tsx`)
+- **Salary/languages (3.5)** — міграція є (`20260419153000_add_profile_compensation_and_languages.sql`); UI частково
 
-### Покращення scoring
-6. **Freshness decay** — jobs > 14 днів зменшувати score поступово
-   - Файл: `apps/engine-api/src/services/matching.rs:152`
+## ✅ Завершено (Фаза 4 — Ollama та ML)
 
-## Наступне після фази 1
+- **Ollama provider (4.1)** — `OllamaEnrichmentProvider` використовує `/api/chat` + `format: json` (`llm_provider_remote.py:172`)
+- **Reranker retrain (4.2)** — bootstrap скрипт + `/api/v1/reranker/bootstrap` endpoint (`scoring_routes.py:84`)
+- **Template provider (4.3)** — повна реалізація всіх 6 методів (`llm_provider_template.py`)
+- **ML enrichment endpoints** — всі 6 routes (`enrichment_routes.py`)
 
-- Market Intelligence (Фаза 2) — агрегатна аналітика ринку з наявних даних
-- Notifications (Фаза 3.1)
-- CV Tailoring (Фаза 3.3)
+## Зараз робимо (Sprint 3)
+
+| # | Задача | Складність | Пріоритет |
+|---|--------|------------|-----------|
+| A | **Market snapshot aggregation job** — заповнити `market_snapshots` реальними даними (агрегація з `jobs` таблиці) | M | Критично |
+| B | **CV Tailoring** — ML endpoint + web modal (відмінно від cover letter — фокус на адаптації CV під JD) | M | Висока |
+| C | **Settings сторінка** — `/settings` route + profile prefs + notification prefs UI | M | Висока |
+| D | **Search profile persistence** — DB таблиця для збереження `SearchPreferences`; зараз будується on-demand | M | Середнє |
+| E | **Profile completion indicator** — % показник заповненості профілю | XS | Низьке |
 
 ## Не робимо зараз
 
-- Semantic embeddings (потрібні дані спочатку)
-- Auth / multi-user (потрібна монетизація спочатку)
-- Email delivery (потрібні notifications спочатку)
-- Будь-який paid LLM API (Ollama спочатку)
+- Semantic embeddings / sentence-transformers (Phase 4.4) — потрібні дані спочатку
+- Auth / multi-user (Phase 5) — потрібна монетизація спочатку
+- Stripe (Phase 5) — після auth
+- Email delivery — після notifications прогресу

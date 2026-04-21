@@ -1,21 +1,13 @@
 import type {
-  BackupMeta,
-  ImportBatchResponse,
-  JobAlert,
-  JobAlertInput,
   JobFeedSummary,
   JobPosting,
-  JobPostingInput,
   MatchResult,
 } from '@job-copilot/shared/jobs';
-import type { ResumeVersion } from '@job-copilot/shared/profiles';
 import {
   RECENT_JOBS_LIMIT_MAX,
   json,
   readStoredProfileId,
   request,
-  unsupported,
-  unsupportedPromise,
   withProfileIdQuery,
 } from './client';
 import type {
@@ -356,28 +348,3 @@ export async function globalSearch(query: string): Promise<GlobalSearchResults> 
     })),
   };
 }
-
-// Unsupported legacy endpoints kept only to avoid breaking compile-time imports.
-export const createJob = (_payload: JobPostingInput): Promise<JobPosting> =>
-  unsupportedPromise('Job creation');
-export const fetchJobUrl = (
-  _url: string,
-): Promise<{ title: string; company: string; description: string }> =>
-  unsupportedPromise('Job fetch by URL');
-export const uploadResumeFile = (_file: File): Promise<ResumeVersion> =>
-  unsupportedPromise('Resume upload');
-export const updateJobNote = (_id: string, _note: string): Promise<JobPosting> =>
-  unsupported('Job notes');
-export const deleteJob = (_id: string): Promise<void> => unsupported('Job deletion');
-export const getAlerts = (): Promise<JobAlert[]> => unsupported('Alerts');
-export const createAlert = (_payload: JobAlertInput): Promise<JobAlert> => unsupported('Alerts');
-export const toggleAlert = (_id: string, _active: boolean): Promise<JobAlert> =>
-  unsupported('Alerts');
-export const deleteAlert = (_id: string): Promise<void> => unsupported('Alerts');
-export const getSuggestedSkills = (): Promise<string[]> => unsupported('Suggested skills');
-export const importBatch = (_urls: string[]): Promise<ImportBatchResponse> =>
-  unsupported('Batch import');
-export const downloadBackup = (): Promise<Record<string, unknown> & BackupMeta> =>
-  unsupported('Backup');
-export const restoreBackup = (_data: unknown): Promise<{ restored: boolean; exportedAt: string }> =>
-  unsupported('Backup');

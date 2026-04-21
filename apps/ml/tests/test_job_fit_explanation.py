@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.api import app
 from app.job_fit_explanation import (
     JobFitExplanationRequest,
     JobFitExplanationResponse,
@@ -8,7 +9,7 @@ from app.job_fit_explanation import (
     parse_job_fit_explanation_output,
 )
 from app.job_fit_explanation_service import JobFitExplanationService
-from app.main import app, get_job_fit_explanation_service
+from app.service_dependencies import get_job_fit_explanation_service
 
 
 def sample_job_fit_context() -> JobFitExplanationRequest:

@@ -7,8 +7,9 @@ from app.interview_prep import (
     build_interview_prep_prompt,
     parse_interview_prep_output,
 )
+from app.api import app
 from app.interview_prep_service import InterviewPrepService
-from app.main import app, get_interview_prep_service
+from app.service_dependencies import get_interview_prep_service
 
 
 def sample_interview_prep_context() -> InterviewPrepRequest:

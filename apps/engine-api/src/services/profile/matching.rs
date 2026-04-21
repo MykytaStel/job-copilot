@@ -6,6 +6,18 @@ const RAW_ALIAS_REPLACEMENTS: &[(&str, &str)] = &[
     ("postgresql", " postgres "),
     ("react.js", " react "),
     ("reactnative", " react native "),
+    ("vue.js", " vue "),
+    ("vuejs", " vue "),
+    ("angular.js", " angular "),
+    ("angularjs", " angular "),
+    ("express.js", " express "),
+    ("expressjs", " express "),
+    ("k8s", " kubernetes "),
+    ("mongo db", " mongodb "),
+    ("elastic search", " elasticsearch "),
+    ("spring boot", " springboot "),
+    ("ci/cd", " cicd "),
+    ("ci cd", " cicd "),
 ];
 
 const PHRASE_REWRITES: &[(&[&str], &str)] = &[
@@ -29,6 +41,9 @@ const PHRASE_REWRITES: &[(&[&str], &str)] = &[
     (&["help", "desk"], "help_desk"),
     (&["node", "js"], "nodejs"),
     (&["next", "js"], "nextjs"),
+    (&["vue", "js"], "vue"),
+    (&["mongo", "db"], "mongodb"),
+    (&["spring", "boot"], "springboot"),
     (&["rest", "api"], "rest_api"),
     (
         &["site", "reliability", "engineer"],
