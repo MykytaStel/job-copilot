@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   AlertCircle,
   BarChart3,
@@ -17,34 +16,6 @@ import {
   Sparkles,
   Target,
 } from 'lucide-react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import type { Application } from '@job-copilot/shared';
-
-import {
-  addCompanyBlacklist,
-  addCompanyWhitelist,
-  hideJobForProfile,
-  markJobBadFit,
-  markJobSaved,
-  removeCompanyBlacklist,
-  removeCompanyWhitelist,
-  unhideJob,
-  unmarkJobBadFit,
-  unsaveJob,
-} from '../api/feedback';
-import type { FitAnalysis } from '../api/jobs';
-import { analyzeFit, getJob } from '../api/jobs';
-import { logUserEvent } from '../api/events';
-import {
-  getCoverLetterDraft,
-  getInterviewPrep,
-  getJobFitExplanation,
-  type JobFitExplanation,
-  type CoverLetterDraft,
-  type InterviewPrep,
-} from '../api/enrichment';
-import { createApplication, getApplications } from '../api/applications';
 import { SkeletonPage } from '../components/Skeleton';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -54,233 +25,47 @@ import { Page, PageGrid } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { cn } from '../lib/cn';
-import {
-  invalidateApplicationSummaryQueries,
-  invalidateFeedbackViewQueries,
-  invalidateJobAiQueries,
-} from '../lib/queryInvalidation';
-import { queryKeys } from '../queryKeys';
+import { useJobDetailsPage } from '../features/job-details/useJobDetailsPage';
 import { FeedbackButton, HeroMetric, Section, formatDate, formatSalary } from './job-details/components';
 import { JobDetailsAiTab } from './job-details/JobDetailsAiTab';
 import { JobDetailsMatchTab } from './job-details/JobDetailsMatchTab';
 
-function readProfileId() {
-  return window.localStorage.getItem('engine_api_profile_id');
-}
-
 export default function JobDetails() {
-  const { id } = useParams<{ id: string }>();
-  const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'overview' | 'match' | 'ai' | 'lifecycle'>('overview');
-  const [copied, setCopied] = useState(false);
-  const [generateCoverLetter, setGenerateCoverLetter] = useState(false);
-  const [generateInterviewPrep, setGenerateInterviewPrep] = useState(false);
-
   const {
-    data: job,
+    id,
+    profileId,
+    job,
     isLoading,
     error,
-  } = useQuery({
-    queryKey: queryKeys.jobs.detail(id!, readProfileId()),
-    queryFn: () => getJob(id!),
-    enabled: !!id,
-  });
-
-  const { data: applications = [] } = useQuery<Application[]>({
-    queryKey: queryKeys.applications.all(),
-    queryFn: getApplications,
-  });
-
-  const profileId = readProfileId();
-
-  useEffect(() => {
-    if (!profileId || !job?.id) return;
-
-    void logUserEvent(profileId, {
-      eventType: 'job_opened',
-      jobId: job.id,
-      payloadJson: { surface: 'job_details' },
-    }).catch(() => null);
-  }, [job?.id, profileId]);
-
-  const { data: fit } = useQuery<FitAnalysis>({
-    queryKey: queryKeys.ml.fit(profileId ?? '', id!),
-    queryFn: () => analyzeFit(profileId!, id!),
-    enabled: !!profileId && !!id,
-    staleTime: 2 * 60_000,
-    retry: false,
-  });
-
-  const deterministicFit = fit && job
-    ? {
-        jobId: fit.jobId,
-        score: fit.score,
-        scoreBreakdown: fit.scoreBreakdown,
-        matchedRoles: fit.matchedRoles,
-        matchedSkills: fit.matchedSkills,
-        matchedKeywords: fit.matchedKeywords,
-        missingSignals: fit.missingTerms,
-        sourceMatch: false,
-        workModeMatch: undefined,
-        regionMatch: undefined,
-        descriptionQuality: fit.descriptionQuality,
-        positiveReasons: fit.positiveReasons,
-        negativeReasons: fit.negativeReasons,
-        reasons: [...fit.positiveReasons, ...fit.negativeReasons],
-      }
-    : null;
-
-  const { data: fitExplanation, isLoading: fitExplanationLoading } = useQuery<JobFitExplanation>({
-    queryKey: queryKeys.ml.fitExplanation(profileId ?? '', id ?? ''),
-    queryFn: () =>
-      getJobFitExplanation({
-        profileId: profileId!,
-        analyzedProfile: null,
-        searchProfile: null,
-        rankedJob: job!,
-        deterministicFit: deterministicFit!,
-      }),
-    enabled: activeTab === 'ai' && !!profileId && !!deterministicFit,
-    staleTime: 10 * 60_000,
-    retry: false,
-  });
-
-  const { data: coverLetter, isLoading: coverLetterLoading } = useQuery<CoverLetterDraft>({
-    queryKey: queryKeys.ml.coverLetter(profileId ?? '', id ?? ''),
-    queryFn: () =>
-      getCoverLetterDraft({
-        profileId: profileId!,
-        analyzedProfile: null,
-        searchProfile: null,
-        rankedJob: job!,
-        deterministicFit: deterministicFit!,
-        jobFitExplanation: fitExplanation ?? null,
-      }),
-    enabled: generateCoverLetter && !!profileId && !!deterministicFit,
-    staleTime: 30 * 60_000,
-    retry: false,
-  });
-
-  const { data: interviewPrep, isLoading: interviewPrepLoading } = useQuery<InterviewPrep>({
-    queryKey: queryKeys.ml.interviewPrep(profileId ?? '', id ?? ''),
-    queryFn: () =>
-      getInterviewPrep({
-        profileId: profileId!,
-        analyzedProfile: null,
-        searchProfile: null,
-        rankedJob: job!,
-        deterministicFit: deterministicFit!,
-        jobFitExplanation: fitExplanation ?? null,
-      }),
-    enabled: generateInterviewPrep && !!profileId && !!deterministicFit,
-    staleTime: 30 * 60_000,
-    retry: false,
-  });
-
-  const existing = applications.find((application) => application.jobId === id);
-  const isSaved = job?.feedback?.saved || !!existing;
-  const isHidden = job?.feedback?.hidden;
-  const isBadFit = job?.feedback?.badFit;
-  const companyStatus = job?.feedback?.companyStatus;
-
-  const invalidateFeedbackQueries = () => {
-    void invalidateFeedbackViewQueries(queryClient, profileId);
-    void invalidateJobAiQueries(queryClient, profileId, id);
-  };
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (!profileId) throw new Error('Create a profile first');
-      await markJobSaved(profileId, id!);
-      if (!existing) await createApplication({ jobId: id!, status: 'saved' });
-    },
-    onSuccess: () => {
-      invalidateFeedbackQueries();
-      void invalidateApplicationSummaryQueries(queryClient);
-      toast.success('Збережено в pipeline');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const unsaveMutation = useMutation({
-    mutationFn: async () => {
-      if (!profileId) throw new Error('Create a profile first');
-      await unsaveJob(profileId, id!);
-    },
-    onSuccess: () => {
-      invalidateFeedbackQueries();
-      toast.success('Знято з обраного');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const hideMutation = useMutation({
-    mutationFn: async () => {
-      if (!profileId) throw new Error('Create a profile first');
-      await hideJobForProfile(profileId, id!);
-    },
-    onSuccess: () => {
-      invalidateFeedbackQueries();
-      toast.success('Вакансію приховано');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const unhideMutation = useMutation({
-    mutationFn: async () => {
-      if (!profileId) throw new Error('Create a profile first');
-      await unhideJob(profileId, id!);
-    },
-    onSuccess: () => {
-      invalidateFeedbackQueries();
-      toast.success('Вакансію показано');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const badFitMutation = useMutation({
-    mutationFn: async () => {
-      if (!profileId) throw new Error('Create a profile first');
-      await markJobBadFit(profileId, id!);
-    },
-    onSuccess: () => {
-      invalidateFeedbackQueries();
-      toast.success('Позначено як bad fit');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const unmarkBadFitMutation = useMutation({
-    mutationFn: async () => {
-      if (!profileId) throw new Error('Create a profile first');
-      await unmarkJobBadFit(profileId, id!);
-    },
-    onSuccess: () => {
-      invalidateFeedbackQueries();
-      toast.success('Позначку bad fit знято');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const companyFeedbackMutation = useMutation({
-    mutationFn: async (nextStatus: 'whitelist' | 'blacklist') => {
-      if (!profileId) throw new Error('Create a profile first');
-
-      if (nextStatus === 'whitelist') {
-        if (companyStatus === 'whitelist') await removeCompanyWhitelist(profileId, job!.company);
-        else await addCompanyWhitelist(profileId, job!.company);
-        return;
-      }
-
-      if (companyStatus === 'blacklist') await removeCompanyBlacklist(profileId, job!.company);
-      else await addCompanyBlacklist(profileId, job!.company);
-    },
-    onSuccess: () => {
-      invalidateFeedbackQueries();
-      toast.success('Оновлено список компанії');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
+    fit,
+    deterministicFit,
+    fitExplanation,
+    fitExplanationLoading,
+    coverLetter,
+    coverLetterLoading,
+    interviewPrep,
+    interviewPrepLoading,
+    existing,
+    isSaved,
+    isHidden,
+    isBadFit,
+    companyStatus,
+    activeTab,
+    setActiveTab,
+    copied,
+    handleCopy,
+    generateCoverLetter,
+    setGenerateCoverLetter,
+    generateInterviewPrep,
+    setGenerateInterviewPrep,
+    saveMutation,
+    unsaveMutation,
+    hideMutation,
+    unhideMutation,
+    badFitMutation,
+    unmarkBadFitMutation,
+    companyFeedbackMutation,
+  } = useJobDetailsPage();
 
   if (isLoading) return <SkeletonPage />;
   if (!job) {
@@ -305,14 +90,6 @@ export default function JobDetails() {
     0,
     10,
   );
-
-  const handleCopy = async () => {
-    if (typeof window === 'undefined' || !navigator.clipboard) return;
-
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
-  };
 
   return (
     <Page>

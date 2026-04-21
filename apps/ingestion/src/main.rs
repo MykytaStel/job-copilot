@@ -1,5 +1,6 @@
 mod adapters;
 mod db;
+mod db_runtime;
 mod models;
 mod scrapers;
 
@@ -79,8 +80,8 @@ async fn main() -> Result<(), String> {
     let config = Config::from_env()?;
 
     if let RunMode::Daemon(ref daemon_mode) = config.run_mode {
-        let pool = db::connect(&config.database_url).await?;
-        db::run_migrations(&pool).await?;
+        let pool = db_runtime::connect(&config.database_url).await?;
+        db_runtime::run_migrations(&pool).await?;
         info!("migrations applied");
         return run_daemon(daemon_mode, &pool).await;
     }
@@ -95,7 +96,7 @@ async fn main() -> Result<(), String> {
         return Err("no jobs to ingest".to_string());
     }
 
-    let pool = db::connect(&config.database_url).await?;
+    let pool = db_runtime::connect(&config.database_url).await?;
 
     // Run migrations if RUN_DB_MIGRATIONS=true — useful when running ingestion
     // standalone without engine-api having started first.
@@ -104,7 +105,7 @@ async fn main() -> Result<(), String> {
         .as_deref()
         == Ok("true")
     {
-        db::run_migrations(&pool).await?;
+        db_runtime::run_migrations(&pool).await?;
         info!("migrations applied");
     }
 

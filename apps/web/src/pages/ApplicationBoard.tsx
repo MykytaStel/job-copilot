@@ -11,11 +11,7 @@ import {
   Users,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import type { Application, ApplicationStatus, JobPosting } from '@job-copilot/shared';
-import { getJobs } from '../api/jobs';
-import { getApplications, patchApplication } from '../api/applications';
+import type { ApplicationStatus } from '@job-copilot/shared';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
@@ -23,7 +19,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Page, PageGrid } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { StatusBadge } from '../components/ui/StatusBadge';
-import { queryKeys } from '../queryKeys';
+import { useApplicationBoard } from '../features/application-board/useApplicationBoard';
 import { formatOptionalDate } from '../lib/format';
 
 const COLUMNS: ApplicationStatus[] = ['saved', 'applied', 'interview', 'offer', 'rejected'];
@@ -63,62 +59,9 @@ const COLUMN_META: Record<
   },
 };
 
-function exportCsv(applications: Application[], jobs: Map<string, JobPosting>) {
-  const header = ['Company', 'Title', 'Status', 'Applied At', 'Updated At'];
-  const rows = applications.map((application) => {
-    const job = jobs.get(application.jobId);
-    return [
-      job?.company ?? '',
-      job?.title ?? '',
-      application.status,
-      application.appliedAt ?? '',
-      application.updatedAt,
-    ].map((value) => `"${String(value).replace(/"/g, '""')}"`);
-  });
-  const csv = [header, ...rows].map((row) => row.join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = 'applications.csv';
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function ApplicationBoard() {
-  const queryClient = useQueryClient();
-
-  const { data: applications = [], error } = useQuery<Application[]>({
-    queryKey: queryKeys.applications.all(),
-    queryFn: getApplications,
-  });
-
-  const { data: jobs = [] } = useQuery<JobPosting[]>({
-    queryKey: queryKeys.jobs.all(),
-    queryFn: getJobs,
-  });
-
-  const jobsById = new Map(jobs.map((job) => [job.id, job]));
-  const rejectedCount = applications.filter(
-    (application) => application.status === 'rejected',
-  ).length;
-  const activeCount = applications.length - rejectedCount;
-  const latestUpdatedAt = applications
-    .slice()
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.updatedAt;
-
-  const moveMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: ApplicationStatus }) =>
-      patchApplication(id, status),
-    onSuccess: (updated) => {
-      queryClient.setQueryData<Application[]>(
-        queryKeys.applications.all(),
-        (prev) => prev?.map((a) => (a.id === updated.id ? updated : a)) ?? [updated],
-      );
-      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
+  const { applications, jobsById, activeCount, latestUpdatedAt, error, moveMutation, exportCsv } =
+    useApplicationBoard();
 
   return (
     <Page>
@@ -128,7 +71,7 @@ export default function ApplicationBoard() {
         breadcrumb={[{ label: 'Dashboard', href: '/' }, { label: 'Applications' }]}
         actions={
           applications.length > 0 ? (
-            <Button onClick={() => exportCsv(applications, jobsById)}>
+            <Button onClick={exportCsv}>
               <Download size={14} />
               Export CSV
             </Button>

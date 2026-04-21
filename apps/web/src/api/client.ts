@@ -1,8 +1,13 @@
 import type { EngineApiError } from './engine-types/health';
+import {
+  readProfileId,
+  resolveProfileId as resolveProfileSessionId,
+  withProfileIdQuery as appendProfileIdQuery,
+  writeProfileId,
+} from '../lib/profileSession';
 
 const API_URL = import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
 const ML_URL = import.meta.env.VITE_ML_URL?.trim() || 'http://localhost:8000';
-const PROFILE_ID_KEY = 'engine_api_profile_id';
 
 export const RECENT_JOBS_LIMIT_MAX = 200;
 
@@ -58,21 +63,17 @@ export function unsupportedPromise<T>(feature: string): Promise<T> {
 }
 
 export function readStoredProfileId() {
-  return window.localStorage.getItem(PROFILE_ID_KEY);
+  return readProfileId();
 }
 
 export function resolveProfileId(profileId?: string) {
-  return profileId ?? readStoredProfileId() ?? undefined;
+  return resolveProfileSessionId(profileId);
 }
 
 export function writeStoredProfileId(profileId: string) {
-  window.localStorage.setItem(PROFILE_ID_KEY, profileId);
+  writeProfileId(profileId);
 }
 
 export function withProfileIdQuery(path: string) {
-  const profileId = readStoredProfileId();
-  if (!profileId) return path;
-
-  const separator = path.includes('?') ? '&' : '?';
-  return `${path}${separator}profile_id=${encodeURIComponent(profileId)}`;
+  return appendProfileIdQuery(path);
 }
