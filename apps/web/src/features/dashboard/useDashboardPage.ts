@@ -337,3 +337,5 @@ export function useDashboardPage() {
     unmarkBadFitMutation,
   };
 }
+
+export type DashboardPageState = ReturnType<typeof useDashboardPage>;

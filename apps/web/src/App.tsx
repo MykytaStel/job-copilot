@@ -1,7 +1,7 @@
 import { lazy } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
-import AppShellNew from './AppShellNew';
+import AppShell from './AppShell';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const JobDetails = lazy(() => import('./pages/JobDetails'));
@@ -17,7 +17,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<AppShellNew />}>
+        <Route element={<AppShell />}>
           <Route index element={<Dashboard />} />
           <Route path="jobs/:id" element={<JobDetails />} />
           <Route path="applications" element={<ApplicationBoard />} />
