@@ -36,6 +36,7 @@ import { Page } from '../components/ui/Page';
 import { StatCard } from '../components/ui/StatCard';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { cn } from '../lib/cn';
+import { invalidateFeedbackViewQueries } from '../lib/queryInvalidation';
 import { queryKeys } from '../queryKeys';
 
 function readProfileId() {
@@ -423,29 +424,49 @@ export default function FeedbackCenter() {
   const summary = feedbackOverview?.summary;
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
-  const filterJobsBySearch = (jobs: JobPosting[]) =>
-    jobs.filter((job) => {
-      if (!normalizedSearch) return true;
-
-      const title = job.presentation?.title ?? job.title;
-      const company = job.presentation?.company ?? job.company;
-
-      return (
-        title.toLowerCase().includes(normalizedSearch) ||
-        company.toLowerCase().includes(normalizedSearch)
-      );
-    });
-
   const filteredSavedJobs = useMemo(
-    () => filterJobsBySearch(savedJobs),
+    () =>
+      savedJobs.filter((job) => {
+        if (!normalizedSearch) return true;
+
+        const title = job.presentation?.title ?? job.title;
+        const company = job.presentation?.company ?? job.company;
+
+        return (
+          title.toLowerCase().includes(normalizedSearch) ||
+          company.toLowerCase().includes(normalizedSearch)
+        );
+      }),
     [normalizedSearch, savedJobs],
   );
   const filteredHiddenJobs = useMemo(
-    () => filterJobsBySearch(hiddenJobs),
+    () =>
+      hiddenJobs.filter((job) => {
+        if (!normalizedSearch) return true;
+
+        const title = job.presentation?.title ?? job.title;
+        const company = job.presentation?.company ?? job.company;
+
+        return (
+          title.toLowerCase().includes(normalizedSearch) ||
+          company.toLowerCase().includes(normalizedSearch)
+        );
+      }),
     [normalizedSearch, hiddenJobs],
   );
   const filteredBadFitJobs = useMemo(
-    () => filterJobsBySearch(badFitJobs),
+    () =>
+      badFitJobs.filter((job) => {
+        if (!normalizedSearch) return true;
+
+        const title = job.presentation?.title ?? job.title;
+        const company = job.presentation?.company ?? job.company;
+
+        return (
+          title.toLowerCase().includes(normalizedSearch) ||
+          company.toLowerCase().includes(normalizedSearch)
+        );
+      }),
     [normalizedSearch, badFitJobs],
   );
 
@@ -460,10 +481,7 @@ export default function FeedbackCenter() {
     FEEDBACK_TAB_META.find((tab) => tab.id === activeTab) ?? FEEDBACK_TAB_META[0];
 
   function invalidateAfterAction() {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-    if (profileId) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) });
-    }
+    void invalidateFeedbackViewQueries(queryClient, profileId);
   }
 
   const unsaveMutation = useMutation({

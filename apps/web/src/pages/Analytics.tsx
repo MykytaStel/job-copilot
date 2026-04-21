@@ -576,12 +576,10 @@ function FunnelBySource({ summary }: { summary: FunnelSummary }) {
 
 function buildInsights({
   summary,
-  funnel,
   profileInsights,
   weeklyGuidance,
 }: {
   summary: AnalyticsSummary;
-  funnel: FunnelSummary | undefined;
   profileInsights: ProfileInsights | undefined;
   weeklyGuidance: WeeklyGuidance | undefined;
 }): AIInsight[] {
@@ -711,12 +709,11 @@ export default function Analytics() {
       summary
         ? buildInsights({
             summary,
-            funnel,
             profileInsights,
             weeklyGuidance,
           })
         : [],
-    [summary, funnel, profileInsights, weeklyGuidance],
+    [summary, profileInsights, weeklyGuidance],
   );
 
   if (!profileId) {

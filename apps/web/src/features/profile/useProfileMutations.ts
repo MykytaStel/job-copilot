@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { analyzeStoredProfile, getProfile, saveProfile } from '../../api/profiles';
+import { invalidateProfileAnalysisQueries } from '../../lib/queryInvalidation';
 import { queryKeys } from '../../queryKeys';
 
 export function useProfileMutations(clearDraft: () => void) {
@@ -35,8 +36,7 @@ export function useProfileMutations(clearDraft: () => void) {
       queryClient.setQueryData(queryKeys.profile.root(), updated);
       queryClient.setQueryData(queryKeys.profile.rawText(), vars.rawText);
       clearDraft();
-      void queryClient.invalidateQueries({ queryKey: ['ml', 'rerank', updated.id] });
-      void queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      void invalidateProfileAnalysisQueries(queryClient, updated.id);
       toast.success('Profile saved');
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
@@ -54,8 +54,7 @@ export function useProfileMutations(clearDraft: () => void) {
         queryClient.getQueryData(queryKeys.profile.root()) as { id?: string } | undefined
       )?.id;
       if (profileId) {
-        void queryClient.invalidateQueries({ queryKey: ['ml', 'rerank', profileId] });
-        void queryClient.invalidateQueries({ queryKey: ['analytics'] });
+        void invalidateProfileAnalysisQueries(queryClient, profileId);
       }
       toast.success('Profile analyzed');
     },

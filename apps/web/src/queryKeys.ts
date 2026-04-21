@@ -74,16 +74,23 @@ export const queryKeys = {
     profile: (profileId: string) => ['feedback', profileId] as const,
   },
   ml: {
+    all: () => ['ml'] as const,
+    rerankPrefix: (profileId: string) => ['ml', 'rerank', profileId] as const,
     rerank: (profileId: string, jobsKey: string) => ['ml', 'rerank', profileId, jobsKey] as const,
+    fitPrefix: (profileId: string) => ['ml', 'fit', profileId] as const,
     fit: (profileId: string, jobId: string) => ['ml', 'fit', profileId, jobId] as const,
+    fitExplanationPrefix: (profileId: string) => ['ml', 'fitExplanation', profileId] as const,
     fitExplanation: (profileId: string, jobId: string) =>
       ['ml', 'fitExplanation', profileId, jobId] as const,
+    coverLetterPrefix: (profileId: string) => ['ml', 'coverLetter', profileId] as const,
     coverLetter: (profileId: string, jobId: string) =>
       ['ml', 'coverLetter', profileId, jobId] as const,
+    interviewPrepPrefix: (profileId: string) => ['ml', 'interviewPrep', profileId] as const,
     interviewPrep: (profileId: string, jobId: string) =>
       ['ml', 'interviewPrep', profileId, jobId] as const,
   },
   analytics: {
+    all: () => ['analytics'] as const,
     summary: (profileId: string) => ['analytics', 'summary', profileId] as const,
     behavior: (profileId: string) => ['analytics', 'behavior', profileId] as const,
     funnel: (profileId: string) => ['analytics', 'funnel', profileId] as const,

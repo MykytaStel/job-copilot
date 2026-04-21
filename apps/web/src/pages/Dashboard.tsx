@@ -50,6 +50,10 @@ import {
 import { createApplication, getApplications, getDashboardStats } from '../api/applications';
 
 import { logJobImpressionsOnce } from '../features/events/jobImpressions';
+import {
+  invalidateApplicationSummaryQueries,
+  invalidateFeedbackViewQueries,
+} from '../lib/queryInvalidation';
 import { queryKeys } from '../queryKeys';
 
 function readProfileId() {
@@ -152,7 +156,7 @@ export default function Dashboard() {
     staleTime: 5 * 60_000,
   });
 
-  const allJobs = jobsFeed?.jobs ?? [];
+  const allJobs = useMemo(() => jobsFeed?.jobs ?? [], [jobsFeed?.jobs]);
   const jobSummary = jobsFeed?.summary;
   const rerankJobIds = allJobs.map((job) => job.id);
   const rerankJobsKey = rerankJobIds.join('|');
@@ -211,17 +215,8 @@ export default function Dashboard() {
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
-      if (profileId) {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.feedback.profile(profileId),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: ['ml', 'rerank', profileId],
-        });
-      }
+      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateApplicationSummaryQueries(queryClient);
       toast.success('Збережено в pipeline');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -236,15 +231,7 @@ export default function Dashboard() {
       await hideJobForProfile(profileId, jobId);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      if (profileId) {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.feedback.profile(profileId),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: ['ml', 'rerank', profileId],
-        });
-      }
+      void invalidateFeedbackViewQueries(queryClient, profileId);
       toast.success('Вакансію приховано');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -259,15 +246,7 @@ export default function Dashboard() {
       await markJobBadFit(profileId, jobId);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      if (profileId) {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.feedback.profile(profileId),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: ['ml', 'rerank', profileId],
-        });
-      }
+      void invalidateFeedbackViewQueries(queryClient, profileId);
       toast.success('Позначено як bad fit');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -282,15 +261,7 @@ export default function Dashboard() {
       await unmarkJobBadFit(profileId, jobId);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      if (profileId) {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.feedback.profile(profileId),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: ['ml', 'rerank', profileId],
-        });
-      }
+      void invalidateFeedbackViewQueries(queryClient, profileId);
       toast.success('Позначку bad fit знято');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -326,15 +297,7 @@ export default function Dashboard() {
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      if (profileId) {
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.feedback.profile(profileId),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: ['ml', 'rerank', profileId],
-        });
-      }
+      void invalidateFeedbackViewQueries(queryClient, profileId);
       toast.success('Оновлено список компанії');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),

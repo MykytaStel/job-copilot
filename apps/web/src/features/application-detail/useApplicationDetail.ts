@@ -18,6 +18,7 @@ import {
 } from '../../api/applications';
 import { getContacts, linkContact, createContact } from '../../api/contacts';
 import { normalizeDateInput, parseOptionalNumber } from '../../lib/format';
+import { invalidateApplicationSummaryQueries } from '../../lib/queryInvalidation';
 import { queryKeys } from '../../queryKeys';
 import { EMPTY_CONTACT_INPUT } from './applicationDetail.constants';
 import { formatCompensation } from './applicationDetail.utils';
@@ -194,7 +195,7 @@ export function useApplicationDetail(id?: string) {
       }),
     onSuccess: async () => {
       setApplicationDraft(null);
-      await refreshDetail();
+      await Promise.all([refreshDetail(), invalidateApplicationSummaryQueries(queryClient)]);
       toast.success('Application updated');
     },
     onError: (error: unknown) => {

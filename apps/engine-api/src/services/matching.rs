@@ -27,9 +27,9 @@ use roles::{
     analyze_role_alignment, collect_role_terms, collect_target_roles, infer_role_family_for_job,
 };
 use scoring::{
-    build_reasons, compute_freshness_decay, confidence_factor, days_since_last_seen,
-    is_low_signal_term, penalty_entry, push_ignored_term, push_unique_region, push_unique_role,
-    push_unique_string, weighted_overlap_ratio,
+    FreshnessDecayConfig, build_reasons, compute_freshness_decay, confidence_factor,
+    days_since_posting, is_low_signal_term, penalty_entry, push_ignored_term, push_unique_region,
+    push_unique_role, push_unique_string, weighted_overlap_ratio,
 };
 use text::{
     build_searchable_text, build_searchable_text_parts, collect_missing_signals, evaluate_terms,
@@ -329,8 +329,8 @@ impl SearchMatchingService {
             - work_mode_penalty
             - seniority_penalty;
 
-        let days_old = days_since_last_seen(&job.job.last_seen_at);
-        let freshness_decay = compute_freshness_decay(days_old);
+        let (days_old, freshness_date_source) = days_since_posting(job);
+        let freshness_decay = compute_freshness_decay(days_old, &FreshnessDecayConfig::default());
         let score = (base_score * freshness_decay).clamp(0.0, 100.0).round() as u8;
         let pre_freshness_total = (matching_score.round() as i16
             + penalties
@@ -353,10 +353,10 @@ impl SearchMatchingService {
             &seniority_alignment,
         );
 
-        if days_old > 14 {
+        if days_old > FreshnessDecayConfig::default().grace_days {
             reasons.push(format!(
-                "Freshness decay applied: job is {} days old (factor {:.2})",
-                days_old, freshness_decay
+                "Freshness decay applied: job is {} days old via {} (factor {:.2})",
+                days_old, freshness_date_source, freshness_decay
             ));
         }
 
