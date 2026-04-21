@@ -101,3 +101,5 @@ export function useAnalyticsPage() {
     weeklyGuidanceError,
   };
 }
+
+export type AnalyticsPageState = ReturnType<typeof useAnalyticsPage>;

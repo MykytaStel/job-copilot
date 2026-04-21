@@ -334,3 +334,5 @@ export function useJobDetailsPage() {
     companyFeedbackMutation,
   };
 }
+
+export type JobDetailsPageState = ReturnType<typeof useJobDetailsPage>;
