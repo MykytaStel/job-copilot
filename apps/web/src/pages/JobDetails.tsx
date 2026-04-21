@@ -13,7 +13,11 @@ import {
   Copy,
   EyeOff,
   ExternalLink,
+  FileText,
+  Lightbulb,
+  Loader2,
   MapPin,
+  MessageSquare,
   Sparkles,
   Target,
   type LucideIcon,
@@ -37,6 +41,14 @@ import {
 import type { FitAnalysis } from '../api/jobs';
 import { analyzeFit, getJob } from '../api/jobs';
 import { logUserEvent } from '../api/events';
+import {
+  getCoverLetterDraft,
+  getInterviewPrep,
+  getJobFitExplanation,
+  type JobFitExplanation,
+  type CoverLetterDraft,
+  type InterviewPrep,
+} from '../api/enrichment';
 import { createApplication, getApplications } from '../api/applications';
 import { SkeletonPage } from '../components/Skeleton';
 import { Badge } from '../components/ui/Badge';
@@ -141,8 +153,10 @@ function FeedbackButton({ children, className, ...props }: ComponentProps<typeof
 export default function JobDetails() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'overview' | 'match' | 'lifecycle'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'match' | 'ai' | 'lifecycle'>('overview');
   const [copied, setCopied] = useState(false);
+  const [generateCoverLetter, setGenerateCoverLetter] = useState(false);
+  const [generateInterviewPrep, setGenerateInterviewPrep] = useState(false);
 
   const {
     data: job,
@@ -175,7 +189,73 @@ export default function JobDetails() {
     queryKey: queryKeys.ml.fit(profileId ?? '', id!),
     queryFn: () => analyzeFit(profileId!, id!),
     enabled: !!profileId && !!id,
+    staleTime: 2 * 60_000,
+    retry: false,
+  });
+
+  const deterministicFit = fit && job
+    ? {
+        jobId: fit.jobId,
+        score: fit.score,
+        scoreBreakdown: fit.scoreBreakdown,
+        matchedRoles: fit.matchedRoles,
+        matchedSkills: fit.matchedSkills,
+        matchedKeywords: fit.matchedKeywords,
+        missingSignals: fit.missingTerms,
+        sourceMatch: false,
+        workModeMatch: undefined,
+        regionMatch: undefined,
+        descriptionQuality: fit.descriptionQuality,
+        positiveReasons: fit.positiveReasons,
+        negativeReasons: fit.negativeReasons,
+        reasons: [...fit.positiveReasons, ...fit.negativeReasons],
+      }
+    : null;
+
+  const { data: fitExplanation, isLoading: fitExplanationLoading } = useQuery<JobFitExplanation>({
+    queryKey: queryKeys.ml.fitExplanation(profileId ?? '', id ?? ''),
+    queryFn: () =>
+      getJobFitExplanation({
+        profileId: profileId!,
+        analyzedProfile: null,
+        searchProfile: null,
+        rankedJob: job!,
+        deterministicFit: deterministicFit!,
+      }),
+    enabled: activeTab === 'ai' && !!profileId && !!deterministicFit,
     staleTime: 10 * 60_000,
+    retry: false,
+  });
+
+  const { data: coverLetter, isLoading: coverLetterLoading } = useQuery<CoverLetterDraft>({
+    queryKey: queryKeys.ml.coverLetter(profileId ?? '', id ?? ''),
+    queryFn: () =>
+      getCoverLetterDraft({
+        profileId: profileId!,
+        analyzedProfile: null,
+        searchProfile: null,
+        rankedJob: job!,
+        deterministicFit: deterministicFit!,
+        jobFitExplanation: fitExplanation ?? null,
+      }),
+    enabled: generateCoverLetter && !!profileId && !!deterministicFit,
+    staleTime: 30 * 60_000,
+    retry: false,
+  });
+
+  const { data: interviewPrep, isLoading: interviewPrepLoading } = useQuery<InterviewPrep>({
+    queryKey: queryKeys.ml.interviewPrep(profileId ?? '', id ?? ''),
+    queryFn: () =>
+      getInterviewPrep({
+        profileId: profileId!,
+        analyzedProfile: null,
+        searchProfile: null,
+        rankedJob: job!,
+        deterministicFit: deterministicFit!,
+        jobFitExplanation: fitExplanation ?? null,
+      }),
+    enabled: generateInterviewPrep && !!profileId && !!deterministicFit,
+    staleTime: 30 * 60_000,
     retry: false,
   });
 
@@ -185,6 +265,15 @@ export default function JobDetails() {
   const isBadFit = job?.feedback?.badFit;
   const companyStatus = job?.feedback?.companyStatus;
 
+  const invalidateFeedbackQueries = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+    if (profileId && id) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ml.fit(profileId, id) });
+      void queryClient.invalidateQueries({ queryKey: ['ml', 'rerank', profileId] });
+    }
+  };
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!profileId) throw new Error('Create a profile first');
@@ -192,7 +281,7 @@ export default function JobDetails() {
       if (!existing) await createApplication({ jobId: id!, status: 'saved' });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      invalidateFeedbackQueries();
       void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
       toast.success('Збережено в pipeline');
@@ -206,8 +295,7 @@ export default function JobDetails() {
       await unsaveJob(profileId, id!);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      invalidateFeedbackQueries();
       toast.success('Знято з обраного');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -219,8 +307,7 @@ export default function JobDetails() {
       await hideJobForProfile(profileId, id!);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      invalidateFeedbackQueries();
       toast.success('Вакансію приховано');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -232,8 +319,7 @@ export default function JobDetails() {
       await unhideJob(profileId, id!);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      invalidateFeedbackQueries();
       toast.success('Вакансію показано');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -245,8 +331,7 @@ export default function JobDetails() {
       await markJobBadFit(profileId, id!);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      invalidateFeedbackQueries();
       toast.success('Позначено як bad fit');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -258,8 +343,7 @@ export default function JobDetails() {
       await unmarkJobBadFit(profileId, id!);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      invalidateFeedbackQueries();
       toast.success('Позначку bad fit знято');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -279,8 +363,7 @@ export default function JobDetails() {
       else await addCompanyBlacklist(profileId, job!.company);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id!, profileId) });
+      invalidateFeedbackQueries();
       toast.success('Оновлено список компанії');
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
@@ -328,8 +411,8 @@ export default function JobDetails() {
           <>
             {existing ? (
               <Link to={`/applications/${existing.id}`} className="no-underline">
-                <Button variant="outline" size="sm" className="bg-primary/10 border-primary/30">
-                  <BookmarkCheck className="h-4 w-4 text-primary" />
+                <Button variant="outline" size="sm" className="bg-primary/10 border-primary/30 text-primary">
+                  <BookmarkCheck className="h-4 w-4" />
                   {existing.status}
                 </Button>
               </Link>
@@ -339,7 +422,7 @@ export default function JobDetails() {
                 size="sm"
                 onClick={() => unsaveMutation.mutate()}
                 disabled={unsaveMutation.isPending}
-                className="bg-primary/10 border-primary/30"
+                className="bg-primary/10 border-primary/30 text-primary"
               >
                 <BookmarkCheck className="h-4 w-4 text-primary" />
                 {unsaveMutation.isPending ? 'Знімаємо…' : 'Saved'}
@@ -485,7 +568,7 @@ export default function JobDetails() {
               description="Use explicit controls to change ranking behavior for this role and company."
               icon={BarChart3}
             >
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {isHidden ? (
                   <FeedbackButton
                     disabled={unhideMutation.isPending}
@@ -583,6 +666,7 @@ export default function JobDetails() {
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'match', label: 'Match' },
+              { id: 'ai', label: 'AI Analysis' },
               { id: 'lifecycle', label: 'Lifecycle' },
             ].map((tab) => (
               <button
@@ -749,6 +833,295 @@ export default function JobDetails() {
                 <p className="m-0 text-sm text-muted-foreground">Fit analysis is not ready yet.</p>
               )}
             </Section>
+          ) : null}
+
+          {activeTab === 'ai' ? (
+            <div className="space-y-6">
+              {!profileId ? (
+                <EmptyState message="Create a profile to enable AI analysis." />
+              ) : !deterministicFit ? (
+                <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-white/[0.03] p-6">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <p className="m-0 text-sm text-muted-foreground">Завантажуємо fit аналіз…</p>
+                </div>
+              ) : (
+                <>
+                  {/* Fit Explanation */}
+                  <Section
+                    title="Why this job?"
+                    description="LLM-generated analysis of how well this role aligns with your profile."
+                    icon={Sparkles}
+                  >
+                    {fitExplanationLoading ? (
+                      <div className="flex items-center gap-3 py-4">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                        <p className="m-0 text-sm text-muted-foreground">
+                          Ollama аналізує вакансію…
+                        </p>
+                      </div>
+                    ) : fitExplanation ? (
+                      <div className="space-y-5">
+                        {fitExplanation.fitSummary ? (
+                          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                            <p className="m-0 text-sm leading-7 text-card-foreground">
+                              {fitExplanation.fitSummary}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        <div className="grid gap-4 xl:grid-cols-2">
+                          {fitExplanation.whyItMatches.length > 0 ? (
+                            <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                              <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-success">
+                                <CheckCircle2 className="h-4 w-4" />
+                                Чому підходить
+                              </p>
+                              <div className="space-y-2">
+                                {fitExplanation.whyItMatches.map((item) => (
+                                  <div key={item} className="flex items-start gap-3">
+                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-excellent" />
+                                    <p className="m-0 text-sm leading-6 text-muted-foreground">
+                                      {item}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {fitExplanation.risks.length > 0 ? (
+                            <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                              <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-warning">
+                                <AlertCircle className="h-4 w-4" />
+                                Ризики
+                              </p>
+                              <div className="space-y-2">
+                                {fitExplanation.risks.map((item) => (
+                                  <div key={item} className="flex items-start gap-3">
+                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-fair" />
+                                    <p className="m-0 text-sm leading-6 text-muted-foreground">
+                                      {item}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {fitExplanation.missingSignals.length > 0 ? (
+                          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                            <p className="mb-3 text-sm font-medium text-muted-foreground">
+                              Чого бракує
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {fitExplanation.missingSignals.map((s) => (
+                                <Badge key={s} variant="danger" className="px-3 py-1 text-xs">
+                                  {s}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {fitExplanation.recommendedNextStep ? (
+                          <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                            <p className="mb-1 flex items-center gap-2 text-sm font-medium text-primary">
+                              <Lightbulb className="h-4 w-4" />
+                              Наступний крок
+                            </p>
+                            <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
+                              {fitExplanation.recommendedNextStep}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        {fitExplanation.applicationAngle ? (
+                          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                            <p className="mb-1 text-sm font-medium text-card-foreground">
+                              Як подаватись
+                            </p>
+                            <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
+                              {fitExplanation.applicationAngle}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <EmptyState message="Fit explanation not available." />
+                    )}
+                  </Section>
+
+                  {/* Cover Letter */}
+                  <Section
+                    title="Cover Letter"
+                    description="AI-generated cover letter tailored to this vacancy and your profile."
+                    icon={FileText}
+                  >
+                    {coverLetter ? (
+                      <div className="space-y-4">
+                        {coverLetter.draftSummary ? (
+                          <p className="m-0 text-sm italic text-muted-foreground">
+                            {coverLetter.draftSummary}
+                          </p>
+                        ) : null}
+                        <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-5 space-y-4 text-sm leading-7 text-card-foreground">
+                          <p className="m-0">{coverLetter.openingParagraph}</p>
+                          {coverLetter.bodyParagraphs.map((p, i) => (
+                            <p key={i} className="m-0">
+                              {p}
+                            </p>
+                          ))}
+                          <p className="m-0">{coverLetter.closingParagraph}</p>
+                        </div>
+                        {coverLetter.keyClaimsUsed.length > 0 ? (
+                          <div>
+                            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Ключові аргументи
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {coverLetter.keyClaimsUsed.map((c) => (
+                                <Badge key={c} variant="muted" className="px-3 py-1 text-xs">
+                                  {c}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : coverLetterLoading ? (
+                      <div className="flex items-center gap-3 py-4">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                        <p className="m-0 text-sm text-muted-foreground">
+                          Ollama генерує cover letter…
+                        </p>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => setGenerateCoverLetter(true)}
+                        disabled={!fitExplanation}
+                        variant="outline"
+                        className="gap-2"
+                      >
+                        <FileText className="h-4 w-4" />
+                        {fitExplanation ? 'Generate Cover Letter' : 'Зачекай на fit analysis…'}
+                      </Button>
+                    )}
+                  </Section>
+
+                  {/* Interview Prep */}
+                  <Section
+                    title="Interview Prep"
+                    description="Topics, questions, and stories to prepare based on this role."
+                    icon={MessageSquare}
+                  >
+                    {interviewPrep ? (
+                      <div className="space-y-5">
+                        {interviewPrep.prepSummary ? (
+                          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                            <p className="m-0 text-sm leading-7 text-card-foreground">
+                              {interviewPrep.prepSummary}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        <div className="grid gap-4 xl:grid-cols-2">
+                          {interviewPrep.technicalFocus.length > 0 ? (
+                            <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                              <p className="mb-3 text-sm font-medium text-card-foreground">
+                                Технічні теми
+                              </p>
+                              <div className="space-y-2">
+                                {interviewPrep.technicalFocus.map((item) => (
+                                  <div key={item} className="flex items-start gap-3">
+                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                                    <p className="m-0 text-sm leading-6 text-muted-foreground">
+                                      {item}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {interviewPrep.behavioralFocus.length > 0 ? (
+                            <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                              <p className="mb-3 text-sm font-medium text-card-foreground">
+                                Поведінкові питання
+                              </p>
+                              <div className="space-y-2">
+                                {interviewPrep.behavioralFocus.map((item) => (
+                                  <div key={item} className="flex items-start gap-3">
+                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-good" />
+                                    <p className="m-0 text-sm leading-6 text-muted-foreground">
+                                      {item}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {interviewPrep.questionsToAsk.length > 0 ? (
+                          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                            <p className="mb-3 text-sm font-medium text-card-foreground">
+                              Питання до роботодавця
+                            </p>
+                            <div className="space-y-2">
+                              {interviewPrep.questionsToAsk.map((item, i) => (
+                                <div key={i} className="flex items-start gap-3">
+                                  <span className="mt-1 shrink-0 text-xs font-semibold text-primary">
+                                    {i + 1}.
+                                  </span>
+                                  <p className="m-0 text-sm leading-6 text-muted-foreground">
+                                    {item}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {interviewPrep.storiesToPrepare.length > 0 ? (
+                          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                            <p className="mb-3 text-sm font-medium text-card-foreground">
+                              Історії для підготовки
+                            </p>
+                            <div className="space-y-2">
+                              {interviewPrep.storiesToPrepare.map((item) => (
+                                <div key={item} className="flex items-start gap-3">
+                                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-fair" />
+                                  <p className="m-0 text-sm leading-6 text-muted-foreground">
+                                    {item}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : interviewPrepLoading ? (
+                      <div className="flex items-center gap-3 py-4">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                        <p className="m-0 text-sm text-muted-foreground">
+                          Ollama готує interview prep…
+                        </p>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => setGenerateInterviewPrep(true)}
+                        variant="outline"
+                        className="gap-2"
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        Generate Interview Prep
+                      </Button>
+                    )}
+                  </Section>
+                </>
+              )}
+            </div>
           ) : null}
 
           {activeTab === 'lifecycle' ? (

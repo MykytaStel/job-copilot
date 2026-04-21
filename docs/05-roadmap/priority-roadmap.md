@@ -1,4 +1,4 @@
-# Priority Roadmap — 2026-04-18
+# Priority Roadmap — 2026-04-21
 
 ## Принципи
 - Тільки реальні дані, ніяких моків там де є реальне джерело
@@ -8,37 +8,34 @@
 
 ---
 
-## ФАЗА 1 — Основи та реальні дані (поточна)
+## ФАЗА 1 — Основи та реальні дані ✅ ЗАВЕРШЕНО
 
-Мета: зробити все що є — стабільним і без hardcoded/mock значень.
-
-| # | Задача | Складність | Пріоритет |
-|---|--------|------------|-----------|
-| 1.1 | Sidebar: profile name/email замість hardcoded | XS | Критично |
-| 1.2 | Query invalidation: rerank/analytics після feedback | S | Критично |
-| 1.3 | Canonical role catalog (`RoleId` enum + aliases) | M | Критично |
-| 1.4 | Виправити LLM provider (model name + Anthropic/Ollama path) | S | Важливо |
-| 1.5 | Bootstrap training data з user_events | S | Важливо |
-| 1.6 | Freshness decay у scoring (jobs > 14 днів) | S | Важливо |
-| 1.7 | Salary fit у scoring (якщо profile має salary range) | S | Середнє |
-| 1.8 | Company reputation у scoring (whitelist +5, blacklist -20) | XS | Середнє |
+| # | Задача | Статус | Доказ |
+|---|--------|--------|-------|
+| 1.1 | Sidebar: profile name/email замість hardcoded | ✅ | `AppShellNew.tsx:288-313` |
+| 1.2 | Query invalidation: rerank/analytics після feedback | ✅ | `JobDetails.tsx:270-276`; ML reranker stateless |
+| 1.3 | Canonical role catalog (`RoleId` enum + aliases) | ✅ | `domain/role/catalog.rs`, `role_id.rs` |
+| 1.4 | Виправити LLM provider (model name + Ollama path) | ✅ | `llm_provider_factory.py:31`, `llm_provider_remote.py:178` |
+| 1.5 | Bootstrap training data з user_events | ✅ | `ml/app/bootstrap_training.py` |
+| 1.6 | Freshness decay у scoring (jobs > 14 днів) | ✅ | `services/matching/scoring.rs` — `compute_freshness_decay()` |
+| 1.7 | Salary fit у scoring (якщо profile має salary range) | ✅ | `services/salary.rs` — `score_search_salary()` ±8 pts |
+| 1.8 | Company reputation у scoring | ✅ (partial) | Whitelist **+10** (не +5); blacklist = **виключення з результатів** (не -20); `api/routes/search/reranking.rs:19` |
 
 ---
 
-## ФАЗА 2 — Market Intelligence (новий диференціатор)
+## ФАЗА 2 — Market Intelligence ✅ ЗДЕБІЛЬШОГО ЗАВЕРШЕНО
 
-Мета: перший в UA job copilot з ринковою аналітикою.
-
-| # | Задача | Складність | Пріоритет |
-|---|--------|------------|-----------|
-| 2.1 | Company hiring velocity (jobs_count per company over time) | M | Висока |
-| 2.2 | Salary trends по role/seniority | M | Висока |
-| 2.3 | Role demand index (які ролі зростають/падають) | M | Висока |
-| 2.4 | Market freeze signals (компанії що зупинились) | M | Середнє |
-| 2.5 | Tech skills demand chart (top N skills по тижнях) | S | Середнє |
-| 2.6 | Remote work adoption trends | S | Низьке |
-| 2.7 | `market_snapshots` таблиця (daily aggregations) | M | Критично для 2.x |
-| 2.8 | Web: Market Intelligence сторінка | L | Висока |
+| # | Задача | Статус | Доказ |
+|---|--------|--------|-------|
+| 2.1 | Company hiring velocity | ✅ | `api/routes/market.rs` — `get_market_companies()` |
+| 2.2 | Salary trends по role/seniority | ✅ | `api/routes/market.rs` — `get_market_salary_trend()` |
+| 2.3 | Role demand index | ✅ | `api/routes/market.rs` — `get_market_role_demand()` |
+| 2.4 | Market freeze signals | ⏳ | Не реалізовано |
+| 2.5 | Tech skills demand chart | ⏳ | Не реалізовано |
+| 2.6 | Remote work adoption trends | ⏳ | Не реалізовано |
+| 2.7 | `market_snapshots` таблиця | ✅ | `migrations/20260416000000_add_market_snapshots.sql` |
+| 2.8 | Web: Market Intelligence сторінка | ✅ | `web/src/pages/Market.tsx` |
+| 2.9 | **Aggregation job** — щоденне заповнення `market_snapshots` | ❌ MISSING | Таблиця є, даних нема; ні `ingestion/` ні `engine-api/` не пишуть агрегати |
 
 Детально: `docs/03-domain/market-intelligence.md`
 
@@ -46,36 +43,38 @@
 
 ## ФАЗА 3 — User engagement фічі
 
-Мета: дати юзеру причину повертатися щодня.
-
-| # | Задача | Складність | Пріоритет |
-|---|--------|------------|-----------|
-| 3.1 | Notifications: таблиця + API + UI (bell icon) | L | Висока |
-| 3.2 | Global search: PostgreSQL FTS + Cmd+K overlay | M | Середнє |
-| 3.3 | CV Tailoring: endpoint + modal (шаблон → Ollama) | M | Висока |
-| 3.4 | Settings сторінка: профіль + notifications prefs | M | Середнє |
-| 3.5 | Profile: years_of_experience + salary_range + languages | S | Середнє |
-| 3.6 | Profile completion indicator (%) | XS | Низьке |
-| 3.7 | Ingestion stats widget в Analytics ("Last updated X min ago") | S | Низьке |
+| # | Задача | Статус | Доказ / Примітка |
+|---|--------|--------|------------------|
+| 3.1 | Notifications: таблиця + API + UI (bell icon) | ✅ | `migrations/20260419000000_add_notifications.sql`, `api/routes/notifications.rs`, `web/src/pages/Notifications.tsx`, `AppShellNew.tsx:106-135`; ingestion trigger в `ingestion/src/db.rs` |
+| 3.2 | Global search: PostgreSQL FTS + Cmd+K overlay | ✅ | `web/src/components/GlobalSearch.tsx` |
+| 3.3 | CV Tailoring: endpoint + modal (адаптація CV під JD) | ❌ MISSING | Немає в `ml/app/enrichment_routes.py`; `cover_letter_draft` — окрема фіча |
+| 3.4 | Settings сторінка: профіль + notifications prefs | ❌ MISSING | Немає `/settings` route в `App.tsx` |
+| 3.5 | Profile: years_of_experience + salary_range + languages | ⚠️ PARTIAL | Міграція є (`20260419153000_add_profile_compensation_and_languages.sql`); UI не підтверджено |
+| 3.6 | Profile completion indicator (%) | ❌ MISSING | Немає компонента в `features/profile/` або `pages/Profile.tsx` |
+| 3.7 | Ingestion stats widget в Analytics ("Last updated X min ago") | ❌ MISSING | Немає в `pages/Analytics.tsx` |
 
 ---
 
-## ФАЗА 4 — ML та Ollama
+## ФАЗА 4 — ML та Ollama ✅ ЗДЕБІЛЬШОГО ЗАВЕРШЕНО
 
-Мета: власний AI без платного API.
+| # | Задача | Статус | Доказ |
+|---|--------|--------|-------|
+| 4.1 | Ollama provider в `llm_provider.py` | ✅ | `llm_provider_remote.py:172-282` — `OllamaEnrichmentProvider`, `/api/chat` + `format: json` |
+| 4.2 | Retrain reranker після 30+ нових labeled examples | ✅ | `ml/app/bootstrap_training.py`; `scoring_routes.py:84` — bootstrap endpoint |
+| 4.3 | Покращені шаблони enrichment (без LLM) | ✅ | `ml/app/llm_provider_template.py:11-739` — всі 6 методів |
+| 4.4 | Sentence-transformers для semantic matching | ⏳ XL | Не реалізовано; low priority |
 
-| # | Задача | Складність | Пріоритет |
-|---|--------|------------|-----------|
-| 4.1 | Ollama provider в `llm_provider.py` | M | Висока |
-| 4.2 | Retrain reranker після 30+ нових labeled examples | S | Висока |
-| 4.3 | Покращені шаблони enrichment (без LLM, краще ніж зараз) | M | Середнє |
-| 4.4 | Sentence-transformers для semantic matching | XL | Низьке |
+**Також реалізовано (не було в roadmap):**
+- Всі 6 enrichment endpoints (`ml/app/enrichment_routes.py`)
+- AI Analysis tab в JobDetails: fit explanation + cover letter + interview prep (`web/src/pages/JobDetails.tsx`)
+- FeedbackCenter з undo controls (`web/src/pages/FeedbackCenter.tsx`)
+- ApplicationBoard Kanban 5 колонок (`web/src/pages/ApplicationBoard.tsx`)
+- Analytics сторінка: funnel, behavior, weekly guidance (`web/src/pages/Analytics.tsx`)
+- Reranker endpoint `/api/v1/rerank` + bootstrap (`ml/app/scoring_routes.py`)
 
 ---
 
 ## ФАЗА 5 — Платна підписка
-
-Мета: монетизація.
 
 | # | Задача | Складність | Пріоритет |
 |---|--------|------------|-----------|

@@ -1,4 +1,4 @@
-import { request, unsupported } from './client';
+import { request } from './client';
 import type {
   EngineMarketCompaniesResponse,
   EngineMarketOverview,
@@ -120,4 +120,3 @@ export async function getMarketRoles(period = 30): Promise<MarketRoleDemand[]> {
   }));
 }
 
-export const getMarketInsights = (): Promise<MarketInsights> => unsupported('Market insights');

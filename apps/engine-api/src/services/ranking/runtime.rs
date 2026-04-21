@@ -77,6 +77,13 @@ pub struct ResolvedRerankerRuntime {
     pub apply_trained: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResolvedRerankerRuntimeComparison {
+    pub baseline: ResolvedRerankerRuntime,
+    pub learned: ResolvedRerankerRuntime,
+    pub trained: ResolvedRerankerRuntime,
+}
+
 pub fn resolve_reranker_runtime(
     requested_mode: RerankerRuntimeMode,
     learned_enabled: bool,
@@ -164,9 +171,39 @@ pub fn resolve_reranker_runtime(
     }
 }
 
+pub fn resolve_reranker_runtime_comparison(
+    learned_enabled: bool,
+    learned_available: bool,
+    trained_availability: &TrainedRerankerAvailability,
+) -> ResolvedRerankerRuntimeComparison {
+    ResolvedRerankerRuntimeComparison {
+        baseline: resolve_reranker_runtime(
+            RerankerRuntimeMode::Deterministic,
+            learned_enabled,
+            learned_available,
+            trained_availability,
+        ),
+        learned: resolve_reranker_runtime(
+            RerankerRuntimeMode::Learned,
+            learned_enabled,
+            learned_available,
+            trained_availability,
+        ),
+        trained: resolve_reranker_runtime(
+            RerankerRuntimeMode::Trained,
+            learned_enabled,
+            learned_available,
+            trained_availability,
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{RerankerRuntimeMode, TrainedRerankerAvailability, resolve_reranker_runtime};
+    use super::{
+        RerankerRuntimeMode, TrainedRerankerAvailability, resolve_reranker_runtime,
+        resolve_reranker_runtime_comparison,
+    };
 
     #[test]
     fn defaults_runtime_mode_from_feature_flags() {
@@ -273,6 +310,29 @@ mod tests {
         assert_eq!(
             TrainedRerankerAvailability::InvalidArtifact("bad json".to_string()).as_str(),
             "invalid_artifact"
+        );
+    }
+
+    #[test]
+    fn comparison_resolution_reuses_safe_fallbacks() {
+        let comparison = resolve_reranker_runtime_comparison(
+            true,
+            true,
+            &TrainedRerankerAvailability::MissingPath,
+        );
+
+        assert_eq!(
+            comparison.baseline.active_mode,
+            RerankerRuntimeMode::Deterministic
+        );
+        assert_eq!(comparison.learned.active_mode, RerankerRuntimeMode::Learned);
+        assert_eq!(comparison.trained.active_mode, RerankerRuntimeMode::Learned);
+        assert!(
+            comparison
+                .trained
+                .fallback_reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("fell back to learned reranker"))
         );
     }
 }

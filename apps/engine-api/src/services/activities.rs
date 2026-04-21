@@ -1,10 +1,15 @@
 #[cfg(test)]
-use std::collections::HashMap;
+#[path = "activities/stub.rs"]
+mod stub;
+
 #[cfg(test)]
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::db::repositories::{ActivitiesRepository, RepositoryError};
 use crate::domain::application::model::{Activity, CreateActivity};
+
+#[cfg(test)]
+pub use stub::ActivitiesServiceStub;
 
 #[derive(Clone)]
 enum ActivitiesServiceBackend {
@@ -38,32 +43,5 @@ impl ActivitiesService {
         Self {
             backend: ActivitiesServiceBackend::Stub(Arc::new(stub)),
         }
-    }
-}
-
-#[cfg(test)]
-#[derive(Default)]
-pub struct ActivitiesServiceStub {
-    activities: Mutex<HashMap<String, Activity>>,
-}
-
-#[cfg(test)]
-impl ActivitiesServiceStub {
-    fn create(&self, activity: CreateActivity) -> Result<Activity, RepositoryError> {
-        let created = Activity {
-            id: format!("activity-{}", uuid::Uuid::now_v7()),
-            application_id: activity.application_id,
-            activity_type: activity.activity_type,
-            description: activity.description,
-            happened_at: activity.happened_at,
-            created_at: "2026-04-11T00:00:00+00:00".to_string(),
-        };
-
-        self.activities
-            .lock()
-            .expect("activities stub mutex should not be poisoned")
-            .insert(created.id.clone(), created.clone());
-
-        Ok(created)
     }
 }

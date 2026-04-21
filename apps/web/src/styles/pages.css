@@ -767,3 +767,28 @@
 .sectionCardHeader h2 {
   margin: 0 0 8px;
 }
+
+@media (max-width: 960px) {
+  .dashboardHero {
+    flex-direction: column;
+  }
+
+  .dashboardHeroActions {
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 720px) {
+  .jobLifecycleHeader {
+    flex-direction: column;
+  }
+
+  .jobLifecycleActions {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .jobTimeline {
+    grid-template-columns: 1fr;
+  }
+}

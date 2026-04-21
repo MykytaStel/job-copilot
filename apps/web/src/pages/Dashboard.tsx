@@ -161,7 +161,6 @@ export default function Dashboard() {
     queryKey: queryKeys.ml.rerank(profileId ?? '', rerankJobsKey),
     queryFn: () => rerankJobs(profileId!, rerankJobIds),
     enabled: !!profileId && allJobs.length > 0,
-    staleTime: 5 * 60_000,
     retry: false,
   });
 
