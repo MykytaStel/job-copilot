@@ -229,7 +229,11 @@ pub(super) struct FreshnessDecayConfig {
 
 impl Default for FreshnessDecayConfig {
     fn default() -> Self {
-        Self { grace_days: 7, half_life_days: 21.0, floor: 0.45 }
+        Self {
+            grace_days: 7,
+            half_life_days: 21.0,
+            floor: 0.45,
+        }
     }
 }
 
@@ -302,7 +306,8 @@ mod tests {
     fn freshness_decay_at_half_life() {
         let cfg = FreshnessDecayConfig::default();
         // At grace + half_life days, the non-floor portion halves
-        let at_half_life = compute_freshness_decay(cfg.grace_days + cfg.half_life_days as i64, &cfg);
+        let at_half_life =
+            compute_freshness_decay(cfg.grace_days + cfg.half_life_days as i64, &cfg);
         let expected = cfg.floor + (1.0 - cfg.floor) * 0.5;
         assert!((at_half_life - expected).abs() < 0.005);
     }
