@@ -31,6 +31,15 @@ jobs:
       - name: Prevent internal api barrel imports
         run: pnpm guard:web-api-imports
 
+      - name: Prevent scattered profile scope storage access
+        run: pnpm guard:web-profile-scope
+
+      - name: Report runtime boundary issues
+        run: pnpm guard:runtime-boundaries:report
+
+      - name: Report runtime file budgets
+        run: pnpm guard:file-size-budgets:report
+
       - name: Workspace typecheck
         run: pnpm typecheck
 

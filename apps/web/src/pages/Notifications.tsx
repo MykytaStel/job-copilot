@@ -13,13 +13,10 @@ import { PageHeader } from '../components/ui/SectionHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { cn } from '../lib/cn';
 import { formatDate, formatEnumLabel } from '../lib/format';
+import { readProfileId } from '../lib/profileSession';
 import { queryKeys } from '../queryKeys';
 
 const LIST_LIMIT = 50;
-
-function readProfileId() {
-  return window.localStorage.getItem('engine_api_profile_id');
-}
 
 const NOTIFICATION_META: Record<
   AppNotification['type'],

@@ -1,6 +1,4 @@
-import type { ReactElement } from 'react';
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   Bookmark,
@@ -15,14 +13,6 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import type {
-  Application,
-  ApplicationStatus,
-  JobFeedSummary,
-  JobPosting,
-} from '@job-copilot/shared';
 
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -34,330 +24,45 @@ import { JobCard, JobCardSkeleton } from '../components/ui/JobCard';
 import { Page, PageGrid } from '../components/ui/Page';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { StatCard } from '../components/ui/StatCard';
-import { getSources } from '../api/profiles';
-import type { RankedJob } from '../api/jobs';
-import { getJobsFeed, rerankJobs } from '../api/jobs';
 import {
-  addCompanyBlacklist,
-  addCompanyWhitelist,
-  markJobSaved,
-  markJobBadFit,
-  hideJobForProfile,
-  removeCompanyBlacklist,
-  removeCompanyWhitelist,
-  unmarkJobBadFit,
-} from '../api/feedback';
-import { createApplication, getApplications, getDashboardStats } from '../api/applications';
-
-import { logJobImpressionsOnce } from '../features/events/jobImpressions';
-import {
-  invalidateApplicationSummaryQueries,
-  invalidateFeedbackViewQueries,
-} from '../lib/queryInvalidation';
-import { queryKeys } from '../queryKeys';
-
-function readProfileId() {
-  return window.localStorage.getItem('engine_api_profile_id');
-}
-
-const STATUS_COLUMNS: ApplicationStatus[] = ['saved', 'applied', 'interview', 'offer', 'rejected'];
-
-const STATUS_ICONS = {
-  saved: <Bookmark size={14} />,
-  applied: <Send size={14} />,
-  interview: <CalendarDays size={14} />,
-  offer: <Briefcase size={14} />,
-  rejected: <XCircle size={14} />,
-} satisfies Record<ApplicationStatus, ReactElement>;
-
-type LifecycleFilter = 'all' | 'active' | 'inactive' | 'reactivated';
-
-const LIFECYCLE_TABS: { value: LifecycleFilter; label: string }[] = [
-  { value: 'all', label: 'Всі' },
-  { value: 'active', label: 'Активні' },
-  { value: 'inactive', label: 'Зникли' },
-  { value: 'reactivated', label: 'Повернулись' },
-];
-
-const DEFAULT_LIFECYCLE_FILTER: LifecycleFilter = 'all';
-
-function readLifecycleFilter(searchParams: URLSearchParams): LifecycleFilter {
-  const lifecycle = searchParams.get('lifecycle');
-
-  if (lifecycle === 'active' || lifecycle === 'inactive' || lifecycle === 'reactivated') {
-    return lifecycle;
-  }
-
-  return DEFAULT_LIFECYCLE_FILTER;
-}
-
-function readSourceFilter(searchParams: URLSearchParams): string | null {
-  const source = searchParams.get('source')?.trim();
-  return source ? source : null;
-}
+  STATUS_COLUMNS,
+  STATUS_ICONS,
+  type LifecycleFilter,
+  useDashboardPage,
+} from '../features/dashboard/useDashboardPage';
 
 export default function Dashboard() {
-  const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [search, setSearch] = useState('');
-  const [sortByScore, setSortByScore] = useState(false);
-  const lifecycleFilter = readLifecycleFilter(searchParams);
-  const sourceFilter = readSourceFilter(searchParams);
-  const profileId = readProfileId();
-
-  const updateFilters = ({
-    lifecycle,
-    source,
-  }: {
-    lifecycle?: LifecycleFilter;
-    source?: string | null;
-  }) => {
-    const nextSearchParams = new URLSearchParams(searchParams);
-
-    if (lifecycle !== undefined) {
-      if (lifecycle === DEFAULT_LIFECYCLE_FILTER) {
-        nextSearchParams.delete('lifecycle');
-      } else {
-        nextSearchParams.set('lifecycle', lifecycle);
-      }
-    }
-
-    if (source !== undefined) {
-      if (source) {
-        nextSearchParams.set('source', source);
-      } else {
-        nextSearchParams.delete('source');
-      }
-    }
-
-    setSearchParams(nextSearchParams, { replace: true });
-  };
-
   const {
-    data: jobsFeed,
-    error: jobsError,
-    isLoading: jobsLoading,
-  } = useQuery<{
-    jobs: JobPosting[];
-    summary: JobFeedSummary;
-  }>({
-    queryKey: queryKeys.jobs.filtered(lifecycleFilter, sourceFilter, profileId),
-    queryFn: () =>
-      getJobsFeed({
-        lifecycle: lifecycleFilter === 'all' ? undefined : lifecycleFilter,
-        source: sourceFilter ?? undefined,
-        limit: 200,
-      }),
-  });
-
-  const { data: sources = [], error: sourcesError } = useQuery({
-    queryKey: queryKeys.sources.all(),
-    queryFn: getSources,
-    staleTime: 5 * 60_000,
-  });
-
-  const allJobs = useMemo(() => jobsFeed?.jobs ?? [], [jobsFeed?.jobs]);
-  const jobSummary = jobsFeed?.summary;
-  const rerankJobIds = allJobs.map((job) => job.id);
-  const rerankJobsKey = rerankJobIds.join('|');
-
-  const { data: rankData } = useQuery<RankedJob[]>({
-    queryKey: queryKeys.ml.rerank(profileId ?? '', rerankJobsKey),
-    queryFn: () => rerankJobs(profileId!, rerankJobIds),
-    enabled: !!profileId && allJobs.length > 0,
-    retry: false,
-  });
-
-  const scoreById = useMemo(() => {
-    const map = new Map<string, number>();
-    rankData?.forEach((r) => map.set(r.jobId, r.score));
-    return map;
-  }, [rankData]);
-
-  const jobs = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const list = q
-      ? allJobs.filter(
-          (j) =>
-            j.title.toLowerCase().includes(q) ||
-            j.company.toLowerCase().includes(q) ||
-            j.description.toLowerCase().includes(q),
-        )
-      : [...allJobs];
-
-    if (sortByScore && scoreById.size > 0) {
-      list.sort((a, b) => (scoreById.get(b.id) ?? 0) - (scoreById.get(a.id) ?? 0));
-    }
-
-    return list;
-  }, [allJobs, search, sortByScore, scoreById]);
-
-  const { data: applications = [] } = useQuery<Application[]>({
-    queryKey: queryKeys.applications.all(),
-    queryFn: getApplications,
-  });
-
-  const { data: stats } = useQuery({
-    queryKey: queryKeys.dashboard.stats(),
-    queryFn: getDashboardStats,
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: async ({ jobId, hasApplication }: { jobId: string; hasApplication: boolean }) => {
-      if (!profileId) {
-        throw new Error('Create a profile first');
-      }
-
-      await markJobSaved(profileId, jobId);
-
-      if (!hasApplication) {
-        await createApplication({ jobId, status: 'saved' });
-      }
-    },
-    onSuccess: () => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
-      void invalidateApplicationSummaryQueries(queryClient);
-      toast.success('Збережено в pipeline');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const hideMutation = useMutation({
-    mutationFn: async (jobId: string) => {
-      if (!profileId) {
-        throw new Error('Create a profile first');
-      }
-
-      await hideJobForProfile(profileId, jobId);
-    },
-    onSuccess: () => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
-      toast.success('Вакансію приховано');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const badFitMutation = useMutation({
-    mutationFn: async (jobId: string) => {
-      if (!profileId) {
-        throw new Error('Create a profile first');
-      }
-
-      await markJobBadFit(profileId, jobId);
-    },
-    onSuccess: () => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
-      toast.success('Позначено як bad fit');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const unmarkBadFitMutation = useMutation({
-    mutationFn: async (jobId: string) => {
-      if (!profileId) {
-        throw new Error('Create a profile first');
-      }
-
-      await unmarkJobBadFit(profileId, jobId);
-    },
-    onSuccess: () => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
-      toast.success('Позначку bad fit знято');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const companyFeedbackMutation = useMutation({
-    mutationFn: async ({
-      company,
-      currentStatus,
-      nextStatus,
-    }: {
-      company: string;
-      currentStatus?: 'whitelist' | 'blacklist';
-      nextStatus: 'whitelist' | 'blacklist';
-    }) => {
-      if (!profileId) {
-        throw new Error('Create a profile first');
-      }
-
-      if (nextStatus === 'whitelist') {
-        if (currentStatus === 'whitelist') {
-          await removeCompanyWhitelist(profileId, company);
-        } else {
-          await addCompanyWhitelist(profileId, company);
-        }
-        return;
-      }
-
-      if (currentStatus === 'blacklist') {
-        await removeCompanyBlacklist(profileId, company);
-      } else {
-        await addCompanyBlacklist(profileId, company);
-      }
-    },
-    onSuccess: () => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
-      toast.success('Оновлено список компанії');
-    },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Помилка'),
-  });
-
-  const applicationByJob = new Map(applications.map((item) => [item.jobId, item]));
-  const error = jobsError instanceof Error ? jobsError.message : jobsError ? 'Error' : null;
-
-  useEffect(() => {
-    void logJobImpressionsOnce({
-      profileId,
-      jobs,
-      surface: 'dashboard_recent_jobs',
-    });
-  }, [jobs, profileId]);
-
-  const lifecycleOptions = LIFECYCLE_TABS.map((tab) => ({
-    id: tab.value,
-    label: tab.label,
-  }));
-  const sourceOptions = [
-    { id: '__all__', label: 'Всі джерела' },
-    ...sources.map((source) => ({ id: source.id, label: source.displayName })),
-  ];
-  const selectedLifecycle = [lifecycleFilter];
-  const selectedSource = sourceFilter ? [sourceFilter] : ['__all__'];
-  const topSource =
-    sources.find((source) => source.id === sourceFilter)?.displayName ?? 'All sources';
-  const interviewedCount = (stats?.byStatus.interview ?? 0) + (stats?.byStatus.offer ?? 0);
-  const mode = sortByScore ? 'ranked' : 'recent';
-
-  const insights = [
-    {
-      id: 'active-feed',
-      type: 'trend' as const,
-      title: 'Feed health is stable',
-      description: jobSummary
-        ? `${jobSummary.activeJobs} active jobs are in rotation and ${jobSummary.reactivatedJobs} came back after disappearing.`
-        : 'Track active and reactivated inventory from the dashboard feed.',
-      action: { label: 'View analytics', href: '/analytics' },
-    },
-    {
-      id: 'pipeline',
-      type: 'recommendation' as const,
-      title: 'Pipeline needs frequent review',
-      description:
-        applications.length > 0
-          ? `${applications.length} tracked applications already affect ranking and next actions. Keep statuses current to improve feedback loops.`
-          : 'Saved jobs and applications will appear here once you start tracking them.',
-      action: { label: 'Open applications', href: '/applications' },
-    },
-    {
-      id: 'profile',
-      type: 'tip' as const,
-      title: 'Search quality comes from profile quality',
-      description:
-        'Refresh your profile and search preferences when target roles, regions, or allowed sources change.',
-      action: { label: 'Update profile', href: '/profile' },
-    },
-  ];
+    search,
+    setSearch,
+    sortByScore,
+    setSortByScore,
+    lifecycleFilter,
+    updateFilters,
+    jobsLoading,
+    jobs,
+    allJobs,
+    jobSummary,
+    sourcesError,
+    applications,
+    stats,
+    rankData,
+    scoreById,
+    applicationByJob,
+    error,
+    lifecycleOptions,
+    sourceOptions,
+    selectedLifecycle,
+    selectedSource,
+    topSource,
+    interviewedCount,
+    mode,
+    insights,
+    saveMutation,
+    hideMutation,
+    badFitMutation,
+    unmarkBadFitMutation,
+  } = useDashboardPage();
 
   return (
     <Page>
@@ -539,17 +244,21 @@ export default function Dashboard() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3.5">
-                  {STATUS_COLUMNS.map((status) => (
-                    <div key={status} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-1.5 text-muted-foreground">
-                        {STATUS_ICONS[status]}
-                        {status}
-                      </span>
-                      <span className="font-medium text-card-foreground">
-                        {stats.byStatus[status] ?? 0}
-                      </span>
-                    </div>
-                  ))}
+                  {STATUS_COLUMNS.map((status) => {
+                    const StatusIcon = STATUS_ICONS[status];
+
+                    return (
+                      <div key={status} className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <StatusIcon size={14} />
+                          {status}
+                        </span>
+                        <span className="font-medium text-card-foreground">
+                          {stats.byStatus[status] ?? 0}
+                        </span>
+                      </div>
+                    );
+                  })}
                   <div className="flex items-center justify-between border-t border-border pt-3 text-sm">
                     <span className="text-muted-foreground">total tracked</span>
                     <span className="font-medium text-card-foreground">{applications.length}</span>
@@ -716,8 +425,7 @@ export default function Dashboard() {
                   saveMutation.isPending ||
                   hideMutation.isPending ||
                   badFitMutation.isPending ||
-                  unmarkBadFitMutation.isPending ||
-                  companyFeedbackMutation.isPending;
+                  unmarkBadFitMutation.isPending;
 
                 return (
                   <JobCard
