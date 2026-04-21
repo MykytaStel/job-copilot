@@ -214,7 +214,10 @@ async fn unsave_job_clears_saved_flag() {
         .expect("listing feedback should succeed");
 
     assert_eq!(overview.jobs.len(), 1);
-    assert!(!overview.jobs[0].saved, "saved should be cleared after unsave");
+    assert!(
+        !overview.jobs[0].saved,
+        "saved should be cleared after unsave"
+    );
 }
 
 #[tokio::test]
@@ -243,7 +246,10 @@ async fn unhide_job_clears_hidden_flag() {
         .expect("listing feedback should succeed");
 
     assert_eq!(overview.jobs.len(), 1);
-    assert!(!overview.jobs[0].hidden, "hidden should be cleared after unhide");
+    assert!(
+        !overview.jobs[0].hidden,
+        "hidden should be cleared after unhide"
+    );
 }
 
 #[tokio::test]
