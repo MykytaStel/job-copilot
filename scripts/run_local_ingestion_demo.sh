@@ -95,7 +95,7 @@ run_ingestion() {
   echo "Running ingestion for ${input_path}..."
   (
     cd "$ROOT_DIR"
-    DATABASE_URL="$DATABASE_URL" cargo run --manifest-path apps/ingestion/Cargo.toml -- --input "$input_path" --input-format "$INPUT_FORMAT"
+    DATABASE_URL="$DATABASE_URL" cargo run --features mock --manifest-path apps/ingestion/Cargo.toml -- --input "$input_path" --input-format "$INPUT_FORMAT"
   )
 }
 
