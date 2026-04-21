@@ -23,6 +23,8 @@ import { mapJob, mapJobFeedSummary, mapMatchResult, uniquePreservingOrder } from
 import type { SearchProfileBuildResult } from './profiles';
 import type { GlobalSearchApplicationResult } from './applications';
 
+export type { SearchProfileBuildResult } from './profiles';
+
 export type RankedJob = {
   jobId: string;
   title: string;
