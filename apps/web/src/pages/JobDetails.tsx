@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   AlertCircle,
@@ -13,14 +13,9 @@ import {
   Copy,
   EyeOff,
   ExternalLink,
-  FileText,
-  Lightbulb,
-  Loader2,
   MapPin,
-  MessageSquare,
   Sparkles,
   Target,
-  type LucideIcon,
 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -53,9 +48,8 @@ import { createApplication, getApplications } from '../api/applications';
 import { SkeletonPage } from '../components/Skeleton';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
-import { FitScoreBox, FitScoreCircular } from '../components/ui/FitScoreBox';
+import { FitScoreBox } from '../components/ui/FitScoreBox';
 import { Page, PageGrid } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -66,93 +60,12 @@ import {
   invalidateJobAiQueries,
 } from '../lib/queryInvalidation';
 import { queryKeys } from '../queryKeys';
+import { FeedbackButton, HeroMetric, Section, formatDate, formatSalary } from './job-details/components';
+import { JobDetailsAiTab } from './job-details/JobDetailsAiTab';
+import { JobDetailsMatchTab } from './job-details/JobDetailsMatchTab';
 
 function readProfileId() {
   return window.localStorage.getItem('engine_api_profile_id');
-}
-
-function formatSalary(min?: number, max?: number, currency?: string) {
-  if (!min && !max) return null;
-  const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : (currency ?? '');
-  const fmt = (n: number) => `${sym}${n.toLocaleString()}`;
-  if (min && max) return `${fmt(min)} – ${fmt(max)}`;
-  return min ? `від ${fmt(min)}` : `до ${fmt(max!)}`;
-}
-
-function formatDate(value?: string) {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime())
-    ? null
-    : d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function Section({
-  title,
-  description,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  children: ReactNode;
-}) {
-  return (
-    <Card className="border-border bg-card">
-      <CardHeader className="gap-3">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
-            <Icon className="h-5 w-5" />
-          </div>
-          <div>
-            <CardTitle className="text-base font-semibold">{title}</CardTitle>
-            <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
-
-function HeroMetric({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: string | number;
-  icon: LucideIcon;
-}) {
-  return (
-    <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div>
-          <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-            {label}
-          </p>
-          <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">{value}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FeedbackButton({ children, className, ...props }: ComponentProps<typeof Button>) {
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      className={cn('w-full justify-start', className)}
-      {...props}
-    >
-      {children}
-    </Button>
-  );
 }
 
 export default function JobDetails() {
@@ -445,86 +358,84 @@ export default function JobDetails() {
         }
       />
 
-      <Card className="overflow-hidden border-border bg-card">
-        <CardContent className="p-0">
-          <div className="relative">
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-primary/8 via-accent/6 to-transparent" />
-            <div className="relative flex flex-col gap-6 p-7 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex min-w-0 gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
-                  <Building2 className="h-8 w-8" />
+      <div className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-card">
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-primary/8 via-accent/6 to-transparent" />
+          <div className="relative flex flex-col gap-6 p-7 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex min-w-0 gap-4">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+                <Building2 className="h-8 w-8" />
+              </div>
+              <div className="min-w-0 space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {topBadges.map((badge) => (
+                    <Badge key={badge} variant="muted" className="px-2.5 py-1 text-xs">
+                      {badge}
+                    </Badge>
+                  ))}
+                  <StatusBadge
+                    status={
+                      job.lifecycleStage ?? (job.isActive === false ? 'inactive' : 'active')
+                    }
+                  />
+                  {isBadFit ? <StatusBadge status="bad fit" /> : null}
+                  {companyStatus === 'blacklist' ? (
+                    <StatusBadge status="blacklist" label="company blacklisted" />
+                  ) : null}
+                  {companyStatus === 'whitelist' ? (
+                    <StatusBadge status="whitelist" label="company whitelisted" />
+                  ) : null}
+                  {descriptionQuality === 'weak' ? (
+                    <StatusBadge status="bad fit" label="description may be incomplete" />
+                  ) : null}
                 </div>
-                <div className="min-w-0 space-y-4">
-                  <div className="flex flex-wrap gap-2">
-                    {topBadges.map((badge) => (
-                      <Badge key={badge} variant="muted" className="px-2.5 py-1 text-xs">
-                        {badge}
-                      </Badge>
-                    ))}
-                    <StatusBadge
-                      status={
-                        job.lifecycleStage ?? (job.isActive === false ? 'inactive' : 'active')
-                      }
-                    />
-                    {isBadFit ? <StatusBadge status="bad fit" /> : null}
-                    {companyStatus === 'blacklist' ? (
-                      <StatusBadge status="blacklist" label="company blacklisted" />
-                    ) : null}
-                    {companyStatus === 'whitelist' ? (
-                      <StatusBadge status="whitelist" label="company whitelisted" />
-                    ) : null}
-                    {descriptionQuality === 'weak' ? (
-                      <StatusBadge status="bad fit" label="description may be incomplete" />
-                    ) : null}
-                  </div>
 
-                  <div>
-                    <h2 className="m-0 text-2xl font-bold text-card-foreground">{job.title}</h2>
-                    <p className="m-0 mt-2 text-base text-muted-foreground">{job.company}</p>
-                  </div>
+                <div>
+                  <h2 className="m-0 text-2xl font-bold text-card-foreground">{job.title}</h2>
+                  <p className="m-0 mt-2 text-base text-muted-foreground">{job.company}</p>
+                </div>
 
-                  <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                    {salary ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5">
-                        <Briefcase className="h-4 w-4" />
-                        {salary}
-                      </span>
-                    ) : null}
-                    {job.postedAt ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5">
-                        <CalendarClock className="h-4 w-4" />
-                        Posted {formatDate(job.postedAt)}
-                      </span>
-                    ) : null}
+                <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                  {salary ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5">
                       <MapPin className="h-4 w-4" />
-                      {sourceLabel}
+                      {salary}
                     </span>
-                  </div>
+                  ) : null}
+                  {job.postedAt ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5">
+                      <CalendarClock className="h-4 w-4" />
+                      Posted {formatDate(job.postedAt)}
+                    </span>
+                  ) : null}
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5">
+                    <MapPin className="h-4 w-4" />
+                    {sourceLabel}
+                  </span>
                 </div>
               </div>
+            </div>
 
-              <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[420px]">
-                <HeroMetric
-                  label="Fit score"
-                  value={fit ? `${fit.score}%` : 'Pending'}
-                  icon={Target}
-                />
-                <HeroMetric
-                  label="Matched terms"
-                  value={fit?.matchedTerms.length ?? 0}
-                  icon={Sparkles}
-                />
-                <HeroMetric
-                  label="Pipeline"
-                  value={existing ? existing.status : 'Not saved'}
-                  icon={BookmarkCheck}
-                />
-              </div>
+            <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[420px]">
+              <HeroMetric
+                label="Fit score"
+                value={fit ? `${fit.score}%` : 'Pending'}
+                icon={Target}
+              />
+              <HeroMetric
+                label="Matched terms"
+                value={fit?.matchedTerms.length ?? 0}
+                icon={Sparkles}
+              />
+              <HeroMetric
+                label="Pipeline"
+                value={existing ? existing.status : 'Not saved'}
+                icon={BookmarkCheck}
+              />
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <PageGrid
         aside={
@@ -730,398 +641,21 @@ export default function JobDetails() {
             </Section>
           ) : null}
 
-          {activeTab === 'match' ? (
-            <Section
-              title="Match Breakdown"
-              description="Detailed evidence, matched terms, and missing signals from the current fit analysis."
-              icon={Sparkles}
-            >
-              {fit ? (
-                <div className="space-y-5">
-                  <div className="flex items-start gap-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                    <FitScoreCircular score={fit.score} size="md" showLabel />
-                    <p className="m-0 text-sm leading-7 text-muted-foreground">
-                      {fit.positiveReasons[0] ??
-                        fit.negativeReasons[0] ??
-                        'Fit analysis is based on canonical Rust matching over the stored profile and job signals.'}
-                    </p>
-                  </div>
-
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                      <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-success">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Strengths
-                      </p>
-                      {fit.positiveReasons.length > 0 ? (
-                        <div className="space-y-3">
-                          {fit.positiveReasons.map((entry) => (
-                            <div key={entry} className="flex items-start gap-3">
-                              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-fit-excellent" />
-                              <p className="m-0 text-sm leading-6 text-muted-foreground">{entry}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="m-0 text-sm text-muted-foreground">
-                          No positive signals yet.
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                      <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-warning">
-                        <AlertCircle className="h-4 w-4" />
-                        Penalties and risks
-                      </p>
-                      {fit.negativeReasons.length > 0 ? (
-                        <div className="space-y-3">
-                          {fit.negativeReasons.map((entry) => (
-                            <div key={entry} className="flex items-start gap-3">
-                              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-content-warning" />
-                              <p className="m-0 text-sm leading-6 text-muted-foreground">{entry}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="m-0 text-sm text-muted-foreground">No penalties returned.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                    <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-warning">
-                      <AlertCircle className="h-4 w-4" />
-                      Missing signals
-                    </p>
-                    {fit.missingTerms.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {fit.missingTerms.map((term) => (
-                          <Badge key={term} variant="danger" className="px-3 py-1 text-xs">
-                            {term}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="m-0 text-sm text-muted-foreground">
-                        No missing signals returned.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                    <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-success">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Matched terms
-                    </p>
-                    {fit.matchedTerms.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {fit.matchedTerms.map((term) => (
-                          <Badge key={term} variant="success" className="px-3 py-1 text-xs">
-                            {term}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="m-0 text-sm text-muted-foreground">
-                        No matched terms returned.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <p className="m-0 text-sm text-muted-foreground">Fit analysis is not ready yet.</p>
-              )}
-            </Section>
-          ) : null}
+          {activeTab === 'match' ? <JobDetailsMatchTab fit={fit} /> : null}
 
           {activeTab === 'ai' ? (
-            <div className="space-y-6">
-              {!profileId ? (
-                <EmptyState message="Create a profile to enable AI analysis." />
-              ) : !deterministicFit ? (
-                <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-white/[0.03] p-6">
-                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                  <p className="m-0 text-sm text-muted-foreground">Завантажуємо fit аналіз…</p>
-                </div>
-              ) : (
-                <>
-                  {/* Fit Explanation */}
-                  <Section
-                    title="Why this job?"
-                    description="LLM-generated analysis of how well this role aligns with your profile."
-                    icon={Sparkles}
-                  >
-                    {fitExplanationLoading ? (
-                      <div className="flex items-center gap-3 py-4">
-                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                        <p className="m-0 text-sm text-muted-foreground">
-                          Ollama аналізує вакансію…
-                        </p>
-                      </div>
-                    ) : fitExplanation ? (
-                      <div className="space-y-5">
-                        {fitExplanation.fitSummary ? (
-                          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                            <p className="m-0 text-sm leading-7 text-card-foreground">
-                              {fitExplanation.fitSummary}
-                            </p>
-                          </div>
-                        ) : null}
-
-                        <div className="grid gap-4 xl:grid-cols-2">
-                          {fitExplanation.whyItMatches.length > 0 ? (
-                            <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                              <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-success">
-                                <CheckCircle2 className="h-4 w-4" />
-                                Чому підходить
-                              </p>
-                              <div className="space-y-2">
-                                {fitExplanation.whyItMatches.map((item) => (
-                                  <div key={item} className="flex items-start gap-3">
-                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-excellent" />
-                                    <p className="m-0 text-sm leading-6 text-muted-foreground">
-                                      {item}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-
-                          {fitExplanation.risks.length > 0 ? (
-                            <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                              <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-warning">
-                                <AlertCircle className="h-4 w-4" />
-                                Ризики
-                              </p>
-                              <div className="space-y-2">
-                                {fitExplanation.risks.map((item) => (
-                                  <div key={item} className="flex items-start gap-3">
-                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-fair" />
-                                    <p className="m-0 text-sm leading-6 text-muted-foreground">
-                                      {item}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        {fitExplanation.missingSignals.length > 0 ? (
-                          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                            <p className="mb-3 text-sm font-medium text-muted-foreground">
-                              Чого бракує
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {fitExplanation.missingSignals.map((s) => (
-                                <Badge key={s} variant="danger" className="px-3 py-1 text-xs">
-                                  {s}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {fitExplanation.recommendedNextStep ? (
-                          <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                            <p className="mb-1 flex items-center gap-2 text-sm font-medium text-primary">
-                              <Lightbulb className="h-4 w-4" />
-                              Наступний крок
-                            </p>
-                            <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
-                              {fitExplanation.recommendedNextStep}
-                            </p>
-                          </div>
-                        ) : null}
-
-                        {fitExplanation.applicationAngle ? (
-                          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                            <p className="mb-1 text-sm font-medium text-card-foreground">
-                              Як подаватись
-                            </p>
-                            <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
-                              {fitExplanation.applicationAngle}
-                            </p>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <EmptyState message="Fit explanation not available." />
-                    )}
-                  </Section>
-
-                  {/* Cover Letter */}
-                  <Section
-                    title="Cover Letter"
-                    description="AI-generated cover letter tailored to this vacancy and your profile."
-                    icon={FileText}
-                  >
-                    {coverLetter ? (
-                      <div className="space-y-4">
-                        {coverLetter.draftSummary ? (
-                          <p className="m-0 text-sm italic text-muted-foreground">
-                            {coverLetter.draftSummary}
-                          </p>
-                        ) : null}
-                        <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-5 space-y-4 text-sm leading-7 text-card-foreground">
-                          <p className="m-0">{coverLetter.openingParagraph}</p>
-                          {coverLetter.bodyParagraphs.map((p, i) => (
-                            <p key={i} className="m-0">
-                              {p}
-                            </p>
-                          ))}
-                          <p className="m-0">{coverLetter.closingParagraph}</p>
-                        </div>
-                        {coverLetter.keyClaimsUsed.length > 0 ? (
-                          <div>
-                            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                              Ключові аргументи
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {coverLetter.keyClaimsUsed.map((c) => (
-                                <Badge key={c} variant="muted" className="px-3 py-1 text-xs">
-                                  {c}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : coverLetterLoading ? (
-                      <div className="flex items-center gap-3 py-4">
-                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                        <p className="m-0 text-sm text-muted-foreground">
-                          Ollama генерує cover letter…
-                        </p>
-                      </div>
-                    ) : (
-                      <Button
-                        onClick={() => setGenerateCoverLetter(true)}
-                        disabled={!fitExplanation}
-                        variant="outline"
-                        className="gap-2"
-                      >
-                        <FileText className="h-4 w-4" />
-                        {fitExplanation ? 'Generate Cover Letter' : 'Зачекай на fit analysis…'}
-                      </Button>
-                    )}
-                  </Section>
-
-                  {/* Interview Prep */}
-                  <Section
-                    title="Interview Prep"
-                    description="Topics, questions, and stories to prepare based on this role."
-                    icon={MessageSquare}
-                  >
-                    {interviewPrep ? (
-                      <div className="space-y-5">
-                        {interviewPrep.prepSummary ? (
-                          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                            <p className="m-0 text-sm leading-7 text-card-foreground">
-                              {interviewPrep.prepSummary}
-                            </p>
-                          </div>
-                        ) : null}
-
-                        <div className="grid gap-4 xl:grid-cols-2">
-                          {interviewPrep.technicalFocus.length > 0 ? (
-                            <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                              <p className="mb-3 text-sm font-medium text-card-foreground">
-                                Технічні теми
-                              </p>
-                              <div className="space-y-2">
-                                {interviewPrep.technicalFocus.map((item) => (
-                                  <div key={item} className="flex items-start gap-3">
-                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                                    <p className="m-0 text-sm leading-6 text-muted-foreground">
-                                      {item}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-
-                          {interviewPrep.behavioralFocus.length > 0 ? (
-                            <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                              <p className="mb-3 text-sm font-medium text-card-foreground">
-                                Поведінкові питання
-                              </p>
-                              <div className="space-y-2">
-                                {interviewPrep.behavioralFocus.map((item) => (
-                                  <div key={item} className="flex items-start gap-3">
-                                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-good" />
-                                    <p className="m-0 text-sm leading-6 text-muted-foreground">
-                                      {item}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        {interviewPrep.questionsToAsk.length > 0 ? (
-                          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                            <p className="mb-3 text-sm font-medium text-card-foreground">
-                              Питання до роботодавця
-                            </p>
-                            <div className="space-y-2">
-                              {interviewPrep.questionsToAsk.map((item, i) => (
-                                <div key={i} className="flex items-start gap-3">
-                                  <span className="mt-1 shrink-0 text-xs font-semibold text-primary">
-                                    {i + 1}.
-                                  </span>
-                                  <p className="m-0 text-sm leading-6 text-muted-foreground">
-                                    {item}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {interviewPrep.storiesToPrepare.length > 0 ? (
-                          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
-                            <p className="mb-3 text-sm font-medium text-card-foreground">
-                              Історії для підготовки
-                            </p>
-                            <div className="space-y-2">
-                              {interviewPrep.storiesToPrepare.map((item) => (
-                                <div key={item} className="flex items-start gap-3">
-                                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-fair" />
-                                  <p className="m-0 text-sm leading-6 text-muted-foreground">
-                                    {item}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : interviewPrepLoading ? (
-                      <div className="flex items-center gap-3 py-4">
-                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                        <p className="m-0 text-sm text-muted-foreground">
-                          Ollama готує interview prep…
-                        </p>
-                      </div>
-                    ) : (
-                      <Button
-                        onClick={() => setGenerateInterviewPrep(true)}
-                        variant="outline"
-                        className="gap-2"
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                        Generate Interview Prep
-                      </Button>
-                    )}
-                  </Section>
-                </>
-              )}
-            </div>
+            <JobDetailsAiTab
+              profileId={profileId}
+              deterministicFit={deterministicFit}
+              fitExplanation={fitExplanation}
+              fitExplanationLoading={fitExplanationLoading}
+              coverLetter={coverLetter}
+              coverLetterLoading={coverLetterLoading}
+              interviewPrep={interviewPrep}
+              interviewPrepLoading={interviewPrepLoading}
+              setGenerateCoverLetter={setGenerateCoverLetter}
+              setGenerateInterviewPrep={setGenerateInterviewPrep}
+            />
           ) : null}
 
           {activeTab === 'lifecycle' ? (

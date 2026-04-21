@@ -1,9 +1,5 @@
 /**
- * AppShellNew — layout migration candidate (Phase 1 preview).
- *
- * This file is ADDITIVE ONLY. The existing Layout.tsx is untouched.
- * To preview: temporarily swap `Layout` for `AppShellNew` in App.tsx,
- * then revert. Permanent swap happens in a dedicated later step.
+ * AppShellNew — active application shell.
  *
  * Adapted from: design-reference/job_copilot_design_model/components/app-shell.tsx
  * Changes from reference:

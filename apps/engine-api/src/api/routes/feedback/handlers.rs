@@ -1,0 +1,327 @@
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+
+use crate::api::dto::feedback::{
+    CompanyFeedbackResponse, FeedbackOverviewResponse, FeedbackSummary, JobFeedbackResponse,
+    UpdateCompanyFeedbackRequest,
+};
+use crate::api::error::{ApiError, ApiJson};
+use crate::api::routes::events::{load_job_event_metadata, log_user_event_softly};
+use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackFlags};
+use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
+use crate::services::feedback::FeedbackService;
+use crate::state::AppState;
+
+pub async fn list_feedback(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+) -> Result<axum::Json<FeedbackOverviewResponse>, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+
+    let jobs = state
+        .feedback_service
+        .list_job_feedback(&profile_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_query_failed"))?;
+    let companies = state
+        .feedback_service
+        .list_company_feedback(&profile_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_query_failed"))?;
+
+    let jobs: Vec<JobFeedbackResponse> = jobs.into_iter().map(JobFeedbackResponse::from).collect();
+    let companies: Vec<CompanyFeedbackResponse> = companies
+        .into_iter()
+        .map(CompanyFeedbackResponse::from)
+        .collect();
+
+    let summary = FeedbackSummary {
+        saved_jobs_count: jobs.iter().filter(|j| j.saved).count(),
+        hidden_jobs_count: jobs.iter().filter(|j| j.hidden).count(),
+        bad_fit_jobs_count: jobs.iter().filter(|j| j.bad_fit).count(),
+        whitelisted_companies_count: companies.iter().filter(|c| c.status == "whitelist").count(),
+        blacklisted_companies_count: companies.iter().filter(|c| c.status == "blacklist").count(),
+    };
+
+    Ok(axum::Json(FeedbackOverviewResponse {
+        profile_id,
+        jobs,
+        companies,
+        summary,
+    }))
+}
+
+pub async fn save_job(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
+    update_job_feedback(
+        state,
+        profile_id,
+        job_id,
+        UserEventType::JobSaved,
+        JobFeedbackFlags {
+            saved: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+pub async fn hide_job(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
+    update_job_feedback(
+        state,
+        profile_id,
+        job_id,
+        UserEventType::JobHidden,
+        JobFeedbackFlags {
+            hidden: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+pub async fn mark_job_bad_fit(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
+    update_job_feedback(
+        state,
+        profile_id,
+        job_id,
+        UserEventType::JobBadFit,
+        JobFeedbackFlags {
+            bad_fit: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+pub async fn unsave_job(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    clear_job_feedback_flags(
+        state,
+        profile_id,
+        job_id,
+        UserEventType::JobUnsaved,
+        JobFeedbackFlags {
+            saved: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+pub async fn unhide_job(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    clear_job_feedback_flags(
+        state,
+        profile_id,
+        job_id,
+        UserEventType::JobUnhidden,
+        JobFeedbackFlags {
+            hidden: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+pub async fn unmark_job_bad_fit(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+) -> Result<StatusCode, ApiError> {
+    clear_job_feedback_flags(
+        state,
+        profile_id,
+        job_id,
+        UserEventType::JobBadFitRemoved,
+        JobFeedbackFlags {
+            bad_fit: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+pub async fn add_company_whitelist(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+    ApiJson(payload): ApiJson<UpdateCompanyFeedbackRequest>,
+) -> Result<axum::Json<CompanyFeedbackResponse>, ApiError> {
+    update_company_feedback(state, profile_id, payload, CompanyFeedbackStatus::Whitelist).await
+}
+
+pub async fn remove_company_whitelist(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+    ApiJson(payload): ApiJson<UpdateCompanyFeedbackRequest>,
+) -> Result<StatusCode, ApiError> {
+    remove_company_feedback(state, profile_id, payload, CompanyFeedbackStatus::Whitelist).await
+}
+
+pub async fn add_company_blacklist(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+    ApiJson(payload): ApiJson<UpdateCompanyFeedbackRequest>,
+) -> Result<axum::Json<CompanyFeedbackResponse>, ApiError> {
+    update_company_feedback(state, profile_id, payload, CompanyFeedbackStatus::Blacklist).await
+}
+
+pub async fn remove_company_blacklist(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+    ApiJson(payload): ApiJson<UpdateCompanyFeedbackRequest>,
+) -> Result<StatusCode, ApiError> {
+    remove_company_feedback(state, profile_id, payload, CompanyFeedbackStatus::Blacklist).await
+}
+
+pub(crate) async fn ensure_profile_exists(
+    state: &AppState,
+    profile_id: &str,
+) -> Result<(), ApiError> {
+    let Some(_) = state
+        .profiles_service
+        .get_by_id(profile_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
+    else {
+        return Err(ApiError::not_found(
+            "profile_not_found",
+            format!("Profile '{profile_id}' was not found"),
+        ));
+    };
+
+    Ok(())
+}
+
+async fn clear_job_feedback_flags(
+    state: AppState,
+    profile_id: String,
+    job_id: String,
+    event_type: UserEventType,
+    flags: JobFeedbackFlags,
+) -> Result<StatusCode, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+    let metadata = load_job_event_metadata(&state, &job_id).await?;
+
+    state
+        .feedback_service
+        .clear_job_feedback(&profile_id, &job_id, flags)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+
+    log_user_event_softly(
+        &state,
+        CreateUserEvent {
+            profile_id,
+            event_type,
+            job_id: Some(job_id),
+            company_name: metadata.company_name,
+            source: metadata.source,
+            role_family: metadata.role_family,
+            payload_json: None,
+        },
+    )
+    .await;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn update_job_feedback(
+    state: AppState,
+    profile_id: String,
+    job_id: String,
+    event_type: UserEventType,
+    flags: JobFeedbackFlags,
+) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+    let metadata = load_job_event_metadata(&state, &job_id).await?;
+
+    let feedback = state
+        .feedback_service
+        .upsert_job_feedback(&profile_id, &job_id, flags)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+
+    log_user_event_softly(
+        &state,
+        CreateUserEvent {
+            profile_id,
+            event_type,
+            job_id: Some(job_id),
+            company_name: metadata.company_name,
+            source: metadata.source,
+            role_family: metadata.role_family,
+            payload_json: None,
+        },
+    )
+    .await;
+
+    Ok(axum::Json(JobFeedbackResponse::from(feedback)))
+}
+
+async fn update_company_feedback(
+    state: AppState,
+    profile_id: String,
+    payload: UpdateCompanyFeedbackRequest,
+    status: CompanyFeedbackStatus,
+) -> Result<axum::Json<CompanyFeedbackResponse>, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+
+    let company_name = payload.validate_company_name()?;
+    let normalized_company_name = FeedbackService::normalize_company_name(&company_name);
+    let feedback = state
+        .feedback_service
+        .upsert_company_feedback(&profile_id, &company_name, &normalized_company_name, status)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+
+    let event_type = match status {
+        CompanyFeedbackStatus::Whitelist => UserEventType::CompanyWhitelisted,
+        CompanyFeedbackStatus::Blacklist => UserEventType::CompanyBlacklisted,
+    };
+    log_user_event_softly(
+        &state,
+        CreateUserEvent {
+            profile_id,
+            event_type,
+            job_id: None,
+            company_name: Some(company_name),
+            source: None,
+            role_family: None,
+            payload_json: None,
+        },
+    )
+    .await;
+
+    Ok(axum::Json(CompanyFeedbackResponse::from(feedback)))
+}
+
+async fn remove_company_feedback(
+    state: AppState,
+    profile_id: String,
+    payload: UpdateCompanyFeedbackRequest,
+    status: CompanyFeedbackStatus,
+) -> Result<StatusCode, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+
+    let company_name = payload.validate_company_name()?;
+    let normalized_company_name = FeedbackService::normalize_company_name(&company_name);
+    state
+        .feedback_service
+        .remove_company_feedback(&profile_id, &normalized_company_name, status)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
