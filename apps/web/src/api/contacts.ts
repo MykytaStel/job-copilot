@@ -1,6 +1,6 @@
 import type { ApplicationContact, Contact, ContactInput } from '@job-copilot/shared/applications';
 
-import { json, request, unsupported } from './client';
+import { json, request } from './client';
 import type { EngineContact, EngineContactsResponse } from './engine-types';
 import { mapContact } from './mappers';
 
@@ -51,8 +51,3 @@ export async function linkContact(
   };
 }
 
-export const updateContact = (_id: string, _payload: Partial<ContactInput>): Promise<Contact> =>
-  unsupported('Contacts');
-export const deleteContact = (_id: string): Promise<void> => unsupported('Contacts');
-export const unlinkContact = (_applicationId: string, _linkId: string): Promise<void> =>
-  unsupported('Application contacts');

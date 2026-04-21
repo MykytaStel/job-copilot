@@ -9,8 +9,9 @@ from app.cover_letter_draft import (
     build_cover_letter_draft_prompt,
     parse_cover_letter_draft_output,
 )
+from app.api import app
 from app.cover_letter_draft_service import CoverLetterDraftService
-from app.main import app, get_cover_letter_draft_service
+from app.service_dependencies import get_cover_letter_draft_service
 
 
 def sample_cover_letter_context() -> CoverLetterDraftRequest:

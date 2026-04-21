@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import app, get_profile_insights_service
+from app.api import app
 from app.profile_insights import (
     LlmContextRequest,
     MalformedProviderOutputError,
@@ -10,6 +10,7 @@ from app.profile_insights import (
     parse_profile_insights_output,
 )
 from app.profile_insights_service import ProfileInsightsService
+from app.service_dependencies import get_profile_insights_service
 
 
 def sample_context() -> LlmContextRequest:
