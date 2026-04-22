@@ -20,7 +20,7 @@ export function ActivitiesSection({ activities }: { activities: ApplicationDetai
           {activities.map((activity) => (
             <div
               key={activity.id}
-              className="flex items-start gap-3 rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-4"
+              className="flex items-start gap-3 rounded-2xl border border-border/70 bg-surface-muted px-4 py-4"
             >
               <Badge
                 variant="muted"
@@ -56,7 +56,7 @@ export function TasksSection({ tasks }: { tasks: ApplicationDetail['tasks'] }) {
           {tasks.map((task) => (
             <div
               key={task.id}
-              className="flex items-start gap-3 rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-4"
+              className="flex items-start gap-3 rounded-2xl border border-border/70 bg-surface-muted px-4 py-4"
             >
               <input type="checkbox" checked={task.done} readOnly className="mt-1 h-4 w-4" />
               <div className="min-w-0">

@@ -118,7 +118,7 @@ export function JobDetailsHeader({
 
                 <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
                   {salary ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white-a05 px-3 py-1.5">
                       <MapPin className="h-4 w-4" />
                       {salary}
                     </span>
@@ -126,13 +126,13 @@ export function JobDetailsHeader({
                   {lifecycleLabels.map((label) => (
                     <span
                       key={label}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white-a05 px-3 py-1.5"
                     >
                       <CalendarClock className="h-4 w-4" />
                       {label}
                     </span>
                   ))}
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white-a05 px-3 py-1.5">
                     <MapPin className="h-4 w-4" />
                     {sourceLabel}
                   </span>

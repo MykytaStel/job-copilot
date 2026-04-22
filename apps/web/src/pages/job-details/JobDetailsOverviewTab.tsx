@@ -20,7 +20,7 @@ export function JobDetailsOverviewTab({
       icon={Briefcase}
     >
       <div className="space-y-5">
-        <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+        <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
           <p className="m-0 text-sm font-semibold text-card-foreground">Job description</p>
           <div className="mt-4 whitespace-pre-wrap text-sm leading-7 text-muted-foreground">
             {job.description || 'No description available.'}
@@ -41,7 +41,7 @@ export function JobDetailsOverviewTab({
         ) : null}
 
         {skillBadges.length > 0 ? (
-          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+          <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
             <p className="m-0 text-sm font-semibold text-card-foreground">Skills and signals</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {skillBadges.map((item) => (

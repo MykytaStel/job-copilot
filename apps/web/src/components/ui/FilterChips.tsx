@@ -45,7 +45,7 @@ export function FilterChips({
               'h-9 rounded-full px-3.5 text-xs font-medium shadow-none',
               isActive
                 ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
-                : 'border-border bg-white/[0.03] text-muted-foreground hover:bg-secondary hover:text-foreground',
+                : 'border-border bg-surface-muted text-muted-foreground hover:bg-secondary hover:text-foreground',
             )}
           >
             {option.label}

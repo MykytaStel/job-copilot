@@ -169,7 +169,7 @@ export default function Profile() {
                       </p>
                     </div>
                     <div className="min-w-0 flex-1 lg:max-w-md">
-                      <div className="h-2 rounded-full bg-white/[0.06]">
+                      <div className="h-2 rounded-full bg-surface-soft">
                         <div
                           className="h-2 rounded-full bg-[image:var(--gradient-button)] transition-[width] duration-300"
                           style={{ width: `${profileCompletion.percent}%` }}

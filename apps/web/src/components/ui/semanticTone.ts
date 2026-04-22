@@ -6,7 +6,7 @@ export const semanticBadgeClass: Record<SemanticTone, string> = {
   success: 'border-fit-excellent/25 bg-fit-excellent/12 text-fit-excellent',
   warning: 'border-fit-fair/25 bg-fit-fair/12 text-fit-fair',
   danger: 'border-destructive/25 bg-destructive/12 text-destructive',
-  muted: 'border-border bg-white/[0.04] text-muted-foreground',
+  muted: 'border-border bg-white-a04 text-muted-foreground',
 };
 
 export const semanticPanelClass: Record<SemanticTone, string> = {
@@ -15,7 +15,7 @@ export const semanticPanelClass: Record<SemanticTone, string> = {
   success: 'border-fit-excellent/20 bg-fit-excellent/5',
   warning: 'border-fit-fair/20 bg-fit-fair/5',
   danger: 'border-destructive/20 bg-destructive/5',
-  muted: 'border-border/70 bg-white/[0.03]',
+  muted: 'border-border/70 bg-surface-muted',
 };
 
 export const semanticIconFrameClass: Record<SemanticTone, string> = {
@@ -24,7 +24,7 @@ export const semanticIconFrameClass: Record<SemanticTone, string> = {
   success: 'border-fit-excellent/20 bg-fit-excellent/10 text-fit-excellent',
   warning: 'border-fit-fair/20 bg-fit-fair/10 text-fit-fair',
   danger: 'border-destructive/20 bg-destructive/10 text-destructive',
-  muted: 'border-border bg-white/[0.04] text-muted-foreground',
+  muted: 'border-border bg-white-a04 text-muted-foreground',
 };
 
 export const semanticTextClass: Record<SemanticTone, string> = {

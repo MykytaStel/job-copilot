@@ -49,7 +49,7 @@ export function RankedResultsSection({
             <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
               Deterministic ranking
             </span>
-            <span className="inline-flex items-center rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <span className="inline-flex items-center rounded-full border border-border bg-white-a04 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Explainable fit reasons
             </span>
           </div>

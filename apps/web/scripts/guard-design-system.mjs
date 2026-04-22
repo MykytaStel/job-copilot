@@ -4,6 +4,9 @@ import { resolve } from 'node:path';
 const appRoot = resolve(import.meta.dirname, '..');
 const stylesDir = resolve(appRoot, 'src/styles');
 const srcDir = resolve(appRoot, 'src');
+const componentsDir = resolve(srcDir, 'components');
+const pagesDir = resolve(srcDir, 'pages');
+
 const requiredFiles = [
   resolve(stylesDir, 'tokens.css'),
   resolve(stylesDir, 'reference-tokens.css'),
@@ -43,30 +46,69 @@ for (const fileName of ['reference-tokens.css', 'semantic-tokens.css', 'componen
   }
 }
 
-function collectSourceFiles(dir) {
+function collectSourceFiles(dir, extensions = /\.(tsx|ts|css)$/) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = resolve(dir, entry.name);
     if (entry.isDirectory()) {
-      return collectSourceFiles(path);
+      return collectSourceFiles(path, extensions);
     }
-    if (statSync(path).isFile() && /\.(tsx|ts|css)$/.test(entry.name)) {
+    if (statSync(path).isFile() && extensions.test(entry.name)) {
       return [path];
     }
     return [];
   });
 }
 
-const forbiddenRadiusPattern = /rounded-\[(24px|28px)\]/;
-const filesWithHardcodedSurfaceRadius = collectSourceFiles(srcDir).filter((file) =>
-  forbiddenRadiusPattern.test(readFileSync(file, 'utf8')),
-);
+const errors = [];
 
-if (filesWithHardcodedSurfaceRadius.length > 0) {
-  console.error(
-    'Design-system guard failed: use --radius-card / --radius-hero tokens instead of hardcoded 24px/28px rounded utilities.',
-  );
-  for (const file of filesWithHardcodedSurfaceRadius) {
-    console.error(`- ${file}`);
+// ── Rule 1: no hardcoded 24px/28px rounded utilities ─────────────────────────
+const forbiddenRadiusPattern = /rounded-\[(24px|28px)\]/;
+for (const file of collectSourceFiles(srcDir)) {
+  if (forbiddenRadiusPattern.test(readFileSync(file, 'utf8'))) {
+    errors.push(
+      `Use --radius-card / --radius-hero tokens instead of hardcoded 24px/28px rounded: ${file}`,
+    );
+  }
+}
+
+// ── Rule 2: no raw bg-white/[0.0x] opacity classes in TSX/TS ─────────────────
+const rawOpacityPattern = /bg-white\/\[0\.\d+\]/;
+for (const file of collectSourceFiles(srcDir, /\.(tsx|ts)$/)) {
+  if (rawOpacityPattern.test(readFileSync(file, 'utf8'))) {
+    errors.push(
+      `Use semantic token classes (bg-surface-muted, bg-white-a04, etc.) instead of raw bg-white/[0.x]: ${file}`,
+    );
+  }
+}
+
+// ── Rule 3: no rgba() literals in component/page TSX files ───────────────────
+// Allows rgba() in CSS token files only.
+const rgbaPattern = /\brgba\s*\(/;
+for (const file of [...collectSourceFiles(componentsDir, /\.(tsx|ts)$/), ...collectSourceFiles(pagesDir, /\.(tsx|ts)$/)]) {
+  if (rgbaPattern.test(readFileSync(file, 'utf8'))) {
+    errors.push(
+      `Use CSS variable tokens instead of raw rgba() in component/page files: ${file}`,
+    );
+  }
+}
+
+// ── Rule 4: no hardcoded 24px/28px border-radius in CSS outside token files ──
+// Only blocks the specific values that have semantic token equivalents.
+const hardcodedBorderRadiusCssPattern = /border-radius\s*:\s*(24px|28px)/;
+const tokenFileNames = new Set(requiredFiles.map((f) => f));
+for (const file of collectSourceFiles(srcDir, /\.css$/)) {
+  if (tokenFileNames.has(file)) continue;
+  if (hardcodedBorderRadiusCssPattern.test(readFileSync(file, 'utf8'))) {
+    errors.push(
+      `Use var(--radius-card) or var(--radius-hero) instead of hardcoded 24px/28px border-radius: ${file}`,
+    );
+  }
+}
+
+if (errors.length > 0) {
+  console.error('Design-system guard failed:');
+  for (const err of errors) {
+    console.error(`  ✗ ${err}`);
   }
   process.exit(1);
 }

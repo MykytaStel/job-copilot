@@ -50,7 +50,7 @@ export function GlobalSearch() {
         <button
           type="button"
           onClick={open}
-          className="flex h-10 w-full items-center justify-between rounded-xl border border-border bg-white/[0.03] pl-9 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-white/[0.06]"
+          className="flex h-10 w-full items-center justify-between rounded-xl border border-border bg-surface-muted pl-9 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-surface-soft"
         >
           <span className="truncate">Search jobs and applications</span>
           <span className="rounded-md border border-border/80 px-2 py-0.5 text-[11px] font-semibold text-foreground/70">
@@ -116,7 +116,7 @@ function GlobalSearchDialog({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search jobs and applications"
-              className="h-12 w-full rounded-2xl border border-border bg-white/[0.03] pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary/40"
+              className="h-12 w-full rounded-2xl border border-border bg-surface-muted pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary/40"
             />
           </div>
         </div>
@@ -157,7 +157,7 @@ function GlobalSearchDialog({
                   key={job.id}
                   type="button"
                   onClick={() => onNavigate(`/jobs/${job.id}`)}
-                  className="flex w-full flex-col rounded-2xl border border-transparent px-3 py-3 text-left transition-colors hover:border-white/5 hover:bg-white/[0.04]"
+                  className="flex w-full flex-col rounded-2xl border border-transparent px-3 py-3 text-left transition-colors hover:border-white/5 hover:bg-white-a04"
                 >
                   <span className="text-sm font-medium text-foreground">{job.title}</span>
                   <span className="mt-1 text-sm text-muted-foreground">{job.company}</span>
@@ -181,7 +181,7 @@ function GlobalSearchDialog({
                   key={application.id}
                   type="button"
                   onClick={() => onNavigate(`/applications/${application.id}`)}
-                  className="flex w-full items-start justify-between gap-4 rounded-2xl border border-transparent px-3 py-3 text-left transition-colors hover:border-white/5 hover:bg-white/[0.04]"
+                  className="flex w-full items-start justify-between gap-4 rounded-2xl border border-transparent px-3 py-3 text-left transition-colors hover:border-white/5 hover:bg-white-a04"
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-foreground">
@@ -191,7 +191,7 @@ function GlobalSearchDialog({
                       {application.companyName}
                     </span>
                   </span>
-                  <span className="shrink-0 rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <span className="shrink-0 rounded-full border border-border bg-white-a04 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     {formatApplicationStatus(application.status)}
                   </span>
                 </button>

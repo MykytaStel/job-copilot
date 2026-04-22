@@ -48,12 +48,12 @@ export function ApplicationHeader({ detail }: { detail: ApplicationDetail }) {
               <div className="flex flex-wrap items-center gap-3">
                 <StatusBadge status={detail.status} />
                 {detail.appliedAt ? (
-                  <span className="rounded-full border border-border bg-white/[0.05] px-3 py-1.5 text-xs text-muted-foreground">
+                  <span className="rounded-full border border-border bg-white-a05 px-3 py-1.5 text-xs text-muted-foreground">
                     Applied {formatDate(detail.appliedAt)}
                   </span>
                 ) : null}
                 {detail.dueDate ? (
-                  <span className="rounded-full border border-border bg-white/[0.05] px-3 py-1.5 text-xs text-muted-foreground">
+                  <span className="rounded-full border border-border bg-white-a05 px-3 py-1.5 text-xs text-muted-foreground">
                     Due {formatDate(detail.dueDate)}
                   </span>
                 ) : null}

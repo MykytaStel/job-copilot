@@ -1,3 +1,4 @@
+import { cn } from '../../lib/cn';
 import { formatEnumLabel } from '../../lib/format';
 import { Badge } from './Badge';
 
@@ -30,7 +31,7 @@ export function StatusBadge({
   return (
     <Badge
       variant={STATUS_VARIANTS[normalized] ?? 'muted'}
-      className={`px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${className ?? ''}`}
+      className={cn('px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]', className)}
     >
       {label ?? formatEnumLabel(normalized)}
     </Badge>

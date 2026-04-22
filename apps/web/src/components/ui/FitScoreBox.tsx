@@ -1,15 +1,15 @@
 import { cn } from '../../lib/cn';
 
-type FitBand = 'excellent' | 'good' | 'fair' | 'poor';
+export type FitBand = 'excellent' | 'good' | 'fair' | 'poor';
 
-function getFitBand(score: number): FitBand {
+export function getFitBand(score: number): FitBand {
   if (score >= 85) return 'excellent';
   if (score >= 70) return 'good';
   if (score >= 50) return 'fair';
   return 'poor';
 }
 
-function getFitLabel(band: FitBand): string {
+export function getFitLabel(band: FitBand): string {
   const labels: Record<FitBand, string> = {
     excellent: 'Excellent Match',
     good: 'Good Match',

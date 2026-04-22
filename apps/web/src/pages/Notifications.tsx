@@ -101,11 +101,11 @@ function NotificationRow({
               </p>
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/[0.04] px-2.5 py-1">
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white-a04 px-2.5 py-1">
                 <Clock3 className="h-3.5 w-3.5" />
                 {formatTimestamp(notification.createdAt)}
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/[0.04] px-2.5 py-1">
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white-a04 px-2.5 py-1">
                 <BriefcaseBusiness className="h-3.5 w-3.5" />
                 {formatEnumLabel(notification.type)}
               </span>
@@ -225,7 +225,7 @@ export default function Notifications() {
                   {Array.from({ length: 3 }).map((_, index) => (
                     <div
                       key={index}
-                      className="h-28 animate-pulse rounded-2xl border border-border/70 bg-white/[0.04]"
+                      className="h-28 animate-pulse rounded-2xl border border-border/70 bg-white-a04"
                     />
                   ))}
                 </div>

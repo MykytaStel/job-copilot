@@ -8,7 +8,7 @@ export function ListSkeleton({ rows = 5 }: { rows?: number }) {
       {Array.from({ length: rows }).map((_, index) => (
         <div
           key={index}
-          className="h-16 animate-pulse rounded-2xl border border-border/70 bg-white/[0.04]"
+          className="h-16 animate-pulse rounded-2xl border border-border/70 bg-white-a04"
         />
       ))}
     </div>

@@ -49,7 +49,7 @@ export function SurfaceInset<E extends ElementType = 'div'>({
   const Component = (as ?? 'div') as ElementType;
   return (
     <Component
-      className={cn('rounded-2xl border border-border/70 bg-white/[0.03] p-4', className)}
+      className={cn('rounded-2xl border border-border/70 bg-surface-muted p-4', className)}
       {...props}
     />
   );
@@ -63,7 +63,7 @@ export function SurfaceMetric<E extends ElementType = 'div'>({
   const Component = (as ?? 'div') as ElementType;
   return (
     <Component
-      className={cn('rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3', className)}
+      className={cn('rounded-2xl border border-border/70 bg-white-a04 px-4 py-3', className)}
       {...props}
     />
   );

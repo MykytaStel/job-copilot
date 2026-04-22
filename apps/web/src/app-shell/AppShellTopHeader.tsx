@@ -85,7 +85,7 @@ export function AppShellTopHeader({
           >
             <Settings className="h-5 w-5" />
           </Button>
-          <div className="ml-1 flex items-center gap-3 rounded-full border border-border bg-white/[0.03] px-3 py-1.5">
+          <div className="ml-1 flex items-center gap-3 rounded-full border border-border bg-surface-muted px-3 py-1.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-primary">
               <span className="text-xs font-semibold">JC</span>
             </div>

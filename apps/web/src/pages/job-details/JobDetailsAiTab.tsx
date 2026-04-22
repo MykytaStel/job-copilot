@@ -48,7 +48,7 @@ export function JobDetailsAiTab({
 
   if (!deterministicFit) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-white/[0.03] p-6">
+      <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-surface-muted p-6">
         <Loader2 className="h-5 w-5 animate-spin text-primary" />
         <p className="m-0 text-sm text-muted-foreground">Завантажуємо fit аналіз…</p>
       </div>
@@ -79,7 +79,7 @@ export function JobDetailsAiTab({
 
             <div className="grid gap-4 xl:grid-cols-2">
               {fitExplanation.whyItMatches.length > 0 ? (
-                <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                   <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-success">
                     <CheckCircle2 className="h-4 w-4" />
                     Чому підходить
@@ -96,7 +96,7 @@ export function JobDetailsAiTab({
               ) : null}
 
               {fitExplanation.risks.length > 0 ? (
-                <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                   <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-warning">
                     <AlertCircle className="h-4 w-4" />
                     Ризики
@@ -114,7 +114,7 @@ export function JobDetailsAiTab({
             </div>
 
             {fitExplanation.missingSignals.length > 0 ? (
-              <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+              <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                 <p className="mb-3 text-sm font-medium text-muted-foreground">Чого бракує</p>
                 <div className="flex flex-wrap gap-2">
                   {fitExplanation.missingSignals.map((s) => (
@@ -139,7 +139,7 @@ export function JobDetailsAiTab({
             ) : null}
 
             {fitExplanation.applicationAngle ? (
-              <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+              <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                 <p className="mb-1 text-sm font-medium text-card-foreground">Як подаватись</p>
                 <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
                   {fitExplanation.applicationAngle}
@@ -162,7 +162,7 @@ export function JobDetailsAiTab({
             {coverLetter.draftSummary ? (
               <p className="m-0 text-sm italic text-muted-foreground">{coverLetter.draftSummary}</p>
             ) : null}
-            <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-5 space-y-4 text-sm leading-7 text-card-foreground">
+            <div className="rounded-2xl border border-border/70 bg-surface-muted p-5 space-y-4 text-sm leading-7 text-card-foreground">
               <p className="m-0">{coverLetter.openingParagraph}</p>
               {coverLetter.bodyParagraphs.map((p, i) => (
                 <p key={i} className="m-0">
@@ -221,7 +221,7 @@ export function JobDetailsAiTab({
 
             <div className="grid gap-4 xl:grid-cols-2">
               {interviewPrep.technicalFocus.length > 0 ? (
-                <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                   <p className="mb-3 text-sm font-medium text-card-foreground">Технічні теми</p>
                   <div className="space-y-2">
                     {interviewPrep.technicalFocus.map((item) => (
@@ -235,7 +235,7 @@ export function JobDetailsAiTab({
               ) : null}
 
               {interviewPrep.behavioralFocus.length > 0 ? (
-                <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                   <p className="mb-3 text-sm font-medium text-card-foreground">
                     Поведінкові питання
                   </p>
@@ -252,7 +252,7 @@ export function JobDetailsAiTab({
             </div>
 
             {interviewPrep.questionsToAsk.length > 0 ? (
-              <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+              <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                 <p className="mb-3 text-sm font-medium text-card-foreground">
                   Питання до роботодавця
                 </p>
@@ -270,7 +270,7 @@ export function JobDetailsAiTab({
             ) : null}
 
             {interviewPrep.storiesToPrepare.length > 0 ? (
-              <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+              <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                 <p className="mb-3 text-sm font-medium text-card-foreground">
                   Історії для підготовки
                 </p>

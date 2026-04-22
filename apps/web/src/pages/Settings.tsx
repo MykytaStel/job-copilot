@@ -206,7 +206,7 @@ export default function Settings() {
               <p className="m-0 text-3xl font-semibold text-card-foreground">
                 {completion.percent}%
               </p>
-              <div className="h-2 rounded-full bg-white/[0.06]">
+              <div className="h-2 rounded-full bg-surface-soft">
                 <div
                   className="h-2 rounded-full bg-[image:var(--gradient-button)]"
                   style={{ width: `${completion.percent}%` }}
