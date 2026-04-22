@@ -1,5 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Settings as SettingsIcon, SlidersHorizontal, UserRound } from 'lucide-react';
+import {
+  Bell,
+  Route,
+  Settings as SettingsIcon,
+  SlidersHorizontal,
+  Target,
+  UserRound,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { getNotifications } from '../api/notifications';
@@ -64,60 +71,118 @@ export default function Settings() {
     analysisReady: Boolean(profile.summary || profile.skills.length),
   });
   const unreadCount = notifications.filter((notification) => !notification.readAt).length;
+  const persistedSearchPreferences = profile.searchPreferences;
+  const persistedPreferenceCount =
+    (persistedSearchPreferences?.targetRegions.length ?? 0) +
+    (persistedSearchPreferences?.workModes.length ?? 0) +
+    (persistedSearchPreferences?.preferredRoles.length ?? 0) +
+    (persistedSearchPreferences?.allowedSources.length ?? 0) +
+    (persistedSearchPreferences?.includeKeywords.length ?? 0) +
+    (persistedSearchPreferences?.excludeKeywords.length ?? 0);
 
   return (
     <Page>
       <PageHeader
         title="Settings"
-        description="A small settings surface for the active profile. Stored preferences are still profile-scoped; dedicated notification preferences are not implemented yet."
+        description="A small settings surface for the active profile. Canonical profile editing and search-profile building stay in Profile & Search; Settings summarizes what is already live."
         breadcrumb={[{ label: 'Dashboard', href: '/' }, { label: 'Settings' }]}
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <Card className="border-border bg-card">
-          <CardHeader className="gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
-                <UserRound className="h-4 w-4" />
+        <div className="space-y-6">
+          <Card className="border-border bg-card">
+            <CardHeader className="gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                  <UserRound className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle>Profile defaults</CardTitle>
+                  <p className="m-0 text-sm leading-6 text-muted-foreground">
+                    The persisted profile still drives ranking, AI context, and notifications scope.
+                  </p>
+                </div>
               </div>
-              <div>
-                <CardTitle>Profile defaults</CardTitle>
-                <p className="m-0 text-sm leading-6 text-muted-foreground">
-                  The persisted profile still drives ranking, AI context, and notifications scope.
-                </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <SettingRow label="Name" value={profile.name} />
+                <SettingRow label="Email" value={profile.email} />
+                <SettingRow label="Location" value={profile.location ?? 'Not set'} />
+                <SettingRow
+                  label="Compensation"
+                  value={
+                    profile.salaryMin && profile.salaryMax
+                      ? `${profile.salaryMin}-${profile.salaryMax} ${profile.salaryCurrency}`
+                      : 'Not set'
+                  }
+                />
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <SettingRow label="Name" value={profile.name} />
-              <SettingRow label="Email" value={profile.email} />
-              <SettingRow label="Location" value={profile.location ?? 'Not set'} />
-              <SettingRow
-                label="Compensation"
-                value={
-                  profile.salaryMin && profile.salaryMax
-                    ? `${profile.salaryMin}-${profile.salaryMax} ${profile.salaryCurrency}`
-                    : 'Not set'
-                }
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {profile.languages.length > 0 ? (
-                profile.languages.map((language) => (
-                  <Badge key={language} variant="muted" className="px-2 py-0.5">
-                    {language}
+              <div className="flex flex-wrap gap-2">
+                {profile.languages.length > 0 ? (
+                  profile.languages.map((language) => (
+                    <Badge key={language} variant="muted" className="px-2 py-0.5">
+                      {language}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge variant="muted" className="px-2 py-0.5">
+                    No languages set
                   </Badge>
-                ))
-              ) : (
-                <Badge variant="muted" className="px-2 py-0.5">
-                  No languages set
-                </Badge>
-              )}
-            </div>
-            <Button onClick={() => navigate('/profile')}>Open profile</Button>
-          </CardContent>
-        </Card>
+                )}
+              </div>
+              <Button onClick={() => navigate('/profile')}>Open profile</Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card">
+            <CardHeader className="gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                  <Target className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle>Search profile scope</CardTitle>
+                  <p className="m-0 text-sm leading-6 text-muted-foreground">
+                    Search filters persist on the profile record, but building and running search
+                    still happens in Profile &amp; Search.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <SettingRow
+                  label="Saved search inputs"
+                  value={
+                    persistedPreferenceCount > 0
+                      ? `${persistedPreferenceCount} active filters`
+                      : 'No saved filters yet'
+                  }
+                />
+                <SettingRow
+                  label="Persistence"
+                  value={persistedSearchPreferences ? 'Profile-scoped' : 'Local until saved'}
+                />
+                <SettingRow
+                  label="Target regions"
+                  value={String(persistedSearchPreferences?.targetRegions.length ?? 0)}
+                />
+                <SettingRow
+                  label="Preferred roles"
+                  value={String(persistedSearchPreferences?.preferredRoles.length ?? 0)}
+                />
+              </div>
+              <p className="m-0 text-sm leading-6 text-muted-foreground">
+                This page stays summary-only for now so the search workflow does not split across
+                multiple routes.
+              </p>
+              <Button variant="outline" onClick={() => navigate('/profile')}>
+                Open Profile &amp; Search
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="space-y-6">
           <Card className="border-border bg-card">
@@ -174,6 +239,34 @@ export default function Settings() {
               <Button variant="outline" onClick={() => navigate('/notifications')}>
                 Open notifications
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card">
+            <CardHeader className="gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                  <Route className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle>Route plan</CardTitle>
+                  <p className="m-0 text-sm leading-6 text-muted-foreground">
+                    Keep navigation minimal by using each route for a single, already-implemented
+                    responsibility.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <SettingRow
+                label="`/profile`"
+                value="Edit profile, filters, build search, run ranking"
+              />
+              <SettingRow label="`/notifications`" value="Review the profile-scoped inbox" />
+              <SettingRow
+                label="`/settings`"
+                value="Summarize active scope and future prefs surface"
+              />
             </CardContent>
           </Card>
         </div>

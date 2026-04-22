@@ -78,6 +78,8 @@ export function useProfilePage() {
     includeKeywordsInput: search.includeKeywordsInput,
     excludeKeywordsInput: search.excludeKeywordsInput,
     buildResult: search.buildResult,
+    buildIsCurrent: search.buildIsCurrent,
+    buildRestoredFromStorage: search.buildRestoredFromStorage,
     searchResult: search.searchResult,
     searchError: search.searchError,
     saveMutation: mutations.saveMutation,

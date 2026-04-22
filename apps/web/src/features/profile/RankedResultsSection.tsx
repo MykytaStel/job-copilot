@@ -1,6 +1,10 @@
 import type { LlmContext } from '../../api/analytics';
 import type { SearchRunResult } from '../../api/jobs';
-import type { RoleCatalogItem, SearchProfileBuildResult, SourceCatalogItem } from '../../api/profiles';
+import type {
+  RoleCatalogItem,
+  SearchProfileBuildResult,
+  SourceCatalogItem,
+} from '../../api/profiles';
 
 import { Button } from '../../components/ui/Button';
 import { SearchResultsSection } from './SearchResultCard';
@@ -9,6 +13,8 @@ export function RankedResultsSection({
   searchResult,
   searchError,
   buildResult,
+  buildIsCurrent,
+  buildRestoredFromStorage,
   profileId,
   rawProfileText,
   llmContext,
@@ -22,6 +28,8 @@ export function RankedResultsSection({
   searchResult: SearchRunResult | null;
   searchError: string | null;
   buildResult: SearchProfileBuildResult;
+  buildIsCurrent: boolean;
+  buildRestoredFromStorage: boolean;
   profileId: string | null;
   rawProfileText: string;
   llmContext: LlmContext | null;
@@ -51,12 +59,19 @@ export function RankedResultsSection({
             Uses the built search profile above and returns explainable ranked jobs.
           </p>
         </div>
-        <Button type="button" onClick={onRunSearch} disabled={isRunning}>
+        <Button type="button" onClick={onRunSearch} disabled={isRunning || !buildIsCurrent}>
           {isRunning ? 'Running…' : 'Run search'}
         </Button>
       </div>
 
       {searchError && <p className="error">{searchError}</p>}
+
+      {!buildIsCurrent ? (
+        <p className="m-0 text-sm leading-6 text-muted-foreground">
+          Raw text or filters changed after the last build. Rebuild the search profile before
+          running ranking again.
+        </p>
+      ) : null}
 
       {isRunning ? (
         <p className="m-0 text-sm leading-6 text-muted-foreground">
@@ -76,7 +91,9 @@ export function RankedResultsSection({
         />
       ) : (
         <p className="m-0 text-sm leading-6 text-muted-foreground">
-          Build a search profile, then run search to inspect ranked jobs and fit reasons.
+          {buildRestoredFromStorage
+            ? 'The last built search profile was restored for these inputs. Run search to refresh ranked jobs and fit reasons.'
+            : 'Build a search profile, then run search to inspect ranked jobs and fit reasons.'}
         </p>
       )}
     </section>

@@ -42,6 +42,7 @@ export function DashboardContent({ state }: { state: DashboardPageState }) {
         }
       >
         <DashboardMatchesSection
+          profileId={state.profileId}
           mode={state.mode}
           setSortByScore={state.setSortByScore}
           search={state.search}
