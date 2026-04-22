@@ -34,7 +34,7 @@ export function MarketRoleDemandSection({ state }: { state: MarketPageState }) {
   return (
     <MarketSection
       title="Role Demand"
-      description="Current-period volume compared with the previous matching window, grouped by major role families."
+      description="Current-period volume compared with the previous matching window, grouped into operator-facing market buckets rather than canonical candidate roles."
       icon={RadioTower}
     >
       {state.rolesQuery.isPending ? (

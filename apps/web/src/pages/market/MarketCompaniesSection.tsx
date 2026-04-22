@@ -41,7 +41,7 @@ export function MarketCompaniesSection({ state }: { state: MarketPageState }) {
   return (
     <MarketSection
       title="Top Hiring Companies"
-      description="Companies with the largest active footprint in the current feed, plus week-over-week hiring velocity."
+      description="Companies with the largest active footprint in the current live feed, plus week-over-week hiring velocity."
       icon={TrendingUp}
     >
       {state.companiesQuery.isPending ? (

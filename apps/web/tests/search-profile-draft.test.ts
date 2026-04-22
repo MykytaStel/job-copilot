@@ -63,4 +63,36 @@ describe('search profile draft storage', () => {
     clearSearchProfileDraft();
     expect(readSearchProfileDraft()).toBeNull();
   });
+
+  it('keeps drafts scoped to the active profile when a profile id is provided', () => {
+    writeSearchProfileDraft(
+      {
+        targetRegions: ['ua'],
+        workModes: ['remote'],
+        preferredRoles: ['frontend_engineer'],
+        allowedSources: ['djinni'],
+        includeKeywordsInput: 'react',
+        excludeKeywordsInput: '',
+      },
+      'profile-a',
+    );
+    writeSearchProfileDraft(
+      {
+        targetRegions: ['eu'],
+        workModes: ['hybrid'],
+        preferredRoles: ['backend_engineer'],
+        allowedSources: ['workua'],
+        includeKeywordsInput: 'rust',
+        excludeKeywordsInput: 'php',
+      },
+      'profile-b',
+    );
+
+    expect(readSearchProfileDraft('profile-a')?.preferredRoles).toEqual(['frontend_engineer']);
+    expect(readSearchProfileDraft('profile-b')?.preferredRoles).toEqual(['backend_engineer']);
+
+    clearSearchProfileDraft('profile-a');
+    expect(readSearchProfileDraft('profile-a')).toBeNull();
+    expect(readSearchProfileDraft('profile-b')?.preferredRoles).toEqual(['backend_engineer']);
+  });
 });

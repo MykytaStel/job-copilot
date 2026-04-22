@@ -31,7 +31,13 @@ import { queryKeys } from '../../queryKeys';
 
 export type LifecycleFilter = 'all' | 'active' | 'inactive' | 'reactivated';
 
-export const STATUS_COLUMNS: ApplicationStatus[] = ['saved', 'applied', 'interview', 'offer', 'rejected'];
+export const STATUS_COLUMNS: ApplicationStatus[] = [
+  'saved',
+  'applied',
+  'interview',
+  'offer',
+  'rejected',
+];
 
 export const STATUS_ICONS = {
   saved: Bookmark,
@@ -155,7 +161,9 @@ export function useDashboardPage() {
       : [...allJobs];
 
     if (sortByScore && scoreById.size > 0) {
-      filtered.sort((left, right) => (scoreById.get(right.id) ?? 0) - (scoreById.get(left.id) ?? 0));
+      filtered.sort(
+        (left, right) => (scoreById.get(right.id) ?? 0) - (scoreById.get(left.id) ?? 0),
+      );
     }
 
     return filtered;
@@ -271,7 +279,7 @@ export function useDashboardPage() {
   const topSource =
     sources.find((source) => source.id === sourceFilter)?.displayName ?? 'All sources';
   const interviewedCount = (stats?.byStatus.interview ?? 0) + (stats?.byStatus.offer ?? 0);
-  const mode = sortByScore ? 'ranked' : 'recent';
+  const mode = sortByScore && profileId ? 'ranked' : 'recent';
 
   const insights = [
     {

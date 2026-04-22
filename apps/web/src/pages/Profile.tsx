@@ -40,6 +40,8 @@ export default function Profile() {
     includeKeywordsInput,
     excludeKeywordsInput,
     buildResult,
+    buildIsCurrent,
+    buildRestoredFromStorage,
     searchResult,
     searchError,
     saveMutation,
@@ -223,6 +225,8 @@ export default function Profile() {
           />
 
           <SearchProfileBuilderSection
+            profileExists={Boolean(profile)}
+            hasPersistedPreferences={Boolean(profile?.searchPreferences)}
             targetRegions={targetRegions}
             workModes={workModes}
             preferredRoles={preferredRoles}
@@ -247,7 +251,18 @@ export default function Profile() {
       </PageGrid>
 
       {buildResult && (
-        <SearchProfileResultSection result={buildResult} roles={roles} sources={sources} />
+        <SearchProfileResultSection
+          result={buildResult}
+          roles={roles}
+          sources={sources}
+          statusMessage={
+            !buildIsCurrent
+              ? 'Current raw text or filters no longer match this build. Rebuild before running ranking.'
+              : buildRestoredFromStorage
+                ? 'Restored the last built search profile for these inputs.'
+                : undefined
+          }
+        />
       )}
 
       {buildResult && (
@@ -257,6 +272,8 @@ export default function Profile() {
           roles={roles}
           sources={sources}
           buildResult={buildResult}
+          buildIsCurrent={buildIsCurrent}
+          buildRestoredFromStorage={buildRestoredFromStorage}
           profileId={profile?.id ?? null}
           rawProfileText={rawText}
           llmContext={llmContext}

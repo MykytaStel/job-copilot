@@ -11,6 +11,11 @@ import { runSearch } from '../../api/jobs';
 import { queryKeys } from '../../queryKeys';
 import type { getProfile } from '../../api/profiles';
 import { toggleValue } from './profile.utils';
+import {
+  createSearchProfileBuildKey,
+  readStoredSearchProfileBuild,
+  writeStoredSearchProfileBuild,
+} from './searchProfileBuildState';
 import { readSearchProfileDraft, writeSearchProfileDraft } from './searchProfileDraft';
 import {
   buildPersistedSearchPreferences,
@@ -23,8 +28,9 @@ export function useSearchProfileWorkflow(
 ) {
   const queryClient = useQueryClient();
   const initialDraft = useMemo(
-    () => resolveSearchProfileDraft(profile?.searchPreferences, readSearchProfileDraft()),
-    [profile?.searchPreferences],
+    () =>
+      resolveSearchProfileDraft(profile?.searchPreferences, readSearchProfileDraft(profile?.id)),
+    [profile?.id, profile?.searchPreferences],
   );
   const hydrationKey = useMemo(
     () =>
@@ -54,15 +60,57 @@ export function useSearchProfileWorkflow(
     initialDraft?.excludeKeywordsInput ?? '',
   );
   const [buildResult, setBuildResult] = useState<SearchProfileBuildResult | null>(null);
+  const [builtInputKey, setBuiltInputKey] = useState<string | null>(null);
   const [searchResult, setSearchResult] = useState<SearchRunResult | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  const currentPreferences = useMemo(
+    () =>
+      buildPersistedSearchPreferences({
+        targetRegions,
+        workModes,
+        preferredRoles,
+        allowedSources,
+        includeKeywordsInput,
+        excludeKeywordsInput,
+      }),
+    [
+      allowedSources,
+      excludeKeywordsInput,
+      includeKeywordsInput,
+      preferredRoles,
+      targetRegions,
+      workModes,
+    ],
+  );
+  const currentInputKey = useMemo(
+    () => createSearchProfileBuildKey(profile?.id ?? null, rawText, currentPreferences),
+    [currentPreferences, profile?.id, rawText],
+  );
+  const buildIsCurrent = builtInputKey !== null && builtInputKey === currentInputKey;
+  const restoredBuildResult = useMemo(
+    () =>
+      readStoredSearchProfileBuild({
+        profileId: profile?.id ?? null,
+        rawText,
+        preferences: currentPreferences,
+      }),
+    [currentPreferences, profile?.id, rawText],
+  );
+  const activeBuildResult = buildIsCurrent ? buildResult : restoredBuildResult;
+  const buildRestoredFromStorage = !buildIsCurrent && Boolean(restoredBuildResult);
+  const activeSearchResult = buildIsCurrent ? searchResult : null;
+  const activeSearchError = buildIsCurrent ? searchError : null;
 
   useEffect(() => {
     if (lastHydratedKey.current === hydrationKey) {
       return;
     }
 
-    const draft = resolveSearchProfileDraft(profile?.searchPreferences, readSearchProfileDraft());
+    const draft = resolveSearchProfileDraft(
+      profile?.searchPreferences,
+      readSearchProfileDraft(profile?.id),
+    );
     setTargetRegions(draft?.targetRegions ?? []);
     setWorkModes(draft?.workModes ?? []);
     setPreferredRoles(draft?.preferredRoles ?? []);
@@ -70,24 +118,29 @@ export function useSearchProfileWorkflow(
     setIncludeKeywordsInput(draft?.includeKeywordsInput ?? '');
     setExcludeKeywordsInput(draft?.excludeKeywordsInput ?? '');
     setBuildResult(null);
+    setBuiltInputKey(null);
     setSearchResult(null);
     setSearchError(null);
     lastHydratedKey.current = hydrationKey;
-  }, [hydrationKey, profile?.searchPreferences]);
+  }, [hydrationKey, profile?.id, profile?.searchPreferences]);
 
   useEffect(() => {
-    writeSearchProfileDraft({
-      targetRegions,
-      workModes,
-      preferredRoles,
-      allowedSources,
-      includeKeywordsInput,
-      excludeKeywordsInput,
-    });
+    writeSearchProfileDraft(
+      {
+        targetRegions,
+        workModes,
+        preferredRoles,
+        allowedSources,
+        includeKeywordsInput,
+        excludeKeywordsInput,
+      },
+      profile?.id,
+    );
   }, [
     allowedSources,
     excludeKeywordsInput,
     includeKeywordsInput,
+    profile?.id,
     preferredRoles,
     targetRegions,
     workModes,
@@ -116,21 +169,18 @@ export function useSearchProfileWorkflow(
 
   const buildMutation = useMutation({
     mutationFn: async () => {
-      const preferences = buildPersistedSearchPreferences({
-        targetRegions,
-        workModes,
-        preferredRoles,
-        allowedSources,
-        includeKeywordsInput,
-        excludeKeywordsInput,
-      });
-
+      const profileScopeId = profile?.id ?? null;
+      const buildInputKey = createSearchProfileBuildKey(
+        profileScopeId,
+        rawText,
+        currentPreferences,
+      );
       let persistedProfile = null;
       let persistenceError: string | null = null;
 
-      if (profile?.id) {
+      if (profileScopeId) {
         try {
-          persistedProfile = await saveProfileSearchPreferences(profile.id, preferences);
+          persistedProfile = await saveProfileSearchPreferences(profileScopeId, currentPreferences);
         } catch (error) {
           persistenceError = error instanceof Error ? error.message : 'Failed to save preferences';
         }
@@ -138,18 +188,33 @@ export function useSearchProfileWorkflow(
 
       const result = await buildSearchProfile({
         rawText,
-        preferences,
+        preferences: currentPreferences,
       });
 
-      return { persistedProfile, persistenceError, result };
+      return {
+        persistedProfile,
+        persistenceError,
+        result,
+        rawText,
+        preferences: currentPreferences,
+        profileScopeId,
+        buildInputKey,
+      };
     },
     onSuccess: (result) => {
       if (result.persistedProfile) {
         queryClient.setQueryData(queryKeys.profile.root(), result.persistedProfile);
       }
       setBuildResult(result.result);
+      setBuiltInputKey(result.buildInputKey);
       setSearchResult(null);
       setSearchError(null);
+      writeStoredSearchProfileBuild({
+        profileId: result.profileScopeId,
+        rawText: result.rawText,
+        preferences: result.preferences,
+        result: result.result,
+      });
       if (result.persistenceError) {
         toast.error(result.persistenceError);
       }
@@ -165,9 +230,11 @@ export function useSearchProfileWorkflow(
     allowedSources,
     includeKeywordsInput,
     excludeKeywordsInput,
-    buildResult,
-    searchResult,
-    searchError,
+    buildResult: activeBuildResult,
+    buildIsCurrent: Boolean(activeBuildResult),
+    buildRestoredFromStorage,
+    searchResult: activeSearchResult,
+    searchError: activeSearchError,
     buildMutation,
     runMutation,
     setIncludeKeywordsInput,
@@ -182,6 +249,7 @@ export function useSearchProfileWorkflow(
     toggleAllowedSource: (value: string) =>
       setAllowedSources((current) => toggleValue(current, value)),
     buildCurrentSearchProfile: () => buildMutation.mutate(),
-    runCurrentSearch: () => buildResult && runMutation.mutate(buildResult.searchProfile),
+    runCurrentSearch: () =>
+      activeBuildResult && runMutation.mutate(activeBuildResult.searchProfile),
   };
 }

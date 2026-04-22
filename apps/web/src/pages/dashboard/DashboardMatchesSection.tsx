@@ -11,6 +11,7 @@ import { JobCard, JobCardSkeleton } from '../../components/ui/JobCard';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 
 export function DashboardMatchesSection({
+  profileId,
   mode,
   setSortByScore,
   search,
@@ -33,6 +34,7 @@ export function DashboardMatchesSection({
   unmarkBadFitMutation,
 }: Pick<
   DashboardPageState,
+  | 'profileId'
   | 'mode'
   | 'setSortByScore'
   | 'search'
@@ -82,6 +84,7 @@ export function DashboardMatchesSection({
                     active={mode === tab.id}
                     size="sm"
                     onClick={() => setSortByScore(tab.id === 'ranked')}
+                    disabled={tab.id === 'ranked' && !profileId}
                     className="rounded-full px-3.5"
                   >
                     <tab.icon className="h-3.5 w-3.5" />
@@ -144,6 +147,21 @@ export function DashboardMatchesSection({
               Каталог джерел недоступний — фільтр за джерелом тимчасово не працює.
             </p>
           )}
+
+          {!profileId && (
+            <div className="rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-4">
+              <p className="m-0 text-sm font-medium text-card-foreground">
+                Create a profile to unlock fit ranking and feedback actions
+              </p>
+              <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
+                You can still browse the recent feed here, but save, hide, bad-fit feedback, and
+                profile-based reranking stay disabled until the active profile exists.
+              </p>
+              <Link to="/profile" className="mt-3 inline-flex no-underline">
+                <Button size="sm">Open Profile &amp; Search</Button>
+              </Link>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -158,7 +176,9 @@ export function DashboardMatchesSection({
           <EmptyState
             message={search ? 'Нічого не знайдено' : 'Вакансій поки немає'}
             description={
-              search ? 'Спробуйте змінити запит.' : 'Запустіть `pnpm scrape:djinni` або оновіть feed.'
+              search
+                ? 'Спробуйте змінити запит.'
+                : 'Запустіть `pnpm scrape:djinni` або оновіть feed.'
             }
             icon={<Briefcase className="h-12 w-12" />}
           />
@@ -183,7 +203,7 @@ export function DashboardMatchesSection({
                 isBadFit={isBadFit}
                 isPending={isPendingAny}
                 onSave={
-                  !isSaved && !application
+                  profileId && !isSaved && !application
                     ? () =>
                         saveMutation.mutate({
                           jobId: job.id,
@@ -191,9 +211,11 @@ export function DashboardMatchesSection({
                         })
                     : undefined
                 }
-                onHide={() => hideMutation.mutate(job.id)}
-                onBadFit={!isBadFit ? () => badFitMutation.mutate(job.id) : undefined}
-                onUnmarkBadFit={isBadFit ? () => unmarkBadFitMutation.mutate(job.id) : undefined}
+                onHide={profileId ? () => hideMutation.mutate(job.id) : undefined}
+                onBadFit={profileId && !isBadFit ? () => badFitMutation.mutate(job.id) : undefined}
+                onUnmarkBadFit={
+                  profileId && isBadFit ? () => unmarkBadFitMutation.mutate(job.id) : undefined
+                }
               />
             );
           })

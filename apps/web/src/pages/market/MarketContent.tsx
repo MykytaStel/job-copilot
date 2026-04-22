@@ -12,7 +12,7 @@ export function MarketContent({ state }: { state: MarketPageState }) {
     <Page>
       <PageHeader
         title="Market Intelligence"
-        description="Live aggregates from the current job feed: hiring activity, salary ranges, and role demand. Additional market sections still land here once snapshot automation is in place."
+        description="Currently live from the active jobs feed: market overview, hiring companies, salary ranges, and role-demand buckets. Freeze signals, skills demand, and snapshot-backed views are not implemented on this page yet."
         breadcrumb={[{ label: 'Dashboard', href: '/' }, { label: 'Market' }]}
       />
 

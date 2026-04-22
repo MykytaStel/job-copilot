@@ -8,13 +8,12 @@ import type {
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
-import {
-  TARGET_REGION_OPTIONS,
-  WORK_MODE_OPTIONS,
-} from './profile.constants';
+import { TARGET_REGION_OPTIONS, WORK_MODE_OPTIONS } from './profile.constants';
 import { renderErrorMessage } from './profileSection.utils';
 
 export function SearchProfileBuilderSection({
+  profileExists,
+  hasPersistedPreferences,
   targetRegions,
   workModes,
   preferredRoles,
@@ -35,6 +34,8 @@ export function SearchProfileBuilderSection({
   setIncludeKeywordsInput,
   setExcludeKeywordsInput,
 }: {
+  profileExists: boolean;
+  hasPersistedPreferences: boolean;
   targetRegions: SearchTargetRegion[];
   workModes: SearchWorkMode[];
   preferredRoles: string[];
@@ -71,8 +72,17 @@ export function SearchProfileBuilderSection({
             Build from current raw text
           </h2>
           <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
-            Uses the CV text above plus explicit preferences. Saved profiles keep these preferences
-            persisted for the next session.
+            Uses the CV text above plus explicit preferences.{' '}
+            {profileExists
+              ? 'These filters persist on the active profile and can be restored on the next session.'
+              : 'These filters stay local until you save the profile.'}
+          </p>
+          <p className="m-0 text-xs leading-6 text-muted-foreground">
+            {hasPersistedPreferences
+              ? 'Saved search preferences already exist for this profile.'
+              : profileExists
+                ? 'No persisted search preferences yet.'
+                : 'Create a profile to persist regions, work modes, sources, and keywords.'}
           </p>
         </div>
         <Button type="button" onClick={onBuild} disabled={isBuilding || !canBuild}>
