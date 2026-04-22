@@ -1,17 +1,33 @@
 import { useProfileDraftForm } from './useProfileDraftForm';
+import { buildProfileCompletionState } from './profileCompletion';
 import { useProfileMutations } from './useProfileMutations';
 import { useProfileQueries } from './useProfileQueries';
 import { useResumePicker } from './useResumePicker';
+import { buildPersistedSearchPreferences } from './searchProfilePreferences';
 import { useSearchProfileWorkflow } from './useSearchProfileWorkflow';
 
 export function useProfilePage() {
   const queries = useProfileQueries();
   const draftForm = useProfileDraftForm(queries.profileQuery.data, queries.rawTextQuery.data);
   const mutations = useProfileMutations(draftForm.clearDraft);
-  const search = useSearchProfileWorkflow(draftForm.form.rawText);
+  const search = useSearchProfileWorkflow(draftForm.form.rawText, queries.profileQuery.data);
   const picker = useResumePicker(draftForm.setRawText);
 
   const { form } = draftForm;
+  const profileCompletion = buildProfileCompletionState({
+    name: form.name,
+    email: form.email,
+    location: form.location,
+    rawText: form.rawText,
+    yearsOfExperience: form.yearsOfExperience,
+    salaryMin: form.salaryMin,
+    salaryMax: form.salaryMax,
+    salaryCurrency: form.salaryCurrency,
+    languages: form.languages,
+    analysisReady: Boolean(
+      queries.profileQuery.data?.summary || queries.profileQuery.data?.skills.length,
+    ),
+  });
 
   function saveCurrentProfile() {
     mutations.saveMutation.mutate({
@@ -24,6 +40,14 @@ export function useProfilePage() {
       salaryMax: parseOptionalNumber(form.salaryMax),
       salaryCurrency: form.salaryCurrency,
       languages: form.languages,
+      searchPreferences: buildPersistedSearchPreferences({
+        targetRegions: search.targetRegions,
+        workModes: search.workModes,
+        preferredRoles: search.preferredRoles,
+        allowedSources: search.allowedSources,
+        includeKeywordsInput: search.includeKeywordsInput,
+        excludeKeywordsInput: search.excludeKeywordsInput,
+      }),
     });
   }
 
@@ -46,6 +70,7 @@ export function useProfilePage() {
     salaryMax: form.salaryMax,
     salaryCurrency: form.salaryCurrency,
     languages: form.languages,
+    profileCompletion,
     targetRegions: search.targetRegions,
     workModes: search.workModes,
     preferredRoles: search.preferredRoles,

@@ -16,7 +16,7 @@ pub async fn create_profile(
     ApiJson(payload): ApiJson<CreateProfileRequest>,
 ) -> Result<(StatusCode, axum::Json<ProfileResponse>), ApiError> {
     let profile = state
-        .profiles_service
+        .profile_records
         .create(payload.validate()?)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?;
@@ -32,7 +32,7 @@ pub async fn get_profile_by_id(
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<ProfileResponse>, ApiError> {
     let Some(profile) = state
-        .profiles_service
+        .profile_records
         .get_by_id(&profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
@@ -49,7 +49,7 @@ pub async fn update_profile(
     ApiJson(payload): ApiJson<UpdateProfileRequest>,
 ) -> Result<axum::Json<ProfileResponse>, ApiError> {
     let Some(profile) = state
-        .profiles_service
+        .profile_records
         .update(&profile_id, payload.validate()?)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
@@ -65,7 +65,7 @@ pub async fn analyze_profile(
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<AnalyzeProfileResponse>, ApiError> {
     let Some(profile) = state
-        .profiles_service
+        .profile_records
         .get_by_id(&profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
@@ -73,10 +73,10 @@ pub async fn analyze_profile(
         return Err(profile_not_found(&profile_id));
     };
 
-    let analyzed_profile = state.profile_analysis_service.analyze(&profile.raw_text);
+    let analyzed_profile = state.profile_analysis.analyze(&profile.raw_text);
 
     state
-        .profiles_service
+        .profile_records
         .save_analysis(
             &profile_id,
             ProfileAnalysis {
@@ -99,7 +99,7 @@ pub async fn build_search_profile(
     ApiJson(payload): ApiJson<BuildStoredSearchProfileRequest>,
 ) -> Result<axum::Json<BuildSearchProfileResponse>, ApiError> {
     let Some(profile) = state
-        .profiles_service
+        .profile_records
         .get_by_id(&profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
@@ -107,10 +107,15 @@ pub async fn build_search_profile(
         return Err(profile_not_found(&profile_id));
     };
 
-    let preferences = payload.preferences.validate()?;
-    let analyzed_profile = state.profile_analysis_service.analyze(&profile.raw_text);
+    let request_preferences = payload.preferences;
+    let preferences = if request_preferences.is_empty() {
+        profile.search_preferences.clone().unwrap_or_default()
+    } else {
+        request_preferences.validate()?
+    };
+    let analyzed_profile = state.profile_analysis.analyze(&profile.raw_text);
     let search_profile = state
-        .search_profile_service
+        .search_profile_builder
         .build(&analyzed_profile, &preferences);
 
     Ok(axum::Json(BuildSearchProfileResponse {
@@ -168,6 +173,7 @@ mod tests {
                 salary_max: None,
                 salary_currency: None,
                 languages: None,
+                search_preferences: None,
             }),
         )
         .await
@@ -213,6 +219,7 @@ mod tests {
                 salary_max: None,
                 salary_currency: None,
                 languages: None,
+                search_preferences: None,
             }),
         )
         .await
@@ -252,6 +259,7 @@ mod tests {
                 salary_max: None,
                 salary_currency: None,
                 languages: None,
+                search_preferences: None,
             }),
         )
         .await
@@ -304,5 +312,93 @@ mod tests {
         .into_response();
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn persists_search_preferences_via_profile_patch() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(ProfilesServiceStub::default()),
+            JobsService::for_tests(JobsServiceStub::default()),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        );
+
+        let _ = create_profile(
+            State(state.clone()),
+            ApiJson(CreateProfileRequest {
+                name: "Jane Doe".to_string(),
+                email: "jane@example.com".to_string(),
+                location: Some("Kyiv".to_string()),
+                raw_text: "Senior frontend engineer".to_string(),
+                years_of_experience: None,
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                languages: None,
+                search_preferences: None,
+            }),
+        )
+        .await
+        .expect("setup should create profile");
+
+        let updated = update_profile(
+            State(state.clone()),
+            Path("profile_test_001".to_string()),
+            ApiJson(crate::api::dto::profile::UpdateProfileRequest {
+                search_preferences: Some(Some(
+                    serde_json::from_value(json!({
+                        "target_regions": ["ua", "eu_remote"],
+                        "work_modes": ["remote"],
+                        "preferred_roles": ["frontend_engineer"],
+                        "allowed_sources": ["djinni", "work_ua"],
+                        "include_keywords": ["product company"],
+                        "exclude_keywords": ["gambling"]
+                    }))
+                    .expect("payload should deserialize"),
+                )),
+                ..Default::default()
+            }),
+        )
+        .await
+        .expect("handler should update stored search preferences")
+        .into_response();
+
+        let body = body::to_bytes(updated.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid json");
+
+        assert_eq!(
+            payload["search_preferences"],
+            json!({
+                "target_regions": ["ua", "eu_remote"],
+                "work_modes": ["remote"],
+                "preferred_roles": ["frontend_engineer"],
+                "allowed_sources": ["djinni", "work_ua"],
+                "include_keywords": ["product company"],
+                "exclude_keywords": ["gambling"]
+            })
+        );
+
+        let rebuilt = build_search_profile(
+            State(state),
+            Path("profile_test_001".to_string()),
+            ApiJson(BuildStoredSearchProfileRequest::default()),
+        )
+        .await
+        .expect("handler should use persisted preferences when request is empty")
+        .into_response();
+
+        let body = body::to_bytes(rebuilt.into_body(), usize::MAX)
+            .await
+            .expect("response body should be readable");
+        let payload: Value =
+            serde_json::from_slice(&body).expect("response body should be valid json");
+
+        assert_eq!(
+            payload["search_profile"]["allowed_sources"],
+            json!(["djinni", "work_ua"])
+        );
     }
 }

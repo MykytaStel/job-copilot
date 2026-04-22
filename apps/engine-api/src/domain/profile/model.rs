@@ -1,4 +1,5 @@
 use crate::domain::role::RoleId;
+use crate::domain::search::profile::SearchPreferences;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Profile {
@@ -14,6 +15,7 @@ pub struct Profile {
     pub salary_currency: String,
     pub languages: Vec<String>,
     pub preferred_work_mode: Option<String>,
+    pub search_preferences: Option<SearchPreferences>,
     pub created_at: String,
     pub updated_at: String,
     pub skills_updated_at: Option<String>,
@@ -39,6 +41,7 @@ pub struct CreateProfile {
     pub salary_max: Option<i32>,
     pub salary_currency: String,
     pub languages: Vec<String>,
+    pub search_preferences: Option<SearchPreferences>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -52,4 +55,5 @@ pub struct UpdateProfile {
     pub salary_max: Option<Option<i32>>,
     pub salary_currency: Option<String>,
     pub languages: Option<Vec<String>>,
+    pub search_preferences: Option<Option<SearchPreferences>>,
 }

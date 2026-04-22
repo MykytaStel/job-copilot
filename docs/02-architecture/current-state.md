@@ -1,4 +1,4 @@
-# Current State — 2026-04-18
+# Current State — 2026-04-22
 
 ## Що побудовано і працює
 
@@ -10,6 +10,7 @@
 - ✅ Multi-source merge з conflict resolution
 - ✅ Daemon mode: 60 хв інтервал, всі 4 sources
 - ✅ Description quality scoring (вибирає кращий текст)
+- ✅ Standalone migrations via `db_runtime::run_migrations()`
 
 ### Engine-API (Rust)
 - ✅ Canonical domain models: Job, JobVariant, Profile, Application, Feedback
@@ -24,6 +25,11 @@
 - ✅ Trained reranker export dataset endpoint
 - ✅ Presentation layer: JobPresentationResponse (UI labels)
 - ✅ PostgreSQL 16, 10 міграцій
+- ✅ Notifications endpoints + profile-scoped unread count
+- ✅ Market endpoints: overview, companies, salary trends, role demand
+- ✅ `market_snapshots` refresh after successful ingestion upserts
+- ✅ Search profile preferences persist on profiles and hydrate back into the web builder
+- ⚠️ Current market readers still query live `jobs` directly
 
 ### ML Sidecar (Python)
 - ✅ `/api/v1/fit/analyze` — deterministic fit scoring
@@ -32,9 +38,10 @@
 - ✅ PII filtering, term normalization, compound term handling
 - ✅ Logistic regression trained reranker (v2) — архітектура є, 4 приклади
 - ✅ Seniority normalization у engine API client
-- ⚠️ LLM: template fallback (OpenAI API key відсутній, model name `gpt-5.4-mini` — не існує)
-- ❌ Ollama provider — не реалізований
-- ❌ Bootstrap training data pipeline
+- ✅ OpenAI provider with current model defaults
+- ✅ Ollama provider is implemented
+- ✅ Bootstrap training data pipeline
+- ⚠️ Runtime provider default is `template`; Docker Compose overrides default env to `ollama`
 
 ### Web (React 19)
 - ✅ Dashboard: job feed, lifecycle filter, source filter, ML ranking toggle
@@ -44,28 +51,29 @@
 - ✅ Application Detail: повний запис (offer, contacts, notes, tasks, activities)
 - ✅ Feedback Center: saved/hidden/badfit/companies tabs
 - ✅ Analytics: funnel, behavior signals, source quality, LLM enrichment
-- ❌ Sidebar показує hardcoded текст замість profile name/email
-- ❌ Notifications — іконка є, сторінки немає
-- ❌ Settings — іконка є, сторінки немає
-- ❌ Global search — placeholder, не функціональний
-- ❌ ML rerank cache не інвалідується після profile/feedback змін
+- ✅ Active shell reads real profile data in the sidebar/header
+- ✅ Notifications page + unread badge
+- ✅ Global search overlay
+- ✅ Query invalidation for profile/feedback-driven rerank refresh
+- ✅ Market Intelligence page
+- ✅ Minimal settings route/page
+- ✅ Profile completion indicator
 
 ### Infrastructure
 - ✅ Docker Compose: postgres + engine-api + web + scraper + ml
 - ✅ PostgreSQL health checks, restart policies
 - ✅ Auto-migrations при старті engine-api
+- ✅ Docker default `ML_LLM_PROVIDER=ollama`
 
 ## Відомі проблеми
 
 | Проблема | Файл | Вплив |
 |----------|------|-------|
-| Sidebar hardcoded | `AppShellNew.tsx:253` | Cosmetic, confusing |
-| LLM model name = `gpt-5.4-mini` | `llm_provider.py` | LLM не працює |
-| Trained reranker: 4 examples | `models/trained-reranker-v2.json` | Модель нефункціональна |
-| ML rerank staleTime: 5 min | `Dashboard.tsx` | Стара аналітика після feedback |
-| Analytics context string-cache | `Analytics.tsx` | Insights не оновлюються |
-| Notifications: no route/page | `AppShellNew.tsx` | Фіча недоступна |
-| Global search: placeholder | Header component | Фіча недоступна |
+| Market readers still bypass snapshots | `market` routes query `jobs` directly | Snapshot refresh exists, but read-side decoupling is still incomplete |
+| Settings route/page відсутня | `apps/web/src/App.tsx` | Settings icon/action cannot lead to a real configuration surface |
+| Profile completion indicator відсутній | `apps/web/src/pages/Profile.tsx` | Harder to see profile quality gaps quickly |
+| Analytics freshness widget відсутній | `apps/web/src/pages/Analytics.tsx` | Ingestion recency is not visible in the analytics flow |
+| Ingestion README stale | `apps/ingestion/README.md` | Misleading for local ops and demos |
 
 ## Що не потребує змін (правильно)
 - Архітектура (Rust + Python + React)

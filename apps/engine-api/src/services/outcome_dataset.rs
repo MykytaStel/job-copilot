@@ -9,7 +9,7 @@ use crate::domain::user_event::model::{UserEventRecord, UserEventType};
 use crate::services::behavior::{BehaviorService, ProfileBehaviorAggregates};
 use crate::services::funnel::ProfileFunnelAggregates;
 use crate::services::learned_reranker::LearnedRerankerService;
-use crate::services::matching::SearchMatchingService;
+use crate::services::search_ranking::SearchRankingService;
 
 pub const OUTCOME_LABEL_POLICY_VERSION: &str = "outcome_label_v2";
 
@@ -96,7 +96,7 @@ impl OutcomeDatasetService {
         profile: &Profile,
         events: &[UserEventRecord],
         jobs: Vec<(JobView, JobFeedbackState)>,
-        matching_service: &SearchMatchingService,
+        search_ranking_service: &SearchRankingService,
         behavior: &ProfileBehaviorAggregates,
         funnel: &ProfileFunnelAggregates,
     ) -> Result<OutcomeDataset, OutcomeDatasetError> {
@@ -121,12 +121,12 @@ impl OutcomeDatasetService {
                 continue;
             };
 
-            let fit = matching_service.score_job(&search_profile, &job);
+            let fit = search_ranking_service.score_job(&search_profile, &job);
             let source = job
                 .primary_variant
                 .as_ref()
                 .map(|variant| variant.source.clone());
-            let role_family = matching_service.infer_role_family(&job);
+            let role_family = search_ranking_service.infer_role_family(&job);
             let behavior_adjustment =
                 behavior_service.score_job(behavior, source.as_deref(), role_family.as_deref());
             let behavior_score =
@@ -424,7 +424,7 @@ mod tests {
     use crate::domain::user_event::model::{UserEventRecord, UserEventType};
     use crate::services::behavior::BehaviorService;
     use crate::services::funnel::FunnelService;
-    use crate::services::matching::SearchMatchingService;
+    use crate::services::search_ranking::SearchRankingService;
 
     use super::{OutcomeDatasetService, OutcomeLabel, outcome_job_ids};
 
@@ -448,6 +448,7 @@ mod tests {
             salary_currency: "USD".to_string(),
             languages: vec![],
             preferred_work_mode: None,
+            search_preferences: None,
             created_at: "2026-04-14T00:00:00Z".to_string(),
             updated_at: "2026-04-14T00:00:00Z".to_string(),
             skills_updated_at: None,
@@ -537,7 +538,7 @@ mod tests {
                         JobFeedbackState::default(),
                     ),
                 ],
-                &SearchMatchingService::new(),
+                &SearchRankingService::new(),
                 &behavior,
                 &funnel,
             )
@@ -593,7 +594,7 @@ mod tests {
                         JobFeedbackState::default(),
                     ),
                 ],
-                &SearchMatchingService::new(),
+                &SearchRankingService::new(),
                 &behavior,
                 &funnel,
             )
@@ -626,7 +627,7 @@ mod tests {
                         company_status: None,
                     },
                 )],
-                &SearchMatchingService::new(),
+                &SearchRankingService::new(),
                 &behavior,
                 &funnel,
             )
@@ -669,7 +670,7 @@ mod tests {
                 &profile(),
                 &events,
                 Vec::new(),
-                &SearchMatchingService::new(),
+                &SearchRankingService::new(),
                 &behavior,
                 &funnel,
             )

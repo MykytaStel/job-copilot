@@ -16,7 +16,9 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::get_reranker_status;
-    use crate::services::ranking::runtime::{RerankerRuntimeMode, TrainedRerankerAvailability};
+    use crate::services::search_ranking::runtime::{
+        RerankerRuntimeMode, TrainedRerankerAvailability,
+    };
     use crate::services::trained_reranker::TrainedRerankerModel;
     use crate::state::AppState;
 

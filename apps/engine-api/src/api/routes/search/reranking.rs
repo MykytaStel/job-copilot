@@ -8,8 +8,8 @@ use crate::domain::matching::RerankerMode;
 use crate::services::behavior::{BehaviorService, ProfileBehaviorAggregates};
 use crate::services::funnel::{FunnelService, ProfileFunnelAggregates};
 use crate::services::learned_reranker::LearnedRerankerService;
-use crate::services::matching::RankedJob;
 use crate::services::salary::{SearchSalaryExpectation, score_search_salary};
+use crate::services::search_ranking::RankedJob;
 use crate::services::trained_reranker::TrainedRerankerFeatures;
 use crate::state::AppState;
 
@@ -87,7 +87,7 @@ pub(crate) async fn load_search_salary_expectation(
         return Ok(None);
     };
     let profile = state
-        .profiles_service
+        .profile_records
         .get_by_id(profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "search_run_failed"))?;
@@ -127,7 +127,7 @@ pub(crate) fn apply_behavior_scoring(
             .primary_variant
             .as_ref()
             .map(|variant| variant.source.as_str());
-        let role_family = state.search_matching_service.infer_role_family(&ranked.job);
+        let role_family = state.search_ranking.infer_role_family(&ranked.job);
         let adjustment = behavior_service.score_job(aggregates, source, role_family.as_deref());
 
         if adjustment.score_delta == 0 {
@@ -161,7 +161,7 @@ pub(crate) fn apply_learned_reranking(
             .primary_variant
             .as_ref()
             .map(|variant| variant.source.as_str());
-        let role_family = state.search_matching_service.infer_role_family(&ranked.job);
+        let role_family = state.search_ranking.infer_role_family(&ranked.job);
         let feedback = feedback_by_job_id
             .get(&ranked.job.job.id)
             .cloned()
@@ -222,7 +222,7 @@ pub(crate) fn apply_trained_reranking(
         let learned_reranker_score = ranked.fit.score;
         let source_present = ranked.job.primary_variant.is_some();
         let role_family_present = state
-            .search_matching_service
+            .search_ranking
             .infer_role_family(&ranked.job)
             .is_some();
         let features = TrainedRerankerFeatures {

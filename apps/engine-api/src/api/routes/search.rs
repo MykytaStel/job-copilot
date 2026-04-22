@@ -5,10 +5,12 @@ mod handlers;
 #[path = "search/reranking.rs"]
 mod reranking;
 
-use crate::services::matching::RankedJob;
+use crate::services::search_ranking::RankedJob;
 
 use comparison::{build_reranker_comparison, mark_reranker_fallback};
-pub use handlers::{SearchQuery, run_search, search};
+#[cfg(test)]
+pub use handlers::SearchQuery;
+pub use handlers::{run_search, search};
 pub(crate) use reranking::{
     SearchLearningAggregates, apply_behavior_scoring, apply_feedback_scoring,
     apply_learned_reranking, apply_salary_scoring, apply_trained_reranking,

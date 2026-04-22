@@ -1,5 +1,6 @@
 import { Menu, Settings } from 'lucide-react';
 import type { Location } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '../components/ui/Button';
 import { GlobalSearch } from '../components/GlobalSearch';
@@ -20,6 +21,8 @@ export function AppShellTopHeader({
   setMobileNavOpen: (value: boolean) => void;
   unreadCount: number;
 }) {
+  const navigate = useNavigate();
+
   return (
     <>
       <header className="fixed left-0 right-0 top-0 z-20 flex h-14 flex-shrink-0 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm lg:hidden">
@@ -76,8 +79,9 @@ export function AppShellTopHeader({
           <Button
             variant="icon"
             size="icon"
-            title="Settings (not yet implemented)"
+            title="Settings"
             className="h-9 w-9"
+            onClick={() => navigate('/settings')}
           >
             <Settings className="h-5 w-5" />
           </Button>

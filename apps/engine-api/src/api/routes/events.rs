@@ -80,7 +80,7 @@ pub(crate) async fn load_job_event_metadata(
             .primary_variant
             .as_ref()
             .map(|variant| variant.source.clone());
-        let role_family = state.search_matching_service.infer_role_family(&job_view);
+        let role_family = state.search_ranking.infer_role_family(&job_view);
 
         return Ok(JobEventMetadata {
             company_name: Some(job_view.job.company_name),
@@ -101,9 +101,7 @@ pub(crate) async fn load_job_event_metadata(
         ));
     };
 
-    let role_family = state
-        .search_matching_service
-        .infer_role_family_for_job(&job);
+    let role_family = state.search_ranking.infer_role_family_for_job(&job);
 
     Ok(JobEventMetadata {
         company_name: Some(job.company_name),
@@ -158,6 +156,7 @@ mod tests {
             salary_currency: "USD".to_string(),
             languages: vec![],
             preferred_work_mode: None,
+            search_preferences: None,
             created_at: "2026-04-14T00:00:00Z".to_string(),
             updated_at: "2026-04-14T00:00:00Z".to_string(),
             skills_updated_at: None,

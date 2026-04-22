@@ -4,7 +4,7 @@ from app.cover_letter_draft import (
     build_cover_letter_draft_prompt,
     parse_cover_letter_draft_output,
 )
-from app.llm_provider import CoverLetterDraftProvider
+from app.llm_provider_types import CoverLetterDraftProvider
 
 
 class CoverLetterDraftService:

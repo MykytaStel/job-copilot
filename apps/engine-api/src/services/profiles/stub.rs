@@ -37,6 +37,7 @@ impl ProfilesServiceStub {
             salary_currency: input.salary_currency,
             languages: input.languages,
             preferred_work_mode: None,
+            search_preferences: input.search_preferences,
             created_at: "2026-04-11T00:00:00+00:00".to_string(),
             updated_at: "2026-04-11T00:00:00+00:00".to_string(),
             skills_updated_at: None,
@@ -108,6 +109,9 @@ impl ProfilesServiceStub {
         }
         if let Some(languages) = input.languages {
             profile.languages = languages;
+        }
+        if let Some(search_preferences) = input.search_preferences {
+            profile.search_preferences = search_preferences;
         }
 
         profile.updated_at = "2026-04-11T00:00:01+00:00".to_string();

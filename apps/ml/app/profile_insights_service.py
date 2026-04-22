@@ -1,4 +1,4 @@
-from app.llm_provider import ProfileInsightsProvider
+from app.llm_provider_types import ProfileInsightsProvider
 from app.profile_insights import (
     LlmContextRequest,
     ProfileInsightsResponse,

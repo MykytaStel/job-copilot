@@ -20,7 +20,7 @@ from app.job_fit_explanation import (
     http_error_from_job_fit_explanation_error,
 )
 from app.job_fit_explanation_service import JobFitExplanationService
-from app.llm_provider import (
+from app.llm_provider_factory import (
     build_application_coach_provider,
     build_cover_letter_draft_provider,
     build_interview_prep_provider,
