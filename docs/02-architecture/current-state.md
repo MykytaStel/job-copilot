@@ -23,7 +23,7 @@
 - ✅ Analytics: summary, funnel, behavior signals, LLM context
 - ✅ Reranker: deterministic + behavior-based + trained (logistic regression)
 - ✅ Trained reranker export dataset endpoint
-- ✅ Presentation layer: JobPresentationResponse (UI labels)
+- ✅ Presentation layer: JobPresentationResponse (UI labels + explicit lifecycle primary/secondary labels)
 - ✅ PostgreSQL 16, 10 міграцій
 - ✅ Notifications endpoints + profile-scoped unread count
 - ✅ Market endpoints: overview, companies, salary trends, role demand
@@ -45,6 +45,7 @@
 
 ### Web (React 19)
 - ✅ Dashboard: job feed, lifecycle filter, source filter, ML ranking toggle
+- ✅ Dashboard ranked mode is deferred and capped to a bounded rerank window
 - ✅ Job Detail: fit analysis, match tab, lifecycle tab, feedback actions
 - ✅ Profile: edit, PDF upload, analyze, search profile builder
 - ✅ Application Board: 5-column Kanban, CSV export
@@ -70,10 +71,9 @@
 | Проблема | Файл | Вплив |
 |----------|------|-------|
 | Market readers still bypass snapshots | `market` routes query `jobs` directly | Snapshot refresh exists, but read-side decoupling is still incomplete |
-| Settings route/page відсутня | `apps/web/src/App.tsx` | Settings icon/action cannot lead to a real configuration surface |
-| Profile completion indicator відсутній | `apps/web/src/pages/Profile.tsx` | Harder to see profile quality gaps quickly |
+| Settings preferences are still partial | `apps/web/src/pages/Settings.tsx` | Dedicated notification controls and richer profile preferences are not implemented yet |
 | Analytics freshness widget відсутній | `apps/web/src/pages/Analytics.tsx` | Ingestion recency is not visible in the analytics flow |
-| Ingestion README stale | `apps/ingestion/README.md` | Misleading for local ops and demos |
+| Provider defaults are inconsistent | `apps/ml/app/settings.py`, `infra/docker-compose.yml` | Runtime code and Docker Compose still disagree on the default ML provider |
 
 ## Що не потребує змін (правильно)
 - Архітектура (Rust + Python + React)

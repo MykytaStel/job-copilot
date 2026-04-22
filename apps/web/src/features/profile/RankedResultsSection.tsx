@@ -7,6 +7,7 @@ import type {
 } from '../../api/profiles';
 
 import { Button } from '../../components/ui/Button';
+import { SurfaceSection } from '../../components/ui/Surface';
 import { SearchResultsSection } from './SearchResultCard';
 
 export function RankedResultsSection({
@@ -41,14 +42,14 @@ export function RankedResultsSection({
   onRunSearch: () => void;
 }) {
   return (
-    <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
+    <SurfaceSection>
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
               Deterministic ranking
             </span>
-            <span className="inline-flex items-center rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <span className="inline-flex items-center rounded-full border border-border bg-white-a04 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Explainable fit reasons
             </span>
           </div>
@@ -94,8 +95,8 @@ export function RankedResultsSection({
           {buildRestoredFromStorage
             ? 'The last built search profile was restored for these inputs. Run search to refresh ranked jobs and fit reasons.'
             : 'Build a search profile, then run search to inspect ranked jobs and fit reasons.'}
-        </p>
+          </p>
       )}
-    </section>
+    </SurfaceSection>
   );
 }

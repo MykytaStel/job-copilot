@@ -44,7 +44,7 @@
 
 .pill-success {
   background: var(--color-bg-positive);
-  color: #86efac;
+  color: var(--color-text-success-strong);
 }
 
 .pill-danger,
@@ -270,7 +270,7 @@
 .textList {
   margin: 8px 0 0;
   padding-left: 18px;
-  color: #d5def1;
+  color: var(--color-text-primary);
   font-size: 14px;
 }
 

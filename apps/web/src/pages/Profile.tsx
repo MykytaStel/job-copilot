@@ -7,9 +7,11 @@ import {
   SearchProfileResultSection,
 } from '../features/profile/ProfileSections';
 import { Badge } from '../components/ui/Badge';
+import { AccentIconFrame } from '../components/ui/AccentIconFrame';
 import { Card, CardContent } from '../components/ui/Card';
 import { Page, PageGrid } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
+import { SurfaceMetric } from '../components/ui/Surface';
 import { useProfilePage } from '../features/profile/useProfilePage';
 
 export default function Profile() {
@@ -108,11 +110,11 @@ export default function Profile() {
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[460px]">
-                <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+                <SurfaceMetric>
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                    <AccentIconFrame size="md">
                       <FileText className="h-4 w-4" />
-                    </div>
+                    </AccentIconFrame>
                     <div>
                       <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                         Profile
@@ -122,12 +124,12 @@ export default function Profile() {
                       </p>
                     </div>
                   </div>
-                </div>
-                <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+                </SurfaceMetric>
+                <SurfaceMetric>
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                    <AccentIconFrame size="md">
                       <BriefcaseBusiness className="h-4 w-4" />
-                    </div>
+                    </AccentIconFrame>
                     <div>
                       <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                         Role catalog
@@ -137,12 +139,12 @@ export default function Profile() {
                       </p>
                     </div>
                   </div>
-                </div>
-                <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+                </SurfaceMetric>
+                <SurfaceMetric>
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                    <AccentIconFrame size="md">
                       <Target className="h-4 w-4" />
-                    </div>
+                    </AccentIconFrame>
                     <div>
                       <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                         Search results
@@ -152,8 +154,8 @@ export default function Profile() {
                       </p>
                     </div>
                   </div>
-                </div>
-                <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3 sm:col-span-3">
+                </SurfaceMetric>
+                <SurfaceMetric className="sm:col-span-3">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
@@ -167,7 +169,7 @@ export default function Profile() {
                       </p>
                     </div>
                     <div className="min-w-0 flex-1 lg:max-w-md">
-                      <div className="h-2 rounded-full bg-white/[0.06]">
+                      <div className="h-2 rounded-full bg-surface-soft">
                         <div
                           className="h-2 rounded-full bg-[image:var(--gradient-button)] transition-[width] duration-300"
                           style={{ width: `${profileCompletion.percent}%` }}
@@ -180,7 +182,7 @@ export default function Profile() {
                       </p>
                     </div>
                   </div>
-                </div>
+                </SurfaceMetric>
               </div>
             </div>
           </div>

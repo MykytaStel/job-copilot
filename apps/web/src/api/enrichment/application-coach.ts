@@ -3,7 +3,6 @@ import { logUserEvent } from '../events';
 
 import {
   buildAnalyzedProfilePayload,
-  buildApplicationCoachSummary,
   buildDeterministicFitPayload,
   buildFeedbackStatePayload,
   buildJobFitExplanationSummary,

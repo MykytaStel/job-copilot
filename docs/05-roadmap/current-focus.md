@@ -13,6 +13,8 @@
 - **Profile compensation + languages** — schema, API, persistence, and web UI are live
 - **Market base page** — overview, company activity, salary trends, and role demand are live
 - **Search profile persistence** — `search_preferences` now persist on profiles; the structured search profile still rebuilds on demand
+- **Lifecycle presentation semantics** — jobs now expose explicit lifecycle labels for posted/seen, last confirmed active, inactive since, and reactivated states
+- **Dashboard rerank throttling** — ranked mode now reranks on demand and only over a bounded first window instead of eager-ranking the full feed
 
 ## ⚠️ Partially Done
 
@@ -36,9 +38,10 @@
 - `market_snapshots` is now refreshed by ingestion after successful upserts
 - Settings now has a minimal route/page, but dedicated notification preferences are still not implemented
 - Profile completion indicator now exists in the profile/settings surfaces
-- `apps/ingestion/README.md` was stale because ingestion now has real scrapers + daemon mode
+- Lifecycle-heavy UI surfaces should read engine presentation labels instead of inferring state from `postedAt` alone
 - PostgreSQL extension guidance for self-hosted PG16 lives in `docs/04-development/postgres-extensions.md`
 - Verification matrix lives in `docs/04-development/verification-matrix.md`
+- ADR template lives in `docs/02-architecture/adr-template.md`
 
 ## Recommended Next Slices
 

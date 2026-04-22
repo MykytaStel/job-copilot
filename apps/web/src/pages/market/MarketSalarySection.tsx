@@ -26,7 +26,7 @@ function SalaryRow({
   const medianPosition = ((salary.median - minValue) / domain) * 100;
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-4">
+    <div className="rounded-2xl border border-border/70 bg-surface-muted px-4 py-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="m-0 text-sm font-semibold text-card-foreground">
@@ -46,7 +46,7 @@ function SalaryRow({
         </div>
       </div>
       <div className="mt-4">
-        <div className="relative h-3 rounded-full bg-white/[0.05]">
+        <div className="relative h-3 rounded-full bg-white-a05">
           <div
             className="absolute top-0 h-full rounded-full bg-primary/25"
             style={{ left: `${rangeStart}%`, width: `${Math.max(rangeWidth, 3)}%` }}

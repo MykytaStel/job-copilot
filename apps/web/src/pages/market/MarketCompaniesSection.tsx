@@ -10,7 +10,7 @@ import { MarketTrendBadge } from './MarketTrendBadge';
 
 function CompanyRow({ company }: { company: MarketCompany }) {
   return (
-    <div className="grid gap-3 rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-4 lg:grid-cols-[minmax(0,1.3fr)_120px_180px] lg:items-center">
+    <div className="grid gap-3 rounded-2xl border border-border/70 bg-surface-muted px-4 py-4 lg:grid-cols-[minmax(0,1.3fr)_120px_180px] lg:items-center">
       <div className="min-w-0">
         <p className="m-0 truncate text-sm font-semibold text-card-foreground">
           {company.companyName}

@@ -5,7 +5,7 @@ export function Card({ className, children, ...props }: HTMLAttributes<HTMLDivEl
   return (
     <div
       className={cn(
-        'flex flex-col gap-6 rounded-[24px] border border-border bg-card/90 py-6 text-card-foreground shadow-[var(--shadow-card)] backdrop-blur-sm',
+        'flex flex-col gap-6 rounded-[var(--radius-card)] border border-border bg-card/90 py-6 text-card-foreground shadow-[var(--shadow-card)] backdrop-blur-sm',
         className,
       )}
       {...props}

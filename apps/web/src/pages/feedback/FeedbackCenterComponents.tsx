@@ -20,7 +20,9 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { semanticIconFrameClass, semanticPanelClass } from '../../components/ui/semanticTone';
 import { cn } from '../../lib/cn';
+import { getJobMetaLabels } from '../../lib/jobPresentation';
 
 export type FeedbackTab = 'saved' | 'hidden' | 'bad-fit' | 'companies';
 export type FeedbackListTone = Exclude<FeedbackTab, 'companies'>;
@@ -75,7 +77,7 @@ const JOB_ROW_TONE_STYLES: Record<
   hidden: {
     badge: 'warning',
     badgeLabel: 'Suppressed',
-    iconClass: 'border-border bg-white/[0.04] text-muted-foreground',
+    iconClass: 'border-border bg-white-a04 text-muted-foreground',
     actionClass: 'text-muted-foreground hover:text-foreground',
   },
   'bad-fit': {
@@ -102,12 +104,7 @@ export function JobRow({
   const presentation = job.presentation;
   const sourceLabel = presentation?.sourceLabel ?? job.primaryVariant?.source ?? 'source';
   const toneStyle = JOB_ROW_TONE_STYLES[tone];
-  const metaItems = [
-    presentation?.locationLabel,
-    presentation?.workModeLabel,
-    presentation?.salaryLabel,
-    presentation?.freshnessLabel,
-  ].filter(Boolean) as string[];
+  const metaItems = getJobMetaLabels(job);
 
   return (
     <Card className="overflow-hidden border-border bg-card">
@@ -152,7 +149,7 @@ export function JobRow({
                 {metaItems.map((item) => (
                   <span
                     key={item}
-                    className="inline-flex items-center rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[11px] text-muted-foreground"
+                    className="inline-flex items-center rounded-full border border-border bg-white-a04 px-2.5 py-1 text-[11px] text-muted-foreground"
                   >
                     {item}
                   </span>
@@ -195,7 +192,7 @@ export function Section({
     <Card className="border-border bg-card">
       <CardHeader className="gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-white/[0.04] text-content-muted">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-white-a04 text-content-muted">
             {icon}
           </span>
           <div>
@@ -254,7 +251,7 @@ export function CompanyPanel({
         <p className="m-0 text-sm leading-6 text-muted-foreground">{description}</p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-3">
+        <div className="rounded-2xl border border-border/70 bg-surface-muted p-3">
           <div className="flex gap-2">
             <input
               type="text"
@@ -311,12 +308,12 @@ export function CompanyRow({
 }) {
   const iconClass =
     accent === 'success'
-      ? 'border-fit-excellent/20 bg-fit-excellent/10 text-fit-excellent'
-      : 'border-destructive/20 bg-destructive/10 text-destructive';
+      ? semanticIconFrameClass.success
+      : semanticIconFrameClass.danger;
   const rowClass =
     accent === 'success'
-      ? 'border-fit-excellent/20 bg-fit-excellent/5'
-      : 'border-destructive/20 bg-destructive/5';
+      ? semanticPanelClass.success
+      : semanticPanelClass.danger;
 
   return (
     <Card className={cn('border', rowClass)}>

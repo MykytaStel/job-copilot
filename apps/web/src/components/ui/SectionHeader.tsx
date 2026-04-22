@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, type LucideIcon } from 'lucide-react';
 import { Button } from './Button';
+import { AccentIconFrame } from './AccentIconFrame';
 import { cn } from '../../lib/cn';
 
 interface SectionHeaderProps {
@@ -39,9 +40,9 @@ export function SectionHeader({
     >
       <div className="flex items-center gap-3">
         {Icon && (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10">
+          <AccentIconFrame size="md">
             <Icon className="h-5 w-5 text-primary" />
-          </div>
+          </AccentIconFrame>
         )}
         <div>
           <h2 className="m-0 text-lg font-semibold text-foreground">{title}</h2>

@@ -6,6 +6,7 @@
 - Run `pnpm --dir apps/web test`
 - Run `cargo check --manifest-path apps/engine-api/Cargo.toml`
 - Run `cargo check --manifest-path apps/ingestion/Cargo.toml`
+- Run the app-local verification matrix for every touched app in `docs/04-development/verification-matrix.md`
 
 ## For architecture changes
 - Prefer adding or moving code inside an existing bounded context first
@@ -14,6 +15,8 @@
 - Keep ML route wiring separate from enrichment/scoring implementations
 - Keep Rust as source of truth for domain state
 - Treat LLM outputs as enrichment, not canonical state
+- Add or update an ADR for every non-trivial slice using `docs/02-architecture/adr-template.md`
+- If runtime truth changes, update `docs/05-roadmap/current-focus.md`, `docs/02-architecture/current-state.md`, and the relevant roadmap/status doc in the same slice
 
 ## For API work
 - Preserve public function signatures unless intentionally changing contracts
