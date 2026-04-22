@@ -13,7 +13,7 @@ import { queryKeys } from '../../queryKeys';
 
 const MARKET_STALE_TIME_MS = 5 * 60_000;
 
-function deriveMedianSalary(trends: MarketSalaryTrend[]) {
+export function deriveMedianSalary(trends: MarketSalaryTrend[]) {
   if (trends.length === 0) {
     return null;
   }
@@ -36,13 +36,23 @@ function deriveMedianSalary(trends: MarketSalaryTrend[]) {
   return ordered.at(-1)?.median ?? null;
 }
 
-function sortRoleDemand(roles: MarketRoleDemand[]) {
+export function sortRoleDemand(roles: MarketRoleDemand[]) {
   return roles
     .slice()
     .sort(
-      (left, right) =>
-        right.thisPeriod - left.thisPeriod || right.prevPeriod - left.prevPeriod,
+      (left, right) => right.thisPeriod - left.thisPeriod || right.prevPeriod - left.prevPeriod,
     );
+}
+
+export function deriveSalaryBounds(trends: MarketSalaryTrend[]) {
+  if (trends.length === 0) {
+    return { min: 0, max: 0 };
+  }
+
+  return {
+    min: Math.min(...trends.map((item) => item.p25)),
+    max: Math.max(...trends.map((item) => item.p75)),
+  };
 }
 
 export function useMarketPage() {
@@ -67,7 +77,7 @@ export function useMarketPage() {
     staleTime: MARKET_STALE_TIME_MS,
   });
 
-  const salaryTrends = salariesQuery.data ?? [];
+  const salaryTrends = useMemo(() => salariesQuery.data ?? [], [salariesQuery.data]);
   const roleDemand = useMemo(
     () =>
       sortRoleDemand(
@@ -80,16 +90,7 @@ export function useMarketPage() {
     () => salaryTrends.reduce((sum, item) => sum + item.sampleCount, 0),
     [salaryTrends],
   );
-  const salaryBounds = useMemo(() => {
-    if (salaryTrends.length === 0) {
-      return { min: 0, max: 0 };
-    }
-
-    return {
-      min: Math.min(...salaryTrends.map((item) => item.p25)),
-      max: Math.max(...salaryTrends.map((item) => item.p75)),
-    };
-  }, [salaryTrends]);
+  const salaryBounds = useMemo(() => deriveSalaryBounds(salaryTrends), [salaryTrends]);
 
   return {
     overviewQuery,

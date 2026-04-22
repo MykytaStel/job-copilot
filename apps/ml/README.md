@@ -40,10 +40,12 @@ Environment variables:
 ## Internal structure
 
 - `app/api.py` wires the FastAPI app and endpoints
+- `app/api_models.py` owns canonical request/response DTOs for health + scoring routes
 - `app/service_dependencies.py` owns cached enrichment service construction
 - `app/scoring.py` owns deterministic fit/rerank helpers
 - `app/settings.py` owns runtime logging and CORS defaults
-- `app/llm_provider.py` stays the public provider entrypoint, with implementations split across:
+- `app/llm_provider_types.py` owns provider protocols
+- `app/llm_provider.py` stays the compatibility/public provider entrypoint, with implementations split across:
   - `app/llm_provider_template.py`
   - `app/llm_provider_remote.py`
   - `app/llm_provider_factory.py`

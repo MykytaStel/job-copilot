@@ -1,3 +1,10 @@
+//! Persisted profile CRUD service over the profiles repository.
+//!
+//! This module owns create/get/update/save-analysis for canonical profile
+//! records. Raw-text analysis and search-profile derivation live in
+//! `crate::services::profile_analysis` and
+//! `crate::services::search_profile_builder`.
+
 #[cfg(test)]
 #[path = "profiles/stub.rs"]
 mod stub;

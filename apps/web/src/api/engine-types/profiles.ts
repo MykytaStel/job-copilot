@@ -49,6 +49,22 @@ export type EngineProfile = {
   salary_max?: number | null;
   salary_currency?: string | null;
   languages?: string[] | null;
+  search_preferences?: {
+    target_regions: (
+      | 'ua'
+      | 'eu'
+      | 'eu_remote'
+      | 'poland'
+      | 'germany'
+      | 'uk'
+      | 'us'
+    )[];
+    work_modes: ('remote' | 'hybrid' | 'onsite')[];
+    preferred_roles: string[];
+    allowed_sources: string[];
+    include_keywords: string[];
+    exclude_keywords: string[];
+  } | null;
   analysis?: EngineProfileAnalysis | null;
   created_at: string;
   updated_at: string;

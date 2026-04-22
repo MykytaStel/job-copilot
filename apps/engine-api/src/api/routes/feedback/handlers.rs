@@ -190,7 +190,7 @@ pub(crate) async fn ensure_profile_exists(
     profile_id: &str,
 ) -> Result<(), ApiError> {
     let Some(_) = state
-        .profiles_service
+        .profile_records
         .get_by_id(profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?

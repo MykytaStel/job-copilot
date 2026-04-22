@@ -25,14 +25,14 @@ pub(super) async fn load_profile_ranked_jobs(
     ensure_profile_exists(state, profile_id).await?;
 
     let profile = state
-        .profiles_service
+        .profile_records
         .get_by_id(profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
         .expect("profile existence already verified above");
-    let analyzed_profile = state.profile_analysis_service.analyze(&profile.raw_text);
+    let analyzed_profile = state.profile_analysis.analyze(&profile.raw_text);
     let search_profile = state
-        .search_profile_service
+        .search_profile_builder
         .build(&analyzed_profile, &SearchPreferences::default());
 
     let mut jobs = Vec::new();
@@ -58,9 +58,7 @@ pub(super) async fn load_profile_ranked_jobs(
         })
         .collect::<Vec<_>>();
 
-    let result = state
-        .search_matching_service
-        .run(&search_profile, ranked_candidates);
+    let result = state.search_ranking.run(&search_profile, ranked_candidates);
     let deterministic_score_by_job_id = result
         .ranked_jobs
         .iter()
@@ -75,7 +73,7 @@ pub(super) async fn load_profile_ranked_jobs(
     }
 
     let behavior_score_by_job_id = score_by_job_id(&adjusted_jobs);
-    let reranker_runtime = crate::services::ranking::runtime::resolve_reranker_runtime(
+    let reranker_runtime = crate::services::search_ranking::runtime::resolve_reranker_runtime(
         state.reranker_runtime_mode,
         state.learned_reranker_enabled,
         learning_aggregates.is_some(),
@@ -108,7 +106,7 @@ pub(super) async fn load_profile_ranked_jobs(
 
     if matches!(
         reranker_runtime.active_mode,
-        crate::services::ranking::runtime::RerankerRuntimeMode::Deterministic
+        crate::services::search_ranking::runtime::RerankerRuntimeMode::Deterministic
     ) {
         if let Some(reason) = reranker_runtime.fallback_reason.as_deref() {
             mark_reranker_fallback(&mut adjusted_jobs, reason);
@@ -133,7 +131,10 @@ pub(super) async fn load_profile_ranked_jobs(
     })
 }
 
-fn mark_reranker_fallback(ranked_jobs: &mut [crate::services::matching::RankedJob], reason: &str) {
+fn mark_reranker_fallback(
+    ranked_jobs: &mut [crate::services::search_ranking::RankedJob],
+    reason: &str,
+) {
     for ranked in ranked_jobs {
         if matches!(
             ranked.fit.score_breakdown.reranker_mode,

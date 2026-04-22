@@ -17,6 +17,10 @@ Job Copilot is not a simple job board. It is a candidate intelligence and action
 - `ml/` — Python enrichment sidecar, reranking, analytics, future LLM orchestration
 - `web/` — operator UI / dashboard
 
+Active runtime paths:
+- `apps/web/src/App.tsx` -> `apps/web/src/AppShell.tsx` is the real shell entrypoint.
+- `apps/web/src/AppShellNew.tsx` is only a compatibility re-export alias, not the source of truth.
+
 ## Architecture rules
 - Domain truth lives in Rust, not in UI and not in LLM prompts.
 - LLM is an enrichment layer, not the source of canonical truth.
@@ -26,12 +30,15 @@ Job Copilot is not a simple job board. It is a candidate intelligence and action
 
 ## Immediate priorities
 1. ~~Canonical role catalog in domain.~~ — DONE (`domain/role/catalog.rs`)
-2. Search profile persistence — struct exists, no DB table yet.
+2. Search profile persistence — persisted `search_preferences` are now stored on profiles; structured search profiles still build on demand.
 3. ~~Source filtering for parsed jobs.~~ — DONE (`domain/source/catalog.rs`, `services/matching/filters.rs`)
 4. ~~Fix web navigation stale-data behavior.~~ — DONE (TanStack Query invalidation in place)
 5. ~~Ranking v2: deterministic baseline + explainable fit.~~ — DONE (scoring.rs, salary.rs, reranking.rs)
 6. ~~Lists and controls: saved, hidden, bad, whitelist, blacklist.~~ — DONE (FeedbackCenter + ApplicationBoard)
 7. ML/LLM enrichment with strict Rust-side validation — enrichment works end-to-end; Rust-side output validation not yet added.
+8. Market Intelligence is partially live — overview, companies, salary trends, and role demand ship from live `jobs` queries; snapshot aggregation is still missing.
+9. Profile compensation and languages are done end-to-end in schema, API, persistence, and UI.
+10. Notifications and global search are already live in web + engine-api.
 
 ## UX direction
 Quiet operator dashboard:
@@ -57,9 +64,6 @@ Quiet operator dashboard:
 - Prefer maintainability over cleverness.
 
 ## Good next slices
-- market snapshot aggregation job (populate `market_snapshots` from `jobs` table)
 - CV tailoring endpoint in ML sidecar + web modal
-- settings page (`/settings` route — profile prefs + notification prefs)
-- search profile persistence (DB table + save/load in UI)
+- settings expansion (dedicated notification prefs + more profile preference controls)
 - Rust-side validation of LLM enrichment output before storing
-- profile completion indicator (%)

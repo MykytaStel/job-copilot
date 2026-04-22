@@ -6,8 +6,8 @@ use crate::api::dto::search::{
 };
 use crate::domain::feedback::model::JobFeedbackState;
 use crate::domain::matching::RerankerMode;
-use crate::services::matching::RankedJob;
-use crate::services::ranking::runtime::{
+use crate::services::search_ranking::RankedJob;
+use crate::services::search_ranking::runtime::{
     ResolvedRerankerRuntime, resolve_reranker_runtime_comparison,
 };
 use crate::state::AppState;

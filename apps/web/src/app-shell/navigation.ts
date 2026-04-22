@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LineChart,
   MessageSquare,
+  Settings,
   User,
 } from 'lucide-react';
 
@@ -22,4 +23,5 @@ export const navigation: NavItem[] = [
   { name: 'Analytics', to: '/analytics', end: false, icon: BarChart3 },
   { name: 'Market', to: '/market', end: false, icon: LineChart },
   { name: 'Profile', to: '/profile', end: false, icon: User },
+  { name: 'Settings', to: '/settings', end: false, icon: Settings },
 ];

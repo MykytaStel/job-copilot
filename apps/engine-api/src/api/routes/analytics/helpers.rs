@@ -4,7 +4,7 @@ use crate::api::dto::analytics::{LlmContextEvidenceEntry, SearchQualitySummaryRe
 use crate::api::error::ApiError;
 use crate::domain::feedback::model::JobFeedbackRecord;
 use crate::domain::search::profile::SearchPreferences;
-use crate::services::matching::summarize_match_quality;
+use crate::services::search_ranking::summarize_match_quality;
 use crate::state::AppState;
 
 pub(super) async fn build_job_feedback_evidence_entries(
@@ -28,19 +28,16 @@ pub(super) async fn build_search_quality_summary(
     state: &AppState,
     raw_text: &str,
 ) -> Result<SearchQualitySummaryResponse, ApiError> {
-    let analyzed_profile = state.profile_analysis_service.analyze(raw_text);
+    let analyzed_profile = state.profile_analysis.analyze(raw_text);
     let search_profile = state
-        .search_profile_service
+        .search_profile_builder
         .build(&analyzed_profile, &SearchPreferences::default());
     let jobs = state
         .jobs_service
         .list_filtered_views(200, Some("active"), None)
         .await
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
-    let ranked_jobs = state
-        .search_matching_service
-        .run(&search_profile, jobs)
-        .ranked_jobs;
+    let ranked_jobs = state.search_ranking.run(&search_profile, jobs).ranked_jobs;
     let quality = summarize_match_quality(&ranked_jobs);
 
     Ok(SearchQualitySummaryResponse {

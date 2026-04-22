@@ -1,9 +1,23 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use chrono::Utc;
 use sqlx::PgPool;
+use sqlx::types::Json;
 use tracing::{info, warn};
 
 use crate::models::{IngestionBatch, JobVariant, NormalizedJob};
+
+mod market_role_heuristics {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../shared/rust/market_role_heuristics.rs"
+    ));
+}
+
+use market_role_heuristics::{
+    MARKET_ROLE_GROUP_CLASSIFIER_CASE_SQL, MARKET_ROLE_GROUP_ORDER_ARRAY_SQL,
+    MARKET_ROLE_GROUPS_VALUES_SQL,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UpsertSummary {
@@ -15,6 +29,12 @@ pub struct UpsertSummary {
     pub jobs_inactivated: usize,
     pub jobs_reactivated: usize,
     pub sources_refreshed: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarketSnapshotSummary {
+    pub snapshot_date: String,
+    pub snapshots_written: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +123,24 @@ pub async fn upsert_batch(pool: &PgPool, batch: &IngestionBatch) -> Result<Upser
     Ok(summary)
 }
 
+pub async fn refresh_market_snapshots(pool: &PgPool) -> Result<MarketSnapshotSummary, String> {
+    let snapshot_date = Utc::now().date_naive();
+    let overview_payload = build_market_overview_snapshot(pool).await?;
+    let company_stats_payload = build_market_company_stats_snapshot(pool).await?;
+    let salary_trends_payload = build_market_salary_trends_snapshot(pool).await?;
+    let role_demand_payload = build_market_role_demand_snapshot(pool).await?;
+
+    upsert_market_snapshot(pool, snapshot_date, "overview", overview_payload).await?;
+    upsert_market_snapshot(pool, snapshot_date, "company_stats", company_stats_payload).await?;
+    upsert_market_snapshot(pool, snapshot_date, "salary_trends", salary_trends_payload).await?;
+    upsert_market_snapshot(pool, snapshot_date, "role_demand", role_demand_payload).await?;
+
+    Ok(MarketSnapshotSummary {
+        snapshot_date: snapshot_date.format("%Y-%m-%d").to_string(),
+        snapshots_written: 4,
+    })
+}
+
 async fn resolve_batch(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     batch: &IngestionBatch,
@@ -186,6 +224,247 @@ async fn resolve_batch(
     })
 }
 
+async fn build_market_overview_snapshot(pool: &PgPool) -> Result<serde_json::Value, String> {
+    sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT jsonb_build_object(
+            'new_jobs_this_week',
+            COUNT(*) FILTER (
+                WHERE is_active AND first_seen_at >= NOW() - INTERVAL '7 days'
+            )::bigint,
+            'active_companies_count',
+            COUNT(DISTINCT company_name) FILTER (WHERE is_active)::bigint,
+            'active_jobs_count',
+            COUNT(*) FILTER (WHERE is_active)::bigint,
+            'remote_percentage',
+            CASE
+                WHEN COUNT(*) FILTER (WHERE is_active) > 0
+                THEN ROUND(
+                    (
+                        COUNT(*) FILTER (
+                            WHERE is_active AND LOWER(remote_type) LIKE '%remote%'
+                        )::numeric
+                        / COUNT(*) FILTER (WHERE is_active)::numeric
+                    ) * 100,
+                    2
+                )
+                ELSE 0
+            END
+        )
+        FROM jobs
+        "#,
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|error| format!("failed to build market overview snapshot: {error}"))
+}
+
+async fn build_market_company_stats_snapshot(pool: &PgPool) -> Result<serde_json::Value, String> {
+    sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        WITH company_stats AS (
+            SELECT
+                company_name,
+                COUNT(*) FILTER (WHERE is_active)::bigint AS active_jobs,
+                COUNT(*) FILTER (
+                    WHERE is_active AND first_seen_at >= NOW() - INTERVAL '7 days'
+                )::bigint AS this_week,
+                COUNT(*) FILTER (
+                    WHERE is_active
+                      AND first_seen_at >= NOW() - INTERVAL '14 days'
+                      AND first_seen_at < NOW() - INTERVAL '7 days'
+                )::bigint AS prev_week
+            FROM jobs
+            GROUP BY company_name
+            HAVING COUNT(*) FILTER (WHERE is_active) > 0
+        )
+        SELECT COALESCE(
+            jsonb_agg(
+                jsonb_build_object(
+                    'company_name', company_name,
+                    'active_jobs', active_jobs,
+                    'this_week', this_week,
+                    'prev_week', prev_week
+                )
+                ORDER BY active_jobs DESC, company_name ASC
+            ),
+            '[]'::jsonb
+        )
+        FROM company_stats
+        "#,
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|error| format!("failed to build market company stats snapshot: {error}"))
+}
+
+async fn build_market_salary_trends_snapshot(pool: &PgPool) -> Result<serde_json::Value, String> {
+    sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        WITH filtered_jobs AS (
+            SELECT
+                LOWER(TRIM(seniority)) AS seniority,
+                COALESCE(NULLIF(UPPER(TRIM(salary_currency)), ''), 'UNKNOWN') AS salary_currency,
+                salary_min
+            FROM jobs
+            WHERE is_active
+              AND salary_min IS NOT NULL
+              AND seniority IS NOT NULL
+              AND last_seen_at >= NOW() - INTERVAL '30 days'
+        ),
+        ranked_currencies AS (
+            SELECT
+                seniority,
+                salary_currency,
+                ROW_NUMBER() OVER (
+                    PARTITION BY seniority
+                    ORDER BY COUNT(*) DESC, salary_currency ASC
+                ) AS currency_rank
+            FROM filtered_jobs
+            GROUP BY seniority, salary_currency
+        ),
+        dominant_jobs AS (
+            SELECT filtered_jobs.*
+            FROM filtered_jobs
+            INNER JOIN ranked_currencies
+                ON ranked_currencies.seniority = filtered_jobs.seniority
+               AND ranked_currencies.salary_currency = filtered_jobs.salary_currency
+            WHERE ranked_currencies.currency_rank = 1
+        ),
+        salary_trends AS (
+            SELECT
+                seniority,
+                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY salary_min))::integer AS p25,
+                ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY salary_min))::integer AS median,
+                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY salary_min))::integer AS p75,
+                COUNT(*)::bigint AS sample_count
+            FROM dominant_jobs
+            GROUP BY seniority
+        )
+        SELECT COALESCE(
+            jsonb_agg(
+                jsonb_build_object(
+                    'seniority', seniority,
+                    'p25', p25,
+                    'median', median,
+                    'p75', p75,
+                    'sample_count', sample_count
+                )
+                ORDER BY
+                    CASE seniority
+                        WHEN 'intern' THEN 0
+                        WHEN 'junior' THEN 1
+                        WHEN 'middle' THEN 2
+                        WHEN 'mid' THEN 2
+                        WHEN 'senior' THEN 3
+                        WHEN 'lead' THEN 4
+                        ELSE 5
+                    END,
+                    seniority ASC
+            ),
+            '[]'::jsonb
+        )
+        FROM salary_trends
+        "#,
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|error| format!("failed to build market salary trends snapshot: {error}"))
+}
+
+async fn build_market_role_demand_snapshot(pool: &PgPool) -> Result<serde_json::Value, String> {
+    let query = format!(
+        r#"
+        WITH role_groups(role_group) AS (
+            VALUES
+                {role_groups_values}
+        ),
+        classified_jobs AS (
+            SELECT
+                {role_group_classifier} AS role_group,
+                first_seen_at
+            FROM jobs
+            WHERE is_active
+        ),
+        counts AS (
+            SELECT
+                role_group,
+                COUNT(*) FILTER (
+                    WHERE first_seen_at >= NOW() - INTERVAL '30 days'
+                )::bigint AS this_period,
+                COUNT(*) FILTER (
+                    WHERE first_seen_at >= NOW() - INTERVAL '60 days'
+                      AND first_seen_at < NOW() - INTERVAL '30 days'
+                )::bigint AS prev_period
+            FROM classified_jobs
+            WHERE role_group IS NOT NULL
+            GROUP BY role_group
+        )
+        SELECT COALESCE(
+            jsonb_agg(
+                jsonb_build_object(
+                    'role_group', role_groups.role_group,
+                    'this_period', COALESCE(counts.this_period, 0)::bigint,
+                    'prev_period', COALESCE(counts.prev_period, 0)::bigint,
+                    'trend',
+                    CASE
+                        WHEN COALESCE(counts.this_period, 0) > COALESCE(counts.prev_period, 0) THEN 'up'
+                        WHEN COALESCE(counts.this_period, 0) < COALESCE(counts.prev_period, 0) THEN 'down'
+                        ELSE 'stable'
+                    END
+                )
+                ORDER BY ARRAY_POSITION(
+                    {role_group_order},
+                    role_groups.role_group
+                )
+            ),
+            '[]'::jsonb
+        )
+        FROM role_groups
+        LEFT JOIN counts USING (role_group)
+        "#,
+        role_groups_values = MARKET_ROLE_GROUPS_VALUES_SQL,
+        role_group_classifier = MARKET_ROLE_GROUP_CLASSIFIER_CASE_SQL,
+        role_group_order = MARKET_ROLE_GROUP_ORDER_ARRAY_SQL,
+    );
+    sqlx::query_scalar::<_, serde_json::Value>(&query)
+        .fetch_one(pool)
+        .await
+        .map_err(|error| format!("failed to build market role demand snapshot: {error}"))
+}
+
+async fn upsert_market_snapshot(
+    pool: &PgPool,
+    snapshot_date: chrono::NaiveDate,
+    snapshot_type: &str,
+    payload: serde_json::Value,
+) -> Result<(), String> {
+    let snapshot_date_string = snapshot_date.format("%Y-%m-%d").to_string();
+    let snapshot_id = format!("market_snapshot_{}_{}", snapshot_type, snapshot_date_string);
+
+    sqlx::query(
+        r#"
+        INSERT INTO market_snapshots (id, snapshot_date, snapshot_type, payload)
+        VALUES ($1, $2::date, $3, $4)
+        ON CONFLICT (id)
+        DO UPDATE SET
+            payload = EXCLUDED.payload,
+            created_at = NOW()
+        "#,
+    )
+    .bind(snapshot_id)
+    .bind(snapshot_date_string)
+    .bind(snapshot_type)
+    .bind(Json(payload))
+    .execute(pool)
+    .await
+    .map_err(|error| {
+        format!("failed to upsert market snapshot '{snapshot_type}' for '{snapshot_date}': {error}")
+    })?;
+
+    Ok(())
+}
+
 async fn existing_variant_state(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     source: &str,
@@ -245,8 +524,8 @@ fn should_skip_stale_variant(
 
             incoming_last_seen == existing_last_seen
                 && incoming_fetched_at <= existing_fetched_at
+                && incoming_variant.dedupe_key == existing_variant.dedupe_key
                 && (incoming_variant.is_active != existing_variant.is_active
-                    || incoming_variant.dedupe_key != existing_variant.dedupe_key
                     || incoming_variant.raw_hash != existing_variant.raw_hash)
         }
         _ => incoming_variant.last_seen_at < existing_variant.last_seen_at,
@@ -994,7 +1273,10 @@ mod tests {
         compute_dedupe_key,
     };
 
-    use super::{SourceRefresh, build_source_refreshes, merge_job, run_migrations, upsert_batch};
+    use super::{
+        SourceRefresh, build_source_refreshes, merge_job, refresh_market_snapshots, upsert_batch,
+    };
+    use crate::db_runtime::run_migrations;
 
     const DEFAULT_TEST_DATABASE_URL: &str =
         "postgres://jobcopilot:jobcopilot@127.0.0.1:5432/jobcopilot";
@@ -1201,6 +1483,12 @@ mod tests {
         reactivated_at: Option<String>,
     }
 
+    #[derive(Debug, sqlx::FromRow)]
+    struct MarketSnapshotRow {
+        snapshot_type: String,
+        payload: serde_json::Value,
+    }
+
     fn with_database_name(database_url: &str, database_name: &str) -> Result<String, String> {
         let (prefix, query_suffix) = match database_url.split_once('?') {
             Some((prefix, query)) => (prefix, format!("?{query}")),
@@ -1334,6 +1622,19 @@ mod tests {
         .fetch_one(pool)
         .await
         .expect("active variant count should query")
+    }
+
+    async fn fetch_market_snapshots(pool: &PgPool) -> Vec<MarketSnapshotRow> {
+        sqlx::query_as::<_, MarketSnapshotRow>(
+            r#"
+            SELECT snapshot_type, payload
+            FROM market_snapshots
+            ORDER BY snapshot_type ASC
+            "#,
+        )
+        .fetch_all(pool)
+        .await
+        .expect("market snapshots should query")
     }
 
     #[tokio::test]
@@ -1557,6 +1858,68 @@ mod tests {
 
         assert!(error.contains("changed dedupe fingerprint"));
         assert!(error.contains("already belongs to canonical job"));
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn refresh_market_snapshots_upserts_one_snapshot_per_type_for_the_day() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        let initial_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("initial batch should upsert");
+
+        let first_summary = refresh_market_snapshots(&test_db.pool)
+            .await
+            .expect("market snapshots should refresh");
+        let second_summary = refresh_market_snapshots(&test_db.pool)
+            .await
+            .expect("market snapshots should refresh idempotently");
+
+        assert_eq!(first_summary.snapshots_written, 4);
+        assert_eq!(first_summary.snapshot_date, second_summary.snapshot_date);
+        assert_eq!(second_summary.snapshots_written, 4);
+
+        let snapshots = fetch_market_snapshots(&test_db.pool).await;
+        assert_eq!(snapshots.len(), 4);
+
+        let by_type = snapshots
+            .into_iter()
+            .map(|snapshot| (snapshot.snapshot_type, snapshot.payload))
+            .collect::<std::collections::BTreeMap<_, _>>();
+
+        assert_eq!(
+            by_type
+                .get("overview")
+                .and_then(|payload| payload.get("active_jobs_count"))
+                .and_then(|value| value.as_i64()),
+            Some(2)
+        );
+        assert!(
+            by_type
+                .get("company_stats")
+                .and_then(|payload| payload.as_array())
+                .is_some_and(|items| items.len() >= 2),
+            "company stats snapshot should contain active companies"
+        );
+        assert!(
+            by_type
+                .get("salary_trends")
+                .and_then(|payload| payload.as_array())
+                .is_some_and(|items| !items.is_empty()),
+            "salary trends snapshot should contain salary buckets"
+        );
+        assert_eq!(
+            by_type
+                .get("role_demand")
+                .and_then(|payload| payload.as_array())
+                .map(|items| items.len()),
+            Some(8)
+        );
 
         test_db.cleanup().await;
     }

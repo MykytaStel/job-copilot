@@ -11,8 +11,8 @@ use crate::api::routes::events::log_user_event_softly;
 use crate::api::routes::jobs::load_feedback_state;
 use crate::domain::feedback::model::CompanyFeedbackStatus;
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
-use crate::services::matching::summarize_match_quality;
-use crate::services::ranking::runtime::{RerankerRuntimeMode, resolve_reranker_runtime};
+use crate::services::search_ranking::runtime::{RerankerRuntimeMode, resolve_reranker_runtime};
+use crate::services::search_ranking::summarize_match_quality;
 use crate::state::AppState;
 
 use super::{
@@ -100,7 +100,7 @@ pub async fn run_search(
         .collect::<Vec<_>>();
 
     let result = state
-        .search_matching_service
+        .search_ranking
         .run(&input.search_profile, ranked_candidates);
     let salary_expectation =
         load_search_salary_expectation(&state, input.profile_id.as_deref()).await?;

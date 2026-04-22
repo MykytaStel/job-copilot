@@ -4,7 +4,7 @@ from app.application_coach import (
     build_application_coach_prompt,
     parse_application_coach_output,
 )
-from app.llm_provider import ApplicationCoachProvider
+from app.llm_provider_types import ApplicationCoachProvider
 
 
 class ApplicationCoachService:

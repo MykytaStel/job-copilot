@@ -28,6 +28,16 @@ pub struct SearchPreferencesRequest {
     pub exclude_keywords: Vec<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SearchPreferencesResponse {
+    pub target_regions: Vec<TargetRegion>,
+    pub work_modes: Vec<WorkMode>,
+    pub preferred_roles: Vec<String>,
+    pub allowed_sources: Vec<String>,
+    pub include_keywords: Vec<String>,
+    pub exclude_keywords: Vec<String>,
+}
+
 #[derive(Default, Deserialize)]
 pub struct BuildStoredSearchProfileRequest {
     #[serde(default)]
@@ -85,6 +95,15 @@ impl BuildSearchProfileRequest {
 }
 
 impl SearchPreferencesRequest {
+    pub fn is_empty(&self) -> bool {
+        self.target_regions.is_empty()
+            && self.work_modes.is_empty()
+            && self.preferred_roles.is_empty()
+            && self.allowed_sources.is_empty()
+            && self.include_keywords.is_empty()
+            && self.exclude_keywords.is_empty()
+    }
+
     pub fn validate(self) -> Result<SearchPreferences, ApiError> {
         let mut preferred_roles = Vec::new();
         let mut invalid_preferred_roles = Vec::new();
@@ -143,6 +162,27 @@ impl SearchPreferencesRequest {
             include_keywords: self.include_keywords,
             exclude_keywords: self.exclude_keywords,
         })
+    }
+}
+
+impl From<SearchPreferences> for SearchPreferencesResponse {
+    fn from(preferences: SearchPreferences) -> Self {
+        Self {
+            target_regions: preferences.target_regions,
+            work_modes: preferences.work_modes,
+            preferred_roles: preferences
+                .preferred_roles
+                .into_iter()
+                .map(|role| role.to_string())
+                .collect(),
+            allowed_sources: preferences
+                .allowed_sources
+                .into_iter()
+                .map(|source| source.canonical_key().to_string())
+                .collect(),
+            include_keywords: preferences.include_keywords,
+            exclude_keywords: preferences.exclude_keywords,
+        }
     }
 }
 

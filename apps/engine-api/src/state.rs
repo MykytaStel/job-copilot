@@ -8,17 +8,17 @@ use crate::db::repositories::{
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
 use crate::services::feedback::FeedbackService;
+use crate::services::fit_scoring::FitScoringService;
 use crate::services::followup::FollowUpService;
 use crate::services::jobs::JobsService;
-use crate::services::matching::SearchMatchingService;
 use crate::services::notifications::NotificationsService;
-use crate::services::profile::service::ProfileAnalysisService;
-use crate::services::profiles::ProfilesService;
-use crate::services::ranking::RankingService;
-use crate::services::ranking::runtime::{RerankerRuntimeMode, TrainedRerankerAvailability};
+use crate::services::profile_analysis::ProfileAnalysisService;
+use crate::services::profile_records::ProfileRecordsService;
 use crate::services::resumes::ResumesService;
 use crate::services::salary::SalaryService;
-use crate::services::search_profile::service::SearchProfileService;
+use crate::services::search_profile_builder::SearchProfileBuilder;
+use crate::services::search_ranking::SearchRankingService;
+use crate::services::search_ranking::runtime::{RerankerRuntimeMode, TrainedRerankerAvailability};
 use crate::services::trained_reranker::TrainedRerankerModel;
 use crate::services::user_events::UserEventsService;
 use tracing::warn;
@@ -32,17 +32,17 @@ pub struct AppState {
     pub app_name: String,
     pub version: String,
     pub database: Database,
-    pub profiles_service: ProfilesService,
+    pub profile_records: ProfileRecordsService,
     pub jobs_service: JobsService,
-    pub search_matching_service: SearchMatchingService,
+    pub search_ranking: SearchRankingService,
     pub applications_service: ApplicationsService,
     pub feedback_service: FeedbackService,
     pub activities_service: ActivitiesService,
     pub resumes_service: ResumesService,
-    pub profile_analysis_service: ProfileAnalysisService,
-    pub ranking_service: RankingService,
+    pub profile_analysis: ProfileAnalysisService,
+    pub fit_scoring: FitScoringService,
     pub fit_scores_repository: FitScoresRepository,
-    pub search_profile_service: SearchProfileService,
+    pub search_profile_builder: SearchProfileBuilder,
     pub followup_service: FollowUpService,
     pub notifications_service: NotificationsService,
     pub salary_service: SalaryService,
@@ -85,7 +85,6 @@ impl AppState {
     ) -> Self {
         let profiles_repository = ProfilesRepository::new(database.clone());
         let jobs_repository = JobsRepository::new(database.clone());
-        let salary_jobs_repository = JobsRepository::new(database.clone());
         let applications_repository = ApplicationsRepository::new(database.clone());
         let feedback_repository = FeedbackRepository::new(database.clone());
         let activities_repository = ActivitiesRepository::new(database.clone());
@@ -94,26 +93,30 @@ impl AppState {
         let fit_scores_repository = FitScoresRepository::new(database.clone());
         let notifications_repository = NotificationsRepository::new(database.clone());
         let user_events_repository = UserEventsRepository::new(database.clone());
-        let profile_analysis_service = ProfileAnalysisService::new();
+        let profile_analysis = ProfileAnalysisService::new();
+        let profile_records = ProfileRecordsService::new(profiles_repository);
+        let search_ranking = SearchRankingService::new();
+        let fit_scoring = FitScoringService::new();
+        let search_profile_builder = SearchProfileBuilder::new();
 
         Self {
             app_name: "engine-api".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             database,
-            profiles_service: ProfilesService::new(profiles_repository),
-            jobs_service: JobsService::new(jobs_repository),
-            search_matching_service: SearchMatchingService::new(),
+            profile_records,
+            jobs_service: JobsService::new(jobs_repository.clone()),
+            search_ranking,
             applications_service: ApplicationsService::new(applications_repository),
             feedback_service: FeedbackService::new(feedback_repository),
             activities_service: ActivitiesService::new(activities_repository),
             resumes_service: ResumesService::new(resumes_repository),
-            profile_analysis_service,
-            ranking_service: RankingService::new(),
+            profile_analysis,
+            fit_scoring,
             fit_scores_repository,
-            search_profile_service: SearchProfileService::new(),
+            search_profile_builder,
             followup_service: FollowUpService::new(tasks_repository),
             notifications_service: NotificationsService::new(notifications_repository),
-            salary_service: SalaryService::new(salary_jobs_repository),
+            salary_service: SalaryService::new(jobs_repository.clone()),
             user_events_service: UserEventsService::new(user_events_repository),
             reranker_runtime_mode,
             learned_reranker_enabled,

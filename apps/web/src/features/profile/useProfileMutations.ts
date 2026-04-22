@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { analyzeStoredProfile, getProfile, saveProfile } from '../../api/profiles';
+import type { PersistedSearchPreferences } from '../../api/profiles';
 import { invalidateProfileAnalysisQueries } from '../../lib/queryInvalidation';
 import { queryKeys } from '../../queryKeys';
 
@@ -18,6 +19,7 @@ export function useProfileMutations(clearDraft: () => void) {
       salaryMax?: number;
       salaryCurrency: string;
       languages: string[];
+      searchPreferences?: PersistedSearchPreferences;
     }) =>
       saveProfile({
         name: vars.name,
@@ -29,6 +31,7 @@ export function useProfileMutations(clearDraft: () => void) {
         salaryMax: vars.salaryMax,
         salaryCurrency: vars.salaryCurrency,
         languages: vars.languages,
+        searchPreferences: vars.searchPreferences,
         summary: undefined,
         skills: [],
       }),

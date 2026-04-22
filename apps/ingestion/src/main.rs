@@ -15,9 +15,9 @@ use tracing::{error, info, warn};
 use crate::adapters::SourceAdapter;
 #[cfg(any(feature = "mock", test))]
 use crate::adapters::mock_source::MockSourceAdapter;
-use crate::models::{IngestionBatch, InputDocument};
 #[cfg(any(feature = "mock", test))]
 use crate::models::MockSourceInput;
+use crate::models::{IngestionBatch, InputDocument};
 use crate::scrapers::ScraperConfig;
 use crate::scrapers::djinni::DjinniScraper;
 use crate::scrapers::dou_ua::DouUaScraper;
@@ -110,6 +110,13 @@ async fn main() -> Result<(), String> {
     }
 
     let summary = db::upsert_batch(&pool, &batch).await?;
+    let market_snapshot_summary = match db::refresh_market_snapshots(&pool).await {
+        Ok(summary) => Some(summary),
+        Err(error) => {
+            warn!(error = %error, "market snapshot refresh failed after ingestion");
+            None
+        }
+    };
 
     info!(
         jobs_written = summary.jobs_written,
@@ -120,11 +127,15 @@ async fn main() -> Result<(), String> {
         jobs_inactivated = summary.jobs_inactivated,
         jobs_reactivated = summary.jobs_reactivated,
         sources_refreshed = summary.sources_refreshed,
+        market_snapshots_written = market_snapshot_summary
+            .as_ref()
+            .map(|value| value.snapshots_written)
+            .unwrap_or(0),
         "ingestion completed"
     );
 
     println!(
-        "Wrote {} jobs; variants created: {}, updated: {}, unchanged: {}, inactivated: {}; jobs inactivated: {}, reactivated: {}; sources refreshed: {}",
+        "Wrote {} jobs; variants created: {}, updated: {}, unchanged: {}, inactivated: {}; jobs inactivated: {}, reactivated: {}; sources refreshed: {}; market snapshots refreshed: {}",
         summary.jobs_written,
         summary.variants_created,
         summary.variants_updated,
@@ -132,7 +143,11 @@ async fn main() -> Result<(), String> {
         summary.variants_inactivated,
         summary.jobs_inactivated,
         summary.jobs_reactivated,
-        summary.sources_refreshed
+        summary.sources_refreshed,
+        market_snapshot_summary
+            .as_ref()
+            .map(|value| value.snapshots_written)
+            .unwrap_or(0)
     );
     Ok(())
 }
@@ -456,15 +471,34 @@ async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result<(), String
 
             match run_scraper(&scrape_mode).await {
                 Ok(batch) => match db::upsert_batch(pool, &batch).await {
-                    Ok(summary) => info!(
-                        source = source.name(),
-                        jobs_written = summary.jobs_written,
-                        variants_created = summary.variants_created,
-                        variants_updated = summary.variants_updated,
-                        variants_unchanged = summary.variants_unchanged,
-                        variants_inactivated = summary.variants_inactivated,
-                        "daemon round complete"
-                    ),
+                    Ok(summary) => {
+                        let market_snapshot_summary = match db::refresh_market_snapshots(pool).await
+                        {
+                            Ok(summary) => Some(summary),
+                            Err(error) => {
+                                warn!(
+                                    source = source.name(),
+                                    error = %error,
+                                    "market snapshot refresh failed after daemon upsert"
+                                );
+                                None
+                            }
+                        };
+
+                        info!(
+                            source = source.name(),
+                            jobs_written = summary.jobs_written,
+                            variants_created = summary.variants_created,
+                            variants_updated = summary.variants_updated,
+                            variants_unchanged = summary.variants_unchanged,
+                            variants_inactivated = summary.variants_inactivated,
+                            market_snapshots_written = market_snapshot_summary
+                                .as_ref()
+                                .map(|value| value.snapshots_written)
+                                .unwrap_or(0),
+                            "daemon round complete"
+                        )
+                    }
                     Err(e) => error!(source = source.name(), error = %e, "db upsert failed"),
                 },
                 Err(e) => {

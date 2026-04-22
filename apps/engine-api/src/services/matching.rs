@@ -1,3 +1,10 @@
+//! Deterministic search matching over a structured `SearchProfile`.
+//!
+//! Prefer importing this logic through `crate::services::search_ranking`.
+//! It is separate from `crate::services::fit_scoring`, which computes a
+//! deterministic fit score for a single profile/job pair used by
+//! detail/explanation flows.
+
 #[path = "matching/filters.rs"]
 mod filters;
 #[path = "matching/quality.rs"]
@@ -16,7 +23,9 @@ use crate::domain::role::RoleId;
 use crate::domain::role::catalog::ROLE_CATALOG;
 use crate::domain::search::profile::{SearchProfile, SearchRoleCandidate, TargetRegion, WorkMode};
 use crate::domain::source::SourceId;
-use crate::services::profile::matching::{PreparedText, normalize_term_for_output, normalize_text};
+use crate::services::profile_analysis::text::{
+    PreparedText, normalize_term_for_output, normalize_text,
+};
 
 use filters::{
     compute_region_match, compute_seniority_alignment, compute_source_match,

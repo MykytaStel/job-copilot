@@ -37,7 +37,7 @@ pub async fn get_analytics_summary(
     ensure_profile_exists(&state, &profile_id).await?;
 
     let profile = state
-        .profiles_service
+        .profile_records
         .get_by_id(&profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
@@ -144,7 +144,7 @@ pub async fn get_llm_context(
     ensure_profile_exists(&state, &profile_id).await?;
 
     let profile = state
-        .profiles_service
+        .profile_records
         .get_by_id(&profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?

@@ -17,16 +17,18 @@ export type SearchTargetRegion = 'ua' | 'eu' | 'eu_remote' | 'poland' | 'germany
 
 export type SearchWorkMode = 'remote' | 'hybrid' | 'onsite';
 
+export type PersistedSearchPreferences = {
+  targetRegions: SearchTargetRegion[];
+  workModes: SearchWorkMode[];
+  preferredRoles: string[];
+  allowedSources: string[];
+  includeKeywords: string[];
+  excludeKeywords: string[];
+};
+
 export type SearchProfileBuildRequest = {
   rawText: string;
-  preferences?: {
-    targetRegions?: SearchTargetRegion[];
-    workModes?: SearchWorkMode[];
-    preferredRoles?: string[];
-    allowedSources?: string[];
-    includeKeywords?: string[];
-    excludeKeywords?: string[];
-  };
+  preferences?: PersistedSearchPreferences;
 };
 
 export type SearchProfileBuildResult = {

@@ -88,7 +88,15 @@ curl \
   -H "Content-Type: application/json" \
   -d '{
     "location": "Lviv",
-    "raw_text": "Senior React Native developer with TypeScript, GraphQL, and product team experience."
+    "raw_text": "Senior React Native developer with TypeScript, GraphQL, and product team experience.",
+    "search_preferences": {
+      "target_regions": ["ua", "eu_remote"],
+      "work_modes": ["remote"],
+      "preferred_roles": ["frontend_engineer"],
+      "allowed_sources": ["djinni", "work_ua"],
+      "include_keywords": ["product company"],
+      "exclude_keywords": ["gambling"]
+    }
   }'
 ```
 
@@ -128,13 +136,16 @@ curl \
     "preferences": {
       "target_regions": ["ua", "eu_remote"],
       "work_modes": ["remote"],
-      "preferred_roles": ["frontend_developer"],
+      "preferred_roles": ["frontend_engineer"],
       "allowed_sources": ["djinni", "work_ua"],
       "include_keywords": ["product company"],
       "exclude_keywords": ["gambling"]
     }
   }'
 ```
+
+If the profile already has stored `search_preferences`, the same endpoint also accepts an empty
+`preferences` object and rebuilds from the persisted values.
 
 Other read APIs:
 

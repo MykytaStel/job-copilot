@@ -5,7 +5,7 @@ use crate::api::dto::jobs::{JobResponse, MlJobLifecycleResponse, RecentJobsRespo
 use crate::api::dto::ranking::FitScoreResponse;
 use crate::api::dto::search::JobFitResponse;
 use crate::api::error::{ApiError, ApiJson};
-use crate::services::matching::summarize_match_quality;
+use crate::services::search_ranking::summarize_match_quality;
 use crate::state::AppState;
 
 use super::{
@@ -234,11 +234,11 @@ pub async fn get_job_fit(
         ));
     };
 
-    let candidate = state.profile_analysis_service.analyze(&resume.raw_text);
-    let profile = state.profiles_service.get_latest().await.ok().flatten();
+    let candidate = state.profile_analysis.analyze(&resume.raw_text);
+    let profile = state.profile_records.get_latest().await.ok().flatten();
 
     let score = state
-        .ranking_service
+        .fit_scoring
         .compute(&candidate, &job, profile.as_ref());
 
     if let Err(error) = state.fit_scores_repository.upsert(&score, &resume.id).await {
@@ -281,10 +281,10 @@ pub async fn score_job_match(
         ));
     };
 
-    let candidate = state.profile_analysis_service.analyze(&resume.raw_text);
-    let profile = state.profiles_service.get_latest().await.ok().flatten();
+    let candidate = state.profile_analysis.analyze(&resume.raw_text);
+    let profile = state.profile_records.get_latest().await.ok().flatten();
     let score = state
-        .ranking_service
+        .fit_scoring
         .compute(&candidate, &job, profile.as_ref());
 
     if let Err(error) = state.fit_scores_repository.upsert(&score, &resume.id).await {

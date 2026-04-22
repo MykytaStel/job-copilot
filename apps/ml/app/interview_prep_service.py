@@ -4,7 +4,7 @@ from app.interview_prep import (
     build_interview_prep_prompt,
     parse_interview_prep_output,
 )
-from app.llm_provider import InterviewPrepProvider
+from app.llm_provider_types import InterviewPrepProvider
 
 
 class InterviewPrepService:

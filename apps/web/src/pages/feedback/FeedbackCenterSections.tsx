@@ -2,6 +2,7 @@
 
 import type { CompanyFeedbackRecord } from '@job-copilot/shared/feedback';
 import type { JobPosting } from '@job-copilot/shared';
+import type { LucideIcon } from 'lucide-react';
 import { Bookmark, EyeOff, ThumbsDown } from 'lucide-react';
 
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -30,7 +31,7 @@ export function filterJobsBySearch(jobs: JobPosting[], normalizedSearch: string)
 function JobFeedbackSection({
   title,
   description,
-  icon,
+  icon: Icon,
   jobs,
   tone,
   emptyMessage,
@@ -40,7 +41,7 @@ function JobFeedbackSection({
 }: {
   title: string;
   description: string;
-  icon: typeof Bookmark;
+  icon: LucideIcon;
   jobs: JobPosting[];
   tone: FeedbackListTone;
   emptyMessage: string;
@@ -49,7 +50,7 @@ function JobFeedbackSection({
   isPending: boolean;
 }) {
   return (
-    <Section title={title} icon={icon({ size: 16 })} description={description} count={jobs.length}>
+    <Section title={title} icon={<Icon size={16} />} description={description} count={jobs.length}>
       {jobs.length === 0 ? (
         <EmptyState message={emptyMessage} className="px-4 py-5 text-left" />
       ) : (

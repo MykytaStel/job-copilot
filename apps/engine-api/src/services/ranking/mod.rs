@@ -1,10 +1,17 @@
+//! Deterministic profile/job fit scoring for single-entity flows.
+//!
+//! Prefer importing this logic through `crate::services::fit_scoring`.
+//! It is intentionally narrower than `crate::services::search_ranking`:
+//! fit scoring answers "how well does this one profile fit this one job?",
+//! while search ranking ranks a list of jobs for a structured search profile.
+
 pub mod runtime;
 
 use crate::domain::candidate::profile::CandidateProfile;
 use crate::domain::job::model::Job;
 use crate::domain::profile::model::Profile;
 use crate::domain::ranking::{FitScore, FitScoreComponents};
-use crate::services::profile::rules::KNOWN_SKILLS;
+use crate::services::profile_analysis::rules::KNOWN_SKILLS;
 
 // Static currency-to-USD conversion rates.
 // These are rough mid-market rates for normalization only, not financial data.
@@ -479,6 +486,7 @@ mod tests {
             salary_currency: "USD".to_string(),
             languages: vec![],
             preferred_work_mode: Some("remote".to_string()),
+            search_preferences: None,
             created_at: "2026-01-01".to_string(),
             updated_at: "2026-04-01".to_string(),
             skills_updated_at: Some("2026-01-01".to_string()),

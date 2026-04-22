@@ -71,7 +71,8 @@ export function SearchProfileBuilderSection({
             Build from current raw text
           </h2>
           <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
-            Uses the CV text above plus explicit preferences. No persistence required.
+            Uses the CV text above plus explicit preferences. Saved profiles keep these preferences
+            persisted for the next session.
           </p>
         </div>
         <Button type="button" onClick={onBuild} disabled={isBuilding || !canBuild}>

@@ -2,7 +2,6 @@ import { Search } from 'lucide-react';
 
 import { Card, CardContent } from '../../components/ui/Card';
 import { cn } from '../../lib/cn';
-import type { FeedbackTab } from './FeedbackCenterComponents';
 import { FEEDBACK_TAB_META } from './FeedbackCenterComponents';
 import type { FeedbackCenterPageState } from './useFeedbackCenterPage';
 

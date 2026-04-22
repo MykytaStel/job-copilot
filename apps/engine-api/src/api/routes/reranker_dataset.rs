@@ -15,7 +15,7 @@ pub async fn get_reranker_dataset(
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<OutcomeDatasetResponse>, ApiError> {
     let Some(profile) = state
-        .profiles_service
+        .profile_records
         .get_by_id(&profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
@@ -66,7 +66,7 @@ pub async fn get_reranker_dataset(
             &profile,
             &events,
             jobs_with_feedback,
-            &state.search_matching_service,
+            &state.search_ranking,
             &behavior,
             &funnel,
         )
@@ -120,6 +120,7 @@ mod tests {
             salary_currency: "USD".to_string(),
             languages: vec![],
             preferred_work_mode: None,
+            search_preferences: None,
             created_at: "2026-04-14T00:00:00Z".to_string(),
             updated_at: "2026-04-14T00:00:00Z".to_string(),
             skills_updated_at: None,

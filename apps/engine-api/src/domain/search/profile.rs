@@ -23,7 +23,7 @@ pub enum WorkMode {
     Onsite,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchPreferences {
     pub target_regions: Vec<TargetRegion>,
     pub work_modes: Vec<WorkMode>,

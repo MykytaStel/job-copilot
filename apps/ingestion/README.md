@@ -1,14 +1,17 @@
 # ingestion
 
-Rust ingestion service foundation.
+Rust ingestion service for source fetch, scrape, normalize, dedupe, lifecycle, and canonical job upserts.
 
 Current slice:
-- reads normalized jobs from a JSON file
-- supports one adapter-backed `mock-source` normalization flow
+- scrapes real sources: Djinni, Work.ua, Dou.ua, Robota.ua
+- supports daemon mode across all configured sources
+- still supports adapter-backed file demos such as `mock-source`
 - upserts canonical jobs into Postgres
 - persists source-specific raw snapshots into `job_variants`
 - resolves adapter-backed canonical job ids through `job_variants` using a normalized dedupe fingerprint
 - reports whether source variants were created, updated, or unchanged on repeat runs
+- applies engine-api migrations when run standalone
+- refreshes `market_snapshots` after successful ingestion writes
 - does not write `search_vector`
 - relies on the database trigger in `engine-api` migrations to maintain search indexing
 
@@ -16,6 +19,8 @@ Current slice:
 
 Environment variables:
 - `DATABASE_URL` required Postgres connection string
+- `INGESTION_DAEMON_INTERVAL_MINUTES` default `60`
+- `INGESTION_MAX_PAGES_PER_SOURCE` default `3`
 
 ## Input format
 
@@ -73,6 +78,22 @@ Run the full local stack from repo root:
 
 ```bash
 pnpm local:ingestion:demo
+```
+
+Run real scrapers once:
+
+```bash
+cd apps/ingestion
+DATABASE_URL=postgres://jobcopilot:jobcopilot@127.0.0.1:5432/jobcopilot \
+  cargo run -- scrape
+```
+
+Run daemon mode:
+
+```bash
+cd apps/ingestion
+DATABASE_URL=postgres://jobcopilot:jobcopilot@127.0.0.1:5432/jobcopilot \
+  cargo run -- daemon
 ```
 
 The local demo:

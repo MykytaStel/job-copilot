@@ -1,25 +1,97 @@
-import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { buildSearchProfile, type SearchProfileBuildResult } from '../../api/profiles';
+import {
+  buildSearchProfile,
+  saveProfileSearchPreferences,
+  type SearchProfileBuildResult,
+} from '../../api/profiles';
 import type { SearchRunResult } from '../../api/jobs';
 import { runSearch } from '../../api/jobs';
-import { parseKeywordInput, toggleValue } from './profile.utils';
+import { queryKeys } from '../../queryKeys';
+import type { getProfile } from '../../api/profiles';
+import { toggleValue } from './profile.utils';
+import { readSearchProfileDraft, writeSearchProfileDraft } from './searchProfileDraft';
+import {
+  buildPersistedSearchPreferences,
+  resolveSearchProfileDraft,
+} from './searchProfilePreferences';
 
-export function useSearchProfileWorkflow(rawText: string) {
+export function useSearchProfileWorkflow(
+  rawText: string,
+  profile: Awaited<ReturnType<typeof getProfile>> | undefined,
+) {
+  const queryClient = useQueryClient();
+  const initialDraft = useMemo(
+    () => resolveSearchProfileDraft(profile?.searchPreferences, readSearchProfileDraft()),
+    [profile?.searchPreferences],
+  );
+  const hydrationKey = useMemo(
+    () =>
+      JSON.stringify({
+        profileId: profile?.id ?? null,
+        searchPreferences: profile?.searchPreferences ?? null,
+      }),
+    [profile?.id, profile?.searchPreferences],
+  );
+  const lastHydratedKey = useRef<string | null>(null);
   const [targetRegions, setTargetRegions] = useState<
     SearchProfileBuildResult['searchProfile']['targetRegions']
-  >([]);
+  >(initialDraft?.targetRegions ?? []);
   const [workModes, setWorkModes] = useState<
     SearchProfileBuildResult['searchProfile']['workModes']
-  >([]);
-  const [preferredRoles, setPreferredRoles] = useState<string[]>([]);
-  const [allowedSources, setAllowedSources] = useState<string[]>([]);
-  const [includeKeywordsInput, setIncludeKeywordsInput] = useState('');
-  const [excludeKeywordsInput, setExcludeKeywordsInput] = useState('');
+  >(initialDraft?.workModes ?? []);
+  const [preferredRoles, setPreferredRoles] = useState<string[]>(
+    initialDraft?.preferredRoles ?? [],
+  );
+  const [allowedSources, setAllowedSources] = useState<string[]>(
+    initialDraft?.allowedSources ?? [],
+  );
+  const [includeKeywordsInput, setIncludeKeywordsInput] = useState(
+    initialDraft?.includeKeywordsInput ?? '',
+  );
+  const [excludeKeywordsInput, setExcludeKeywordsInput] = useState(
+    initialDraft?.excludeKeywordsInput ?? '',
+  );
   const [buildResult, setBuildResult] = useState<SearchProfileBuildResult | null>(null);
   const [searchResult, setSearchResult] = useState<SearchRunResult | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (lastHydratedKey.current === hydrationKey) {
+      return;
+    }
+
+    const draft = resolveSearchProfileDraft(profile?.searchPreferences, readSearchProfileDraft());
+    setTargetRegions(draft?.targetRegions ?? []);
+    setWorkModes(draft?.workModes ?? []);
+    setPreferredRoles(draft?.preferredRoles ?? []);
+    setAllowedSources(draft?.allowedSources ?? []);
+    setIncludeKeywordsInput(draft?.includeKeywordsInput ?? '');
+    setExcludeKeywordsInput(draft?.excludeKeywordsInput ?? '');
+    setBuildResult(null);
+    setSearchResult(null);
+    setSearchError(null);
+    lastHydratedKey.current = hydrationKey;
+  }, [hydrationKey, profile?.searchPreferences]);
+
+  useEffect(() => {
+    writeSearchProfileDraft({
+      targetRegions,
+      workModes,
+      preferredRoles,
+      allowedSources,
+      includeKeywordsInput,
+      excludeKeywordsInput,
+    });
+  }, [
+    allowedSources,
+    excludeKeywordsInput,
+    includeKeywordsInput,
+    preferredRoles,
+    targetRegions,
+    workModes,
+  ]);
 
   const runMutation = useMutation({
     mutationFn: (searchProfile: SearchProfileBuildResult['searchProfile']) =>
@@ -43,22 +115,44 @@ export function useSearchProfileWorkflow(rawText: string) {
   });
 
   const buildMutation = useMutation({
-    mutationFn: () =>
-      buildSearchProfile({
+    mutationFn: async () => {
+      const preferences = buildPersistedSearchPreferences({
+        targetRegions,
+        workModes,
+        preferredRoles,
+        allowedSources,
+        includeKeywordsInput,
+        excludeKeywordsInput,
+      });
+
+      let persistedProfile = null;
+      let persistenceError: string | null = null;
+
+      if (profile?.id) {
+        try {
+          persistedProfile = await saveProfileSearchPreferences(profile.id, preferences);
+        } catch (error) {
+          persistenceError = error instanceof Error ? error.message : 'Failed to save preferences';
+        }
+      }
+
+      const result = await buildSearchProfile({
         rawText,
-        preferences: {
-          targetRegions,
-          workModes,
-          preferredRoles,
-          allowedSources,
-          includeKeywords: parseKeywordInput(includeKeywordsInput),
-          excludeKeywords: parseKeywordInput(excludeKeywordsInput),
-        },
-      }),
+        preferences,
+      });
+
+      return { persistedProfile, persistenceError, result };
+    },
     onSuccess: (result) => {
-      setBuildResult(result);
+      if (result.persistedProfile) {
+        queryClient.setQueryData(queryKeys.profile.root(), result.persistedProfile);
+      }
+      setBuildResult(result.result);
       setSearchResult(null);
       setSearchError(null);
+      if (result.persistenceError) {
+        toast.error(result.persistenceError);
+      }
       toast.success('Search profile built');
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),

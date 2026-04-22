@@ -4,7 +4,7 @@ from app.job_fit_explanation import (
     build_job_fit_explanation_prompt,
     parse_job_fit_explanation_output,
 )
-from app.llm_provider import JobFitExplanationProvider
+from app.llm_provider_types import JobFitExplanationProvider
 
 
 class JobFitExplanationService:

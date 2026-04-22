@@ -32,6 +32,7 @@ export default function Profile() {
     salaryMax,
     salaryCurrency,
     languages,
+    profileCompletion,
     targetRegions,
     workModes,
     preferredRoles,
@@ -146,6 +147,34 @@ export default function Profile() {
                       </p>
                       <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">
                         {searchResult ? `${searchResult.meta.returnedJobs} ranked` : 'Not run yet'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3 sm:col-span-3">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                        Completion
+                      </p>
+                      <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">
+                        {profileCompletion.percent}% complete
+                      </p>
+                      <p className="m-0 mt-1 text-xs text-muted-foreground">
+                        {profileCompletion.completed}/{profileCompletion.total} checkpoints ready
+                      </p>
+                    </div>
+                    <div className="min-w-0 flex-1 lg:max-w-md">
+                      <div className="h-2 rounded-full bg-white/[0.06]">
+                        <div
+                          className="h-2 rounded-full bg-[image:var(--gradient-button)] transition-[width] duration-300"
+                          style={{ width: `${profileCompletion.percent}%` }}
+                        />
+                      </div>
+                      <p className="m-0 mt-2 truncate text-xs text-muted-foreground">
+                        {profileCompletion.missingLabels.length > 0
+                          ? `Missing: ${profileCompletion.missingLabels.join(', ')}`
+                          : 'Profile and analysis are ready for ranking and AI flows.'}
                       </p>
                     </div>
                   </div>
