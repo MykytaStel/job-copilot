@@ -34,6 +34,7 @@ async fn creates_profile_in_stub() {
             salary_max: None,
             salary_currency: "USD".to_string(),
             languages: vec![],
+            search_preferences: None,
         })
         .await
         .expect("stub should create a profile");
@@ -57,6 +58,7 @@ async fn unrelated_profile_updates_keep_skills_timestamp() {
             salary_max: None,
             salary_currency: "USD".to_string(),
             languages: vec![],
+            search_preferences: None,
         })
         .await
         .expect("stub should create a profile");

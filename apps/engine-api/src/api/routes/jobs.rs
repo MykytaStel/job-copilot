@@ -5,8 +5,8 @@ mod helpers;
 
 use serde::Deserialize;
 
-use crate::services::matching::RankedJob;
-use crate::services::ranking::runtime::ResolvedRerankerRuntime;
+use crate::services::search_ranking::RankedJob;
+use crate::services::search_ranking::runtime::ResolvedRerankerRuntime;
 
 pub use handlers::{
     bulk_profile_job_match, get_job_by_id, get_job_fit, get_job_match, get_ml_job_lifecycle,

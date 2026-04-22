@@ -6,7 +6,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, status
 from app.bootstrap_training import DEFAULT_MODEL_PATH, bootstrap_and_retrain
 from app.engine_api_client import EngineApiClient, engine_api_timeout_seconds
 from app.scoring import score_job, unique_preserving_order
-from app.scoring_models import (
+from app.api_models import (
     BootstrapRequest,
     BootstrapResponse,
     FitAnalyzeRequest,

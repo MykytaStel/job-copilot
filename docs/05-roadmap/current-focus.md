@@ -1,45 +1,55 @@
-# Current Focus — 2026-04-21
+# Current Focus — 2026-04-22
 
-## ✅ Завершено (Фаза 1 — всі пункти)
+## ✅ Already Done
 
-1. **Sidebar profile** — реальне ім'я/email з API (`AppShellNew.tsx:288-313`)
-2. **Query invalidation** — web-side TanStack invalidation після feedback (`JobDetails.tsx:270-276`); ML reranker stateless, server-side не потрібен
-3. **Canonical role catalog** — `RoleId` enum, display_name, aliases, підключено до scoring (`domain/role/catalog.rs`, `role_id.rs`)
-4. **Bootstrap training data** — скрипт генерує labeled examples з user_events (`ml/app/bootstrap_training.py`)
-5. **LLM provider** — правильні model names (`gpt-4o-mini`, `llama3.1:8b`); Ollama є default провайдером (`docker-compose.yml`)
-6. **Freshness decay** — jobs > 14 днів зменшують score; `compute_freshness_decay()` (`services/matching/scoring.rs`)
+- **Active web shell** — runtime goes through `apps/web/src/App.tsx` -> `apps/web/src/AppShell.tsx`; `AppShellNew.tsx` is only a re-export alias
+- **Sidebar profile** — real name/email is wired from profile query in the active app shell
+- **Query invalidation** — TanStack invalidation is in place after feedback/profile changes
+- **Canonical role catalog** — `RoleId` enum + aliases are live in Rust matching and related flows
+- **Bootstrap training data** — bootstrap retraining flow exists in `ml/app/bootstrap_training.py`
+- **Freshness decay** — deterministic search scoring decays older jobs
+- **Notifications** — DB table + API endpoints + web inbox + unread badge + ingestion trigger
+- **Global search** — Cmd/Ctrl+K overlay is implemented
+- **Profile compensation + languages** — schema, API, persistence, and web UI are live
+- **Market base page** — overview, company activity, salary trends, and role demand are live
+- **Search profile persistence** — `search_preferences` now persist on profiles; the structured search profile still rebuilds on demand
 
-## ✅ Завершено (Фаза 2 — Market Intelligence)
+## ⚠️ Partially Done
 
-- `market_snapshots` таблиця (`migrations/20260416000000_add_market_snapshots.sql`)
-- API endpoints: overview, companies, salary trends, role demand (`api/routes/market.rs`)
-- Web сторінка `/market` з усіма секціями (`pages/Market.tsx`)
-- **⚠️ Відкрито:** job що пише агрегати в `market_snapshots` — відсутній (таблиця є, даних нема)
+- **Market Intelligence overall** — snapshot writer now refreshes `market_snapshots` after successful ingestion upserts, but current UI/API still read directly from `jobs`
+- **ML provider defaulting** — runtime code defaults to `template`; Docker Compose defaults `ML_LLM_PROVIDER` to `ollama`
 
-## ✅ Завершено (Фаза 3 — часткова)
+## ❌ Missing
 
-- **Notifications (3.1)** — таблиця + 3 API endpoints + UI + bell icon + ingestion trigger (`notifications.rs`, `Notifications.tsx`, `ingestion/src/db.rs`)
-- **Global search (3.2)** — Cmd+K overlay з debounced search (`GlobalSearch.tsx`)
-- **Salary/languages (3.5)** — міграція є (`20260419153000_add_profile_compensation_and_languages.sql`); UI частково
+- CV Tailoring endpoint + web entrypoint
+- Analytics freshness widget for ingestion recency
+- Additional market sections from the broader spec:
+  - freeze signals
+  - tech skills demand
+  - remote adoption trends
 
-## ✅ Завершено (Фаза 4 — Ollama та ML)
+## Current Runtime Notes
 
-- **Ollama provider (4.1)** — `OllamaEnrichmentProvider` використовує `/api/chat` + `format: json` (`llm_provider_remote.py:172`)
-- **Reranker retrain (4.2)** — bootstrap скрипт + `/api/v1/reranker/bootstrap` endpoint (`scoring_routes.py:84`)
-- **Template provider (4.3)** — повна реалізація всіх 6 методів (`llm_provider_template.py`)
-- **ML enrichment endpoints** — всі 6 routes (`enrichment_routes.py`)
+- Active shell source of truth: `apps/web/src/AppShell.tsx`
+- Legacy alias only: `apps/web/src/AppShellNew.tsx`
+- Notifications, market base sections, profile compensation/languages, and global search should no longer be tracked as open feature work
+- `market_snapshots` is now refreshed by ingestion after successful upserts
+- Settings now has a minimal route/page, but dedicated notification preferences are still not implemented
+- Profile completion indicator now exists in the profile/settings surfaces
+- `apps/ingestion/README.md` was stale because ingestion now has real scrapers + daemon mode
+- PostgreSQL extension guidance for self-hosted PG16 lives in `docs/04-development/postgres-extensions.md`
+- Verification matrix lives in `docs/04-development/verification-matrix.md`
 
-## Зараз робимо (Sprint 3)
+## Recommended Next Slices
 
 | # | Задача | Складність | Пріоритет |
 |---|--------|------------|-----------|
-| A | **Market snapshot aggregation job** — заповнити `market_snapshots` реальними даними (агрегація з `jobs` таблиці) | M | Критично |
-| B | **CV Tailoring** — ML endpoint + web modal (відмінно від cover letter — фокус на адаптації CV під JD) | M | Висока |
-| C | **Settings сторінка** — `/settings` route + profile prefs + notification prefs UI | M | Висока |
-| D | **Search profile persistence** — DB таблиця для збереження `SearchPreferences`; зараз будується on-demand | M | Середнє |
-| E | **Profile completion indicator** — % показник заповненості профілю | XS | Низьке |
+| A | **CV Tailoring** — ML endpoint + web modal (відмінно від cover letter — фокус на адаптації CV під JD) | M | Висока |
+| B | **Settings expansion** — dedicated notification prefs + profile preference controls beyond the current read-only route | M | Висока |
+| C | **Analytics freshness widget** — ingestion recency and feed freshness in analytics | XS | Низьке |
+| D | **Market snapshot readers** — якщо потрібно, поступово переводити market sections з live `jobs` queries на snapshots | M | Низьке |
 
-## Не робимо зараз
+## Not Now
 
 - Semantic embeddings / sentence-transformers (Phase 4.4) — потрібні дані спочатку
 - Auth / multi-user (Phase 5) — потрібна монетизація спочатку

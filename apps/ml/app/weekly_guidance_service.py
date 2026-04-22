@@ -1,4 +1,4 @@
-from app.llm_provider import WeeklyGuidanceProvider
+from app.llm_provider_types import WeeklyGuidanceProvider
 from app.weekly_guidance import (
     WeeklyGuidanceRequest,
     WeeklyGuidanceResponse,

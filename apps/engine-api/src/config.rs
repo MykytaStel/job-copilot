@@ -1,6 +1,6 @@
 use tracing::warn;
 
-use crate::services::ranking::runtime::RerankerRuntimeMode;
+use crate::services::search_ranking::runtime::RerankerRuntimeMode;
 
 pub struct Config {
     pub port: u16,
@@ -90,7 +90,7 @@ fn parse_bool(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::services::ranking::runtime::RerankerRuntimeMode;
+    use crate::services::search_ranking::runtime::RerankerRuntimeMode;
 
     use super::parse_bool;
 

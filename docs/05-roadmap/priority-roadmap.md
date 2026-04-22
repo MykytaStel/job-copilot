@@ -1,4 +1,4 @@
-# Priority Roadmap — 2026-04-21
+# Priority Roadmap — 2026-04-22
 
 ## Принципи
 - Тільки реальні дані, ніяких моків там де є реальне джерело
@@ -12,7 +12,7 @@
 
 | # | Задача | Статус | Доказ |
 |---|--------|--------|-------|
-| 1.1 | Sidebar: profile name/email замість hardcoded | ✅ | `AppShellNew.tsx:288-313` |
+| 1.1 | Sidebar: profile name/email замість hardcoded | ✅ | Active runtime path is `web/src/App.tsx` -> `web/src/AppShell.tsx`; `AppShellNew.tsx` is only a re-export alias |
 | 1.2 | Query invalidation: rerank/analytics після feedback | ✅ | `JobDetails.tsx:270-276`; ML reranker stateless |
 | 1.3 | Canonical role catalog (`RoleId` enum + aliases) | ✅ | `domain/role/catalog.rs`, `role_id.rs` |
 | 1.4 | Виправити LLM provider (model name + Ollama path) | ✅ | `llm_provider_factory.py:31`, `llm_provider_remote.py:178` |
@@ -35,7 +35,7 @@
 | 2.6 | Remote work adoption trends | ⏳ | Не реалізовано |
 | 2.7 | `market_snapshots` таблиця | ✅ | `migrations/20260416000000_add_market_snapshots.sql` |
 | 2.8 | Web: Market Intelligence сторінка | ✅ | `web/src/pages/Market.tsx` |
-| 2.9 | **Aggregation job** — щоденне заповнення `market_snapshots` | ❌ MISSING | Таблиця є, даних нема; ні `ingestion/` ні `engine-api/` не пишуть агрегати |
+| 2.9 | **Aggregation job** — заповнення `market_snapshots` | ✅ | `ingestion` refreshes snapshots after successful upserts; live readers still use `jobs` directly |
 
 Детально: `docs/03-domain/market-intelligence.md`
 
@@ -45,12 +45,12 @@
 
 | # | Задача | Статус | Доказ / Примітка |
 |---|--------|--------|------------------|
-| 3.1 | Notifications: таблиця + API + UI (bell icon) | ✅ | `migrations/20260419000000_add_notifications.sql`, `api/routes/notifications.rs`, `web/src/pages/Notifications.tsx`, `AppShellNew.tsx:106-135`; ingestion trigger в `ingestion/src/db.rs` |
+| 3.1 | Notifications: таблиця + API + UI (bell icon) | ✅ | `migrations/20260419000000_add_notifications.sql`, `api/routes/notifications.rs`, `web/src/pages/Notifications.tsx`, active shell badge wiring in `app-shell/useAppShell.ts`; ingestion trigger в `ingestion/src/db.rs` |
 | 3.2 | Global search: PostgreSQL FTS + Cmd+K overlay | ✅ | `web/src/components/GlobalSearch.tsx` |
 | 3.3 | CV Tailoring: endpoint + modal (адаптація CV під JD) | ❌ MISSING | Немає в `ml/app/enrichment_routes.py`; `cover_letter_draft` — окрема фіча |
-| 3.4 | Settings сторінка: профіль + notifications prefs | ❌ MISSING | Немає `/settings` route в `App.tsx` |
-| 3.5 | Profile: years_of_experience + salary_range + languages | ⚠️ PARTIAL | Міграція є (`20260419153000_add_profile_compensation_and_languages.sql`); UI не підтверджено |
-| 3.6 | Profile completion indicator (%) | ❌ MISSING | Немає компонента в `features/profile/` або `pages/Profile.tsx` |
+| 3.4 | Settings сторінка: профіль + notifications prefs | ⚠️ PARTIAL | `/settings` route/page exists, but dedicated notification prefs are not implemented yet |
+| 3.5 | Profile: years_of_experience + salary_range + languages | ✅ | Міграція + DTO + persistence + UI already live |
+| 3.6 | Profile completion indicator (%) | ✅ | Completion status now exists in profile/settings surfaces |
 | 3.7 | Ingestion stats widget в Analytics ("Last updated X min ago") | ❌ MISSING | Немає в `pages/Analytics.tsx` |
 
 ---
@@ -71,6 +71,8 @@
 - ApplicationBoard Kanban 5 колонок (`web/src/pages/ApplicationBoard.tsx`)
 - Analytics сторінка: funnel, behavior, weekly guidance (`web/src/pages/Analytics.tsx`)
 - Reranker endpoint `/api/v1/rerank` + bootstrap (`ml/app/scoring_routes.py`)
+- Notifications inbox unread badge in the active app shell
+- Global search wired in the active header shell
 
 ---
 

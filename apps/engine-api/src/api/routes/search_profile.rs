@@ -12,9 +12,9 @@ pub async fn build_search_profile(
     ApiJson(payload): ApiJson<BuildSearchProfileRequest>,
 ) -> Result<axum::Json<BuildSearchProfileResponse>, ApiError> {
     let input = payload.validate()?;
-    let analyzed_profile = state.profile_analysis_service.analyze(&input.raw_text);
+    let analyzed_profile = state.profile_analysis.analyze(&input.raw_text);
     let search_profile = state
-        .search_profile_service
+        .search_profile_builder
         .build(&analyzed_profile, &input.preferences);
 
     Ok(axum::Json(BuildSearchProfileResponse {

@@ -1,6 +1,6 @@
 # Job Copilot — Master Plan
 
-> Last updated: 2026-04-21
+> Last updated: 2026-04-22
 
 ## 1. Що таке Job Copilot
 
@@ -53,7 +53,7 @@ ingestion (Rust) ─→ PostgreSQL ←─ engine-api (Rust) ←─ web (React)
 
 - **engine-api**: canonical domain, API, validation, persistence
 - **ingestion**: scrape → normalize → dedupe → lifecycle → DB
-- **ml**: scoring, reranking, enrichment, market analytics, (Ollama LLM)
+- **ml**: scoring, reranking, enrichment, market analytics, optional LLM provider layer
 - **web**: dashboard, profile, ranked jobs, application board, market insights
 
 ## 4. AI стратегія (без платного API)
@@ -61,14 +61,19 @@ ingestion (Rust) ─→ PostgreSQL ←─ engine-api (Rust) ←─ web (React)
 ### Зараз (активно)
 - Детермінований scoring в Rust — головний двигун
 - Template enrichment provider в Python — структуровані пояснення без LLM (`ml/app/llm_provider_template.py`)
-- **Ollama provider активний** — `OllamaEnrichmentProvider` є default (`ML_LLM_PROVIDER=ollama`); використовує `llama3.1:8b` через `/api/chat` з `format: json` (`ml/app/llm_provider_remote.py`)
+- **Ollama provider активний, але не universal default** — runtime code default для `ML_LLM_PROVIDER` це `template`; Docker stack за замовчуванням підставляє `ML_LLM_PROVIDER=ollama`
 - Bootstrap ML з реальних feedbacks юзера (`ml/app/bootstrap_training.py`)
 - Всі 6 enrichment endpoints доступні: fit explanation, cover letter, interview prep, profile insights, coaching, weekly guidance
+- Notifications і global search вже доступні в web + engine-api
+- Profile compensation + languages вже доступні end-to-end
+- Market Intelligence already ships базові live sections: overview, companies, salary trends, role demand
+- Search profile preferences now persist on the profile record; the structured search profile is still rebuilt on demand from raw text + saved preferences
 
 ### Наступний крок
-- Market snapshot aggregation job — наповнення `market_snapshots` реальними агрегатами
+- Market snapshot aggregation writer is now live in ingestion; market API can later switch readers from live `jobs` queries to snapshots where useful
 - CV Tailoring endpoint (адаптація CV під конкретну JD)
 - Перемикання провайдера через `ML_LLM_PROVIDER` env var (template / ollama / openai)
+- Settings page (`/settings`) і profile completion indicator
 
 ### Платна підписка (майбутнє)
 - Claude Haiku / GPT-4o-mini для CV tailoring, cover letter, interview prep
@@ -117,7 +122,15 @@ ingestion (Rust) ─→ PostgreSQL ←─ engine-api (Rust) ←─ web (React)
 
 Оновлення: кожні 60 хв (daemon), 3 сторінки на source.
 
-## 8. Що заборонено
+## 8. Operational Notes
+
+- Active web shell runtime path: `apps/web/src/App.tsx` -> `apps/web/src/AppShell.tsx`
+- `apps/web/src/AppShellNew.tsx` is a legacy alias only
+- Market endpoints currently aggregate directly from `jobs`; `market_snapshots` is now refreshed by ingestion after successful upserts
+- PostgreSQL extension recommendations for self-hosted PG16: `docs/04-development/postgres-extensions.md`
+- Verification commands per app: `docs/04-development/verification-matrix.md`
+
+## 9. Що заборонено
 
 - Нові role IDs поза canonical catalog
 - Обхід DTO validation

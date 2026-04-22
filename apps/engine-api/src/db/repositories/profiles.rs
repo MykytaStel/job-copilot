@@ -6,6 +6,7 @@ use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::profile::model::{CreateProfile, Profile, ProfileAnalysis, UpdateProfile};
 use crate::domain::role::RoleId;
+use crate::domain::search::profile::SearchPreferences;
 
 #[derive(Clone)]
 pub struct ProfilesRepository {
@@ -30,6 +31,7 @@ struct ProfileRow {
     salary_currency: Option<String>,
     languages_json: String,
     preferred_work_mode: Option<String>,
+    search_preferences: Option<Json<SearchPreferences>>,
     created_at: String,
     updated_at: String,
     skills_updated_at: Option<String>,
@@ -58,10 +60,11 @@ impl ProfilesRepository {
                 salary_max,
                 salary_currency,
                 languages,
+                search_preferences,
                 created_at,
                 updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
             RETURNING
                 id,
                 name,
@@ -79,6 +82,7 @@ impl ProfilesRepository {
                 salary_currency,
                 languages::text AS languages_json,
                 preferred_work_mode,
+                search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
                 skills_updated_at::text AS skills_updated_at
@@ -94,6 +98,12 @@ impl ProfilesRepository {
         .bind(input.salary_max)
         .bind(&input.salary_currency)
         .bind(Json(input.languages.clone()))
+        .bind(
+            input
+                .search_preferences
+                .as_ref()
+                .map(|value| Json(value.clone())),
+        )
         .fetch_one(pool)
         .await?;
 
@@ -124,6 +134,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
+                search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
                 skills_updated_at::text AS skills_updated_at
@@ -162,6 +173,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
+                search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
                 skills_updated_at::text AS skills_updated_at
@@ -213,6 +225,10 @@ impl ProfilesRepository {
                     WHEN $14 THEN $15
                     ELSE languages
                 END,
+                search_preferences = CASE
+                    WHEN $16 THEN $17
+                    ELSE search_preferences
+                END,
                 summary = CASE
                     WHEN $6 IS NULL THEN summary
                     ELSE NULL
@@ -256,6 +272,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
+                search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
                 skills_updated_at::text AS skills_updated_at
@@ -276,6 +293,13 @@ impl ProfilesRepository {
         .bind(&input.salary_currency)
         .bind(input.languages.is_some())
         .bind(input.languages.as_ref().map(|value| Json(value.clone())))
+        .bind(input.search_preferences.is_some())
+        .bind(
+            input
+                .search_preferences
+                .as_ref()
+                .and_then(|value| value.as_ref().map(|prefs| Json(prefs.clone()))),
+        )
         .fetch_optional(pool)
         .await?;
 
@@ -320,6 +344,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
+                search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
                 skills_updated_at::text AS skills_updated_at
@@ -370,6 +395,7 @@ impl TryFrom<ProfileRow> for Profile {
             salary_currency: row.salary_currency.unwrap_or_else(|| "USD".to_string()),
             languages: serde_json::from_str(&row.languages_json)?,
             preferred_work_mode: row.preferred_work_mode,
+            search_preferences: row.search_preferences.map(|value| value.0),
             created_at: row.created_at,
             updated_at: row.updated_at,
             skills_updated_at: row.skills_updated_at,
@@ -410,6 +436,7 @@ mod tests {
                 salary_max: None,
                 salary_currency: "USD".to_string(),
                 languages: vec![],
+                search_preferences: None,
             })
             .await
             .expect_err("repository should fail without configured database");

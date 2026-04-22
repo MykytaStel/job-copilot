@@ -5,17 +5,17 @@ use crate::db::repositories::{
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
 use crate::services::feedback::FeedbackService;
+use crate::services::fit_scoring::FitScoringService;
 use crate::services::followup::FollowUpService;
 use crate::services::jobs::JobsService;
-use crate::services::matching::SearchMatchingService;
 use crate::services::notifications::NotificationsService;
-use crate::services::profile::service::ProfileAnalysisService;
-use crate::services::profiles::ProfilesService;
-use crate::services::ranking::RankingService;
-use crate::services::ranking::runtime::{RerankerRuntimeMode, TrainedRerankerAvailability};
+use crate::services::profile_analysis::ProfileAnalysisService;
+use crate::services::profile_records::ProfileRecordsService;
 use crate::services::resumes::ResumesService;
 use crate::services::salary::SalaryService;
-use crate::services::search_profile::service::SearchProfileService;
+use crate::services::search_profile_builder::SearchProfileBuilder;
+use crate::services::search_ranking::SearchRankingService;
+use crate::services::search_ranking::runtime::{RerankerRuntimeMode, TrainedRerankerAvailability};
 use crate::services::trained_reranker::TrainedRerankerModel;
 use crate::services::user_events::UserEventsService;
 
@@ -27,20 +27,20 @@ impl AppState {
     }
 
     pub fn for_services(
-        profiles_service: ProfilesService,
+        profile_records: ProfileRecordsService,
         jobs_service: JobsService,
         applications_service: ApplicationsService,
         resumes_service: ResumesService,
     ) -> Self {
-        let profile_analysis_service = ProfileAnalysisService::new();
+        let profile_analysis = ProfileAnalysisService::new();
 
         Self {
             app_name: "engine-api".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             database: Database::disabled(),
-            profiles_service,
+            profile_records,
             jobs_service,
-            search_matching_service: SearchMatchingService::new(),
+            search_ranking: SearchRankingService::new(),
             applications_service,
             feedback_service: FeedbackService::for_tests(
                 crate::services::feedback::FeedbackServiceStub::default(),
@@ -49,10 +49,10 @@ impl AppState {
                 crate::services::activities::ActivitiesServiceStub::default(),
             ),
             resumes_service,
-            profile_analysis_service,
-            ranking_service: RankingService::new(),
+            profile_analysis,
+            fit_scoring: FitScoringService::new(),
             fit_scores_repository: FitScoresRepository::new(Database::disabled()),
-            search_profile_service: SearchProfileService::new(),
+            search_profile_builder: SearchProfileBuilder::new(),
             followup_service: FollowUpService::new(TasksRepository::new(Database::disabled())),
             notifications_service: NotificationsService::new(NotificationsRepository::new(
                 Database::disabled(),

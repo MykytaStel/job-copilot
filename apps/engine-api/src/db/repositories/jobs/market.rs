@@ -5,7 +5,18 @@ use crate::domain::market::model::{
 };
 use sqlx::FromRow;
 
+mod market_role_heuristics {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../shared/rust/market_role_heuristics.rs"
+    ));
+}
+
 use super::JobsRepository;
+use market_role_heuristics::{
+    MARKET_ROLE_GROUP_CLASSIFIER_CASE_SQL, MARKET_ROLE_GROUP_ORDER_ARRAY_SQL,
+    MARKET_ROLE_GROUPS_VALUES_SQL,
+};
 
 impl JobsRepository {
     pub async fn market_overview(&self) -> Result<MarketOverview, RepositoryError> {
@@ -218,94 +229,17 @@ impl JobsRepository {
             prev_period: i64,
         }
 
-        let rows = sqlx::query_as::<_, MarketRoleDemandRow>(
+        // This remains a title-heuristic classifier until market snapshots are
+        // populated from canonical role-aware aggregates.
+        let query = format!(
             r#"
             WITH role_groups(role_group) AS (
                 VALUES
-                    ('Frontend'),
-                    ('Backend'),
-                    ('Fullstack'),
-                    ('DevOps'),
-                    ('Data/ML'),
-                    ('QA'),
-                    ('Design'),
-                    ('Management')
+                    {role_groups_values}
             ),
             classified_jobs AS (
                 SELECT
-                    CASE
-                        WHEN title ILIKE '%engineering manager%'
-                          OR title ILIKE '%product manager%'
-                          OR title ILIKE '%project manager%'
-                          OR title ILIKE '%program manager%'
-                          OR title ILIKE '%delivery manager%'
-                          OR title ILIKE '%product owner%'
-                          OR title ILIKE '%tech lead%'
-                          OR title ILIKE '%technical lead%'
-                          OR title ILIKE '%head of engineering%'
-                          OR title ILIKE '%vp of engineering%'
-                        THEN 'Management'
-                        WHEN title ILIKE '%product designer%'
-                          OR title ILIKE '%ui/ux designer%'
-                          OR title ILIKE '%ux designer%'
-                          OR title ILIKE '%ui designer%'
-                          OR title ILIKE '%interaction designer%'
-                          OR title ILIKE '%graphic designer%'
-                        THEN 'Design'
-                        WHEN title ~* '(^|[^a-z])(qa|sdet|tester)([^a-z]|$)'
-                          OR title ILIKE '%quality assurance%'
-                          OR title ILIKE '%test engineer%'
-                          OR title ILIKE '%automation qa%'
-                        THEN 'QA'
-                        WHEN title ILIKE '%devops%'
-                          OR title ILIKE '%site reliability%'
-                          OR title ~* '(^|[^a-z])sre([^a-z]|$)'
-                          OR title ILIKE '%cloud engineer%'
-                          OR title ILIKE '%cloud architect%'
-                          OR title ILIKE '%infrastructure%'
-                          OR title ILIKE '%platform engineer%'
-                        THEN 'DevOps'
-                        WHEN title ILIKE '%machine learning%'
-                          OR title ILIKE '%ml engineer%'
-                          OR title ILIKE '%ai engineer%'
-                          OR title ILIKE '%data scientist%'
-                          OR title ILIKE '%data engineer%'
-                          OR title ILIKE '%data analyst%'
-                          OR title ILIKE '%analytics engineer%'
-                          OR title ILIKE '%analyst%'
-                        THEN 'Data/ML'
-                        WHEN title ILIKE '%fullstack%'
-                          OR title ILIKE '%full-stack%'
-                          OR title ILIKE '%full stack%'
-                        THEN 'Fullstack'
-                        WHEN title ILIKE '%frontend%'
-                          OR title ILIKE '%front-end%'
-                          OR title ILIKE '%front end%'
-                          OR title ILIKE '%react%'
-                          OR title ILIKE '%vue%'
-                          OR title ILIKE '%angular%'
-                          OR title ILIKE '%next.js%'
-                          OR title ILIKE '%nextjs%'
-                          OR title ILIKE '%typescript%'
-                          OR title ILIKE '%javascript%'
-                        THEN 'Frontend'
-                        WHEN title ILIKE '%backend%'
-                          OR title ILIKE '%back-end%'
-                          OR title ILIKE '%back end%'
-                          OR title ILIKE '%server-side%'
-                          OR title ILIKE '%api developer%'
-                          OR title ILIKE '%rust engineer%'
-                          OR title ILIKE '%rust developer%'
-                          OR title ILIKE '%golang%'
-                          OR title ILIKE '%go developer%'
-                          OR title ILIKE '%java developer%'
-                          OR title ILIKE '%python developer%'
-                          OR title ILIKE '%php developer%'
-                          OR title ILIKE '%node.js%'
-                          OR title ILIKE '%nodejs%'
-                        THEN 'Backend'
-                        ELSE NULL
-                    END AS role_group,
+                    {role_group_classifier} AS role_group,
                     first_seen_at
                 FROM jobs
                 WHERE is_active
@@ -331,14 +265,18 @@ impl JobsRepository {
             FROM role_groups
             LEFT JOIN counts USING (role_group)
             ORDER BY ARRAY_POSITION(
-                ARRAY['Frontend', 'Backend', 'Fullstack', 'DevOps', 'Data/ML', 'QA', 'Design', 'Management']::text[],
+                {role_group_order},
                 role_groups.role_group
             )
             "#,
-        )
-        .bind(period_days)
-        .fetch_all(pool)
-        .await?;
+            role_groups_values = MARKET_ROLE_GROUPS_VALUES_SQL,
+            role_group_classifier = MARKET_ROLE_GROUP_CLASSIFIER_CASE_SQL,
+            role_group_order = MARKET_ROLE_GROUP_ORDER_ARRAY_SQL,
+        );
+        let rows = sqlx::query_as::<_, MarketRoleDemandRow>(&query)
+            .bind(period_days)
+            .fetch_all(pool)
+            .await?;
 
         Ok(rows
             .into_iter()

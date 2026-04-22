@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::api::dto::search_profile::{SearchPreferencesRequest, SearchPreferencesResponse};
 use crate::api::error::ApiError;
 use crate::domain::candidate::profile::{CandidateProfile, RoleScore};
 use crate::domain::profile::model::{
@@ -18,6 +19,7 @@ pub struct CreateProfileRequest {
     pub salary_max: Option<i32>,
     pub salary_currency: Option<String>,
     pub languages: Option<Vec<String>>,
+    pub search_preferences: Option<SearchPreferencesRequest>,
 }
 
 #[derive(Default, Deserialize)]
@@ -31,6 +33,7 @@ pub struct UpdateProfileRequest {
     pub salary_max: Option<Option<i32>>,
     pub salary_currency: Option<String>,
     pub languages: Option<Vec<String>>,
+    pub search_preferences: Option<Option<SearchPreferencesRequest>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -73,6 +76,7 @@ pub struct ProfileResponse {
     pub salary_max: Option<i32>,
     pub salary_currency: String,
     pub languages: Vec<String>,
+    pub search_preferences: Option<SearchPreferencesResponse>,
     pub analysis: Option<PersistedProfileAnalysisResponse>,
     pub created_at: String,
     pub updated_at: String,
@@ -100,6 +104,10 @@ impl CreateProfileRequest {
             salary_max,
             salary_currency,
             languages,
+            search_preferences: self
+                .search_preferences
+                .map(|value| value.validate())
+                .transpose()?,
         })
     }
 }
@@ -115,6 +123,7 @@ impl UpdateProfileRequest {
             && self.salary_max.is_none()
             && self.salary_currency.is_none()
             && self.languages.is_none()
+            && self.search_preferences.is_none()
         {
             return Err(ApiError::bad_request_with_details(
                 "empty_profile_patch",
@@ -129,7 +138,8 @@ impl UpdateProfileRequest {
                         "salary_min",
                         "salary_max",
                         "salary_currency",
-                        "languages"
+                        "languages",
+                        "search_preferences"
                     ]
                 }),
             ));
@@ -182,6 +192,10 @@ impl UpdateProfileRequest {
             salary_max,
             salary_currency,
             languages,
+            search_preferences: self
+                .search_preferences
+                .map(|value| value.map(|prefs| prefs.validate()).transpose())
+                .transpose()?,
         })
     }
 }
@@ -249,6 +263,9 @@ impl From<Profile> for ProfileResponse {
             salary_max: profile.salary_max,
             salary_currency: profile.salary_currency,
             languages: profile.languages,
+            search_preferences: profile
+                .search_preferences
+                .map(SearchPreferencesResponse::from),
             analysis: profile.analysis.map(PersistedProfileAnalysisResponse::from),
             created_at: profile.created_at,
             updated_at: profile.updated_at,
@@ -422,6 +439,7 @@ fn validate_salary_bounds(
 #[cfg(test)]
 mod tests {
     use axum::response::IntoResponse;
+    use serde_json::json;
 
     use crate::domain::candidate::profile::{CandidateProfile, RoleScore};
     use crate::domain::role::RoleId;
@@ -461,6 +479,7 @@ mod tests {
             salary_max: None,
             salary_currency: None,
             languages: None,
+            search_preferences: None,
         }
         .validate()
         .expect_err("validation should fail");
@@ -475,6 +494,33 @@ mod tests {
             .expect_err("validation should fail");
 
         assert_eq!(error.into_response().status(), 400);
+    }
+
+    #[test]
+    fn accepts_search_preferences_only_patch() {
+        let validated = UpdateProfileRequest {
+            search_preferences: Some(Some(
+                serde_json::from_value(json!({
+                    "target_regions": ["ua"],
+                    "work_modes": ["remote"],
+                    "preferred_roles": ["frontend_engineer"],
+                    "allowed_sources": ["djinni"],
+                    "include_keywords": ["product company"],
+                    "exclude_keywords": ["gambling"]
+                }))
+                .expect("payload should deserialize"),
+            )),
+            ..Default::default()
+        }
+        .validate()
+        .expect("validation should succeed");
+
+        let preferences = validated
+            .search_preferences
+            .flatten()
+            .expect("search preferences should be present");
+        assert_eq!(preferences.preferred_roles, vec![RoleId::FrontendEngineer]);
+        assert_eq!(preferences.include_keywords, vec!["product company"]);
     }
 
     #[test]

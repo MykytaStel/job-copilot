@@ -15,6 +15,7 @@ import { cn } from '../lib/cn';
 import { formatDate, formatEnumLabel } from '../lib/format';
 import { readProfileId } from '../lib/profileSession';
 import { queryKeys } from '../queryKeys';
+import { countUnreadNotifications, resolveNotificationsViewState } from './notifications/viewState';
 
 const LIST_LIMIT = 50;
 
@@ -164,7 +165,13 @@ export default function Notifications() {
     },
   });
 
-  const unreadCount = notifications.filter((notification) => !notification.readAt).length;
+  const unreadCount = countUnreadNotifications(notifications);
+  const viewState = resolveNotificationsViewState({
+    profileId,
+    isLoading,
+    error,
+    notifications,
+  });
 
   return (
     <Page>
@@ -186,7 +193,7 @@ export default function Notifications() {
         }
       />
 
-      {!profileId ? (
+      {viewState === 'missing_profile' ? (
         <EmptyState
           icon={<Bell className="h-5 w-5" />}
           message="Notifications need an active profile"
@@ -207,7 +214,7 @@ export default function Notifications() {
             />
             <StatCard
               title="Profile scope"
-              value={profileId.slice(0, 8)}
+              value={(profileId ?? 'none').slice(0, 8)}
               description="Notifications are stored per profile"
             />
           </div>
@@ -220,7 +227,7 @@ export default function Notifications() {
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              {isLoading ? (
+              {viewState === 'loading' ? (
                 <div className="space-y-3">
                   {Array.from({ length: 3 }).map((_, index) => (
                     <div
@@ -229,14 +236,14 @@ export default function Notifications() {
                     />
                   ))}
                 </div>
-              ) : error ? (
+              ) : viewState === 'error' ? (
                 <EmptyState
                   message="Failed to load notifications"
                   description={
                     error instanceof Error ? error.message : 'The inbox could not be loaded.'
                   }
                 />
-              ) : notifications.length === 0 ? (
+              ) : viewState === 'empty' ? (
                 <EmptyState
                   icon={<Bell className="h-5 w-5" />}
                   message="No notifications yet"

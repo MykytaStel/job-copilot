@@ -5,7 +5,7 @@ use crate::api::dto::jobs::JobResponse;
 use crate::domain::job::model::Job;
 use crate::domain::matching::{JobFit, JobScoreBreakdown, JobScorePenalty};
 use crate::domain::search::global::ApplicationSearchHit;
-use crate::services::matching::SearchRunResult;
+use crate::services::search_ranking::{RankedJob, SearchRunResult};
 
 #[derive(Debug, Serialize)]
 pub struct SearchResponse {
@@ -193,8 +193,8 @@ impl RunSearchResponse {
     }
 }
 
-impl From<crate::services::matching::RankedJob> for RankedJobResponse {
-    fn from(value: crate::services::matching::RankedJob) -> Self {
+impl From<RankedJob> for RankedJobResponse {
+    fn from(value: RankedJob) -> Self {
         Self {
             job: JobResponse::from(value.job),
             fit: JobFitResponse::from(value.fit),

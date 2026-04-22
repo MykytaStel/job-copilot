@@ -73,6 +73,12 @@ FROM jobs WHERE is_active = TRUE
 GROUP BY role_group;
 ```
 
+Поточна реалізація:
+- `engine-api` live reader і `ingestion` snapshot writer обидва використовують один shared interim title heuristic.
+- Це не canonical `RoleId` pipeline і не джерело domain truth.
+- Евристика існує лише для ринкової агрегації, поки market snapshots не будуються з role-aware aggregate layer.
+- Через це назви груп (`Frontend`, `Backend`, `Data/ML`, ...) треба трактувати як operator-facing market buckets, а не як канонічні ролі кандидата/вакансії.
+
 ### 4. Market Freeze Signals
 **Питання:** Які компанії могли провести звільнення?
 
@@ -119,7 +125,7 @@ CREATE TABLE market_snapshots (
 CREATE INDEX ON market_snapshots(snapshot_date, snapshot_type);
 ```
 
-**Заповнення:** раз на день (або після кожного ingestion run) — окремий job в ingestion daemon.
+**Заповнення:** зараз після кожного успішного ingestion upsert; за потреби можна лишити це так або пізніше перевести на окремий daily job.
 
 ## Нові API endpoints
 

@@ -2,6 +2,10 @@
 
 Кожен промпт — окремий чат. Копіюй як є, він самодостатній.
 
+> Historical note: some prompts below reference `apps/web/src/AppShellNew.tsx`.
+> The active runtime shell is `apps/web/src/App.tsx` -> `apps/web/src/AppShell.tsx`;
+> treat `AppShellNew.tsx` as a compatibility alias only.
+
 ---
 
 ## ФАЗА 1 — Основи

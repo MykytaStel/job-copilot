@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.engine_api_client import engine_api_base_url
 from app.enrichment_routes import register_enrichment_routes
-from app.models import HealthResponse
+from app.api_models import HealthResponse
 from app.scoring_routes import register_scoring_routes
 from app.settings import configure_logging, get_runtime_settings
 

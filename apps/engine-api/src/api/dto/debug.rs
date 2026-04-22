@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::services::ranking::runtime::TrainedRerankerAvailability;
+use crate::services::search_ranking::runtime::TrainedRerankerAvailability;
 use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
@@ -36,7 +36,9 @@ mod tests {
     use serde_json::json;
 
     use super::RerankerStatusResponse;
-    use crate::services::ranking::runtime::{RerankerRuntimeMode, TrainedRerankerAvailability};
+    use crate::services::search_ranking::runtime::{
+        RerankerRuntimeMode, TrainedRerankerAvailability,
+    };
     use crate::state::AppState;
 
     #[test]
