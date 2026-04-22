@@ -62,7 +62,7 @@ export function ApplicationFormSection({
           </label>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-surface-muted px-4 py-3">
           <p className="m-0 text-sm text-muted-foreground">
             Save only when something actually changed to keep the activity trail clean.
           </p>

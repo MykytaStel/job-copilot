@@ -33,6 +33,8 @@ export interface JobPresentation {
   outboundUrl?: string;
   salaryLabel?: string;
   freshnessLabel?: string;
+  lifecyclePrimaryLabel?: string;
+  lifecycleSecondaryLabel?: string;
   badges: string[];
 }
 

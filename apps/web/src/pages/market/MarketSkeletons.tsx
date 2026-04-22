@@ -1,5 +1,5 @@
 export function StatCardSkeleton() {
-  return <div className="h-[140px] animate-pulse rounded-[24px] border border-border bg-card/80" />;
+  return <div className="h-[140px] animate-pulse rounded-[var(--radius-card)] border border-border bg-card/80" />;
 }
 
 export function ListSkeleton({ rows = 5 }: { rows?: number }) {
@@ -8,7 +8,7 @@ export function ListSkeleton({ rows = 5 }: { rows?: number }) {
       {Array.from({ length: rows }).map((_, index) => (
         <div
           key={index}
-          className="h-16 animate-pulse rounded-2xl border border-border/70 bg-white/[0.04]"
+          className="h-16 animate-pulse rounded-2xl border border-border/70 bg-white-a04"
         />
       ))}
     </div>

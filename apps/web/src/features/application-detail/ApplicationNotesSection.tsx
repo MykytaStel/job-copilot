@@ -52,7 +52,7 @@ export function NotesSection({
           {notes.map((note) => (
             <div
               key={note.id}
-              className="rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-4"
+              className="rounded-2xl border border-border/70 bg-surface-muted px-4 py-4"
             >
               <p className="m-0 text-sm leading-7 text-card-foreground">{note.content}</p>
               <p className="m-0 mt-3 text-xs text-muted-foreground">{formatDate(note.createdAt)}</p>

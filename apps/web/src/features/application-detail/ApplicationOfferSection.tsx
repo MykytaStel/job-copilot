@@ -63,7 +63,7 @@ export function OfferSection({
           </InnerPanel>
         </div>
       ) : (
-        <div className="rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-3">
+        <div className="rounded-2xl border border-border/70 bg-surface-muted px-4 py-3">
           <p className="m-0 text-sm text-muted-foreground">No offer saved yet.</p>
         </div>
       )}

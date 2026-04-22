@@ -32,11 +32,19 @@ pub struct JobPresentation {
     pub outbound_url: Option<String>,
     pub salary_label: Option<String>,
     pub freshness_label: Option<String>,
+    pub lifecycle_primary_label: Option<String>,
+    pub lifecycle_secondary_label: Option<String>,
     pub badges: Vec<String>,
 }
 
 pub fn build_job_presentation(job: &Job) -> JobPresentation {
-    build_presentation(job, None, None, None)
+    let lifecycle_stage = if job.is_active {
+        JobLifecycleStage::Active
+    } else {
+        JobLifecycleStage::Inactive
+    };
+
+    build_presentation(job, None, Some(&lifecycle_stage), None, None, None)
 }
 
 pub fn build_job_view_presentation(view: &JobView) -> JobPresentation {
@@ -44,6 +52,8 @@ pub fn build_job_view_presentation(view: &JobView) -> JobPresentation {
         &view.job,
         Some(&view.first_seen_at),
         Some(&view.lifecycle_stage),
+        view.inactivated_at.as_deref(),
+        view.reactivated_at.as_deref(),
         view.primary_variant.as_ref(),
     )
 }
@@ -52,6 +62,8 @@ fn build_presentation(
     job: &Job,
     first_seen_at: Option<&str>,
     lifecycle_stage: Option<&JobLifecycleStage>,
+    inactivated_at: Option<&str>,
+    reactivated_at: Option<&str>,
     primary_variant: Option<&JobSourceVariant>,
 ) -> JobPresentation {
     let source_id =
@@ -77,8 +89,15 @@ fn build_presentation(
         job.salary_max,
         job.salary_currency.as_deref(),
     );
-    let freshness_label =
-        build_freshness_label(job.posted_at.as_deref(), first_seen_at, &job.last_seen_at);
+    let (lifecycle_primary_label, lifecycle_secondary_label) = build_lifecycle_labels(
+        job.posted_at.as_deref(),
+        first_seen_at,
+        &job.last_seen_at,
+        lifecycle_stage,
+        inactivated_at,
+        reactivated_at,
+    );
+    let freshness_label = lifecycle_primary_label.clone();
     let description_quality = assess_description_quality(&job.description_text);
     let (summary, summary_quality, summary_fallback) = build_summary(
         source_id,
@@ -110,6 +129,8 @@ fn build_presentation(
         outbound_url,
         salary_label,
         freshness_label,
+        lifecycle_primary_label,
+        lifecycle_secondary_label,
         badges,
     }
 }
@@ -412,20 +433,37 @@ fn build_salary_label(
     }
 }
 
-fn build_freshness_label(
+fn build_lifecycle_labels(
     posted_at: Option<&str>,
     first_seen_at: Option<&str>,
     last_seen_at: &str,
-) -> Option<String> {
-    if let Some(posted) = date_part(posted_at) {
-        return Some(format!("Posted {posted}"));
-    }
+    lifecycle_stage: Option<&JobLifecycleStage>,
+    inactivated_at: Option<&str>,
+    reactivated_at: Option<&str>,
+) -> (Option<String>, Option<String>) {
+    let origin_label = if let Some(posted) = date_part(posted_at) {
+        Some(format!("Posted {posted}"))
+    } else if let Some(first_seen) = date_part(first_seen_at) {
+        Some(format!("Seen since {first_seen}"))
+    } else {
+        date_part(Some(last_seen_at)).map(|date| format!("Seen since {date}"))
+    };
+    let last_confirmed_label =
+        date_part(Some(last_seen_at)).map(|date| format!("Last confirmed active {date}"));
 
-    if let Some(first_seen) = date_part(first_seen_at) {
-        return Some(format!("Seen {first_seen}"));
+    match lifecycle_stage {
+        Some(JobLifecycleStage::Inactive) => (
+            origin_label,
+            date_part(inactivated_at.or(Some(last_seen_at)))
+                .map(|date| format!("Inactive since {date}")),
+        ),
+        Some(JobLifecycleStage::Reactivated) => (
+            date_part(reactivated_at.or(Some(last_seen_at)))
+                .map(|date| format!("Reactivated {date}")),
+            last_confirmed_label,
+        ),
+        _ => (origin_label, last_confirmed_label),
     }
-
-    date_part(Some(last_seen_at)).map(|date| format!("Seen {date}"))
 }
 
 fn build_badges(
@@ -707,6 +745,14 @@ mod tests {
             presentation.freshness_label.as_deref(),
             Some("Posted 2026-04-12")
         );
+        assert_eq!(
+            presentation.lifecycle_primary_label.as_deref(),
+            Some("Posted 2026-04-12")
+        );
+        assert_eq!(
+            presentation.lifecycle_secondary_label.as_deref(),
+            Some("Last confirmed active 2026-04-14")
+        );
     }
 
     #[test]
@@ -858,5 +904,62 @@ mod tests {
         ];
 
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn missing_posted_at_uses_seen_since_for_primary_lifecycle_label() {
+        let mut view = sample_view(
+            "work_ua",
+            "87654321",
+            "https://www.work.ua/jobs/87654321/",
+            "Own integrations with ATS partners.",
+            json!({
+                "location": "Kyiv",
+                "description_text": "Own integrations with ATS partners."
+            }),
+        );
+        view.job.posted_at = None;
+        view.first_seen_at = "2026-04-15T08:00:00Z".to_string();
+        view.job.last_seen_at = "2026-04-22T09:00:00Z".to_string();
+
+        let presentation = build_job_view_presentation(&view);
+
+        assert_eq!(
+            presentation.lifecycle_primary_label.as_deref(),
+            Some("Seen since 2026-04-15")
+        );
+        assert_eq!(
+            presentation.lifecycle_secondary_label.as_deref(),
+            Some("Last confirmed active 2026-04-22")
+        );
+    }
+
+    #[test]
+    fn inactive_lifecycle_prefers_inactive_since_secondary_label() {
+        let mut view = sample_view(
+            "djinni",
+            "196044",
+            "https://djinni.co/jobs/196044-seo-specialist/",
+            "Build Rust APIs for high-load recruiting workflows.",
+            json!({
+                "location": "Remote, Europe",
+                "description_text": "Build Rust APIs for high-load recruiting workflows."
+            }),
+        );
+        view.lifecycle_stage = JobLifecycleStage::Inactive;
+        view.job.is_active = false;
+        view.inactivated_at = Some("2026-04-20T09:00:00Z".to_string());
+        view.job.last_seen_at = "2026-04-20T09:00:00Z".to_string();
+
+        let presentation = build_job_view_presentation(&view);
+
+        assert_eq!(
+            presentation.lifecycle_primary_label.as_deref(),
+            Some("Posted 2026-04-12")
+        );
+        assert_eq!(
+            presentation.lifecycle_secondary_label.as_deref(),
+            Some("Inactive since 2026-04-20")
+        );
     }
 }

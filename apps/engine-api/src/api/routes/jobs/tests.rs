@@ -59,6 +59,26 @@ fn sample_job_view(id: &str) -> JobView {
     }
 }
 
+fn job_view_with_lifecycle(
+    id: &str,
+    posted_at: Option<&str>,
+    first_seen_at: &str,
+    last_seen_at: &str,
+    inactivated_at: Option<&str>,
+    reactivated_at: Option<&str>,
+    lifecycle_stage: JobLifecycleStage,
+) -> JobView {
+    let mut view = sample_job_view(id);
+    view.job.posted_at = posted_at.map(str::to_string);
+    view.first_seen_at = first_seen_at.to_string();
+    view.job.last_seen_at = last_seen_at.to_string();
+    view.inactivated_at = inactivated_at.map(str::to_string);
+    view.reactivated_at = reactivated_at.map(str::to_string);
+    view.lifecycle_stage = lifecycle_stage.clone();
+    view.job.is_active = !matches!(lifecycle_stage, JobLifecycleStage::Inactive);
+    view
+}
+
 fn sample_profile() -> Profile {
     Profile {
         id: "profile-1".to_string(),
@@ -429,6 +449,156 @@ async fn returns_job_feed_summary_and_lifecycle_fields() {
     assert_eq!(
         payload["jobs"][0]["presentation"]["salary_label"],
         json!("5,000-6,500 USD")
+    );
+    assert_eq!(
+        payload["jobs"][0]["presentation"]["lifecycle_primary_label"],
+        json!("Reactivated 2026-04-16")
+    );
+    assert_eq!(
+        payload["jobs"][0]["presentation"]["lifecycle_secondary_label"],
+        json!("Last confirmed active 2026-04-16")
+    );
+}
+
+async fn recent_jobs_payload_for(job_view: JobView) -> Value {
+    let lifecycle_stage = job_view.lifecycle_stage.clone();
+    let state = AppState::for_services(
+        ProfilesService::for_tests(ProfilesServiceStub::default()),
+        JobsService::for_tests(
+            JobsServiceStub::default()
+                .with_job_view(job_view)
+                .with_feed_summary(JobFeedSummary {
+                    total_jobs: 1,
+                    active_jobs: if matches!(lifecycle_stage, JobLifecycleStage::Inactive) {
+                        0
+                    } else {
+                        1
+                    },
+                    inactive_jobs: if matches!(lifecycle_stage, JobLifecycleStage::Inactive) {
+                        1
+                    } else {
+                        0
+                    },
+                    reactivated_jobs: if matches!(lifecycle_stage, JobLifecycleStage::Reactivated) {
+                        1
+                    } else {
+                        0
+                    },
+                }),
+        ),
+        ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+        ResumesService::for_tests(ResumesServiceStub::default()),
+    );
+
+    let response = get_recent_jobs(
+        State(state),
+        Query(RecentJobsQuery {
+            limit: Some(20),
+            lifecycle: None,
+            source: None,
+            profile_id: None,
+        }),
+    )
+    .await
+    .expect("recent jobs should succeed")
+    .into_response();
+
+    let body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("response body should be readable");
+
+    serde_json::from_slice(&body).expect("response body should be valid JSON")
+}
+
+#[tokio::test]
+async fn recent_jobs_active_with_posted_at_returns_posted_and_last_confirmed_labels() {
+    let payload = recent_jobs_payload_for(job_view_with_lifecycle(
+        "job-active-posted",
+        Some("2026-04-15T08:00:00Z"),
+        "2026-04-15T08:00:00Z",
+        "2026-04-22T09:00:00Z",
+        None,
+        None,
+        JobLifecycleStage::Active,
+    ))
+    .await;
+
+    assert_eq!(
+        payload["jobs"][0]["presentation"]["lifecycle_primary_label"],
+        json!("Posted 2026-04-15")
+    );
+    assert_eq!(
+        payload["jobs"][0]["presentation"]["lifecycle_secondary_label"],
+        json!("Last confirmed active 2026-04-22")
+    );
+}
+
+#[tokio::test]
+async fn recent_jobs_active_without_posted_at_uses_seen_since_fallback() {
+    let payload = recent_jobs_payload_for(job_view_with_lifecycle(
+        "job-active-seen",
+        None,
+        "2026-04-15T08:00:00Z",
+        "2026-04-22T09:00:00Z",
+        None,
+        None,
+        JobLifecycleStage::Active,
+    ))
+    .await;
+
+    assert_eq!(
+        payload["jobs"][0]["presentation"]["lifecycle_primary_label"],
+        json!("Seen since 2026-04-15")
+    );
+    assert_eq!(
+        payload["jobs"][0]["presentation"]["lifecycle_secondary_label"],
+        json!("Last confirmed active 2026-04-22")
+    );
+}
+
+#[tokio::test]
+async fn recent_jobs_inactive_returns_inactive_since_label() {
+    let payload = recent_jobs_payload_for(job_view_with_lifecycle(
+        "job-inactive",
+        Some("2026-04-15T08:00:00Z"),
+        "2026-04-15T08:00:00Z",
+        "2026-04-20T09:00:00Z",
+        Some("2026-04-20T09:00:00Z"),
+        None,
+        JobLifecycleStage::Inactive,
+    ))
+    .await;
+
+    assert_eq!(
+        payload["jobs"][0]["presentation"]["lifecycle_primary_label"],
+        json!("Posted 2026-04-15")
+    );
+    assert_eq!(
+        payload["jobs"][0]["presentation"]["lifecycle_secondary_label"],
+        json!("Inactive since 2026-04-20")
+    );
+}
+
+#[tokio::test]
+async fn recent_jobs_reactivated_returns_reactivated_and_last_confirmed_labels() {
+    let payload = recent_jobs_payload_for(job_view_with_lifecycle(
+        "job-reactivated",
+        Some("2026-04-15T08:00:00Z"),
+        "2026-04-15T08:00:00Z",
+        "2026-04-22T09:00:00Z",
+        None,
+        Some("2026-04-22T09:00:00Z"),
+        JobLifecycleStage::Reactivated,
+    ))
+    .await;
+
+    assert_eq!(
+        payload["jobs"][0]["presentation"]["lifecycle_primary_label"],
+        json!("Reactivated 2026-04-22")
+    );
+    assert_eq!(
+        payload["jobs"][0]["presentation"]["lifecycle_secondary_label"],
+        json!("Last confirmed active 2026-04-22")
     );
 }
 

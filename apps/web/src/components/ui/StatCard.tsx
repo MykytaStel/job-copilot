@@ -1,6 +1,8 @@
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/cn';
+import { AccentIconFrame } from './AccentIconFrame';
 import { Card, CardContent } from './Card';
+import { semanticTextClass } from './semanticTone';
 
 interface StatCardProps {
   title: string;
@@ -32,7 +34,7 @@ export function StatCard({
                 <span
                   className={cn(
                     'text-xs font-medium',
-                    trend.value >= 0 ? 'text-fit-excellent' : 'text-fit-poor',
+                    trend.value >= 0 ? semanticTextClass.success : 'text-fit-poor',
                   )}
                 >
                   {trend.value >= 0 ? '+' : ''}
@@ -43,9 +45,9 @@ export function StatCard({
             )}
           </div>
           {Icon && (
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <AccentIconFrame size="md" className="rounded-lg border-0">
               <Icon className="h-5 w-5 text-primary" />
-            </div>
+            </AccentIconFrame>
           )}
         </div>
       </CardContent>
@@ -62,9 +64,9 @@ export function AnalyticsCard(props: StatCardProps) {
         <div className="mb-4 flex items-center justify-between">
           <p className="text-sm font-medium text-muted-foreground">{title}</p>
           {Icon && (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+            <AccentIconFrame size="sm" className="rounded-lg border-0">
               <Icon className="h-4 w-4 text-primary" />
-            </div>
+            </AccentIconFrame>
           )}
         </div>
         <div className="space-y-1.5">
@@ -74,7 +76,7 @@ export function AnalyticsCard(props: StatCardProps) {
               <span
                 className={cn(
                   'text-sm font-medium',
-                  trend.value >= 0 ? 'text-fit-excellent' : 'text-fit-poor',
+                  trend.value >= 0 ? semanticTextClass.success : 'text-fit-poor',
                 )}
               >
                 {trend.value >= 0 ? '+' : ''}

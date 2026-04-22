@@ -1,5 +1,7 @@
+use std::time::Instant;
+
 use axum::extract::{Path, Query, State};
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::api::dto::jobs::{JobResponse, MlJobLifecycleResponse, RecentJobsResponse};
 use crate::api::dto::ranking::FitScoreResponse;
@@ -68,6 +70,7 @@ pub async fn get_recent_jobs(
     State(state): State<AppState>,
     Query(query): Query<RecentJobsQuery>,
 ) -> Result<axum::Json<RecentJobsResponse>, ApiError> {
+    let started_at = Instant::now();
     let limit = query.limit.unwrap_or(50);
 
     if !(1..=200).contains(&limit) {
@@ -80,23 +83,43 @@ pub async fn get_recent_jobs(
         .map(crate::domain::source::SourceId::canonical_key);
     let profile_id = query.profile_id.as_deref();
 
+    let fetch_started_at = Instant::now();
     let jobs = state
         .jobs_service
         .list_filtered_views(limit, lifecycle, source)
         .await
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
+    let fetch_duration_ms = fetch_started_at.elapsed().as_millis();
+    let fetched_jobs = jobs.len();
+
+    let feedback_started_at = Instant::now();
     let feedback_states = load_feedback_state(&state, profile_id, &jobs).await?;
-    let jobs = jobs
+    let feedback_duration_ms = feedback_started_at.elapsed().as_millis();
+    let jobs: Vec<JobResponse> = jobs
         .into_iter()
         .zip(feedback_states.into_iter())
         .filter(|(_, feedback)| !feedback.hidden)
         .map(|(job, feedback)| JobResponse::from_view_with_feedback(job, feedback))
         .collect();
+    let returned_jobs = jobs.len();
     let summary = state
         .jobs_service
         .feed_summary()
         .await
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
+
+    info!(
+        limit,
+        lifecycle = lifecycle.unwrap_or("all"),
+        source = source.unwrap_or("all"),
+        profile_id = profile_id.unwrap_or(""),
+        fetched_jobs,
+        returned_jobs,
+        fetch_duration_ms,
+        feedback_duration_ms,
+        total_duration_ms = started_at.elapsed().as_millis(),
+        "recent jobs feed loaded"
+    );
 
     Ok(axum::Json(RecentJobsResponse {
         jobs,

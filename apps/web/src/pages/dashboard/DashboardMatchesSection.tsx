@@ -18,6 +18,7 @@ export function DashboardMatchesSection({
   setSearch,
   jobs,
   allJobs,
+  rerankCoverage,
   jobsLoading,
   rankData,
   lifecycleOptions,
@@ -41,6 +42,7 @@ export function DashboardMatchesSection({
   | 'setSearch'
   | 'jobs'
   | 'allJobs'
+  | 'rerankCoverage'
   | 'jobsLoading'
   | 'rankData'
   | 'lifecycleOptions'
@@ -95,7 +97,7 @@ export function DashboardMatchesSection({
             </div>
 
             {search && (
-              <span className="shrink-0 rounded-full border border-border bg-white/[0.03] px-3 py-1.5 text-xs text-muted-foreground">
+              <span className="shrink-0 rounded-full border border-border bg-surface-muted px-3 py-1.5 text-xs text-muted-foreground">
                 {jobs.length}/{allJobs.length} visible
               </span>
             )}
@@ -142,6 +144,13 @@ export function DashboardMatchesSection({
             )}
           </div>
 
+          {mode === 'ranked' && rerankCoverage.isTruncated ? (
+            <p className="m-0 text-xs leading-6 text-muted-foreground">
+              Score sorting reranks the first {rerankCoverage.rankedJobs} feed items out of{' '}
+              {rerankCoverage.totalJobs} to keep the dashboard responsive.
+            </p>
+          ) : null}
+
           {sourcesError && (
             <p className="m-0 text-xs leading-6 text-muted-foreground">
               Каталог джерел недоступний — фільтр за джерелом тимчасово не працює.
@@ -149,7 +158,7 @@ export function DashboardMatchesSection({
           )}
 
           {!profileId && (
-            <div className="rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-4">
+            <div className="rounded-2xl border border-border/70 bg-surface-muted px-4 py-4">
               <p className="m-0 text-sm font-medium text-card-foreground">
                 Create a profile to unlock fit ranking and feedback actions
               </p>

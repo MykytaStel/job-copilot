@@ -1,0 +1,61 @@
+:root {
+  --font-sans: var(--ref-font-family-sans);
+
+  --color-text-primary: var(--ref-color-slate-100);
+  --color-text-secondary: var(--ref-color-slate-400);
+  --color-text-strong: var(--ref-color-slate-050);
+  --color-text-link: var(--ref-color-indigo-300);
+  --color-text-accent: #d7ddff;
+  --color-text-success: var(--ref-color-teal-100);
+  --color-text-success-strong: #86efac;
+  --color-text-warning: var(--ref-color-amber-100);
+  --color-text-warning-strong: #fcd34d;
+  --color-text-danger: var(--ref-color-red-200);
+  --color-text-danger-strong: var(--ref-color-red-300);
+
+  --color-bg-app: var(--ref-color-app-bg);
+  --color-bg-elevated: var(--ref-color-app-surface);
+  --color-bg-card-soft: var(--ref-color-white-040a);
+  --color-bg-card-muted: var(--ref-color-white-035a);
+  --color-bg-input: var(--ref-color-input-bg);
+  --color-bg-hover: var(--ref-color-white-060a);
+  --color-bg-accent: var(--ref-color-indigo-900a);
+  --color-bg-accent-strong: var(--ref-color-indigo-950a);
+  --color-bg-success: var(--ref-color-teal-900a);
+  --color-bg-warning: var(--ref-color-amber-900a);
+  --color-bg-danger: var(--ref-color-red-900a);
+  --color-bg-positive: var(--ref-color-green-900a);
+
+  --color-border-subtle: var(--ref-color-white-070a);
+  --color-border-soft: var(--ref-color-white-080a);
+  --color-border-input: var(--ref-color-white-120a);
+  --color-border-accent: rgba(99, 102, 241, 0.6);
+
+  --gradient-app: var(--ref-gradient-app);
+  --gradient-button: var(--ref-gradient-button);
+
+  --shadow-card: var(--ref-shadow-card);
+  --shadow-hero: var(--ref-shadow-hero);
+
+  --radius-sm: var(--ref-radius-sm);
+  --radius-md: var(--ref-radius-md);
+  --radius-lg: var(--ref-radius-lg);
+  --radius-xl: var(--ref-radius-xl);
+  --radius-2xl: var(--ref-radius-2xl);
+  --radius-pill: var(--ref-radius-pill);
+
+  --space-1: var(--ref-space-1);
+  --space-2: var(--ref-space-2);
+  --space-3: var(--ref-space-3);
+  --space-4: var(--ref-space-4);
+  --space-5: var(--ref-space-5);
+  --space-6: var(--ref-space-6);
+  --space-7: var(--ref-space-7);
+  --space-8: var(--ref-space-8);
+
+  /* Direct aliases for CSS consumers outside Tailwind utilities. */
+  --color-primary: var(--ref-color-indigo-500);
+  --color-primary-foreground: #ffffff;
+  --color-sidebar: var(--ref-color-sidebar-bg);
+  --color-sidebar-foreground: var(--color-text-primary);
+}

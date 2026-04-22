@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 
 import { getNotifications, markNotificationRead } from '../api/notifications';
 import type { AppNotification } from '../api/notifications';
+import { AccentIconFrame } from '../components/ui/AccentIconFrame';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
@@ -24,23 +25,23 @@ const NOTIFICATION_META: Record<
   {
     label: string;
     badgeVariant: 'default' | 'warning' | 'success';
-    iconClass: string;
+    tone: 'primary' | 'warning' | 'success';
   }
 > = {
   new_jobs_found: {
     label: 'New matches',
     badgeVariant: 'default',
-    iconClass: 'border-primary/15 bg-primary/10 text-primary',
+    tone: 'primary',
   },
   job_reactivated: {
     label: 'Reactivated',
     badgeVariant: 'warning',
-    iconClass: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
+    tone: 'warning',
   },
   application_due_soon: {
     label: 'Due soon',
     badgeVariant: 'success',
-    iconClass: 'border-fit-excellent/20 bg-fit-excellent/10 text-fit-excellent',
+    tone: 'success',
   },
 };
 
@@ -74,14 +75,9 @@ function NotificationRow({
     >
       <CardContent className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 gap-4">
-          <div
-            className={cn(
-              'mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border',
-              meta.iconClass,
-            )}
-          >
+          <AccentIconFrame size="lg" tone={meta.tone} className="mt-0.5">
             <Bell className="h-4 w-4" />
-          </div>
+          </AccentIconFrame>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="m-0 text-sm font-semibold text-card-foreground md:text-base">
@@ -94,10 +90,7 @@ function NotificationRow({
                 {meta.label}
               </Badge>
               {!notification.readAt && (
-                <Badge
-                  variant="muted"
-                  className="px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-primary"
-                >
+                <Badge variant="default" className="px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]">
                   Unread
                 </Badge>
               )}
@@ -108,11 +101,11 @@ function NotificationRow({
               </p>
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/[0.04] px-2.5 py-1">
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white-a04 px-2.5 py-1">
                 <Clock3 className="h-3.5 w-3.5" />
                 {formatTimestamp(notification.createdAt)}
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/[0.04] px-2.5 py-1">
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white-a04 px-2.5 py-1">
                 <BriefcaseBusiness className="h-3.5 w-3.5" />
                 {formatEnumLabel(notification.type)}
               </span>
@@ -126,9 +119,9 @@ function NotificationRow({
             </span>
           ) : (
             <Button
-              variant="ghost"
+              variant="link"
               size="sm"
-              className="h-10 rounded-xl px-3 text-primary hover:text-primary"
+              className="h-10 rounded-xl px-3"
               onClick={() => onMarkRead(notification.id)}
               disabled={isPending}
             >
@@ -232,7 +225,7 @@ export default function Notifications() {
                   {Array.from({ length: 3 }).map((_, index) => (
                     <div
                       key={index}
-                      className="h-28 animate-pulse rounded-2xl border border-border/70 bg-white/[0.04]"
+                      className="h-28 animate-pulse rounded-2xl border border-border/70 bg-white-a04"
                     />
                   ))}
                 </div>

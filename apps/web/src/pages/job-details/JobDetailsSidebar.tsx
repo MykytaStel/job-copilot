@@ -51,7 +51,7 @@ export function JobDetailsSidebar({ state }: { state: JobDetailsPageState }) {
                   {fit.evidence.slice(0, 3).map((entry) => (
                     <div
                       key={entry}
-                      className="flex items-start gap-3 rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-3"
+                      className="flex items-start gap-3 rounded-2xl border border-border/70 bg-surface-muted px-4 py-3"
                     >
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-fit-excellent" />
                       <p className="m-0 text-sm leading-6 text-card-foreground">{entry}</p>

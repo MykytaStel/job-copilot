@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { mapApplicationDetail, mapOffer } from '../src/api/mappers';
-import type { EngineApplicationDetail, EngineOffer } from '../src/api/engine-types';
+import { mapApplicationDetail, mapJob, mapOffer } from '../src/api/mappers';
+import type { EngineApplicationDetail, EngineJob, EngineOffer } from '../src/api/engine-types';
 
 describe('api mappers', () => {
   it('maps offer without enum casts', () => {
@@ -126,5 +126,57 @@ describe('api mappers', () => {
 
     expect(mapped.contacts[0]?.relationship).toBe('recruiter');
     expect(mapped.activities[0]?.type).toBe('note');
+  });
+
+  it('maps lifecycle presentation labels without dropping legacy freshness label', () => {
+    const job: EngineJob = {
+      id: 'job-1',
+      title: 'Frontend Engineer',
+      company_name: 'Acme',
+      description_text: 'React TypeScript',
+      location: 'Kyiv',
+      remote_type: 'remote',
+      seniority: 'middle',
+      salary_min: null,
+      salary_max: null,
+      salary_currency: null,
+      posted_at: null,
+      first_seen_at: '2026-04-15T10:00:00Z',
+      last_seen_at: '2026-04-22T10:00:00Z',
+      is_active: true,
+      inactivated_at: null,
+      reactivated_at: null,
+      lifecycle_stage: 'active',
+      primary_variant: null,
+      presentation: {
+        title: 'Frontend Engineer',
+        company: 'Acme',
+        summary: null,
+        summary_quality: null,
+        summary_fallback: false,
+        description_quality: 'good',
+        location_label: 'Kyiv',
+        work_mode_label: 'Remote',
+        source_label: 'Manual',
+        outbound_url: null,
+        salary_label: null,
+        freshness_label: 'Seen since 2026-04-15',
+        lifecycle_primary_label: 'Seen since 2026-04-15',
+        lifecycle_secondary_label: 'Last confirmed active 2026-04-22',
+        badges: [],
+      },
+      feedback: {
+        saved: false,
+        hidden: false,
+        bad_fit: false,
+        company_status: null,
+      },
+    };
+
+    expect(mapJob(job).presentation).toMatchObject({
+      freshnessLabel: 'Seen since 2026-04-15',
+      lifecyclePrimaryLabel: 'Seen since 2026-04-15',
+      lifecycleSecondaryLabel: 'Last confirmed active 2026-04-22',
+    });
   });
 });

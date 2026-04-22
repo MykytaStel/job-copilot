@@ -1,26 +1,16 @@
-interface SkeletonBlockProps {
-  height?: number;
-  width?: string;
-  borderRadius?: number;
-}
-
-function SkeletonBlock({ height = 16, width = '100%', borderRadius = 8 }: SkeletonBlockProps) {
-  return <div className="skeleton" style={{ height, width, borderRadius }} />;
-}
-
-/** Single shimmer line. Use for inline/short replacements. */
+/** Single shimmer line with dynamic dimensions. */
 export function Skeleton({ height = 20, width = '60%' }: { height?: number; width?: string }) {
-  return <SkeletonBlock height={height} width={width} />;
+  return <div className="skeleton" style={{ height, width, borderRadius: 8 }} />;
 }
 
 /** Full page skeleton: simulates a page header + a few content blocks. */
 export function SkeletonPage() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <SkeletonBlock height={32} width="40%" borderRadius={10} />
-      <SkeletonBlock height={100} borderRadius={16} />
-      <SkeletonBlock height={100} borderRadius={16} />
-      <SkeletonBlock height={80} borderRadius={16} />
+    <div className="flex flex-col gap-5">
+      <div className="skeleton h-8 w-2/5 rounded-[10px]" />
+      <div className="skeleton h-[100px] rounded-2xl" />
+      <div className="skeleton h-[100px] rounded-2xl" />
+      <div className="skeleton h-20 rounded-2xl" />
     </div>
   );
 }
@@ -28,9 +18,9 @@ export function SkeletonPage() {
 /** List skeleton: simulates N card rows. */
 export function SkeletonList({ rows = 3 }: { rows?: number }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="flex flex-col gap-3">
       {Array.from({ length: rows }, (_, i) => (
-        <SkeletonBlock key={i} height={56} borderRadius={14} />
+        <div key={i} className="skeleton h-14 rounded-[14px]" />
       ))}
     </div>
   );

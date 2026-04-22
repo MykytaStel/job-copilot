@@ -12,8 +12,8 @@ export function NotificationIconButton({
 }) {
   const badgeLabel = unreadCount > 99 ? '99+' : String(unreadCount);
   const linkClass = mobile
-    ? 'border border-transparent bg-white/[0.03] text-foreground hover:bg-white/[0.06]'
-    : 'border border-border bg-white/[0.03] text-muted-foreground hover:bg-white/[0.06] hover:text-foreground';
+    ? 'border border-transparent bg-surface-muted text-foreground hover:bg-surface-soft'
+    : 'border border-border bg-surface-muted text-muted-foreground hover:bg-surface-soft hover:text-foreground';
 
   return (
     <Link

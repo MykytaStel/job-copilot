@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
 import { ChevronRight, Lightbulb, Sparkles, Target, TrendingUp } from 'lucide-react';
 import { cn } from '../../lib/cn';
+import { AccentIconFrame } from './AccentIconFrame';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { Card, CardContent, CardHeader, CardTitle } from './Card';
+import { semanticBadgeClass, type SemanticTone } from './semanticTone';
 
 type InsightType = 'tip' | 'recommendation' | 'trend';
 
@@ -24,11 +26,11 @@ const insightIcons = {
   trend: TrendingUp,
 } satisfies Record<InsightType, typeof Lightbulb>;
 
-const insightColors = {
-  tip: 'bg-fit-fair/15 text-fit-fair border-fit-fair/30',
-  recommendation: 'bg-primary/15 text-primary border-primary/30',
-  trend: 'bg-fit-good/15 text-fit-good border-fit-good/30',
-} satisfies Record<InsightType, string>;
+const insightTones = {
+  tip: 'warning',
+  recommendation: 'primary',
+  trend: 'info',
+} satisfies Record<InsightType, SemanticTone>;
 
 export function AIInsightPanel({
   insights,
@@ -44,9 +46,9 @@ export function AIInsightPanel({
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-base font-semibold">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15">
+            <AccentIconFrame size="sm" className="rounded-lg border-0">
               <Sparkles className="h-4 w-4 text-primary" />
-            </div>
+            </AccentIconFrame>
             {title}
           </CardTitle>
           <Badge
@@ -60,6 +62,7 @@ export function AIInsightPanel({
       <CardContent className="space-y-3">
         {insights.map((insight) => {
           const Icon = insightIcons[insight.type];
+          const tone = insightTones[insight.type];
 
           return (
             <div
@@ -69,7 +72,7 @@ export function AIInsightPanel({
               <div
                 className={cn(
                   'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
-                  insightColors[insight.type],
+                  semanticBadgeClass[tone],
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -81,11 +84,7 @@ export function AIInsightPanel({
                 </p>
                 {insight.action && (
                   <Link to={insight.action.href} className="mt-2 inline-block no-underline">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="px-0 text-xs text-primary hover:text-primary"
-                    >
+                    <Button variant="link" size="sm" className="px-0 text-xs">
                       {insight.action.label}
                       <ChevronRight className="ml-1 h-3 w-3" />
                     </Button>

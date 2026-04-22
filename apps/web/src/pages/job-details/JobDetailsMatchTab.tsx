@@ -35,7 +35,7 @@ export function JobDetailsMatchTab({ fit }: { fit: FitAnalysis | undefined }) {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-2">
-          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+          <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
             <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-success">
               <CheckCircle2 className="h-4 w-4" />
               Strengths
@@ -54,7 +54,7 @@ export function JobDetailsMatchTab({ fit }: { fit: FitAnalysis | undefined }) {
             )}
           </div>
 
-          <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+          <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
             <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-warning">
               <AlertCircle className="h-4 w-4" />
               Penalties and risks
@@ -74,7 +74,7 @@ export function JobDetailsMatchTab({ fit }: { fit: FitAnalysis | undefined }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+        <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
           <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-warning">
             <AlertCircle className="h-4 w-4" />
             Missing signals
@@ -92,7 +92,7 @@ export function JobDetailsMatchTab({ fit }: { fit: FitAnalysis | undefined }) {
           )}
         </div>
 
-        <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+        <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
           <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-success">
             <CheckCircle2 className="h-4 w-4" />
             Matched terms

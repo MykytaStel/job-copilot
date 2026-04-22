@@ -13,47 +13,52 @@ import {
 } from 'lucide-react';
 import type { Application, JobPosting } from '@job-copilot/shared';
 import { cn } from '../../lib/cn';
+import { getJobMetaLabels } from '../../lib/jobPresentation';
 import { Badge } from './Badge';
 import { Card, CardContent } from './Card';
+import { getFitBand } from './FitScoreBox';
 import { StatusBadge } from './StatusBadge';
 
-// ── Fit score helpers ─────────────────────────────────────────────────────────
+function metaIcon(label: string, job: JobPosting) {
+  const presentation = job.presentation;
 
-function fitBand(score: number): 'excellent' | 'good' | 'fair' | 'poor' {
-  if (score >= 85) return 'excellent';
-  if (score >= 70) return 'good';
-  if (score >= 50) return 'fair';
-  return 'poor';
-}
-
-function fitLabel(score: number): string {
-  switch (fitBand(score)) {
-    case 'excellent':
-      return 'Excellent';
-    case 'good':
-      return 'Good';
-    case 'fair':
-      return 'Fair';
-    default:
-      return 'Weak';
+  if (label === presentation?.locationLabel) {
+    return <MapPin className="h-3 w-3" />;
   }
+
+  if (label === presentation?.salaryLabel) {
+    return <DollarSign className="h-3 w-3" />;
+  }
+
+  return <Clock className="h-3 w-3" />;
 }
 
-function FitScoreBox({ score }: { score: number }) {
-  const band = fitBand(score);
+const FIT_BAND_CLASSES: Record<string, string> = {
+  excellent: 'text-fit-excellent bg-fit-excellent/15',
+  good: 'text-fit-good bg-fit-good/15',
+  fair: 'text-fit-fair bg-fit-fair/15',
+  poor: 'text-fit-poor bg-fit-poor/15',
+};
+
+const FIT_BAND_LABELS: Record<string, string> = {
+  excellent: 'Excellent',
+  good: 'Good',
+  fair: 'Fair',
+  poor: 'Weak',
+};
+
+function JobFitBadge({ score }: { score: number }) {
+  const band = getFitBand(score);
   return (
     <div
       className={cn(
         'flex flex-col items-center justify-center rounded-lg px-3 py-1.5 shrink-0',
-        band === 'excellent' && 'text-fit-excellent bg-fit-excellent/15',
-        band === 'good' && 'text-fit-good bg-fit-good/15',
-        band === 'fair' && 'text-fit-fair bg-fit-fair/15',
-        band === 'poor' && 'text-fit-poor bg-fit-poor/15',
+        FIT_BAND_CLASSES[band],
       )}
     >
       <span className="text-lg font-bold leading-none">{score}</span>
       <span className="text-[10px] font-medium uppercase tracking-wide mt-0.5">
-        {fitLabel(score)}
+        {FIT_BAND_LABELS[band]}
       </span>
     </div>
   );
@@ -61,13 +66,16 @@ function FitScoreBox({ score }: { score: number }) {
 
 // ── Source color helper ───────────────────────────────────────────────────────
 
-function sourceClass(source: string): string {
+const SOURCE_CLASSES: [string, string][] = [
+  ['djinni', 'bg-blue-500/15 text-blue-400'],
+  ['work.ua', 'bg-purple-500/15 text-purple-400'],
+  ['linkedin', 'bg-blue-600/15 text-blue-300'],
+  ['indeed', 'bg-purple-600/15 text-purple-300'],
+];
+
+function getSourceClass(source: string): string {
   const s = source.toLowerCase();
-  if (s.includes('djinni')) return 'bg-blue-500/15 text-blue-400';
-  if (s.includes('work.ua')) return 'bg-purple-500/15 text-purple-400';
-  if (s.includes('linkedin')) return 'bg-blue-600/15 text-blue-300';
-  if (s.includes('indeed')) return 'bg-purple-600/15 text-purple-300';
-  return 'bg-muted text-muted-foreground';
+  return SOURCE_CLASSES.find(([key]) => s.includes(key))?.[1] ?? 'bg-muted text-muted-foreground';
 }
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
@@ -141,6 +149,7 @@ export function JobCard({
   const badges = p?.badges ?? [];
   const summary = p?.summary;
   const showSummary = Boolean(summary && !p?.summaryFallback && p?.summaryQuality !== 'weak');
+  const metaLabels = getJobMetaLabels(job);
 
   const applicationStatus = application?.status;
 
@@ -177,7 +186,7 @@ export function JobCard({
                 </div>
               </div>
 
-              {score !== undefined && <FitScoreBox score={score} />}
+              {score !== undefined && <JobFitBadge score={score} />}
             </div>
 
             {/* Meta row */}
@@ -187,24 +196,12 @@ export function JobCard({
                 compact ? 'mb-2' : 'mb-3',
               )}
             >
-              {p?.locationLabel && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
-                  {p.locationLabel}
+              {metaLabels.map((label) => (
+                <span key={label} className="flex items-center gap-1">
+                  {metaIcon(label, job)}
+                  {label}
                 </span>
-              )}
-              {p?.salaryLabel && (
-                <span className="flex items-center gap-1">
-                  <DollarSign className="h-3 w-3" />
-                  {p.salaryLabel}
-                </span>
-              )}
-              {p?.freshnessLabel && (
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {p.freshnessLabel}
-                </span>
-              )}
+              ))}
             </div>
 
             {/* Skills / badges */}
@@ -243,7 +240,7 @@ export function JobCard({
                   <span
                     className={cn(
                       'text-[10px] font-medium px-2 py-0.5 rounded border border-current/20',
-                      sourceClass(source),
+                      getSourceClass(source),
                     )}
                   >
                     {source}
@@ -263,7 +260,6 @@ export function JobCard({
                     disabled={isPending}
                     onClick={onSave}
                     className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors disabled:opacity-40"
-                    style={{ background: 'transparent', border: 'none' }}
                   >
                     {isSaved ? (
                       <BookmarkCheck className="h-4 w-4 text-primary" />
@@ -279,7 +275,6 @@ export function JobCard({
                     disabled={isPending}
                     onClick={onHide}
                     className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors disabled:opacity-40"
-                    style={{ background: 'transparent', border: 'none' }}
                   >
                     <EyeOff className="h-4 w-4" />
                   </button>
@@ -291,7 +286,6 @@ export function JobCard({
                     disabled={isPending}
                     onClick={onUnmarkBadFit}
                     className="h-7 w-7 flex items-center justify-center rounded-md text-fit-poor hover:bg-surface-hover transition-colors disabled:opacity-40"
-                    style={{ background: 'transparent', border: 'none' }}
                   >
                     <ThumbsDown className="h-4 w-4" />
                   </button>
@@ -302,7 +296,6 @@ export function JobCard({
                     disabled={isPending}
                     onClick={onBadFit}
                     className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-surface-hover transition-colors disabled:opacity-40"
-                    style={{ background: 'transparent', border: 'none' }}
                   >
                     <ThumbsDown className="h-4 w-4" />
                   </button>

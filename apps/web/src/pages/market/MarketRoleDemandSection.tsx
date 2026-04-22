@@ -13,7 +13,7 @@ function RoleRow({ role }: { role: MarketRoleDemand }) {
   const deltaLabel = delta > 0 ? `+${delta}` : `${delta}`;
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-4">
+    <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-surface-muted px-4 py-4">
       <div className="min-w-0">
         <p className="m-0 text-sm font-semibold text-card-foreground">{role.roleGroup}</p>
         <p className="m-0 mt-1 text-xs leading-5 text-muted-foreground">

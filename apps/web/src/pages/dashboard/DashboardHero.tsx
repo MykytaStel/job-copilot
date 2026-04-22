@@ -65,7 +65,7 @@ export function DashboardHero({
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+                  <div className="rounded-2xl border border-border/70 bg-white-a04 px-4 py-3">
                     <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                       Active jobs
                     </p>
@@ -73,7 +73,7 @@ export function DashboardHero({
                       {viewModel.activeJobs}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+                  <div className="rounded-2xl border border-border/70 bg-white-a04 px-4 py-3">
                     <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                       Tracked pipeline
                     </p>
@@ -81,7 +81,7 @@ export function DashboardHero({
                       {viewModel.trackedPipeline}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+                  <div className="rounded-2xl border border-border/70 bg-white-a04 px-4 py-3">
                     <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                       Source focus
                     </p>

@@ -23,6 +23,8 @@ export type EngineJobPresentation = {
   outbound_url?: string | null;
   salary_label?: string | null;
   freshness_label?: string | null;
+  lifecycle_primary_label?: string | null;
+  lifecycle_secondary_label?: string | null;
   badges: string[];
 };
 

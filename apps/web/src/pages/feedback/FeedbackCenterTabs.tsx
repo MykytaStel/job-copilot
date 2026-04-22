@@ -54,7 +54,7 @@ export function FeedbackCenterTabs({
             </p>
           </div>
 
-          <div className="space-y-3 rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+          <div className="space-y-3 rounded-2xl border border-border/70 bg-surface-muted p-4">
             <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Active slice
             </p>

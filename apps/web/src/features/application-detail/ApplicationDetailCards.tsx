@@ -13,7 +13,7 @@ export function DescriptionBlock({ text }: { text: string }) {
   const displayed = expanded || !shouldTruncate ? text : `${text.slice(0, limit)}...`;
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+    <div className="space-y-3 rounded-2xl border border-border/70 bg-surface-muted p-4">
       <div className="flex items-center gap-2">
         <FileText className="h-4 w-4 text-primary" />
         <p className="m-0 text-sm font-semibold text-card-foreground">Job description</p>
@@ -38,7 +38,7 @@ export function ContactCard({ item }: { item: ApplicationContact }) {
   const contact = item.contact;
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-4">
+    <div className="rounded-2xl border border-border/70 bg-surface-muted px-4 py-4">
       <div className="flex flex-wrap items-center gap-2">
         <p className="m-0 text-sm font-semibold text-card-foreground">{contact.name}</p>
         <Badge variant="muted" className="px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]">

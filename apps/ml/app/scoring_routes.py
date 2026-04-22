@@ -1,4 +1,6 @@
 import asyncio
+import logging
+from time import perf_counter
 
 import httpx
 from fastapi import APIRouter, FastAPI, HTTPException, status
@@ -17,6 +19,7 @@ from app.api_models import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/api/v1/fit/analyze", response_model=FitAnalyzeResponse)
@@ -42,6 +45,7 @@ async def analyze_fit(payload: FitAnalyzeRequest) -> FitAnalyzeResponse:
 
 @router.post("/api/v1/rerank", response_model=RerankResponse)
 async def rerank_jobs(payload: RerankRequest) -> RerankResponse:
+    started_at = perf_counter()
     unique_job_ids = unique_preserving_order(
         [job_id.strip() for job_id in payload.job_ids if job_id.strip()]
     )
@@ -77,6 +81,17 @@ async def rerank_jobs(payload: RerankRequest) -> RerankResponse:
         )
 
     ranked_jobs.sort(key=lambda item: (-item.score, item.title.lower(), item.job_id))
+
+    logger.info(
+        "rerank completed",
+        extra={
+            "profile_id": payload.profile_id,
+            "requested_job_ids": len(payload.job_ids),
+            "deduped_job_ids": len(unique_job_ids),
+            "returned_jobs": len(ranked_jobs),
+            "duration_ms": round((perf_counter() - started_at) * 1000, 2),
+        },
+    )
 
     return RerankResponse(profile_id=payload.profile_id, jobs=ranked_jobs)
 

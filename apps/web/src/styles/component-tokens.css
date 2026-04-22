@@ -1,0 +1,4 @@
+:root {
+  --radius-card: var(--radius-2xl);
+  --radius-hero: var(--ref-radius-3xl);
+}

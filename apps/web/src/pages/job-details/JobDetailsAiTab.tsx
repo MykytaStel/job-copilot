@@ -12,6 +12,11 @@ import type { CoverLetterDraft, InterviewPrep, JobFitExplanation } from '../../a
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
+import {
+  semanticDotClass,
+  semanticPanelClass,
+  semanticTextClass,
+} from '../../components/ui/semanticTone';
 import { Section } from './components';
 
 export function JobDetailsAiTab({
@@ -43,7 +48,7 @@ export function JobDetailsAiTab({
 
   if (!deterministicFit) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-white/[0.03] p-6">
+      <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-surface-muted p-6">
         <Loader2 className="h-5 w-5 animate-spin text-primary" />
         <p className="m-0 text-sm text-muted-foreground">Завантажуємо fit аналіз…</p>
       </div>
@@ -65,7 +70,7 @@ export function JobDetailsAiTab({
         ) : fitExplanation ? (
           <div className="space-y-5">
             {fitExplanation.fitSummary ? (
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className={`rounded-2xl border p-4 ${semanticPanelClass.primary}`}>
                 <p className="m-0 text-sm leading-7 text-card-foreground">
                   {fitExplanation.fitSummary}
                 </p>
@@ -74,7 +79,7 @@ export function JobDetailsAiTab({
 
             <div className="grid gap-4 xl:grid-cols-2">
               {fitExplanation.whyItMatches.length > 0 ? (
-                <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                   <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-success">
                     <CheckCircle2 className="h-4 w-4" />
                     Чому підходить
@@ -82,7 +87,7 @@ export function JobDetailsAiTab({
                   <div className="space-y-2">
                     {fitExplanation.whyItMatches.map((item) => (
                       <div key={item} className="flex items-start gap-3">
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-excellent" />
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${semanticDotClass.success}`} />
                         <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
                       </div>
                     ))}
@@ -91,7 +96,7 @@ export function JobDetailsAiTab({
               ) : null}
 
               {fitExplanation.risks.length > 0 ? (
-                <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                   <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-warning">
                     <AlertCircle className="h-4 w-4" />
                     Ризики
@@ -99,7 +104,7 @@ export function JobDetailsAiTab({
                   <div className="space-y-2">
                     {fitExplanation.risks.map((item) => (
                       <div key={item} className="flex items-start gap-3">
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-fair" />
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${semanticDotClass.warning}`} />
                         <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
                       </div>
                     ))}
@@ -109,7 +114,7 @@ export function JobDetailsAiTab({
             </div>
 
             {fitExplanation.missingSignals.length > 0 ? (
-              <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+              <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                 <p className="mb-3 text-sm font-medium text-muted-foreground">Чого бракує</p>
                 <div className="flex flex-wrap gap-2">
                   {fitExplanation.missingSignals.map((s) => (
@@ -122,8 +127,8 @@ export function JobDetailsAiTab({
             ) : null}
 
             {fitExplanation.recommendedNextStep ? (
-              <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                <p className="mb-1 flex items-center gap-2 text-sm font-medium text-primary">
+              <div className={`rounded-2xl border p-4 ${semanticPanelClass.primary}`}>
+                <p className={`mb-1 flex items-center gap-2 text-sm font-medium ${semanticTextClass.primary}`}>
                   <Lightbulb className="h-4 w-4" />
                   Наступний крок
                 </p>
@@ -134,7 +139,7 @@ export function JobDetailsAiTab({
             ) : null}
 
             {fitExplanation.applicationAngle ? (
-              <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+              <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                 <p className="mb-1 text-sm font-medium text-card-foreground">Як подаватись</p>
                 <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
                   {fitExplanation.applicationAngle}
@@ -157,7 +162,7 @@ export function JobDetailsAiTab({
             {coverLetter.draftSummary ? (
               <p className="m-0 text-sm italic text-muted-foreground">{coverLetter.draftSummary}</p>
             ) : null}
-            <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-5 space-y-4 text-sm leading-7 text-card-foreground">
+            <div className="rounded-2xl border border-border/70 bg-surface-muted p-5 space-y-4 text-sm leading-7 text-card-foreground">
               <p className="m-0">{coverLetter.openingParagraph}</p>
               {coverLetter.bodyParagraphs.map((p, i) => (
                 <p key={i} className="m-0">
@@ -207,7 +212,7 @@ export function JobDetailsAiTab({
         {interviewPrep ? (
           <div className="space-y-5">
             {interviewPrep.prepSummary ? (
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className={`rounded-2xl border p-4 ${semanticPanelClass.primary}`}>
                 <p className="m-0 text-sm leading-7 text-card-foreground">
                   {interviewPrep.prepSummary}
                 </p>
@@ -216,12 +221,12 @@ export function JobDetailsAiTab({
 
             <div className="grid gap-4 xl:grid-cols-2">
               {interviewPrep.technicalFocus.length > 0 ? (
-                <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                   <p className="mb-3 text-sm font-medium text-card-foreground">Технічні теми</p>
                   <div className="space-y-2">
                     {interviewPrep.technicalFocus.map((item) => (
                       <div key={item} className="flex items-start gap-3">
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${semanticDotClass.primary}`} />
                         <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
                       </div>
                     ))}
@@ -230,14 +235,14 @@ export function JobDetailsAiTab({
               ) : null}
 
               {interviewPrep.behavioralFocus.length > 0 ? (
-                <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+                <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                   <p className="mb-3 text-sm font-medium text-card-foreground">
                     Поведінкові питання
                   </p>
                   <div className="space-y-2">
                     {interviewPrep.behavioralFocus.map((item) => (
                       <div key={item} className="flex items-start gap-3">
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-good" />
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${semanticDotClass.info}`} />
                         <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
                       </div>
                     ))}
@@ -247,14 +252,14 @@ export function JobDetailsAiTab({
             </div>
 
             {interviewPrep.questionsToAsk.length > 0 ? (
-              <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+              <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                 <p className="mb-3 text-sm font-medium text-card-foreground">
                   Питання до роботодавця
                 </p>
                 <div className="space-y-2">
                   {interviewPrep.questionsToAsk.map((item, i) => (
                     <div key={i} className="flex items-start gap-3">
-                      <span className="mt-1 shrink-0 text-xs font-semibold text-primary">
+                      <span className={`mt-1 shrink-0 text-xs font-semibold ${semanticTextClass.primary}`}>
                         {i + 1}.
                       </span>
                       <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
@@ -265,14 +270,14 @@ export function JobDetailsAiTab({
             ) : null}
 
             {interviewPrep.storiesToPrepare.length > 0 ? (
-              <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+              <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
                 <p className="mb-3 text-sm font-medium text-card-foreground">
                   Історії для підготовки
                 </p>
                 <div className="space-y-2">
                   {interviewPrep.storiesToPrepare.map((item) => (
                     <div key={item} className="flex items-start gap-3">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-fair" />
+                      <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${semanticDotClass.warning}`} />
                       <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
                     </div>
                   ))}

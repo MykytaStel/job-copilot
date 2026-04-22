@@ -141,7 +141,7 @@ export function AnalyticsMainSections({
             ]}
             emptyMessage="No lifecycle data yet."
           />
-          <div className="mt-5 rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-3">
+          <div className="mt-5 rounded-2xl border border-border/70 bg-surface-muted px-4 py-3">
             <p className="m-0 text-xs uppercase tracking-[0.14em] text-muted-foreground">
               Total indexed
             </p>

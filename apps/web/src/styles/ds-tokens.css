@@ -20,6 +20,20 @@
   --color-surface-warning: var(--color-bg-warning);
   --color-surface-danger: var(--color-bg-danger);
 
+  /* White-opacity surface depths — semantic alternatives to bg-white/[0.0x] */
+  --color-surface-muted: var(--ref-color-white-035a);
+  --color-surface-soft:  var(--ref-color-white-060a);
+  --color-surface-dim:   var(--ref-color-white-080a);
+
+  /* Named white-opacity aliases for border/ring/hover contexts */
+  --color-white-a03: var(--ref-color-white-035a);
+  --color-white-a04: var(--ref-color-white-040a);
+  --color-white-a05: var(--ref-color-white-050a);
+  --color-white-a06: var(--ref-color-white-060a);
+  --color-white-a07: var(--ref-color-white-070a);
+  --color-white-a08: var(--ref-color-white-080a);
+  --color-white-a12: var(--ref-color-white-120a);
+
   /* Content (text) */
   --color-content: var(--color-text-primary);
   --color-content-muted: var(--color-text-secondary);
@@ -51,11 +65,11 @@
   --color-primary-foreground: #ffffff;
 
   /* Secondary */
-  --color-secondary: rgba(255, 255, 255, 0.08);
+  --color-secondary: var(--ref-color-white-080a);
   --color-secondary-foreground: var(--color-text-secondary);
 
   /* Muted */
-  --color-muted: rgba(255, 255, 255, 0.06);
+  --color-muted: var(--ref-color-white-060a);
   --color-muted-foreground: var(--color-text-secondary);
 
   /* Accent (cyan, for interactive highlights) */

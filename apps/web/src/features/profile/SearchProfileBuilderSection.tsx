@@ -8,6 +8,7 @@ import type {
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
+import { SurfaceSection } from '../../components/ui/Surface';
 import { TARGET_REGION_OPTIONS, WORK_MODE_OPTIONS } from './profile.constants';
 import { renderErrorMessage } from './profileSection.utils';
 
@@ -57,14 +58,14 @@ export function SearchProfileBuilderSection({
   setExcludeKeywordsInput: (value: string) => void;
 }) {
   return (
-    <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
+    <SurfaceSection>
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
               Structured search profile
             </span>
-            <span className="inline-flex items-center rounded-full border border-border bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <span className="inline-flex items-center rounded-full border border-border bg-white-a04 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Roles, regions, work mode, sources
             </span>
           </div>
@@ -164,6 +165,6 @@ export function SearchProfileBuilderSection({
           />
         </div>
       </div>
-    </section>
+    </SurfaceSection>
   );
 }

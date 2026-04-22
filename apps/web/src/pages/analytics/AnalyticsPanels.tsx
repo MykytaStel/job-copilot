@@ -14,7 +14,7 @@ export function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
   return (
     <div className="space-y-5">
       {ctx.analyzedProfile ? (
-        <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+        <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Profile anchor
           </p>
@@ -22,7 +22,7 @@ export function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
             <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/12 px-3 py-1.5 text-xs font-semibold text-primary">
               {ctx.analyzedProfile.primaryRole}
             </span>
-            <span className="inline-flex items-center rounded-full border border-border bg-white/[0.05] px-3 py-1.5 text-xs text-muted-foreground">
+            <span className="inline-flex items-center rounded-full border border-border bg-white-a05 px-3 py-1.5 text-xs text-muted-foreground">
               {seniorityLabel}
             </span>
           </div>
@@ -57,7 +57,7 @@ export function LlmContextPanel({ ctx }: { ctx: LlmContext }) {
 export function ProfileInsightsPanel({ insights }: { insights: ProfileInsights }) {
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+      <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
         <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           Profile summary
         </p>
@@ -120,7 +120,7 @@ export function ProfileInsightsPanel({ insights }: { insights: ProfileInsights }
 export function WeeklyGuidancePanel({ guidance }: { guidance: WeeklyGuidance }) {
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+      <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
         <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           Weekly summary
         </p>
@@ -206,7 +206,7 @@ export function FunnelBySource({ summary }: { summary: FunnelSummary }) {
       {rows.map((row) => (
         <div
           key={row.source}
-          className="grid grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(56px,1fr))] gap-2 rounded-2xl border border-border/70 bg-white/[0.03] px-4 py-3 text-xs"
+          className="grid grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(56px,1fr))] gap-2 rounded-2xl border border-border/70 bg-surface-muted px-4 py-3 text-xs"
         >
           <span className="truncate font-semibold text-card-foreground">{row.source}</span>
           <span className="text-muted-foreground">Impr. {row.impressions}</span>

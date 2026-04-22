@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
-export const insightPanelBaseClass = 'flex flex-col gap-3 rounded-[14px] border px-4 py-3.5';
+export const insightPanelBaseClass =
+  'flex flex-col gap-3 rounded-[var(--radius-lg)] border px-4 py-3.5';
 
 export function FitExplanationList({
   label,

@@ -6,6 +6,7 @@ import type {
 
 import { EmptyState } from '../../components/ui/EmptyState';
 import { PillList } from '../../components/ui/PillList';
+import { SurfaceSection } from '../../components/ui/Surface';
 import { formatFallbackLabel } from '../../lib/format';
 import { SearchProfilePillSection } from './SearchResultCard';
 import { resolveRoleLabel, resolveSourceLabel } from './profile.utils';
@@ -31,7 +32,7 @@ export function SearchProfileResultSection({
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
+        <SurfaceSection>
           <div className="space-y-2">
             <p className="eyebrow">Analyzed profile</p>
             <h3 className="m-0 text-lg font-semibold text-card-foreground">
@@ -81,9 +82,9 @@ export function SearchProfileResultSection({
               <EmptyState message="No role candidates returned." />
             )}
           </div>
-        </section>
+        </SurfaceSection>
 
-        <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
+        <SurfaceSection>
           <div className="space-y-2">
             <p className="eyebrow">Search profile</p>
             <h3 className="m-0 text-lg font-semibold text-card-foreground">
@@ -134,7 +135,7 @@ export function SearchProfileResultSection({
             items={result.searchProfile.excludeTerms}
             emptyLabel="No exclude terms selected."
           />
-        </section>
+        </SurfaceSection>
       </div>
     </div>
   );

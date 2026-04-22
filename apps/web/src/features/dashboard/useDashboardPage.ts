@@ -55,6 +55,7 @@ const LIFECYCLE_TABS: { value: LifecycleFilter; label: string }[] = [
 ];
 
 const DEFAULT_LIFECYCLE_FILTER: LifecycleFilter = 'all';
+const DASHBOARD_RERANK_WINDOW = 60;
 
 function readLifecycleFilter(searchParams: URLSearchParams): LifecycleFilter {
   const lifecycle = searchParams.get('lifecycle');
@@ -133,13 +134,17 @@ export function useDashboardPage() {
 
   const allJobs = useMemo(() => jobsFeed?.jobs ?? [], [jobsFeed?.jobs]);
   const jobSummary = jobsFeed?.summary;
-  const rerankJobIds = allJobs.map((job) => job.id);
+  const rerankCandidates = useMemo(
+    () => allJobs.slice(0, DASHBOARD_RERANK_WINDOW),
+    [allJobs],
+  );
+  const rerankJobIds = rerankCandidates.map((job) => job.id);
   const rerankJobsKey = rerankJobIds.join('|');
 
   const { data: rankData } = useQuery<RankedJob[]>({
     queryKey: queryKeys.ml.rerank(profileId ?? '', rerankJobsKey),
     queryFn: () => rerankJobs(profileId!, rerankJobIds),
-    enabled: !!profileId && allJobs.length > 0,
+    enabled: !!profileId && sortByScore && rerankJobIds.length > 0,
     retry: false,
   });
 
@@ -280,6 +285,11 @@ export function useDashboardPage() {
     sources.find((source) => source.id === sourceFilter)?.displayName ?? 'All sources';
   const interviewedCount = (stats?.byStatus.interview ?? 0) + (stats?.byStatus.offer ?? 0);
   const mode = sortByScore && profileId ? 'ranked' : 'recent';
+  const rerankCoverage = {
+    rankedJobs: rerankJobIds.length,
+    totalJobs: allJobs.length,
+    isTruncated: allJobs.length > rerankJobIds.length,
+  };
 
   const insights = [
     {
@@ -338,6 +348,7 @@ export function useDashboardPage() {
     topSource,
     interviewedCount,
     mode,
+    rerankCoverage,
     insights,
     saveMutation,
     hideMutation,
