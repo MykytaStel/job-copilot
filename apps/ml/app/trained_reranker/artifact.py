@@ -34,6 +34,8 @@ DEFAULT_FEATURE_NAMES = [
     "work_mode_deal_breaker",
     "scrolled_to_bottom",
     "returned_count",
+    "quick_apply",
+    "delayed_apply",
     "legitimacy_suspicious",
 ]
 FEATURE_TRANSFORMS = {
@@ -58,6 +60,8 @@ FEATURE_TRANSFORMS = {
     "work_mode_deal_breaker": "1 if work_mode_deal_breaker else 0",
     "scrolled_to_bottom": "1 if scrolled_to_bottom else 0",
     "returned_count": "clamp(count, 0, 5) / 5",
+    "quick_apply": "1 if time_to_apply_days is not None and <= 3 else 0",
+    "delayed_apply": "1 if time_to_apply_days is not None and > 14 else 0",
     "legitimacy_suspicious": "1 if legitimacy_suspicious else 0",
 }
 

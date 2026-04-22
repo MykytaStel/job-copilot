@@ -59,6 +59,7 @@ pub struct OutcomeSignalsResponse {
     pub work_mode_deal_breaker: bool,
     pub scrolled_to_bottom: bool,
     pub returned_count: usize,
+    pub time_to_apply_days: Option<u32>,
     pub legitimacy_suspicious: bool,
     pub legitimacy_spam: bool,
 }
@@ -147,6 +148,7 @@ impl From<OutcomeSignals> for OutcomeSignalsResponse {
             work_mode_deal_breaker: value.work_mode_deal_breaker,
             scrolled_to_bottom: value.scrolled_to_bottom,
             returned_count: value.returned_count,
+            time_to_apply_days: value.time_to_apply_days,
             legitimacy_suspicious: value.legitimacy_suspicious,
             legitimacy_spam: value.legitimacy_spam,
         }

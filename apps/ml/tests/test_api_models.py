@@ -31,6 +31,10 @@ def test_bootstrap_response_keeps_training_json_shape_with_typed_summary():
         "example_count": 30,
         "reason": None,
         "model_path": "/tmp/trained-reranker-v3.json",
+        "artifact_version": None,
+        "model_type": None,
         "training": training_summary_payload(),
+        "evaluation": None,
+        "benchmark": None,
         "feature_importances": None,
     }

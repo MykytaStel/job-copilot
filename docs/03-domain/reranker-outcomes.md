@@ -80,6 +80,7 @@ Small v3 example:
         "work_mode_deal_breaker": false,
         "scrolled_to_bottom": true,
         "returned_count": 1,
+        "time_to_apply_days": 2,
         "legitimacy_suspicious": false
       },
       "ranking": {
@@ -189,8 +190,11 @@ Feature inputs are explicit numeric or boolean fields already present in the exp
 - matched role, skill, and keyword counts
 - source presence
 - role family presence
+- quick apply / delayed apply derived from `time_to_apply_days`
 
 The model does not use text embeddings and does not call an LLM.
+Offline bootstrap also benchmarks a linear BPR candidate on the same temporal holdout when enough
+positive/negative pairs exist, but the persisted production artifact remains logistic by default.
 
 Default ML-side outcome weights stay conservative and inspectable:
 
@@ -242,6 +246,22 @@ PROFILE_ID=<profile-id> pnpm train:reranker:v3:docker
 
 The Docker command restarts `engine-api` with `TRAINED_RERANKER_ENABLED=true` and the promoted
 artifact mounted at `/app/models/trained-reranker-v3.json`.
+
+## Operational loop
+
+`engine-api` now keeps profile-scoped reranker learning state and history:
+
+- `ml_examples_since_retrain`
+- `ml_last_retrained_at`
+- `ml_last_artifact_version`
+- `ml_last_training_status`
+
+New labelable outcomes increment the counter only once per `(profile_id, job_id)` via a dedicated
+dedupe table. A background poller checks for profiles above the retrain threshold and calls
+`POST /api/v1/reranker/bootstrap` asynchronously. Retrain outcomes are stored in
+`profile_ml_metrics` and exposed via:
+
+- `GET /api/v1/profiles/{id}/reranker/metrics`
 
 ## Optional live integration
 

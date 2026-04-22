@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::domain::application::model::{Application, ApplicationOutcome};
@@ -84,6 +85,7 @@ pub struct OutcomeSignals {
     // Slice 6: engagement depth
     pub scrolled_to_bottom: bool,
     pub returned_count: usize,
+    pub time_to_apply_days: Option<u32>,
     // Slice 7: legitimacy
     pub legitimacy_suspicious: bool,
     pub legitimacy_spam: bool,
@@ -238,6 +240,8 @@ pub(crate) struct EventSignals {
     pub dismissed_event_count: usize,
     pub scrolled_to_bottom: bool,
     pub returned_count: usize,
+    pub first_viewed_at: Option<String>,
+    pub first_applied_at: Option<String>,
     pub latest_event_at: Option<String>,
 }
 
@@ -354,6 +358,9 @@ pub(crate) fn event_signals_by_job_id(events: &[UserEventRecord]) -> BTreeMap<St
             UserEventType::JobOpened => {
                 signals.viewed = true;
                 signals.viewed_event_count += 1;
+                if signals.first_viewed_at.is_none() {
+                    signals.first_viewed_at = Some(event.created_at.clone());
+                }
             }
             UserEventType::JobSaved => {
                 signals.saved = true;
@@ -373,6 +380,9 @@ pub(crate) fn event_signals_by_job_id(events: &[UserEventRecord]) -> BTreeMap<St
             UserEventType::ApplicationCreated => {
                 signals.applied = true;
                 signals.applied_event_count += 1;
+                if signals.first_applied_at.is_none() {
+                    signals.first_applied_at = Some(event.created_at.clone());
+                }
             }
             UserEventType::JobScrolledToBottom => {
                 signals.scrolled_to_bottom = true;
@@ -443,6 +453,7 @@ pub(crate) fn normalize_signals(
     let was_ghosted = application.is_some_and(|record| {
         matches!(record.outcome, Some(ApplicationOutcome::Ghosted))
     });
+    let time_to_apply_days = resolve_time_to_apply_days(event_signals, application);
 
     OutcomeSignals {
         viewed: event_signals.viewed,
@@ -475,6 +486,7 @@ pub(crate) fn normalize_signals(
         work_mode_deal_breaker,
         scrolled_to_bottom: event_signals.scrolled_to_bottom,
         returned_count: event_signals.returned_count,
+        time_to_apply_days,
         legitimacy_suspicious,
         legitimacy_spam,
     }
@@ -635,6 +647,32 @@ fn ranking_features(
         behavior_reasons,
         learned_reasons,
     }
+}
+
+fn resolve_time_to_apply_days(
+    event_signals: &EventSignals,
+    application: Option<&Application>,
+) -> Option<u32> {
+    let first_viewed_at = parse_timestamp(event_signals.first_viewed_at.as_deref())?;
+    let applied_at = application
+        .and_then(|record| record.applied_at.as_deref())
+        .and_then(|value| parse_timestamp(Some(value)))
+        .or_else(|| parse_timestamp(event_signals.first_applied_at.as_deref()))?;
+
+    let duration = applied_at.signed_duration_since(first_viewed_at);
+    let days = duration.num_days().max(0);
+    u32::try_from(days).ok()
+}
+
+fn parse_timestamp(value: Option<&str>) -> Option<DateTime<Utc>> {
+    let value = value?.trim();
+    if value.is_empty() {
+        return None;
+    }
+
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|timestamp| timestamp.with_timezone(&Utc))
 }
 
 fn application_id_from_payload(payload: Option<&Value>) -> Option<String> {
@@ -940,7 +978,20 @@ mod tests {
 
     #[test]
     fn application_outcomes_enrich_signals_and_label_timestamp() {
-        let events = vec![event("evt-1", "job-positive", UserEventType::ApplicationCreated)];
+        let events = vec![
+            UserEventRecord {
+                id: "evt-0".to_string(),
+                profile_id: "profile-1".to_string(),
+                event_type: UserEventType::JobOpened,
+                job_id: Some("job-positive".to_string()),
+                company_name: Some("NovaLedger".to_string()),
+                source: Some("djinni".to_string()),
+                role_family: Some("engineering".to_string()),
+                payload_json: None,
+                created_at: "2026-04-10T00:00:00Z".to_string(),
+            },
+            event("evt-1", "job-positive", UserEventType::ApplicationCreated),
+        ];
         let behavior = BehaviorService::new().build_aggregates(events.iter());
         let funnel = FunnelService::new().build_aggregates(events.iter());
         let dataset = OutcomeDatasetService::new()
@@ -981,5 +1032,6 @@ mod tests {
         assert_eq!(dataset.examples[0].signals.outcome.as_deref(), Some("offer_received"));
         assert!(dataset.examples[0].signals.received_offer);
         assert!(dataset.examples[0].signals.reached_interview);
+        assert_eq!(dataset.examples[0].signals.time_to_apply_days, Some(5));
     }
 }

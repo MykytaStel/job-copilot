@@ -10,6 +10,7 @@ pub mod market;
 pub mod notifications;
 pub mod profile;
 pub mod reranker_dataset;
+pub mod reranker_metrics;
 pub mod resumes;
 pub mod roles;
 pub mod search;
@@ -71,6 +72,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/profiles/{id}/reranker-dataset",
             get(reranker_dataset::get_reranker_dataset),
+        )
+        .route(
+            "/api/v1/profiles/{id}/reranker/metrics",
+            get(reranker_metrics::get_reranker_metrics),
         )
         .route("/api/v1/profiles/{id}/events", post(events::log_user_event))
         .route(

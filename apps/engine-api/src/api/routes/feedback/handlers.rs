@@ -7,7 +7,9 @@ use crate::api::dto::feedback::{
     SetWorkModeFeedbackRequest, TagJobFeedbackRequest, UpdateCompanyFeedbackRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
-use crate::api::routes::events::{load_job_event_metadata, log_user_event_softly};
+use crate::api::routes::events::{
+    load_job_event_metadata, log_user_event_softly, record_labelable_job_softly,
+};
 use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackFlags};
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::feedback::FeedbackService;
@@ -228,6 +230,12 @@ pub async fn set_job_work_mode_signal(
         .set_work_mode_signal(&profile_id, &job_id, signal)
         .await
         .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+    if matches!(
+        signal,
+        crate::domain::feedback::model::WorkModeFeedbackSignal::DealBreaker
+    ) {
+        record_labelable_job_softly(&state, &profile_id, &job_id).await;
+    }
     Ok(axum::Json(JobFeedbackResponse::from(feedback)))
 }
 
@@ -243,6 +251,13 @@ pub async fn set_job_legitimacy_signal(
         .set_legitimacy_signal(&profile_id, &job_id, signal)
         .await
         .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+    if matches!(
+        signal,
+        crate::domain::feedback::model::LegitimacySignal::Spam
+            | crate::domain::feedback::model::LegitimacySignal::Suspicious
+    ) {
+        record_labelable_job_softly(&state, &profile_id, &job_id).await;
+    }
     Ok(axum::Json(JobFeedbackResponse::from(feedback)))
 }
 

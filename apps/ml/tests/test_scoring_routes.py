@@ -178,7 +178,11 @@ def test_reranker_bootstrap_route_returns_service_response():
         "example_count": 12,
         "reason": "need at least 30 examples, got 12",
         "model_path": None,
+        "artifact_version": None,
+        "model_type": None,
         "training": None,
+        "evaluation": None,
+        "benchmark": None,
         "feature_importances": None,
     }
 
@@ -240,6 +244,8 @@ def test_reranker_bootstrap_route_keeps_trained_payload_shape():
         "example_count": 30,
         "reason": None,
         "model_path": "/tmp/trained-reranker-v3.json",
+        "artifact_version": None,
+        "model_type": None,
         "training": {
             "example_count": 30,
             "positive_count": 10,
@@ -253,6 +259,8 @@ def test_reranker_bootstrap_route_keeps_trained_payload_shape():
             "l2": 0.01,
             "loss": 0.123,
         },
+        "evaluation": None,
+        "benchmark": None,
         "feature_importances": None,
     }
 

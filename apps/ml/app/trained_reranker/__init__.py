@@ -13,6 +13,7 @@ from .artifact import (
     TrainedRerankerArtifact,
     load_dataset,
 )
+from .bpr_model import bpr_candidate_available, train_bpr_model
 from .features import clamp, extract_features, has_text
 from .model import TrainedRerankerModel, sigmoid
 from .training import average_log_loss, dot, smoothed_logit, train_model
@@ -27,6 +28,8 @@ __all__ = [
     "TrainedRerankerModel",
     "extract_features",
     "train_model",
+    "train_bpr_model",
+    "bpr_candidate_available",
     "load_dataset",
     "clamp",
     "has_text",
@@ -94,12 +97,51 @@ def main() -> None:
         top_n=args.top_n,
         trained_model=candidate_model,
     )
+    benchmark = None
+    if bpr_candidate_available(candidate_datasets):
+        bpr_model = train_bpr_model(
+            candidate_datasets,
+            epochs=args.epochs,
+            learning_rate=args.learning_rate,
+            l2=args.l2,
+            max_score_delta=args.max_score_delta,
+        )
+        bpr_summary = evaluate_dataset(
+            merged_input,
+            top_n=args.top_n,
+            trained_model=bpr_model,
+        )
+        logistic_hit_rate = next(
+            (
+                variant.positive_hit_rate
+                for variant in summary.variants
+                if variant.variant == "trained_reranker_prediction"
+            ),
+            0.0,
+        )
+        bpr_hit_rate = next(
+            (
+                variant.positive_hit_rate
+                for variant in bpr_summary.variants
+                if variant.variant == "trained_reranker_prediction"
+            ),
+            0.0,
+        )
+        benchmark = {
+            "baseline_model_type": "logistic_regression",
+            "candidate_model_type": "bpr",
+            "baseline_positive_hit_rate": logistic_hit_rate,
+            "candidate_positive_hit_rate": bpr_hit_rate,
+            "candidate_available": True,
+            "winner": "bpr" if bpr_hit_rate > logistic_hit_rate else "logistic_regression",
+        }
     print(
         json.dumps(
             {
                 "model_artifact": args.output,
                 "training": model.artifact.training.model_dump(),
                 "evaluation": summary.model_dump(),
+                "benchmark": benchmark,
             },
             indent=2,
         )

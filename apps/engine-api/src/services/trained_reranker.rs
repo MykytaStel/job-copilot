@@ -39,6 +39,8 @@ pub struct TrainedRerankerFeatures {
     // Slice 6: engagement depth
     pub scrolled_to_bottom: bool,
     pub returned_count: usize,
+    pub quick_apply: bool,
+    pub delayed_apply: bool,
     // Slice 7: legitimacy
     pub legitimacy_suspicious: bool,
 }
@@ -214,6 +216,20 @@ fn feature_value(feature_name: &str, features: &TrainedRerankerFeatures) -> f64 
             }
         }
         "returned_count" => features.returned_count.min(5) as f64 / 5.0,
+        "quick_apply" => {
+            if features.quick_apply {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "delayed_apply" => {
+            if features.delayed_apply {
+                1.0
+            } else {
+                0.0
+            }
+        }
         "legitimacy_suspicious" => {
             if features.legitimacy_suspicious {
                 1.0
@@ -249,6 +265,8 @@ fn is_supported_feature(feature_name: &str) -> bool {
             | "work_mode_deal_breaker"
             | "scrolled_to_bottom"
             | "returned_count"
+            | "quick_apply"
+            | "delayed_apply"
             | "legitimacy_suspicious"
     )
 }
@@ -318,6 +336,8 @@ mod tests {
             work_mode_deal_breaker: false,
             scrolled_to_bottom: false,
             returned_count: 0,
+            quick_apply: false,
+            delayed_apply: false,
             legitimacy_suspicious: false,
         });
 

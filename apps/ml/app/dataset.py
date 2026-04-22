@@ -61,6 +61,7 @@ class OutcomeSignals(BaseModel):
     # Slice 6: engagement depth
     scrolled_to_bottom: bool = False
     returned_count: int = Field(default=0, ge=0)
+    time_to_apply_days: int | None = Field(default=None, ge=0)
     # Slice 7: legitimacy
     legitimacy_suspicious: bool = False
     legitimacy_spam: bool = False

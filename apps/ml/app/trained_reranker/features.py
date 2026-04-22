@@ -42,6 +42,12 @@ def extract_features(example: OutcomeExample) -> dict[str, float]:
         "returned_count": clamp(
             getattr(signals, "returned_count", 0) if signals else 0, 0, 5
         ) / 5.0,
+        "quick_apply": 1.0
+        if _time_to_apply_days(signals) is not None and _time_to_apply_days(signals) <= 3
+        else 0.0,
+        "delayed_apply": 1.0
+        if _time_to_apply_days(signals) is not None and _time_to_apply_days(signals) > 14
+        else 0.0,
         # Slice 7: legitimacy
         "legitimacy_suspicious": 1.0 if _bool_signal(signals, "legitimacy_suspicious") else 0.0,
     }
@@ -49,6 +55,15 @@ def extract_features(example: OutcomeExample) -> dict[str, float]:
 
 def _bool_signal(signals: object | None, attr: str) -> bool:
     return bool(getattr(signals, attr, False)) if signals is not None else False
+
+
+def _time_to_apply_days(signals: object | None) -> int | None:
+    if signals is None:
+        return None
+    value = getattr(signals, "time_to_apply_days", None)
+    if value is None:
+        return None
+    return int(value)
 
 
 def clamp(value: int | float, lower: int | float, upper: int | float) -> int | float:

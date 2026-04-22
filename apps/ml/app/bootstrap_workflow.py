@@ -11,6 +11,7 @@ from app.reranker_evaluation import (
 )
 from app.trained_reranker_config import DEFAULT_TRAINED_RERANKER_MODEL_PATH
 from app.trained_reranker import train_model
+from app.trained_reranker.bpr_model import bpr_candidate_available, train_bpr_model
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,50 @@ async def bootstrap_and_retrain(
     )
     candidate_model = train_model([candidate_dataset])
     evaluation = evaluate_dataset(dataset, trained_model=candidate_model)
+    benchmark = None
+    if bpr_candidate_available([candidate_dataset]):
+        bpr_model = train_bpr_model([candidate_dataset])
+        bpr_evaluation = evaluate_dataset(dataset, trained_model=bpr_model)
+        logistic_hit_rate = next(
+            (
+                variant.positive_hit_rate
+                for variant in evaluation.variants
+                if variant.variant == "trained_reranker_prediction"
+            ),
+            0.0,
+        )
+        bpr_hit_rate = next(
+            (
+                variant.positive_hit_rate
+                for variant in bpr_evaluation.variants
+                if variant.variant == "trained_reranker_prediction"
+            ),
+            0.0,
+        )
+        benchmark = {
+            "baseline_model_type": "logistic_regression",
+            "candidate_model_type": "bpr",
+            "baseline_positive_hit_rate": logistic_hit_rate,
+            "candidate_positive_hit_rate": bpr_hit_rate,
+            "candidate_available": True,
+            "winner": "bpr" if bpr_hit_rate > logistic_hit_rate else "logistic_regression",
+        }
+    else:
+        benchmark = {
+            "baseline_model_type": "logistic_regression",
+            "candidate_model_type": "bpr",
+            "baseline_positive_hit_rate": next(
+                (
+                    variant.positive_hit_rate
+                    for variant in evaluation.variants
+                    if variant.variant == "trained_reranker_prediction"
+                ),
+                0.0,
+            ),
+            "candidate_positive_hit_rate": 0.0,
+            "candidate_available": False,
+            "winner": "logistic_regression",
+        }
     model = train_model([dataset])
     model.save(model_path)
     logger.info(
@@ -74,5 +119,7 @@ async def bootstrap_and_retrain(
         example_count=example_count,
         model_path=model_path,
         training=model.artifact.training,
+        evaluation=evaluation,
+        benchmark=benchmark,
         feature_importances=model.feature_importances(),
     )

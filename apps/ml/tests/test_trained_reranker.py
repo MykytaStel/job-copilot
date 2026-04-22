@@ -287,3 +287,18 @@ def test_evaluation_compares_trained_variant():
     assert summary.test_example_count == 1
     assert metrics["trained_reranker_prediction"].top_k_positives == 1
     assert metrics["trained_reranker_prediction"].ordered_job_ids == ["positive-strong"]
+
+
+def test_time_to_apply_feature_maps_to_quick_and_delayed_flags():
+    payload = dataset_payload()
+    payload["examples"][0]["signals"]["time_to_apply_days"] = 2
+    payload["examples"][1]["signals"]["time_to_apply_days"] = 20
+
+    model = train_model([payload], epochs=20)
+    fast_features = model.feature_vector(payload["examples"][0])
+    slow_features = model.feature_vector(payload["examples"][1])
+
+    assert fast_features["quick_apply"] == 1.0
+    assert fast_features["delayed_apply"] == 0.0
+    assert slow_features["quick_apply"] == 0.0
+    assert slow_features["delayed_apply"] == 1.0

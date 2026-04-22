@@ -5,7 +5,7 @@ use tracing::warn;
 use crate::api::dto::events::{LogUserEventRequest, UserEventResponse, UserEventSummaryResponse};
 use crate::api::error::{ApiError, ApiJson};
 use crate::api::routes::feedback::ensure_profile_exists;
-use crate::domain::user_event::model::CreateUserEvent;
+use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::state::AppState;
 
 pub async fn log_user_event(
@@ -34,6 +34,8 @@ pub async fn log_user_event(
         .log_event(event)
         .await
         .map_err(|error| ApiError::from_repository(error, "user_event_write_failed"))?;
+    maybe_record_labelable_outcome(&state, &event.profile_id, event.job_id.as_deref(), event.event_type)
+        .await;
 
     Ok((
         axum::http::StatusCode::CREATED,
@@ -117,8 +119,74 @@ pub(crate) async fn log_user_event_softly(state: &AppState, event: CreateUserEve
         "job_id": event.job_id,
     });
 
-    if let Err(error) = state.user_events_service.log_event(event).await {
-        warn!(error = %error, details = %details, "failed to log user event");
+    match state.user_events_service.log_event(event).await {
+        Ok(record) => {
+            maybe_record_labelable_outcome(
+                state,
+                &record.profile_id,
+                record.job_id.as_deref(),
+                record.event_type,
+            )
+            .await;
+        }
+        Err(error) => {
+            warn!(error = %error, details = %details, "failed to log user event");
+        }
+    }
+}
+
+pub(crate) async fn record_labelable_job_softly(
+    state: &AppState,
+    profile_id: &str,
+    job_id: &str,
+) {
+    if let Err(error) = state
+        .profile_ml_state
+        .record_labelable_job(profile_id, job_id)
+        .await
+    {
+        warn!(
+            error = %error,
+            profile_id,
+            job_id,
+            "failed to record labelable job for ML state"
+        );
+    }
+}
+
+async fn maybe_record_labelable_outcome(
+    state: &AppState,
+    profile_id: &str,
+    job_id: Option<&str>,
+    event_type: UserEventType,
+) {
+    let Some(job_id) = job_id.filter(|value| !value.trim().is_empty()) else {
+        return;
+    };
+
+    if !matches!(
+        event_type,
+        UserEventType::JobOpened
+            | UserEventType::JobSaved
+            | UserEventType::JobHidden
+            | UserEventType::JobBadFit
+            | UserEventType::ApplicationCreated
+    ) {
+        return;
+    }
+
+    if let Err(error) = state
+        .profile_ml_state
+        .record_labelable_job(profile_id, job_id)
+        .await
+    {
+        warn!(
+            error = %error,
+            profile_id,
+            job_id,
+            event_type = event_type.as_str(),
+            "failed to record labelable outcome for ML state"
+        );
     }
 }
 
@@ -131,10 +199,12 @@ mod tests {
     use crate::api::dto::events::LogUserEventRequest;
     use crate::api::error::ApiJson;
     use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
+    use crate::domain::profile::ml::ProfileMlState;
     use crate::domain::profile::model::Profile;
     use crate::domain::user_event::model::{UserEventRecord, UserEventType};
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
+    use crate::services::profile_ml_state::{ProfileMlStateService, ProfileMlStateServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
     use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
@@ -304,5 +374,47 @@ mod tests {
         assert_eq!(summary.search_run_count, 1);
         assert_eq!(summary.interview_prep_requested_count, 1);
         assert_eq!(summary.hide_count, 0);
+    }
+
+    #[tokio::test]
+    async fn labelable_events_increment_ml_counter_only_once_per_job() {
+        let state = test_state().with_profile_ml_state_service(ProfileMlStateService::for_tests(
+            ProfileMlStateServiceStub::default().with_state(ProfileMlState {
+                profile_id: "profile-1".to_string(),
+                ..ProfileMlState::default()
+            }),
+        ));
+
+        let request = || LogUserEventRequest {
+            event_type: "job_opened".to_string(),
+            job_id: Some("job-1".to_string()),
+            company_name: None,
+            source: None,
+            role_family: None,
+            payload_json: None,
+        };
+
+        let _ = log_user_event(
+            State(state.clone()),
+            Path("profile-1".to_string()),
+            ApiJson(request()),
+        )
+        .await
+        .expect("first event should succeed");
+        let _ = log_user_event(
+            State(state.clone()),
+            Path("profile-1".to_string()),
+            ApiJson(request()),
+        )
+        .await
+        .expect("duplicate event should still succeed");
+
+        let ml_state = state
+            .profile_ml_state
+            .get_by_profile_id("profile-1")
+            .await
+            .expect("ML state should be queryable")
+            .expect("ML state should exist");
+        assert_eq!(ml_state.examples_since_retrain, 1);
     }
 }

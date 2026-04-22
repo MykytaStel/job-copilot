@@ -243,6 +243,8 @@ pub(crate) fn apply_trained_reranking(
             .unwrap_or(&default_event_signals);
         let signals = normalize_signals(&feedback, event_signals, applications_by_job_id.get(job_id));
         let rating = signals.interest_rating.unwrap_or(0);
+        let quick_apply = signals.time_to_apply_days.is_some_and(|days| days <= 3);
+        let delayed_apply = signals.time_to_apply_days.is_some_and(|days| days > 14);
         let features = TrainedRerankerFeatures {
             deterministic_score,
             behavior_score_delta: i16::from(behavior_score) - i16::from(deterministic_score),
@@ -266,6 +268,8 @@ pub(crate) fn apply_trained_reranking(
             work_mode_deal_breaker: signals.work_mode_deal_breaker,
             scrolled_to_bottom: signals.scrolled_to_bottom,
             returned_count: signals.returned_count,
+            quick_apply,
+            delayed_apply,
             legitimacy_suspicious: signals.legitimacy_suspicious,
         };
         let score = model.score(&features);

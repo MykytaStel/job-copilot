@@ -10,12 +10,14 @@ from app.reranker_evaluation import OutcomeExample
 from .artifact import ARTIFACT_VERSION, FEATURE_TRANSFORMS, MODEL_TYPE, TrainedRerankerArtifact
 from .features import extract_features
 
+SUPPORTED_MODEL_TYPES = {MODEL_TYPE, "bpr"}
+
 
 class TrainedRerankerModel:
     def __init__(self, artifact: TrainedRerankerArtifact):
         if artifact.artifact_version != ARTIFACT_VERSION:
             raise ValueError(f"unsupported artifact_version: {artifact.artifact_version}")
-        if artifact.model_type != MODEL_TYPE:
+        if artifact.model_type not in SUPPORTED_MODEL_TYPES:
             raise ValueError(f"unsupported model_type: {artifact.model_type}")
         for feature_name in artifact.feature_names:
             if feature_name not in FEATURE_TRANSFORMS:

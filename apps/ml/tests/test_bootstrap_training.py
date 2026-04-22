@@ -270,7 +270,11 @@ def test_reranker_bootstrap_service_uses_injected_workflow_and_model_path():
         "example_count": 30,
         "reason": None,
         "model_path": str(bootstrap_training.DEFAULT_MODEL_PATH),
+        "artifact_version": "trained_reranker_v3",
+        "model_type": "logistic_regression",
         "training": training_summary_payload(),
+        "evaluation": None,
+        "benchmark": None,
         "feature_importances": None,
     }
 
@@ -296,7 +300,11 @@ def test_reranker_bootstrap_service_keeps_public_response_shape_when_workflow_sk
         "example_count": 2,
         "reason": "need at least 3 examples, got 2",
         "model_path": None,
+        "artifact_version": None,
+        "model_type": None,
         "training": None,
+        "evaluation": None,
+        "benchmark": None,
         "feature_importances": None,
     }
 
@@ -372,6 +380,8 @@ def test_main_uses_default_model_path_and_prints_json(monkeypatch, capsys):
         "retrained": True,
         "example_count": 30,
         "model_path": str(DEFAULT_TRAINED_RERANKER_MODEL_PATH),
+        "artifact_version": "trained_reranker_v3",
+        "model_type": "logistic_regression",
         "training": training_summary_payload(loss=0.123),
     }
 
