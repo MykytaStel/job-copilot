@@ -2,6 +2,8 @@ services:
   postgres:
     image: postgres:16
     container_name: job-copilot-postgres
+    # shared_preload_libraries must be set at server start — cannot be changed at runtime.
+    command: postgres -c shared_preload_libraries=pg_stat_statements
     environment:
       POSTGRES_USER: jobcopilot
       POSTGRES_PASSWORD: jobcopilot
@@ -10,6 +12,7 @@ services:
       - "5432:5432"
     volumes:
       - job-copilot-postgres-data:/var/lib/postgresql/data
+      - ./postgres/init-extensions.sql:/docker-entrypoint-initdb.d/init-extensions.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U jobcopilot -d jobcopilot"]
       interval: 2s
