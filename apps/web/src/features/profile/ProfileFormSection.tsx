@@ -3,6 +3,7 @@ import { Upload } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
+import { SurfaceHero, SurfaceSection } from '../../components/ui/Surface';
 import {
   PROFILE_LANGUAGE_OPTIONS,
   PROFILE_SALARY_CURRENCY_OPTIONS,
@@ -65,7 +66,7 @@ export function ProfileFormSection({
 }) {
   return (
     <>
-      <div className="flex flex-col gap-5 rounded-[28px] border border-border bg-card/85 p-7 shadow-[var(--shadow-hero)] md:flex-row md:items-end md:justify-between">
+      <SurfaceHero className="flex flex-col gap-5 p-7 md:flex-row md:items-end md:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
@@ -88,10 +89,11 @@ export function ProfileFormSection({
         >
           {isAnalyzing ? 'Analyzing…' : 'Analyze'}
         </Button>
-      </div>
+      </SurfaceHero>
 
-      <form
-        className="flex flex-col gap-5 rounded-[24px] border border-border bg-card/85 p-7"
+      <SurfaceSection
+        as="form"
+        className="flex flex-col gap-5"
         onSubmit={(event) => {
           event.preventDefault();
           onSave();
@@ -215,7 +217,7 @@ export function ProfileFormSection({
         >
           {isSaving ? 'Saving…' : profileExists ? 'Update Profile' : 'Create Profile'}
         </Button>
-      </form>
+      </SurfaceSection>
     </>
   );
 }

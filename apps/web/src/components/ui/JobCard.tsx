@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { Application, JobPosting } from '@job-copilot/shared';
 import { cn } from '../../lib/cn';
+import { getJobMetaLabels } from '../../lib/jobPresentation';
 import { Badge } from './Badge';
 import { Card, CardContent } from './Card';
 import { StatusBadge } from './StatusBadge';
@@ -37,6 +38,20 @@ function fitLabel(score: number): string {
     default:
       return 'Weak';
   }
+}
+
+function metaIcon(label: string, job: JobPosting) {
+  const presentation = job.presentation;
+
+  if (label === presentation?.locationLabel) {
+    return <MapPin className="h-3 w-3" />;
+  }
+
+  if (label === presentation?.salaryLabel) {
+    return <DollarSign className="h-3 w-3" />;
+  }
+
+  return <Clock className="h-3 w-3" />;
 }
 
 function FitScoreBox({ score }: { score: number }) {
@@ -141,6 +156,7 @@ export function JobCard({
   const badges = p?.badges ?? [];
   const summary = p?.summary;
   const showSummary = Boolean(summary && !p?.summaryFallback && p?.summaryQuality !== 'weak');
+  const metaLabels = getJobMetaLabels(job);
 
   const applicationStatus = application?.status;
 
@@ -187,24 +203,12 @@ export function JobCard({
                 compact ? 'mb-2' : 'mb-3',
               )}
             >
-              {p?.locationLabel && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
-                  {p.locationLabel}
+              {metaLabels.map((label) => (
+                <span key={label} className="flex items-center gap-1">
+                  {metaIcon(label, job)}
+                  {label}
                 </span>
-              )}
-              {p?.salaryLabel && (
-                <span className="flex items-center gap-1">
-                  <DollarSign className="h-3 w-3" />
-                  {p.salaryLabel}
-                </span>
-              )}
-              {p?.freshnessLabel && (
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  {p.freshnessLabel}
-                </span>
-              )}
+              ))}
             </div>
 
             {/* Skills / badges */}
@@ -263,7 +267,6 @@ export function JobCard({
                     disabled={isPending}
                     onClick={onSave}
                     className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors disabled:opacity-40"
-                    style={{ background: 'transparent', border: 'none' }}
                   >
                     {isSaved ? (
                       <BookmarkCheck className="h-4 w-4 text-primary" />
@@ -279,7 +282,6 @@ export function JobCard({
                     disabled={isPending}
                     onClick={onHide}
                     className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors disabled:opacity-40"
-                    style={{ background: 'transparent', border: 'none' }}
                   >
                     <EyeOff className="h-4 w-4" />
                   </button>
@@ -291,7 +293,6 @@ export function JobCard({
                     disabled={isPending}
                     onClick={onUnmarkBadFit}
                     className="h-7 w-7 flex items-center justify-center rounded-md text-fit-poor hover:bg-surface-hover transition-colors disabled:opacity-40"
-                    style={{ background: 'transparent', border: 'none' }}
                   >
                     <ThumbsDown className="h-4 w-4" />
                   </button>
@@ -302,7 +303,6 @@ export function JobCard({
                     disabled={isPending}
                     onClick={onBadFit}
                     className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-surface-hover transition-colors disabled:opacity-40"
-                    style={{ background: 'transparent', border: 'none' }}
                   >
                     <ThumbsDown className="h-4 w-4" />
                   </button>

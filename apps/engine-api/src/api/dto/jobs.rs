@@ -34,6 +34,8 @@ pub struct JobPresentationResponse {
     pub outbound_url: Option<String>,
     pub salary_label: Option<String>,
     pub freshness_label: Option<String>,
+    pub lifecycle_primary_label: Option<String>,
+    pub lifecycle_secondary_label: Option<String>,
     pub badges: Vec<String>,
 }
 
@@ -247,6 +249,8 @@ impl From<JobPresentation> for JobPresentationResponse {
             outbound_url: value.outbound_url,
             salary_label: value.salary_label,
             freshness_label: value.freshness_label,
+            lifecycle_primary_label: value.lifecycle_primary_label,
+            lifecycle_secondary_label: value.lifecycle_secondary_label,
             badges: value.badges,
         }
     }

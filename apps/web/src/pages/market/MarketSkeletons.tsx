@@ -1,5 +1,5 @@
 export function StatCardSkeleton() {
-  return <div className="h-[140px] animate-pulse rounded-[24px] border border-border bg-card/80" />;
+  return <div className="h-[140px] animate-pulse rounded-[var(--radius-card)] border border-border bg-card/80" />;
 }
 
 export function ListSkeleton({ rows = 5 }: { rows?: number }) {

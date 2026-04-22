@@ -16,7 +16,8 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { PageHeader } from '../../components/ui/SectionHeader';
 import { StatusBadge } from '../../components/ui/StatusBadge';
-import { HeroMetric, formatDate } from './components';
+import { getJobLifecycleLabels } from '../../lib/jobPresentation';
+import { HeroMetric } from './components';
 
 export function JobDetailsHeader({
   state,
@@ -39,6 +40,8 @@ export function JobDetailsHeader({
   if (!job) {
     return null;
   }
+
+  const lifecycleLabels = getJobLifecycleLabels(job);
 
   return (
     <>
@@ -120,12 +123,15 @@ export function JobDetailsHeader({
                       {salary}
                     </span>
                   ) : null}
-                  {job.postedAt ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5">
+                  {lifecycleLabels.map((label) => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5"
+                    >
                       <CalendarClock className="h-4 w-4" />
-                      Posted {formatDate(job.postedAt)}
+                      {label}
                     </span>
-                  ) : null}
+                  ))}
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white/[0.05] px-3 py-1.5">
                     <MapPin className="h-4 w-4" />
                     {sourceLabel}

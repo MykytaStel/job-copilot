@@ -18,6 +18,7 @@ export function DashboardMatchesSection({
   setSearch,
   jobs,
   allJobs,
+  rerankCoverage,
   jobsLoading,
   rankData,
   lifecycleOptions,
@@ -41,6 +42,7 @@ export function DashboardMatchesSection({
   | 'setSearch'
   | 'jobs'
   | 'allJobs'
+  | 'rerankCoverage'
   | 'jobsLoading'
   | 'rankData'
   | 'lifecycleOptions'
@@ -141,6 +143,13 @@ export function DashboardMatchesSection({
               </Button>
             )}
           </div>
+
+          {mode === 'ranked' && rerankCoverage.isTruncated ? (
+            <p className="m-0 text-xs leading-6 text-muted-foreground">
+              Score sorting reranks the first {rerankCoverage.rankedJobs} feed items out of{' '}
+              {rerankCoverage.totalJobs} to keep the dashboard responsive.
+            </p>
+          ) : null}
 
           {sourcesError && (
             <p className="m-0 text-xs leading-6 text-muted-foreground">

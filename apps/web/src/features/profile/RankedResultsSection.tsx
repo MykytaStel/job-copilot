@@ -7,6 +7,7 @@ import type {
 } from '../../api/profiles';
 
 import { Button } from '../../components/ui/Button';
+import { SurfaceSection } from '../../components/ui/Surface';
 import { SearchResultsSection } from './SearchResultCard';
 
 export function RankedResultsSection({
@@ -41,7 +42,7 @@ export function RankedResultsSection({
   onRunSearch: () => void;
 }) {
   return (
-    <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
+    <SurfaceSection>
       <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
@@ -94,8 +95,8 @@ export function RankedResultsSection({
           {buildRestoredFromStorage
             ? 'The last built search profile was restored for these inputs. Run search to refresh ranked jobs and fit reasons.'
             : 'Build a search profile, then run search to inspect ranked jobs and fit reasons.'}
-        </p>
+          </p>
       )}
-    </section>
+    </SurfaceSection>
   );
 }

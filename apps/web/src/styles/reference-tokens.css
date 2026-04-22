@@ -1,0 +1,58 @@
+:root {
+  --ref-font-family-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --ref-color-slate-050: #f7f9ff;
+  --ref-color-slate-100: #e9eef6;
+  --ref-color-slate-400: #9aa8bc;
+  --ref-color-indigo-300: #95a7ff;
+  --ref-color-indigo-500: #636bff;
+  --ref-color-indigo-600: #536dfe;
+  --ref-color-indigo-700: #6c63ff;
+  --ref-color-indigo-900a: rgba(80, 92, 255, 0.18);
+  --ref-color-indigo-950a: rgba(80, 92, 255, 0.2);
+  --ref-color-teal-100: #c9fff8;
+  --ref-color-teal-900a: rgba(46, 196, 182, 0.16);
+  --ref-color-amber-100: #ffe7a5;
+  --ref-color-amber-900a: rgba(255, 196, 87, 0.16);
+  --ref-color-red-200: #ffb4b4;
+  --ref-color-red-300: #fca5a5;
+  --ref-color-red-900a: rgba(255, 80, 80, 0.14);
+  --ref-color-green-900a: rgba(34, 197, 94, 0.14);
+
+  --ref-color-white-035a: rgba(255, 255, 255, 0.035);
+  --ref-color-white-040a: rgba(255, 255, 255, 0.04);
+  --ref-color-white-060a: rgba(255, 255, 255, 0.06);
+  --ref-color-white-070a: rgba(255, 255, 255, 0.07);
+  --ref-color-white-080a: rgba(255, 255, 255, 0.08);
+  --ref-color-white-120a: rgba(255, 255, 255, 0.12);
+
+  --ref-color-app-bg: #0d1320;
+  --ref-color-app-surface: rgba(18, 25, 39, 0.9);
+  --ref-color-input-bg: rgba(9, 13, 23, 0.95);
+  --ref-color-sidebar-bg: #0b0f1c;
+
+  --ref-gradient-app:
+    radial-gradient(circle at top right, rgba(80, 92, 255, 0.2), transparent 30%),
+    radial-gradient(circle at left top, rgba(46, 196, 182, 0.14), transparent 20%), #0d1320;
+  --ref-gradient-button: linear-gradient(135deg, #536dfe, #6c63ff);
+
+  --ref-shadow-card: 0 24px 60px rgba(0, 0, 0, 0.35);
+  --ref-shadow-hero: 0 30px 80px rgba(0, 0, 0, 0.28);
+
+  --ref-radius-sm: 8px;
+  --ref-radius-md: 12px;
+  --ref-radius-lg: 14px;
+  --ref-radius-xl: 16px;
+  --ref-radius-2xl: 24px;
+  --ref-radius-3xl: 28px;
+  --ref-radius-pill: 999px;
+
+  --ref-space-1: 4px;
+  --ref-space-2: 8px;
+  --ref-space-3: 12px;
+  --ref-space-4: 16px;
+  --ref-space-5: 20px;
+  --ref-space-6: 24px;
+  --ref-space-7: 28px;
+  --ref-space-8: 32px;
+}

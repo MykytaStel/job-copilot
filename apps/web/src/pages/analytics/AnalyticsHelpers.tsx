@@ -4,26 +4,33 @@ import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { BehaviorSignalCount } from '../../api/analytics';
+import { AccentIconFrame } from '../../components/ui/AccentIconFrame';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import {
+  semanticBadgeClass,
+  semanticFillClass,
+  semanticTextClass,
+  type SemanticTone,
+} from '../../components/ui/semanticTone';
 import { cn } from '../../lib/cn';
 
-export type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'muted';
+export type Tone = Extract<SemanticTone, 'primary' | 'success' | 'warning' | 'danger' | 'muted'>;
 
 export const toneClasses: Record<Tone, string> = {
-  primary: 'bg-primary/15 text-primary border-primary/25',
-  success: 'bg-fit-excellent/15 text-fit-excellent border-fit-excellent/25',
-  warning: 'bg-fit-fair/15 text-fit-fair border-fit-fair/25',
-  danger: 'bg-destructive/15 text-destructive border-destructive/25',
-  muted: 'bg-white/[0.05] text-muted-foreground border-border',
+  primary: semanticBadgeClass.primary,
+  success: semanticBadgeClass.success,
+  warning: semanticBadgeClass.warning,
+  danger: semanticBadgeClass.danger,
+  muted: semanticBadgeClass.muted,
 };
 
 export const barToneClasses: Record<Tone, string> = {
-  primary: 'bg-primary',
-  success: 'bg-fit-excellent',
-  warning: 'bg-fit-fair',
-  danger: 'bg-destructive',
-  muted: 'bg-muted-foreground',
+  primary: semanticFillClass.primary,
+  success: semanticFillClass.success,
+  warning: semanticFillClass.warning,
+  danger: semanticFillClass.danger,
+  muted: semanticFillClass.muted,
 };
 
 export function Section({
@@ -48,9 +55,9 @@ export function Section({
       <CardHeader className="gap-3">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
+            <AccentIconFrame size="lg">
               <Icon className="h-5 w-5" />
-            </div>
+            </AccentIconFrame>
             <div className="min-w-0">
               {eyebrow ? (
                 <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -83,9 +90,9 @@ export function HeroMetric({
   return (
     <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+        <AccentIconFrame size="md">
           <Icon className="h-4 w-4" />
-        </div>
+        </AccentIconFrame>
         <div>
           <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
             {label}
@@ -162,18 +169,7 @@ export function ConversionCard({
     <div className="rounded-2xl border border-border/70 bg-white/[0.03] p-4">
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="m-0 text-xs text-muted-foreground">{label}</p>
-        <span
-          className={cn(
-            'text-lg font-bold',
-            tone === 'danger'
-              ? 'text-destructive'
-              : tone === 'warning'
-                ? 'text-fit-fair'
-                : tone === 'success'
-                  ? 'text-fit-excellent'
-                  : 'text-primary',
-          )}
-        >
+        <span className={cn('text-lg font-bold', semanticTextClass[tone])}>
           {Math.round(rate * 100)}%
         </span>
       </div>

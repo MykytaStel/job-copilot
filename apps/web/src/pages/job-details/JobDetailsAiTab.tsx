@@ -12,6 +12,11 @@ import type { CoverLetterDraft, InterviewPrep, JobFitExplanation } from '../../a
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
+import {
+  semanticDotClass,
+  semanticPanelClass,
+  semanticTextClass,
+} from '../../components/ui/semanticTone';
 import { Section } from './components';
 
 export function JobDetailsAiTab({
@@ -65,7 +70,7 @@ export function JobDetailsAiTab({
         ) : fitExplanation ? (
           <div className="space-y-5">
             {fitExplanation.fitSummary ? (
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className={`rounded-2xl border p-4 ${semanticPanelClass.primary}`}>
                 <p className="m-0 text-sm leading-7 text-card-foreground">
                   {fitExplanation.fitSummary}
                 </p>
@@ -82,7 +87,7 @@ export function JobDetailsAiTab({
                   <div className="space-y-2">
                     {fitExplanation.whyItMatches.map((item) => (
                       <div key={item} className="flex items-start gap-3">
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-excellent" />
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${semanticDotClass.success}`} />
                         <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
                       </div>
                     ))}
@@ -99,7 +104,7 @@ export function JobDetailsAiTab({
                   <div className="space-y-2">
                     {fitExplanation.risks.map((item) => (
                       <div key={item} className="flex items-start gap-3">
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-fair" />
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${semanticDotClass.warning}`} />
                         <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
                       </div>
                     ))}
@@ -122,8 +127,8 @@ export function JobDetailsAiTab({
             ) : null}
 
             {fitExplanation.recommendedNextStep ? (
-              <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                <p className="mb-1 flex items-center gap-2 text-sm font-medium text-primary">
+              <div className={`rounded-2xl border p-4 ${semanticPanelClass.primary}`}>
+                <p className={`mb-1 flex items-center gap-2 text-sm font-medium ${semanticTextClass.primary}`}>
                   <Lightbulb className="h-4 w-4" />
                   Наступний крок
                 </p>
@@ -207,7 +212,7 @@ export function JobDetailsAiTab({
         {interviewPrep ? (
           <div className="space-y-5">
             {interviewPrep.prepSummary ? (
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className={`rounded-2xl border p-4 ${semanticPanelClass.primary}`}>
                 <p className="m-0 text-sm leading-7 text-card-foreground">
                   {interviewPrep.prepSummary}
                 </p>
@@ -221,7 +226,7 @@ export function JobDetailsAiTab({
                   <div className="space-y-2">
                     {interviewPrep.technicalFocus.map((item) => (
                       <div key={item} className="flex items-start gap-3">
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${semanticDotClass.primary}`} />
                         <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
                       </div>
                     ))}
@@ -237,7 +242,7 @@ export function JobDetailsAiTab({
                   <div className="space-y-2">
                     {interviewPrep.behavioralFocus.map((item) => (
                       <div key={item} className="flex items-start gap-3">
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-good" />
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${semanticDotClass.info}`} />
                         <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
                       </div>
                     ))}
@@ -254,7 +259,7 @@ export function JobDetailsAiTab({
                 <div className="space-y-2">
                   {interviewPrep.questionsToAsk.map((item, i) => (
                     <div key={i} className="flex items-start gap-3">
-                      <span className="mt-1 shrink-0 text-xs font-semibold text-primary">
+                      <span className={`mt-1 shrink-0 text-xs font-semibold ${semanticTextClass.primary}`}>
                         {i + 1}.
                       </span>
                       <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
@@ -272,7 +277,7 @@ export function JobDetailsAiTab({
                 <div className="space-y-2">
                   {interviewPrep.storiesToPrepare.map((item) => (
                     <div key={item} className="flex items-start gap-3">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-fit-fair" />
+                      <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${semanticDotClass.warning}`} />
                       <p className="m-0 text-sm leading-6 text-muted-foreground">{item}</p>
                     </div>
                   ))}

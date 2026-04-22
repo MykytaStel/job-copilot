@@ -166,7 +166,7 @@
 
 .jobLifecycleDescription {
   margin: 0;
-  color: #c2cede;
+  color: var(--color-text-primary);
   line-height: 1.7;
 }
 
@@ -183,7 +183,7 @@
   padding: 8px 10px;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.05);
-  color: #d5def0;
+  color: var(--color-text-primary);
   font-size: 12px;
 }
 
@@ -212,12 +212,12 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #8fa2bd;
+  color: var(--color-text-secondary);
 }
 
 .jobTimeline strong,
 .jobDetailFacts strong {
-  color: #f5f7ff;
+  color: var(--color-text-strong);
   font-size: 14px;
 }
 
@@ -280,7 +280,7 @@
   width: 88px;
   height: 88px;
   border-radius: 50%;
-  background: conic-gradient(#536dfe calc(var(--score, 0) * 1%), rgba(255, 255, 255, 0.08) 0);
+  background: conic-gradient(var(--color-primary) calc(var(--score, 0) * 1%), rgba(255, 255, 255, 0.08) 0);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -634,7 +634,7 @@
 }
 
 .taskCheckbox {
-  accent-color: #536dfe;
+  accent-color: var(--color-primary);
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -708,7 +708,7 @@
 
 .fitScorePill-high {
   background: var(--color-bg-positive);
-  color: #86efac;
+  color: var(--color-text-success-strong);
 }
 
 .fitScorePill-medium {
@@ -717,8 +717,8 @@
 }
 
 .fitScorePill-low {
-  background: rgba(245, 158, 11, 0.16);
-  color: #fcd34d;
+  background: var(--color-bg-warning);
+  color: var(--color-text-warning-strong);
 }
 
 .fitScoreBar {

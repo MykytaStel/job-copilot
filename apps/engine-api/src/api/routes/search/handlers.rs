@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Instant;
 
 use axum::extract::{Query, State};
 use serde::Deserialize;
@@ -59,18 +60,23 @@ pub async fn run_search(
     State(state): State<AppState>,
     ApiJson(payload): ApiJson<RunSearchRequest>,
 ) -> Result<axum::Json<RunSearchResponse>, ApiError> {
+    let total_started_at = Instant::now();
     let input = payload.validate()?;
     let fetch_limit = (input.limit * 5).clamp(50, 200);
 
+    let candidate_fetch_started_at = Instant::now();
     let candidate_jobs = state
         .jobs_service
         .list_filtered_views(fetch_limit, Some("active"), None)
         .await
         .map_err(|error| ApiError::from_repository(error, "search_run_failed"))?;
+    let candidate_fetch_duration_ms = candidate_fetch_started_at.elapsed().as_millis();
     let total_candidates = candidate_jobs.len();
     let learning_aggregates = load_learning_aggregates(&state, input.profile_id.as_deref()).await;
+    let feedback_load_started_at = Instant::now();
     let feedback_states =
         load_feedback_state(&state, input.profile_id.as_deref(), &candidate_jobs).await?;
+    let feedback_load_duration_ms = feedback_load_started_at.elapsed().as_millis();
     let mut filtered_out_hidden = 0usize;
     let mut filtered_out_company_blacklist = 0usize;
     let jobs_with_feedback = candidate_jobs
@@ -99,9 +105,11 @@ pub async fn run_search(
         })
         .collect::<Vec<_>>();
 
+    let ranking_started_at = Instant::now();
     let result = state
         .search_ranking
         .run(&input.search_profile, ranked_candidates);
+    let deterministic_ranking_duration_ms = ranking_started_at.elapsed().as_millis();
     let salary_expectation =
         load_search_salary_expectation(&state, input.profile_id.as_deref()).await?;
     let deterministic_score_by_job_id = result
@@ -110,6 +118,7 @@ pub async fn run_search(
         .map(|ranked| (ranked.job.job.id.clone(), ranked.fit.score))
         .collect::<HashMap<_, _>>();
 
+    let reranking_started_at = Instant::now();
     let mut adjusted_jobs = apply_salary_scoring(result.ranked_jobs, salary_expectation.as_ref());
     adjusted_jobs = apply_feedback_scoring(adjusted_jobs, &feedback_by_job_id);
     if let Some(aggregates) = learning_aggregates.as_ref() {
@@ -217,6 +226,14 @@ pub async fn run_search(
 
     info!(
         profile_id = input.profile_id.as_deref().unwrap_or(""),
+        fetch_limit,
+        total_candidates,
+        returned_jobs = ranked_jobs.len(),
+        candidate_fetch_duration_ms,
+        feedback_load_duration_ms,
+        deterministic_ranking_duration_ms,
+        reranking_duration_ms = reranking_started_at.elapsed().as_millis(),
+        total_duration_ms = total_started_at.elapsed().as_millis(),
         requested_reranker_mode = meta.reranker_mode_requested.as_str(),
         active_reranker_mode = meta.reranker_mode_active.as_str(),
         reranker_fallback_reason = meta.reranker_fallback_reason.as_deref().unwrap_or("none"),

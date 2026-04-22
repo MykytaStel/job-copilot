@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 import { SectionHeader } from '../../components/ui/SectionHeader';
+import { SurfaceInset, SurfaceMetric, SurfaceSection } from '../../components/ui/Surface';
 
 export function Panel({
   title,
@@ -15,10 +16,10 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-5 rounded-[24px] border border-border bg-card/85 p-7">
+    <SurfaceSection>
       <SectionHeader title={title} description={description} icon={icon} />
       {children}
-    </section>
+    </SurfaceSection>
   );
 }
 
@@ -32,7 +33,7 @@ export function InnerPanel({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-4 rounded-2xl border border-border/70 bg-white/[0.03] p-4">
+    <SurfaceInset className="space-y-4">
       <div>
         <p className="m-0 text-sm font-semibold text-card-foreground">{title}</p>
         {description ? (
@@ -40,15 +41,15 @@ export function InnerPanel({
         ) : null}
       </div>
       {children}
-    </div>
+    </SurfaceInset>
   );
 }
 
 export function SummaryMetric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+    <SurfaceMetric>
       <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
       <p className="m-0 mt-2 text-sm font-semibold text-card-foreground">{value}</p>
-    </div>
+    </SurfaceMetric>
   );
 }

@@ -104,7 +104,7 @@ function GlobalSearchDialog({
   return (
     <div className="fixed inset-0 z-50 bg-black/55 p-4 pt-20 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="mx-auto w-full max-w-2xl rounded-[28px] border border-border bg-background/95 shadow-2xl"
+        className="mx-auto w-full max-w-2xl rounded-[var(--radius-hero)] border border-border bg-background/95 shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="border-b border-border p-4">

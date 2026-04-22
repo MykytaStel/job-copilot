@@ -20,6 +20,8 @@
 | 1.6 | Freshness decay у scoring (jobs > 14 днів) | ✅ | `services/matching/scoring.rs` — `compute_freshness_decay()` |
 | 1.7 | Salary fit у scoring (якщо profile має salary range) | ✅ | `services/salary.rs` — `score_search_salary()` ±8 pts |
 | 1.8 | Company reputation у scoring | ✅ (partial) | Whitelist **+10** (не +5); blacklist = **виключення з результатів** (не -20); `api/routes/search/reranking.rs:19` |
+| 1.9 | Lifecycle presentation semantics in UI/read-model | ✅ | Engine presentation now returns explicit lifecycle labels; web surfaces use them instead of inferring from `postedAt` alone |
+| 1.10 | Deferred + bounded dashboard rerank | ✅ | Ranked mode reranks on demand and caps the first window to keep feed browsing responsive |
 
 ---
 

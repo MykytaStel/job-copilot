@@ -6,8 +6,8 @@ import type { RankedJobResult, SearchProfileBuildResult, SearchRunResult } from 
 import type { RoleCatalogItem, SourceCatalogItem } from '../../api/profiles';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { PillList } from '../../components/ui/PillList';
+import { ACTIVE_ONLY_EMPTY_STATE_MESSAGE, getJobMetaLabels } from '../../lib/jobPresentation';
 import { logJobImpressionsOnce } from '../events/jobImpressions';
-import { formatFallbackLabel } from '../../lib/format';
 import { getFitScoreTone, resolveRoleLabel, resolveSourceLabel } from './profile.utils';
 import { SearchResultFitExplanation } from './SearchResultFitExplanation';
 
@@ -111,7 +111,7 @@ export function SearchResultsSection({
       )}
 
       {result.results.length === 0 ? (
-        <EmptyState message="No active jobs matched this search profile." />
+        <EmptyState message={ACTIVE_ONLY_EMPTY_STATE_MESSAGE} />
       ) : (
         <div className="stackList">
           {result.results.map((item) => (
@@ -176,12 +176,7 @@ function SearchResultCard({
     searchProfile.excludeTerms.join('|'),
     searchProfile.allowedSources.join('|'),
   ].join('::');
-  const metaItems = [
-    presentation?.locationLabel,
-    presentation?.workModeLabel,
-    presentation?.salaryLabel,
-    presentation?.freshnessLabel,
-  ].filter(Boolean) as string[];
+  const metaItems = getJobMetaLabels(result.job);
 
   return (
     <article className="stackListItem searchResultCard">

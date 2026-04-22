@@ -4,6 +4,7 @@ import {
   Minus,
   type LucideIcon,
 } from 'lucide-react';
+import { semanticBadgeClass } from '../../components/ui/semanticTone';
 
 import type {
   MarketTrend,
@@ -38,7 +39,7 @@ export function getTrendMeta(trend: MarketTrend | number): {
       return {
         icon: ArrowUpRight,
         label: `+${trend}`,
-        className: 'border-fit-excellent/25 bg-fit-excellent/10 text-fit-excellent',
+        className: semanticBadgeClass.success,
       };
     }
 
@@ -46,14 +47,14 @@ export function getTrendMeta(trend: MarketTrend | number): {
       return {
         icon: ArrowDownRight,
         label: `${trend}`,
-        className: 'border-destructive/25 bg-destructive/10 text-destructive',
+        className: semanticBadgeClass.danger,
       };
     }
 
     return {
       icon: Minus,
       label: '0',
-      className: 'border-border bg-white/[0.04] text-muted-foreground',
+      className: semanticBadgeClass.muted,
     };
   }
 
@@ -61,7 +62,7 @@ export function getTrendMeta(trend: MarketTrend | number): {
     return {
       icon: ArrowUpRight,
       label: 'Up',
-      className: 'border-fit-excellent/25 bg-fit-excellent/10 text-fit-excellent',
+      className: semanticBadgeClass.success,
     };
   }
 
@@ -69,13 +70,13 @@ export function getTrendMeta(trend: MarketTrend | number): {
     return {
       icon: ArrowDownRight,
       label: 'Down',
-      className: 'border-destructive/25 bg-destructive/10 text-destructive',
+      className: semanticBadgeClass.danger,
     };
   }
 
   return {
     icon: Minus,
     label: 'Flat',
-    className: 'border-border bg-white/[0.04] text-muted-foreground',
+    className: semanticBadgeClass.muted,
   };
 }

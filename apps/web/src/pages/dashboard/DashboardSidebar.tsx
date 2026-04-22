@@ -3,6 +3,7 @@ import { Bookmark, KanbanSquare, Sparkles, TrendingUp, XCircle, Zap } from 'luci
 import type { DashboardPageState } from '../../features/dashboard/useDashboardPage';
 import { STATUS_COLUMNS, STATUS_ICONS } from '../../features/dashboard/useDashboardPage';
 
+import { AccentIconFrame } from '../../components/ui/AccentIconFrame';
 import { AIInsightPanel } from '../../components/ui/AIInsightPanel';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
@@ -20,9 +21,9 @@ export function DashboardSidebar({
       <Card className="border-border bg-card">
         <CardHeader className="gap-3">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
+            <AccentIconFrame size="md">
               <Sparkles className="h-4 w-4" />
-            </div>
+            </AccentIconFrame>
             <div>
               <h2 className="m-0 text-base font-semibold text-card-foreground">Quick Actions</h2>
               <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">
@@ -63,9 +64,9 @@ export function DashboardSidebar({
         <Card className="border-border bg-card">
           <CardHeader className="gap-3">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
+              <AccentIconFrame size="md">
                 <XCircle className="h-4 w-4" />
-              </div>
+              </AccentIconFrame>
               <div>
                 <h2 className="m-0 text-base font-semibold text-card-foreground">Pipeline</h2>
                 <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">
@@ -100,9 +101,9 @@ export function DashboardSidebar({
         <Card className="border-border bg-card">
           <CardHeader className="gap-3">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary">
+              <AccentIconFrame size="md">
                 <Zap className="h-4 w-4" />
-              </div>
+              </AccentIconFrame>
               <div>
                 <h2 className="m-0 text-base font-semibold text-card-foreground">Feed</h2>
                 <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">

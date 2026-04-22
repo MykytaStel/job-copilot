@@ -1,5 +1,6 @@
 import { cn } from '../../lib/cn';
 import { EmptyState } from './EmptyState';
+import { semanticBadgeClass } from './semanticTone';
 
 export function PillList({
   items,
@@ -16,10 +17,10 @@ export function PillList({
 
   const toneClass =
     tone === 'success'
-      ? 'bg-fit-excellent/12 text-fit-excellent border-fit-excellent/15'
+      ? semanticBadgeClass.success
       : tone === 'danger'
-        ? 'bg-destructive/12 text-destructive border-destructive/15'
-        : 'bg-secondary/70 text-secondary-foreground border-border';
+        ? semanticBadgeClass.danger
+        : semanticBadgeClass.muted;
 
   return (
     <div className="flex flex-wrap gap-2">

@@ -1,6 +1,6 @@
 import type { JobDetailsPageState } from '../../features/job-details/useJobDetailsPage';
 
-import { formatSalary } from './components';
+import { formatSalary } from './jobDetails.format';
 
 export function buildJobDetailsViewModel({
   job,

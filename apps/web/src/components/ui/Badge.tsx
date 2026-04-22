@@ -1,14 +1,16 @@
 import type { HTMLAttributes } from 'react';
 import { cn } from '../../lib/cn';
+import { semanticBadgeClass } from './semanticTone';
 
-type BadgeVariant = 'default' | 'success' | 'danger' | 'warning' | 'muted';
+type BadgeVariant = 'default' | 'info' | 'success' | 'danger' | 'warning' | 'muted';
 
 const variantClass: Record<BadgeVariant, string> = {
-  default: 'bg-surface-accent text-content-accent',
-  success: 'bg-surface-success text-content-success',
-  danger: 'bg-surface-danger text-content-danger',
-  warning: 'bg-surface-warning text-content-warning',
-  muted: 'bg-white/[.08] text-content-muted',
+  default: semanticBadgeClass.primary,
+  info: semanticBadgeClass.info,
+  success: semanticBadgeClass.success,
+  danger: semanticBadgeClass.danger,
+  warning: semanticBadgeClass.warning,
+  muted: semanticBadgeClass.muted,
 };
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
@@ -19,7 +21,7 @@ export function Badge({ variant = 'default', className, children, ...props }: Ba
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm',
+        'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm',
         variantClass[variant],
         className,
       )}

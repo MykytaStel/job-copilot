@@ -11,12 +11,14 @@ import { useNavigate } from 'react-router-dom';
 
 import { getNotifications } from '../api/notifications';
 import { getProfile, getStoredProfileRawText } from '../api/profiles';
+import { AccentIconFrame } from '../components/ui/AccentIconFrame';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Page } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
+import { SurfaceMetric } from '../components/ui/Surface';
 import { readProfileId } from '../lib/profileSession';
 import { queryKeys } from '../queryKeys';
 import { buildProfileCompletionState } from '../features/profile/profileCompletion';
@@ -93,9 +95,9 @@ export default function Settings() {
           <Card className="border-border bg-card">
             <CardHeader className="gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                <AccentIconFrame size="md">
                   <UserRound className="h-4 w-4" />
-                </div>
+                </AccentIconFrame>
                 <div>
                   <CardTitle>Profile defaults</CardTitle>
                   <p className="m-0 text-sm leading-6 text-muted-foreground">
@@ -138,9 +140,9 @@ export default function Settings() {
           <Card className="border-border bg-card">
             <CardHeader className="gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                <AccentIconFrame size="md">
                   <Target className="h-4 w-4" />
-                </div>
+                </AccentIconFrame>
                 <div>
                   <CardTitle>Search profile scope</CardTitle>
                   <p className="m-0 text-sm leading-6 text-muted-foreground">
@@ -188,9 +190,9 @@ export default function Settings() {
           <Card className="border-border bg-card">
             <CardHeader className="gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                <AccentIconFrame size="md">
                   <SlidersHorizontal className="h-4 w-4" />
-                </div>
+                </AccentIconFrame>
                 <div>
                   <CardTitle>Profile readiness</CardTitle>
                   <p className="m-0 text-sm leading-6 text-muted-foreground">
@@ -221,9 +223,9 @@ export default function Settings() {
           <Card className="border-border bg-card">
             <CardHeader className="gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                <AccentIconFrame size="md">
                   <Bell className="h-4 w-4" />
-                </div>
+                </AccentIconFrame>
                 <div>
                   <CardTitle>Notification scope</CardTitle>
                   <p className="m-0 text-sm leading-6 text-muted-foreground">
@@ -245,9 +247,9 @@ export default function Settings() {
           <Card className="border-border bg-card">
             <CardHeader className="gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                <AccentIconFrame size="md">
                   <Route className="h-4 w-4" />
-                </div>
+                </AccentIconFrame>
                 <div>
                   <CardTitle>Route plan</CardTitle>
                   <p className="m-0 text-sm leading-6 text-muted-foreground">
@@ -277,9 +279,9 @@ export default function Settings() {
 
 function SettingRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-white/[0.04] px-4 py-3">
+    <SurfaceMetric>
       <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
       <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">{value}</p>
-    </div>
+    </SurfaceMetric>
   );
 }

@@ -112,6 +112,8 @@ export function mapJob(job: EngineJob): JobPosting {
       outboundUrl: job.presentation.outbound_url ?? undefined,
       salaryLabel: job.presentation.salary_label ?? undefined,
       freshnessLabel: job.presentation.freshness_label ?? undefined,
+      lifecyclePrimaryLabel: job.presentation.lifecycle_primary_label ?? undefined,
+      lifecycleSecondaryLabel: job.presentation.lifecycle_secondary_label ?? undefined,
       badges: job.presentation.badges,
     },
     feedback: mapJobFeedbackState(job.feedback),

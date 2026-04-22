@@ -4,12 +4,13 @@ import type { ApplicationDetail } from '@job-copilot/shared';
 
 import { Badge } from '../../components/ui/Badge';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { SurfaceHero } from '../../components/ui/Surface';
 import { formatDate } from '../../lib/format';
 import { SummaryMetric } from './ApplicationDetailLayout';
 
 export function ApplicationHeader({ detail }: { detail: ApplicationDetail }) {
   return (
-    <div className="overflow-hidden rounded-[28px] border border-border bg-card/85 shadow-[var(--shadow-hero)]">
+    <SurfaceHero>
       <div className="relative">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-primary/10 via-accent/6 to-transparent" />
         <div className="relative space-y-6 p-7">
@@ -68,6 +69,6 @@ export function ApplicationHeader({ detail }: { detail: ApplicationDetail }) {
           </div>
         </div>
       </div>
-    </div>
+    </SurfaceHero>
   );
 }

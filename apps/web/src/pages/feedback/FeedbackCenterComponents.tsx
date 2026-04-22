@@ -20,7 +20,9 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { semanticIconFrameClass, semanticPanelClass } from '../../components/ui/semanticTone';
 import { cn } from '../../lib/cn';
+import { getJobMetaLabels } from '../../lib/jobPresentation';
 
 export type FeedbackTab = 'saved' | 'hidden' | 'bad-fit' | 'companies';
 export type FeedbackListTone = Exclude<FeedbackTab, 'companies'>;
@@ -102,12 +104,7 @@ export function JobRow({
   const presentation = job.presentation;
   const sourceLabel = presentation?.sourceLabel ?? job.primaryVariant?.source ?? 'source';
   const toneStyle = JOB_ROW_TONE_STYLES[tone];
-  const metaItems = [
-    presentation?.locationLabel,
-    presentation?.workModeLabel,
-    presentation?.salaryLabel,
-    presentation?.freshnessLabel,
-  ].filter(Boolean) as string[];
+  const metaItems = getJobMetaLabels(job);
 
   return (
     <Card className="overflow-hidden border-border bg-card">
@@ -311,12 +308,12 @@ export function CompanyRow({
 }) {
   const iconClass =
     accent === 'success'
-      ? 'border-fit-excellent/20 bg-fit-excellent/10 text-fit-excellent'
-      : 'border-destructive/20 bg-destructive/10 text-destructive';
+      ? semanticIconFrameClass.success
+      : semanticIconFrameClass.danger;
   const rowClass =
     accent === 'success'
-      ? 'border-fit-excellent/20 bg-fit-excellent/5'
-      : 'border-destructive/20 bg-destructive/5';
+      ? semanticPanelClass.success
+      : semanticPanelClass.danger;
 
   return (
     <Card className={cn('border', rowClass)}>
