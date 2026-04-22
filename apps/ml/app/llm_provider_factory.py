@@ -1,5 +1,3 @@
-import os
-
 from app.application_coach import ApplicationCoachProviderError
 from app.cover_letter_draft import CoverLetterDraftProviderError
 from app.interview_prep import InterviewPrepProviderError
@@ -9,6 +7,7 @@ from app.weekly_guidance import WeeklyGuidanceProviderError
 
 from app.llm_provider_remote import OllamaEnrichmentProvider, OpenAIEnrichmentProvider
 from app.llm_provider_template import TemplateEnrichmentProvider
+from app.settings import DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS, get_runtime_settings
 
 
 EnrichmentProvider = (
@@ -17,23 +16,29 @@ EnrichmentProvider = (
 
 
 def _build_enrichment_provider() -> EnrichmentProvider:
-    configured = os.getenv("ML_LLM_PROVIDER", "").strip().lower()
-    provider_name = configured or "template"
+    settings = get_runtime_settings()
+    provider_name = settings.llm_provider
 
     if provider_name == "template":
         return TemplateEnrichmentProvider()
 
     if provider_name == "openai":
-        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        api_key = settings.openai_api_key or ""
         if not api_key:
             raise ProfileInsightsProviderError("OPENAI_API_KEY is required when ML_LLM_PROVIDER=openai.")
 
-        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
-        base_url = os.getenv("OPENAI_BASE_URL", "").strip() or None
-        return OpenAIEnrichmentProvider(api_key=api_key, model=model, base_url=base_url)
+        return OpenAIEnrichmentProvider(
+            api_key=api_key,
+            model=settings.openai_model,
+            base_url=settings.openai_base_url,
+        )
 
     if provider_name == "ollama":
-        return OllamaEnrichmentProvider()
+        return OllamaEnrichmentProvider(
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+            timeout_seconds=DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS,
+        )
 
     raise ProfileInsightsProviderError(f"Unsupported ML_LLM_PROVIDER: {provider_name}")
 

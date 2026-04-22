@@ -90,6 +90,26 @@ pub fn router() -> Router<AppState> {
             put(feedback::mark_job_bad_fit).delete(feedback::unmark_job_bad_fit),
         )
         .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/salary-signal",
+            put(feedback::set_job_salary_signal),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/interest-rating",
+            put(feedback::set_job_interest_rating),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/work-mode-signal",
+            put(feedback::set_job_work_mode_signal),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/legitimacy-signal",
+            put(feedback::set_job_legitimacy_signal),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/tags",
+            put(feedback::tag_job_feedback),
+        )
+        .route(
             "/api/v1/profiles/{id}/companies/whitelist",
             put(feedback::add_company_whitelist).delete(feedback::remove_company_whitelist),
         )

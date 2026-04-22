@@ -33,7 +33,7 @@ Environment variables:
 - `OPENAI_MODEL` default `gpt-4o-mini`
 - `OPENAI_BASE_URL` optional override
 - `OLLAMA_BASE_URL` default `http://localhost:11434`
-- `OLLAMA_MODEL` default `mistral:7b`
+- `OLLAMA_MODEL` default `llama3.1:8b`
 - `ML_CORS_ALLOWED_ORIGINS` comma-separated allowlist; default is local dev origins for `3000` and `5173`
 - `ML_LOG_LEVEL` default `INFO`
 
@@ -42,7 +42,9 @@ Environment variables:
 - `app/api.py` wires the FastAPI app and endpoints
 - `app/api_models.py` owns canonical request/response DTOs for health + scoring routes
 - `app/service_dependencies.py` owns cached enrichment service construction
+- `app/fit_analysis_service.py`, `app/rerank_service.py`, and `app/reranker_bootstrap_service.py` own scoring/bootstrap orchestration
 - `app/scoring.py` owns deterministic fit/rerank helpers
+- `app/engine_api_client.py` owns engine-api client DTOs + upstream client errors
 - `app/settings.py` owns runtime logging and CORS defaults
 - `app/llm_provider_types.py` owns provider protocols
 - `app/llm_provider.py` stays the compatibility/public provider entrypoint, with implementations split across:

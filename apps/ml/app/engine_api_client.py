@@ -1,15 +1,35 @@
-import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-from fastapi import HTTPException, status
 from pydantic import BaseModel, field_validator
+
+from app.dataset import OutcomeDataset
+from app.settings import get_runtime_settings
 
 
 class EngineApiError(BaseModel):
     code: str | None = None
     message: str | None = None
     details: dict[str, Any] | None = None
+
+
+class EngineApiClientError(Exception):
+    pass
+
+
+class EngineApiUnavailableError(EngineApiClientError):
+    def __init__(self, detail: str):
+        super().__init__(detail)
+        self.detail = detail
+
+
+class EngineApiResponseError(EngineApiClientError):
+    def __init__(self, *, status_code: int, detail: str):
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
 
 
 class EngineProfileAnalysis(BaseModel):
@@ -98,20 +118,17 @@ class EngineJobLifecycle(BaseModel):
 
 
 def engine_api_base_url() -> str:
-    return os.getenv("ENGINE_API_BASE_URL", "http://localhost:8080").rstrip("/")
+    return get_runtime_settings().engine_api_base_url
 
 
 def engine_api_timeout_seconds() -> float:
-    raw = os.getenv("ENGINE_API_TIMEOUT_SECONDS", "10").strip()
-    try:
-        return max(1.0, float(raw))
-    except ValueError:
-        return 10.0
+    return get_runtime_settings().engine_api_timeout_seconds
 
 
 class EngineApiClient:
-    def __init__(self, client: httpx.AsyncClient):
+    def __init__(self, client: httpx.AsyncClient, *, base_url: str | None = None):
         self._client = client
+        self._base_url = base_url.rstrip("/") if base_url else None
 
     async def fetch_profile(self, profile_id: str) -> EngineProfile:
         payload = await self._fetch_json(f"/api/v1/profiles/{profile_id}")
@@ -121,15 +138,16 @@ class EngineApiClient:
         payload = await self._fetch_json(f"/api/v1/ml/jobs/{job_id}/lifecycle")
         return EngineJobLifecycle.model_validate(payload)
 
+    async def fetch_reranker_dataset(self, profile_id: str) -> OutcomeDataset:
+        payload = await self._fetch_json(f"/api/v1/profiles/{profile_id}/reranker-dataset")
+        return OutcomeDataset.model_validate(payload)
+
     async def _fetch_json(self, path: str) -> dict[str, Any]:
-        url = f"{engine_api_base_url()}{path}"
+        url = self._build_url(path)
         try:
             response = await self._client.get(url)
         except httpx.HTTPError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"engine-api request failed: {exc}",
-            ) from exc
+            raise EngineApiUnavailableError(f"engine-api request failed: {exc}") from exc
 
         if response.status_code >= 400:
             try:
@@ -138,6 +156,19 @@ class EngineApiClient:
                 payload = {}
             error = EngineApiError.model_validate(payload)
             detail = error.message or error.code or f"engine-api returned {response.status_code}"
-            raise HTTPException(status_code=response.status_code, detail=detail)
+            raise EngineApiResponseError(status_code=response.status_code, detail=detail)
 
         return response.json()
+
+    def _build_url(self, path: str) -> str:
+        return f"{self._base_url or engine_api_base_url()}{path}"
+
+
+@asynccontextmanager
+async def engine_api_client_context(
+    *,
+    base_url: str | None = None,
+) -> AsyncIterator[EngineApiClient]:
+    timeout = httpx.Timeout(engine_api_timeout_seconds())
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        yield EngineApiClient(client, base_url=base_url)

@@ -1,32 +1,27 @@
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
-from typing import Any
 
-import httpx
-
-from app.engine_api_client import engine_api_base_url, engine_api_timeout_seconds
-from app.reranker_evaluation import OutcomeDataset
-from app.trained_reranker import TrainedRerankerModel, train_model
+from app.bootstrap_client import fetch_labeled_examples as _fetch_labeled_examples
+from app.bootstrap_contract import BootstrapWorkflowResult
+from app.bootstrap_workflow import (
+    DEFAULT_MODEL_PATH as _DEFAULT_MODEL_PATH,
+    bootstrap_and_retrain as _bootstrap_and_retrain,
+)
+from app.trained_reranker_config import DEFAULT_TRAINED_RERANKER_MODEL_PATH
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL_PATH = Path(__file__).parent.parent / "models" / "trained-reranker-v2.json"
+# Compatibility export for existing imports.
+DEFAULT_MODEL_PATH = _DEFAULT_MODEL_PATH
 
 
 async def fetch_labeled_examples(
     profile_id: str,
     base_url: str | None = None,
-) -> OutcomeDataset:
-    url_base = (base_url or engine_api_base_url()).rstrip("/")
-    timeout = httpx.Timeout(engine_api_timeout_seconds())
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.get(f"{url_base}/api/v1/profiles/{profile_id}/reranker-dataset")
-    response.raise_for_status()
-    payload: dict[str, Any] = response.json()
-    return OutcomeDataset.model_validate(payload)
+):
+    return await _fetch_labeled_examples(profile_id, base_url=base_url)
 
 
 async def bootstrap_and_retrain(
@@ -34,38 +29,14 @@ async def bootstrap_and_retrain(
     min_examples: int = 30,
     model_path: Path = DEFAULT_MODEL_PATH,
     base_url: str | None = None,
-) -> dict[str, Any]:
-    dataset = await fetch_labeled_examples(profile_id, base_url=base_url)
-    example_count = len(dataset.examples)
-
-    if example_count < min_examples:
-        logger.warning(
-            "not enough labeled examples to retrain: got %d, need %d (profile=%s)",
-            example_count,
-            min_examples,
-            profile_id,
-        )
-        return {
-            "retrained": False,
-            "example_count": example_count,
-            "min_examples": min_examples,
-            "reason": f"need at least {min_examples} examples, got {example_count}",
-        }
-
-    model = train_model([dataset])
-    model.save(model_path)
-    logger.info(
-        "retrained reranker: %d examples, loss=%.6f, saved to %s",
-        example_count,
-        model.artifact.training.loss,
-        model_path,
+) -> BootstrapWorkflowResult:
+    return await _bootstrap_and_retrain(
+        profile_id=profile_id,
+        min_examples=min_examples,
+        model_path=model_path,
+        base_url=base_url,
+        fetch_examples=fetch_labeled_examples,
     )
-    return {
-        "retrained": True,
-        "example_count": example_count,
-        "model_path": str(model_path),
-        "training": model.artifact.training.model_dump(),
-    }
 
 
 def main() -> None:
@@ -75,7 +46,7 @@ def main() -> None:
     )
     parser.add_argument("--profile-id", required=True, help="Profile ID to fetch dataset for")
     parser.add_argument("--min-examples", type=int, default=30)
-    parser.add_argument("--model-path", default=str(DEFAULT_MODEL_PATH))
+    parser.add_argument("--model-path", default=str(DEFAULT_TRAINED_RERANKER_MODEL_PATH))
     parser.add_argument("--engine-api-url", default=None, help="Override ENGINE_API_BASE_URL")
     args = parser.parse_args()
 
@@ -92,8 +63,8 @@ def main() -> None:
 
     import json
 
-    print(json.dumps(result, indent=2))
-    if not result["retrained"]:
+    print(json.dumps(result.to_payload(), indent=2))
+    if not result.retrained:
         sys.exit(1)
 
 

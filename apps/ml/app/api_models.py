@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.trained_reranker.artifact import TrainingSummary
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -50,4 +52,5 @@ class BootstrapResponse(BaseModel):
     example_count: int
     reason: str | None = None
     model_path: str | None = None
-    training: dict | None = None
+    training: TrainingSummary | None = None
+    feature_importances: dict[str, float] | None = None

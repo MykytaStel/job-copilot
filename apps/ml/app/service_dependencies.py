@@ -1,10 +1,13 @@
 from functools import lru_cache
 
+from app import bootstrap_training
 from app.application_coach import (
     ApplicationCoachProviderError,
     http_error_from_application_coach_error,
 )
 from app.application_coach_service import ApplicationCoachService
+from app.engine_api_client import engine_api_client_context
+from app.fit_analysis_service import FitAnalysisService
 from app.cover_letter_draft import (
     CoverLetterDraftProviderError,
     http_error_from_cover_letter_draft_error,
@@ -33,11 +36,18 @@ from app.profile_insights import (
     http_error_from_provider_error,
 )
 from app.profile_insights_service import ProfileInsightsService
+from app.rerank_service import RerankService
+from app.reranker_bootstrap_service import RerankerBootstrapService
+from app.trained_reranker_config import DEFAULT_TRAINED_RERANKER_MODEL_PATH
 from app.weekly_guidance import (
     WeeklyGuidanceProviderError,
     http_error_from_weekly_guidance_error,
 )
 from app.weekly_guidance_service import WeeklyGuidanceService
+
+
+def engine_api_client_factory():
+    return engine_api_client_context()
 
 
 @lru_cache(maxsize=1)
@@ -110,3 +120,33 @@ def get_weekly_guidance_service() -> WeeklyGuidanceService:
         return build_cached_weekly_guidance_service()
     except WeeklyGuidanceProviderError as exc:
         raise http_error_from_weekly_guidance_error(exc) from exc
+
+
+@lru_cache(maxsize=1)
+def build_cached_fit_analysis_service() -> FitAnalysisService:
+    return FitAnalysisService(engine_api_client_factory)
+
+
+def get_fit_analysis_service() -> FitAnalysisService:
+    return build_cached_fit_analysis_service()
+
+
+@lru_cache(maxsize=1)
+def build_cached_rerank_service() -> RerankService:
+    return RerankService(engine_api_client_factory)
+
+
+def get_rerank_service() -> RerankService:
+    return build_cached_rerank_service()
+
+
+@lru_cache(maxsize=1)
+def build_cached_reranker_bootstrap_service() -> RerankerBootstrapService:
+    return RerankerBootstrapService(
+        bootstrap_workflow=bootstrap_training.bootstrap_and_retrain,
+        model_path=DEFAULT_TRAINED_RERANKER_MODEL_PATH,
+    )
+
+
+def get_reranker_bootstrap_service() -> RerankerBootstrapService:
+    return build_cached_reranker_bootstrap_service()

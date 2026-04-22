@@ -48,6 +48,9 @@ fn sample_application() -> Application {
         status: "saved".to_string(),
         applied_at: None,
         due_date: None,
+        outcome: None,
+        outcome_date: None,
+        rejection_stage: None,
         updated_at: "2026-04-11T00:00:00Z".to_string(),
     }
 }

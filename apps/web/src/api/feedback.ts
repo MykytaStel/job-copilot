@@ -2,6 +2,10 @@ import type {
   CompanyFeedbackRecord,
   FeedbackOverview,
   JobFeedbackRecord,
+  JobFeedbackReason,
+  LegitimacySignal,
+  SalaryFeedbackSignal,
+  WorkModeFeedbackSignal,
 } from '@job-copilot/shared/feedback';
 import { json, request } from './client';
 import type {
@@ -113,5 +117,60 @@ export async function removeCompanyBlacklist(
   await request<void>(
     `/api/v1/profiles/${profileId}/companies/blacklist`,
     json('DELETE', { company_name: companyName }),
+  );
+}
+
+export async function setJobSalarySignal(
+  profileId: string,
+  jobId: string,
+  signal: SalaryFeedbackSignal,
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/salary-signal`,
+    json('PUT', { signal }),
+  );
+}
+
+export async function setJobInterestRating(
+  profileId: string,
+  jobId: string,
+  rating: number,
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/interest-rating`,
+    json('PUT', { rating }),
+  );
+}
+
+export async function setJobWorkModeSignal(
+  profileId: string,
+  jobId: string,
+  signal: WorkModeFeedbackSignal,
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/work-mode-signal`,
+    json('PUT', { signal }),
+  );
+}
+
+export async function tagJobFeedback(
+  profileId: string,
+  jobId: string,
+  tags: JobFeedbackReason[],
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/tags`,
+    json('PUT', { tags }),
+  );
+}
+
+export async function setJobLegitimacySignal(
+  profileId: string,
+  jobId: string,
+  signal: LegitimacySignal,
+): Promise<void> {
+  await request<void>(
+    `/api/v1/profiles/${profileId}/jobs/${jobId}/legitimacy-signal`,
+    json('PUT', { signal }),
   );
 }

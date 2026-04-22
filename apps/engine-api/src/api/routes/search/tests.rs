@@ -9,6 +9,7 @@ use crate::api::dto::search::{
     RunSearchRequest, SearchProfileRequest, SearchRerankerComparisonRequest,
 };
 use crate::api::error::ApiJson;
+use crate::domain::application::model::{Application, ApplicationOutcome};
 use crate::domain::feedback::model::{
     CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackRecord,
 };
@@ -159,9 +160,9 @@ fn user_event(
 fn trained_reranker_model() -> TrainedRerankerModel {
     TrainedRerankerModel::from_json_str(
         r#"{
-              "artifact_version": "trained_reranker_v2",
+              "artifact_version": "trained_reranker_v3",
               "model_type": "logistic_regression",
-              "label_policy_version": "outcome_label_v2",
+              "label_policy_version": "outcome_label_v3",
               "feature_names": ["matched_skill_count"],
               "feature_transforms": {},
               "weights": { "matched_skill_count": 20.0 },
@@ -180,6 +181,21 @@ fn trained_reranker_model() -> TrainedRerankerModel {
             }"#,
     )
     .expect("test artifact should load")
+}
+
+fn outcome_signal_trained_reranker_model() -> TrainedRerankerModel {
+    TrainedRerankerModel::from_json_str(
+        r#"{
+              "artifact_version": "trained_reranker_v3",
+              "model_type": "logistic_regression",
+              "label_policy_version": "outcome_label_v3",
+              "feature_names": ["outcome_received_offer"],
+              "weights": { "outcome_received_offer": 10.0 },
+              "intercept": -4.0,
+              "max_score_delta": 8
+            }"#,
+    )
+    .expect("signal-aware test artifact should load")
 }
 
 fn reranker_comparison_request(
@@ -657,6 +673,10 @@ async fn hidden_jobs_are_excluded_from_ranked_results() {
             saved: false,
             hidden: true,
             bad_fit: false,
+            salary_signal: None,
+            interest_rating: None,
+            work_mode_signal: None,
+            legitimacy_signal: None,
             created_at: "2026-04-14T00:00:00Z".to_string(),
             updated_at: "2026-04-14T00:00:00Z".to_string(),
         }),
@@ -899,6 +919,10 @@ async fn bad_fit_job_gets_score_penalty_and_reason() {
             saved: false,
             hidden: false,
             bad_fit: true,
+            salary_signal: None,
+            interest_rating: None,
+            work_mode_signal: None,
+            legitimacy_signal: None,
             created_at: "2026-04-14T00:00:00Z".to_string(),
             updated_at: "2026-04-14T00:00:00Z".to_string(),
         }),
@@ -1087,6 +1111,10 @@ async fn bad_fit_penalty_demotes_job_before_truncation() {
             saved: false,
             hidden: false,
             bad_fit: true,
+            salary_signal: None,
+            interest_rating: None,
+            work_mode_signal: None,
+            legitimacy_signal: None,
             created_at: "2026-04-14T00:00:00Z".to_string(),
             updated_at: "2026-04-14T00:00:00Z".to_string(),
         }),
@@ -1973,8 +2001,126 @@ async fn trained_reranker_feature_flag_disables_layer_cleanly() {
             .flat_map(|result| result["fit"]["reasons"].as_array().into_iter().flatten())
             .all(|reason| !reason
                 .as_str()
-                .is_some_and(|value| value.contains("Trained reranker v2"))),
+                .is_some_and(|value| value.contains("Trained reranker v3"))),
         "trained reranker reasons should not appear when disabled"
+    );
+}
+
+#[tokio::test]
+async fn trained_reranker_uses_application_outcome_signals_in_live_scoring() {
+    let event_with_application = UserEventRecord {
+        id: "evt-1".to_string(),
+        profile_id: "profile-1".to_string(),
+        event_type: UserEventType::ApplicationCreated,
+        job_id: Some("job-1".to_string()),
+        company_name: Some("NovaLedger".to_string()),
+        source: Some("djinni".to_string()),
+        role_family: Some("engineering".to_string()),
+        payload_json: Some(json!({ "application_id": "app-1" })),
+        created_at: "2026-04-15T00:00:00Z".to_string(),
+    };
+    let build_state = |enable_trained: bool| {
+        AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(JobsServiceStub::default().with_job_view(sample_job_view(
+                "job-1",
+                "Senior Backend Developer",
+                "Remote role working with Rust",
+                Some("remote"),
+                "djinni",
+            ))),
+            ApplicationsService::for_tests(
+                ApplicationsServiceStub::default().with_application(Application {
+                    id: "app-1".to_string(),
+                    job_id: "job-1".to_string(),
+                    resume_id: None,
+                    status: "offer".to_string(),
+                    applied_at: Some("2026-04-15T00:00:00Z".to_string()),
+                    due_date: None,
+                    outcome: Some(ApplicationOutcome::OfferReceived),
+                    outcome_date: Some("2026-04-20T00:00:00Z".to_string()),
+                    rejection_stage: None,
+                    updated_at: "2026-04-20T00:00:00Z".to_string(),
+                }),
+            ),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_learned_reranker_enabled(false)
+        .with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default().with_event(event_with_application.clone()),
+        ))
+        .with_trained_reranker(
+            enable_trained,
+            enable_trained.then(outcome_signal_trained_reranker_model),
+        )
+        .with_reranker_runtime_mode(RerankerRuntimeMode::Trained)
+    };
+    let request = || RunSearchRequest {
+        profile_id: Some("profile-1".to_string()),
+        search_profile: SearchProfileRequest {
+            primary_role: "backend_engineer".to_string(),
+            primary_role_confidence: Some(95),
+            target_roles: vec![],
+            role_candidates: vec![],
+            seniority: "senior".to_string(),
+            target_regions: vec![TargetRegion::EuRemote],
+            work_modes: vec![WorkMode::Remote],
+            allowed_sources: vec!["djinni".to_string()],
+            profile_skills: vec!["rust".to_string()],
+            profile_keywords: vec!["backend".to_string()],
+            search_terms: vec!["rust".to_string()],
+            exclude_terms: vec![],
+        },
+        limit: Some(10),
+        reranker_comparison: None,
+    };
+
+    let baseline = run_search(State(build_state(false)), ApiJson(request()))
+        .await
+        .expect("baseline search should succeed")
+        .into_response();
+    let trained = run_search(State(build_state(true)), ApiJson(request()))
+        .await
+        .expect("trained search should succeed")
+        .into_response();
+
+    let baseline_body = body::to_bytes(baseline.into_body(), usize::MAX)
+        .await
+        .expect("baseline response body should be readable");
+    let trained_body = body::to_bytes(trained.into_body(), usize::MAX)
+        .await
+        .expect("trained response body should be readable");
+    let baseline_payload: Value =
+        serde_json::from_slice(&baseline_body).expect("baseline body should be valid JSON");
+    let trained_payload: Value =
+        serde_json::from_slice(&trained_body).expect("trained body should be valid JSON");
+
+    let baseline_score = baseline_payload["results"][0]["fit"]["score"]
+        .as_u64()
+        .expect("baseline score should be a number");
+    let trained_score = trained_payload["results"][0]["fit"]["score"]
+        .as_u64()
+        .expect("trained score should be a number");
+
+    assert!(
+        trained_score > baseline_score,
+        "application outcome signal should produce a positive trained reranker adjustment"
+    );
+    assert_eq!(
+        trained_payload["meta"]["trained_reranker_adjusted_jobs"],
+        json!(1)
+    );
+    assert!(
+        trained_payload["results"][0]["fit"]["reasons"]
+            .as_array()
+            .expect("reasons should be an array")
+            .iter()
+            .any(|reason| reason
+                .as_str()
+                .is_some_and(|value| value.contains("Trained reranker v3"))),
+        "trained reranker reason should be present when application outcome signal is loaded"
     );
 }
 

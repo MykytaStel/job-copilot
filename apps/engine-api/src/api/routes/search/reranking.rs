@@ -2,12 +2,16 @@ use std::collections::HashMap;
 
 use tracing::warn;
 
+use crate::domain::application::model::Application;
 use crate::api::error::ApiError;
 use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackState};
 use crate::domain::matching::RerankerMode;
 use crate::services::behavior::{BehaviorService, ProfileBehaviorAggregates};
 use crate::services::funnel::{FunnelService, ProfileFunnelAggregates};
 use crate::services::learned_reranker::LearnedRerankerService;
+use crate::services::outcome_dataset::{
+    EventSignals, application_ids_by_job_id, normalize_signals,
+};
 use crate::services::salary::{SearchSalaryExpectation, score_search_salary};
 use crate::services::search_ranking::RankedJob;
 use crate::services::trained_reranker::TrainedRerankerFeatures;
@@ -24,6 +28,8 @@ const BAD_FIT_SCORE_PENALTY: u8 = 30;
 pub(crate) struct SearchLearningAggregates {
     pub(crate) behavior: ProfileBehaviorAggregates,
     pub(crate) funnel: ProfileFunnelAggregates,
+    pub(crate) events: Vec<crate::domain::user_event::model::UserEventRecord>,
+    pub(crate) applications_by_job_id: HashMap<String, Application>,
 }
 
 /// Adjust fit scores based on explicit job feedback, then re-sort by adjusted score.
@@ -76,6 +82,8 @@ pub(crate) async fn load_learning_aggregates(
     Some(SearchLearningAggregates {
         behavior: BehaviorService::new().build_aggregates(events.iter()),
         funnel: FunnelService::new().build_aggregates(events.iter()),
+        applications_by_job_id: load_profile_applications_by_job_id(state, &events).await,
+        events,
     })
 }
 
@@ -203,6 +211,9 @@ pub(crate) fn apply_trained_reranking(
     mut ranked_jobs: Vec<RankedJob>,
     deterministic_score_by_job_id: &HashMap<String, u8>,
     behavior_score_by_job_id: &HashMap<String, u8>,
+    feedback_by_job_id: &HashMap<String, JobFeedbackState>,
+    event_signals_by_job_id: &HashMap<String, EventSignals>,
+    applications_by_job_id: &HashMap<String, Application>,
 ) -> (Vec<RankedJob>, usize) {
     let Some(model) = state.trained_reranker_model.as_ref() else {
         return (ranked_jobs, 0);
@@ -225,6 +236,13 @@ pub(crate) fn apply_trained_reranking(
             .search_ranking
             .infer_role_family(&ranked.job)
             .is_some();
+        let feedback = feedback_by_job_id.get(job_id).cloned().unwrap_or_default();
+        let default_event_signals = EventSignals::default();
+        let event_signals = event_signals_by_job_id
+            .get(job_id)
+            .unwrap_or(&default_event_signals);
+        let signals = normalize_signals(&feedback, event_signals, applications_by_job_id.get(job_id));
+        let rating = signals.interest_rating.unwrap_or(0);
         let features = TrainedRerankerFeatures {
             deterministic_score,
             behavior_score_delta: i16::from(behavior_score) - i16::from(deterministic_score),
@@ -237,6 +255,18 @@ pub(crate) fn apply_trained_reranking(
             matched_keyword_count: ranked.fit.matched_keywords.len(),
             source_present,
             role_family_present,
+            outcome_received_offer: signals.received_offer,
+            outcome_reached_interview: signals.reached_interview,
+            outcome_rejected: signals.was_rejected,
+            has_salary_rejection: signals.has_salary_rejection,
+            has_remote_rejection: signals.has_remote_rejection,
+            has_tech_rejection: signals.has_tech_rejection,
+            interest_rating_positive: f64::from(rating.max(0).clamp(0, 2)) / 2.0,
+            interest_rating_negative: f64::from((-rating).max(0).clamp(0, 2)) / 2.0,
+            work_mode_deal_breaker: signals.work_mode_deal_breaker,
+            scrolled_to_bottom: signals.scrolled_to_bottom,
+            returned_count: signals.returned_count,
+            legitimacy_suspicious: signals.legitimacy_suspicious,
         };
         let score = model.score(&features);
 
@@ -255,6 +285,31 @@ pub(crate) fn apply_trained_reranking(
 
     sort_ranked_jobs(&mut ranked_jobs);
     (ranked_jobs, adjusted_count)
+}
+
+async fn load_profile_applications_by_job_id(
+    state: &AppState,
+    events: &[crate::domain::user_event::model::UserEventRecord],
+) -> HashMap<String, Application> {
+    let mut applications_by_job_id = HashMap::new();
+
+    for (job_id, application_id) in application_ids_by_job_id(events) {
+        match state.applications_service.get_by_id(&application_id).await {
+            Ok(Some(application)) => {
+                applications_by_job_id.insert(job_id, application);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                warn!(
+                    error = %error,
+                    application_id,
+                    "failed to load application outcome for trained reranker; continuing without it"
+                );
+            }
+        }
+    }
+
+    applications_by_job_id
 }
 
 pub(crate) fn score_by_job_id(ranked_jobs: &[RankedJob]) -> HashMap<String, u8> {

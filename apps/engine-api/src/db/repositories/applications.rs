@@ -4,8 +4,8 @@ use uuid::Uuid;
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::application::model::{
-    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, Contact,
-    CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer, Task,
+    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, ApplicationOutcome,
+    Contact, CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer, Task,
     UpdateApplication, UpsertOffer,
 };
 use crate::domain::job::model::Job;
@@ -25,6 +25,9 @@ struct ApplicationRow {
     status: String,
     applied_at: Option<String>,
     due_date: Option<String>,
+    outcome: Option<String>,
+    outcome_date: Option<String>,
+    rejection_stage: Option<String>,
     updated_at: String,
 }
 
@@ -105,6 +108,9 @@ struct ApplicationDetailRow {
     application_status: String,
     application_applied_at: Option<String>,
     application_due_date: Option<String>,
+    application_outcome: Option<String>,
+    application_outcome_date: Option<String>,
+    application_rejection_stage: Option<String>,
     application_updated_at: String,
     job_id: String,
     job_title: String,
@@ -170,6 +176,9 @@ impl ApplicationsRepository {
                 status,
                 applied_at::text AS applied_at,
                 due_date::text AS due_date,
+                outcome,
+                outcome_date::text AS outcome_date,
+                rejection_stage,
                 updated_at::text AS updated_at
             "#,
         )
@@ -197,6 +206,9 @@ impl ApplicationsRepository {
                 status,
                 applied_at::text AS applied_at,
                 due_date::text AS due_date,
+                outcome,
+                outcome_date::text AS outcome_date,
+                rejection_stage,
                 updated_at::text AS updated_at
             FROM applications
             WHERE id = $1
@@ -226,6 +238,9 @@ impl ApplicationsRepository {
                 applications.status AS application_status,
                 applications.applied_at::text AS application_applied_at,
                 applications.due_date::text AS application_due_date,
+                applications.outcome AS application_outcome,
+                applications.outcome_date::text AS application_outcome_date,
+                applications.rejection_stage AS application_rejection_stage,
                 applications.updated_at::text AS application_updated_at,
                 jobs.id AS job_id,
                 jobs.title AS job_title,
@@ -415,6 +430,9 @@ impl ApplicationsRepository {
                 status,
                 applied_at::text AS applied_at,
                 due_date::text AS due_date,
+                outcome,
+                outcome_date::text AS outcome_date,
+                rejection_stage,
                 updated_at::text AS updated_at
             FROM applications
             ORDER BY updated_at DESC
@@ -487,6 +505,18 @@ impl ApplicationsRepository {
                     WHEN $3 THEN $4::timestamptz
                     ELSE due_date
                 END,
+                outcome = CASE
+                    WHEN $5 THEN $6
+                    ELSE outcome
+                END,
+                outcome_date = CASE
+                    WHEN $7 THEN $8::timestamptz
+                    ELSE outcome_date
+                END,
+                rejection_stage = CASE
+                    WHEN $9 THEN $10
+                    ELSE rejection_stage
+                END,
                 updated_at = NOW()
             WHERE id = $1
             RETURNING
@@ -496,13 +526,27 @@ impl ApplicationsRepository {
                 status,
                 applied_at::text AS applied_at,
                 due_date::text AS due_date,
+                outcome,
+                outcome_date::text AS outcome_date,
+                rejection_stage,
                 updated_at::text AS updated_at
             "#,
         )
         .bind(id)
         .bind(&update.status)
         .bind(update.due_date.is_some())
-        .bind(&update.due_date)
+        .bind(update.due_date.as_ref().and_then(|v| v.as_deref()))
+        .bind(update.outcome.is_some())
+        .bind(
+            update
+                .outcome
+                .as_ref()
+                .and_then(|v| v.as_ref().map(|o| o.as_str())),
+        )
+        .bind(update.outcome_date.is_some())
+        .bind(update.outcome_date.as_ref().and_then(|v| v.as_deref()))
+        .bind(update.rejection_stage.is_some())
+        .bind(update.rejection_stage.as_ref().and_then(|v| v.as_deref()))
         .fetch_optional(pool)
         .await?;
 
@@ -759,6 +803,9 @@ impl ApplicationsRepository {
                 status,
                 applied_at::text AS applied_at,
                 due_date::text AS due_date,
+                outcome,
+                outcome_date::text AS outcome_date,
+                rejection_stage,
                 updated_at::text AS updated_at
             "#,
         )
@@ -780,6 +827,9 @@ impl From<ApplicationRow> for Application {
             status: row.status,
             applied_at: row.applied_at,
             due_date: row.due_date,
+            outcome: row.outcome.as_deref().and_then(ApplicationOutcome::parse),
+            outcome_date: row.outcome_date,
+            rejection_stage: row.rejection_stage,
             updated_at: row.updated_at,
         }
     }
@@ -829,6 +879,12 @@ impl
                 status: row.application_status,
                 applied_at: row.application_applied_at,
                 due_date: row.application_due_date,
+                outcome: row
+                    .application_outcome
+                    .as_deref()
+                    .and_then(ApplicationOutcome::parse),
+                outcome_date: row.application_outcome_date,
+                rejection_stage: row.application_rejection_stage,
                 updated_at: row.application_updated_at,
             },
             job: Job {

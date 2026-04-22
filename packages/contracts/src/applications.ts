@@ -8,6 +8,21 @@ export type ApplicationStatus =
   | 'offer'
   | 'rejected';
 
+export type ApplicationOutcome =
+  | 'phone_screen'
+  | 'technical_interview'
+  | 'final_interview'
+  | 'offer_received'
+  | 'rejected'
+  | 'ghosted'
+  | 'withdrew';
+
+export type RejectionStage =
+  | 'applied'
+  | 'phone_screen'
+  | 'technical_interview'
+  | 'final_interview';
+
 export interface ApplicationNote {
   id: string;
   applicationId: string;
@@ -23,6 +38,9 @@ export interface Application {
   status: ApplicationStatus;
   appliedAt?: string;
   dueDate?: string;
+  outcome?: ApplicationOutcome;
+  outcomeDate?: string;
+  rejectionStage?: RejectionStage;
   updatedAt: string;
 }
 

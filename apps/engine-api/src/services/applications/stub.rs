@@ -56,6 +56,9 @@ impl ApplicationsServiceStub {
             status: application.status,
             applied_at: application.applied_at,
             due_date: None,
+            outcome: None,
+            outcome_date: None,
+            rejection_stage: None,
             updated_at: "2026-04-11T00:00:00+00:00".to_string(),
         };
 
