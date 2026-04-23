@@ -1,3 +1,4 @@
+// Test double for ProfileMlMetricsService. The real backend uses ProfileMlMetricsRepository.
 use std::sync::Mutex;
 
 use crate::db::repositories::RepositoryError;
@@ -6,7 +7,6 @@ use crate::domain::profile::ml::{CreateProfileMlMetric, ProfileMlMetricRecord};
 #[derive(Default)]
 pub struct ProfileMlMetricsServiceStub {
     records: Mutex<Vec<ProfileMlMetricRecord>>,
-    database_disabled: bool,
 }
 
 impl ProfileMlMetricsServiceStub {
@@ -18,20 +18,10 @@ impl ProfileMlMetricsServiceStub {
         self
     }
 
-    #[allow(dead_code)]
-    pub fn with_database_disabled(mut self) -> Self {
-        self.database_disabled = true;
-        self
-    }
-
     pub(crate) fn create(
         &self,
         input: CreateProfileMlMetric,
     ) -> Result<ProfileMlMetricRecord, RepositoryError> {
-        if self.database_disabled {
-            return Err(RepositoryError::DatabaseDisabled);
-        }
-
         let mut records = self
             .records
             .lock()
@@ -58,10 +48,6 @@ impl ProfileMlMetricsServiceStub {
         profile_id: &str,
         limit: usize,
     ) -> Result<Vec<ProfileMlMetricRecord>, RepositoryError> {
-        if self.database_disabled {
-            return Err(RepositoryError::DatabaseDisabled);
-        }
-
         let mut rows = self
             .records
             .lock()

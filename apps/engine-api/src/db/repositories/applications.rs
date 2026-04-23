@@ -411,9 +411,9 @@ impl ApplicationsRepository {
         })
         .collect();
 
-        Ok(Some(ApplicationDetail::from((
+        Ok(Some(ApplicationDetail::try_from((
             row, offer, notes, contacts, activities, tasks,
-        ))))
+        ))?))
     }
 
     pub async fn list_recent(&self, limit: i64) -> Result<Vec<Application>, RepositoryError> {
@@ -852,7 +852,7 @@ impl From<ApplicationSearchHitRow> for ApplicationSearchHit {
 }
 
 impl
-    From<(
+    TryFrom<(
         ApplicationDetailRow,
         Option<Offer>,
         Vec<ApplicationNote>,
@@ -861,7 +861,9 @@ impl
         Vec<Task>,
     )> for ApplicationDetail
 {
-    fn from(
+    type Error = RepositoryError;
+
+    fn try_from(
         (row, offer, notes, contacts, activities, tasks): (
             ApplicationDetailRow,
             Option<Offer>,
@@ -870,12 +872,38 @@ impl
             Vec<Activity>,
             Vec<Task>,
         ),
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Self::Error> {
+        let resume = match row.resume_version {
+            None => None,
+            Some(version) => Some(ResumeVersion {
+                id: row.application_resume_id.clone().ok_or_else(|| {
+                    RepositoryError::InvalidData {
+                        message: "resume_id missing on joined resume row".into(),
+                    }
+                })?,
+                version,
+                filename: row.resume_filename.ok_or_else(|| RepositoryError::InvalidData {
+                    message: "resume filename missing on joined resume row".into(),
+                })?,
+                raw_text: row.resume_raw_text.ok_or_else(|| RepositoryError::InvalidData {
+                    message: "resume raw_text missing on joined resume row".into(),
+                })?,
+                is_active: row.resume_is_active.ok_or_else(|| RepositoryError::InvalidData {
+                    message: "resume is_active missing on joined resume row".into(),
+                })?,
+                uploaded_at: row
+                    .resume_uploaded_at
+                    .ok_or_else(|| RepositoryError::InvalidData {
+                        message: "resume uploaded_at missing on joined resume row".into(),
+                    })?,
+            }),
+        };
+
+        Ok(Self {
             application: Application {
                 id: row.application_id,
                 job_id: row.application_job_id,
-                resume_id: row.application_resume_id.clone(),
+                resume_id: row.application_resume_id,
                 status: row.application_status,
                 applied_at: row.application_applied_at,
                 due_date: row.application_due_date,
@@ -902,30 +930,13 @@ impl
                 last_seen_at: row.job_last_seen_at,
                 is_active: row.job_is_active,
             },
-            resume: row.resume_version.map(|version| ResumeVersion {
-                id: row
-                    .application_resume_id
-                    .expect("resume id should be present when resume is joined"),
-                version,
-                filename: row
-                    .resume_filename
-                    .expect("filename should be present when resume is joined"),
-                raw_text: row
-                    .resume_raw_text
-                    .expect("raw_text should be present when resume is joined"),
-                is_active: row
-                    .resume_is_active
-                    .expect("is_active should be present when resume is joined"),
-                uploaded_at: row
-                    .resume_uploaded_at
-                    .expect("uploaded_at should be present when resume is joined"),
-            }),
+            resume,
             offer,
             notes,
             contacts,
             activities,
             tasks,
-        }
+        })
     }
 }
 

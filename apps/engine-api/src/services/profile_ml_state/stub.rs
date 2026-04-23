@@ -1,3 +1,4 @@
+// Test double for ProfileMlStateService. The real backend uses ProfileMlStateRepository.
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
@@ -8,7 +9,6 @@ use crate::domain::profile::ml::{ProfileMlRetrainCandidate, ProfileMlState, Upda
 pub struct ProfileMlStateServiceStub {
     states_by_profile_id: Mutex<HashMap<String, ProfileMlState>>,
     labeled_jobs_by_profile_id: Mutex<HashMap<String, HashSet<String>>>,
-    database_disabled: bool,
 }
 
 impl ProfileMlStateServiceStub {
@@ -20,20 +20,10 @@ impl ProfileMlStateServiceStub {
         self
     }
 
-    #[allow(dead_code)]
-    pub fn with_database_disabled(mut self) -> Self {
-        self.database_disabled = true;
-        self
-    }
-
     pub(crate) fn get_by_profile_id(
         &self,
         profile_id: &str,
     ) -> Result<Option<ProfileMlState>, RepositoryError> {
-        if self.database_disabled {
-            return Err(RepositoryError::DatabaseDisabled);
-        }
-
         Ok(self
             .states_by_profile_id
             .lock()
@@ -47,10 +37,6 @@ impl ProfileMlStateServiceStub {
         profile_id: &str,
         job_id: &str,
     ) -> Result<bool, RepositoryError> {
-        if self.database_disabled {
-            return Err(RepositoryError::DatabaseDisabled);
-        }
-
         let mut labeled_jobs_by_profile_id = self
             .labeled_jobs_by_profile_id
             .lock()
@@ -81,10 +67,6 @@ impl ProfileMlStateServiceStub {
         &self,
         min_examples: usize,
     ) -> Result<Vec<ProfileMlRetrainCandidate>, RepositoryError> {
-        if self.database_disabled {
-            return Err(RepositoryError::DatabaseDisabled);
-        }
-
         Ok(self
             .states_by_profile_id
             .lock()
@@ -103,10 +85,6 @@ impl ProfileMlStateServiceStub {
         profile_id: &str,
         update: UpdateProfileMlState,
     ) -> Result<Option<ProfileMlState>, RepositoryError> {
-        if self.database_disabled {
-            return Err(RepositoryError::DatabaseDisabled);
-        }
-
         let mut states = self
             .states_by_profile_id
             .lock()
