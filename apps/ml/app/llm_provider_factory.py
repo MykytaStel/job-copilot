@@ -1,10 +1,9 @@
-from app.application_coach import ApplicationCoachProviderError
-from app.cover_letter_draft import CoverLetterDraftProviderError
-from app.interview_prep import InterviewPrepProviderError
-from app.job_fit_explanation import JobFitExplanationProviderError
-from app.profile_insights import ProfileInsightsProviderError
-from app.weekly_guidance import WeeklyGuidanceProviderError
-
+from app.enrichment.application_coach.contract import ApplicationCoachProviderError
+from app.enrichment.cover_letter_draft.contract import CoverLetterDraftProviderError
+from app.enrichment.interview_prep.contract import InterviewPrepProviderError
+from app.enrichment.job_fit_explanation.contract import JobFitExplanationProviderError
+from app.enrichment.profile_insights.contract import ProfileInsightsProviderError
+from app.enrichment.weekly_guidance.errors import WeeklyGuidanceProviderError
 from app.llm_provider_remote import OllamaEnrichmentProvider, OpenAIEnrichmentProvider
 from app.llm_provider_template import TemplateEnrichmentProvider
 from app.settings import DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS, get_runtime_settings

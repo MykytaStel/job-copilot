@@ -1,27 +1,33 @@
 import httpx
 
 from app.enrichment.application_coach.contract import (
+    ApplicationCoachPrompt,
     ApplicationCoachProviderError,
     ApplicationCoachRequest,
 )
 from app.enrichment.cover_letter_draft.contract import (
+    CoverLetterDraftPrompt,
     CoverLetterDraftProviderError,
     CoverLetterDraftRequest,
 )
 from app.enrichment.interview_prep.contract import (
+    InterviewPrepPrompt,
     InterviewPrepProviderError,
     InterviewPrepRequest,
 )
 from app.enrichment.job_fit_explanation.contract import (
+    JobFitExplanationPrompt,
     JobFitExplanationProviderError,
     JobFitExplanationRequest,
 )
 from app.enrichment.profile_insights.contract import (
     LlmContextRequest,
+    ProfileInsightsPrompt,
     ProfileInsightsProviderError,
 )
 from app.enrichment.weekly_guidance.contract import WeeklyGuidanceRequest
 from app.enrichment.weekly_guidance.errors import WeeklyGuidanceProviderError
+from app.enrichment.weekly_guidance.prompt import WeeklyGuidancePrompt
 from app.llm_providers.common import build_async_client, build_async_retrying
 from app.settings import DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
 
@@ -105,7 +111,7 @@ class OllamaEnrichmentProvider:
             raise error_type(f"Ollama request failed: {exc}") from exc
 
     async def generate_profile_insights(
-        self, context: LlmContextRequest, prompt
+        self, context: LlmContextRequest, prompt: ProfileInsightsPrompt
     ) -> str:
         return await self._generate(
             system_instructions=prompt.system_instructions,
@@ -115,7 +121,7 @@ class OllamaEnrichmentProvider:
         )
 
     async def generate_job_fit_explanation(
-        self, context: JobFitExplanationRequest, prompt
+        self, context: JobFitExplanationRequest, prompt: JobFitExplanationPrompt
     ) -> str:
         return await self._generate(
             system_instructions=prompt.system_instructions,
@@ -125,7 +131,7 @@ class OllamaEnrichmentProvider:
         )
 
     async def generate_application_coach(
-        self, context: ApplicationCoachRequest, prompt
+        self, context: ApplicationCoachRequest, prompt: ApplicationCoachPrompt
     ) -> str:
         return await self._generate(
             system_instructions=prompt.system_instructions,
@@ -135,7 +141,7 @@ class OllamaEnrichmentProvider:
         )
 
     async def generate_cover_letter_draft(
-        self, context: CoverLetterDraftRequest, prompt
+        self, context: CoverLetterDraftRequest, prompt: CoverLetterDraftPrompt
     ) -> str:
         return await self._generate(
             system_instructions=prompt.system_instructions,
@@ -145,7 +151,7 @@ class OllamaEnrichmentProvider:
         )
 
     async def generate_interview_prep(
-        self, context: InterviewPrepRequest, prompt
+        self, context: InterviewPrepRequest, prompt: InterviewPrepPrompt
     ) -> str:
         return await self._generate(
             system_instructions=prompt.system_instructions,
@@ -155,7 +161,7 @@ class OllamaEnrichmentProvider:
         )
 
     async def generate_weekly_guidance(
-        self, context: WeeklyGuidanceRequest, prompt
+        self, context: WeeklyGuidanceRequest, prompt: WeeklyGuidancePrompt
     ) -> str:
         return await self._generate(
             system_instructions=prompt.system_instructions,

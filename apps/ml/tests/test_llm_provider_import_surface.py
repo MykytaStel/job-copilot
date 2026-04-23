@@ -165,18 +165,30 @@ def test_provider_implementations_annotate_contexts_from_enrichment_packages():
     assert TemplateEnrichmentProvider.generate_weekly_guidance.__annotations__["context"] is WeeklyGuidanceRequest
 
     assert OpenAIEnrichmentProvider.generate_profile_insights.__annotations__["context"] is LlmContextRequest
+    assert OpenAIEnrichmentProvider.generate_profile_insights.__annotations__["prompt"] is ProfileInsightsPrompt
     assert OpenAIEnrichmentProvider.generate_job_fit_explanation.__annotations__["context"] is JobFitExplanationRequest
+    assert OpenAIEnrichmentProvider.generate_job_fit_explanation.__annotations__["prompt"] is JobFitExplanationPrompt
     assert OpenAIEnrichmentProvider.generate_application_coach.__annotations__["context"] is ApplicationCoachRequest
+    assert OpenAIEnrichmentProvider.generate_application_coach.__annotations__["prompt"] is ApplicationCoachPrompt
     assert OpenAIEnrichmentProvider.generate_cover_letter_draft.__annotations__["context"] is CoverLetterDraftRequest
+    assert OpenAIEnrichmentProvider.generate_cover_letter_draft.__annotations__["prompt"] is CoverLetterDraftPrompt
     assert OpenAIEnrichmentProvider.generate_interview_prep.__annotations__["context"] is InterviewPrepRequest
+    assert OpenAIEnrichmentProvider.generate_interview_prep.__annotations__["prompt"] is InterviewPrepPrompt
     assert OpenAIEnrichmentProvider.generate_weekly_guidance.__annotations__["context"] is WeeklyGuidanceRequest
+    assert OpenAIEnrichmentProvider.generate_weekly_guidance.__annotations__["prompt"] is WeeklyGuidancePrompt
 
     assert OllamaEnrichmentProvider.generate_profile_insights.__annotations__["context"] is LlmContextRequest
+    assert OllamaEnrichmentProvider.generate_profile_insights.__annotations__["prompt"] is ProfileInsightsPrompt
     assert OllamaEnrichmentProvider.generate_job_fit_explanation.__annotations__["context"] is JobFitExplanationRequest
+    assert OllamaEnrichmentProvider.generate_job_fit_explanation.__annotations__["prompt"] is JobFitExplanationPrompt
     assert OllamaEnrichmentProvider.generate_application_coach.__annotations__["context"] is ApplicationCoachRequest
+    assert OllamaEnrichmentProvider.generate_application_coach.__annotations__["prompt"] is ApplicationCoachPrompt
     assert OllamaEnrichmentProvider.generate_cover_letter_draft.__annotations__["context"] is CoverLetterDraftRequest
+    assert OllamaEnrichmentProvider.generate_cover_letter_draft.__annotations__["prompt"] is CoverLetterDraftPrompt
     assert OllamaEnrichmentProvider.generate_interview_prep.__annotations__["context"] is InterviewPrepRequest
+    assert OllamaEnrichmentProvider.generate_interview_prep.__annotations__["prompt"] is InterviewPrepPrompt
     assert OllamaEnrichmentProvider.generate_weekly_guidance.__annotations__["context"] is WeeklyGuidanceRequest
+    assert OllamaEnrichmentProvider.generate_weekly_guidance.__annotations__["prompt"] is WeeklyGuidancePrompt
 
 
 def test_legacy_flat_modules_remain_aliases_of_enrichment_exports():
@@ -379,6 +391,38 @@ def test_template_provider_imports_narrow_enrichment_internal_modules():
         "app.enrichment.profile_insights",
         "app.enrichment.weekly_guidance",
     }.isdisjoint(import_paths)
+
+
+def test_provider_factory_imports_narrow_enrichment_internal_modules():
+    factory_path = ML_APP_ROOT / "app" / "llm_provider_factory.py"
+    parsed = ast.parse(factory_path.read_text())
+    import_paths = {
+        node.module for node in parsed.body if isinstance(node, ast.ImportFrom) and node.module is not None
+    }
+
+    required_modules = {
+        "app.enrichment.application_coach.contract",
+        "app.enrichment.cover_letter_draft.contract",
+        "app.enrichment.interview_prep.contract",
+        "app.enrichment.job_fit_explanation.contract",
+        "app.enrichment.profile_insights.contract",
+        "app.enrichment.weekly_guidance.errors",
+    }
+    legacy_modules = {
+        "app.application_coach",
+        "app.cover_letter_draft",
+        "app.interview_prep",
+        "app.job_fit_explanation",
+        "app.profile_insights",
+        "app.weekly_guidance",
+    }
+
+    assert required_modules.issubset(import_paths)
+    assert legacy_modules.isdisjoint(import_paths)
+
+    loaded_modules = _loaded_app_modules("app.llm_provider_factory")
+    assert required_modules.issubset(loaded_modules)
+    assert legacy_modules.isdisjoint(loaded_modules)
 
 
 def test_enrichment_contracts_import_shared_profile_module_directly():
