@@ -28,7 +28,7 @@ from app.enrichment.profile_insights.contract import (
 from app.enrichment.weekly_guidance.contract import WeeklyGuidanceRequest
 from app.enrichment.weekly_guidance.errors import WeeklyGuidanceProviderError
 from app.enrichment.weekly_guidance.prompt import WeeklyGuidancePrompt
-from app.llm_providers.common import PromptPayload, build_retrying
+from app.llm_providers.common import PromptPayload, build_rate_limit_retrying, build_retrying
 
 
 class _OpenAIJsonSchemaProvider:
@@ -42,12 +42,9 @@ class _OpenAIJsonSchemaProvider:
 
         self._client = OpenAI(api_key=api_key, base_url=base_url)
         self._model = model
-        self._retryable_errors = (
-            APIConnectionError,
-            APITimeoutError,
-            InternalServerError,
-            RateLimitError,
-        )
+        self._conn_errors = (APIConnectionError, APITimeoutError, InternalServerError)
+        self._rate_limit_error = RateLimitError
+        self._retryable_errors = (*self._conn_errors, RateLimitError)
 
     async def _generate(
         self,
@@ -66,23 +63,26 @@ class _OpenAIJsonSchemaProvider:
         )
 
     def _request_with_retry(self, *, prompt_name: str, prompt: PromptPayload):
-        retrying = build_retrying(self._retryable_errors)
-        for attempt in retrying:
-            with attempt:
-                return self._client.responses.create(
-                    model=self._model,
-                    instructions=prompt.system_instructions,
-                    input=prompt.context_payload,
-                    text={
-                        "format": {
-                            "type": "json_schema",
-                            "name": prompt_name,
-                            "strict": True,
-                            "schema": prompt.output_schema,
-                        }
-                    },
-                    store=False,
-                )
+        rate_limit_retrying = build_rate_limit_retrying(self._rate_limit_error)
+        for rate_limit_attempt in rate_limit_retrying:
+            with rate_limit_attempt:
+                conn_retrying = build_retrying(self._conn_errors)
+                for attempt in conn_retrying:
+                    with attempt:
+                        return self._client.responses.create(
+                            model=self._model,
+                            instructions=prompt.system_instructions,
+                            input=prompt.context_payload,
+                            text={
+                                "format": {
+                                    "type": "json_schema",
+                                    "name": prompt_name,
+                                    "strict": True,
+                                    "schema": prompt.output_schema,
+                                }
+                            },
+                            store=False,
+                        )
 
         raise AssertionError("OpenAI retry loop should always return or raise")
 

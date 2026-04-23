@@ -21,6 +21,8 @@ class RankingVariantMetrics(BaseModel):
     positive_hit_rate: float
     ndcg_at_top_n: float = 0.0
     mrr_at_top_n: float = 0.0
+    map_at_top_n: float = 0.0
+    precision_at_3: float = 0.0
     signal_bucket_metrics: list[dict[str, int | float | str]] = Field(default_factory=list)
 
 

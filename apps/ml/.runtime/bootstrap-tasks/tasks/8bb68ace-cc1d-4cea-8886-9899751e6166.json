@@ -1,0 +1,31 @@
+{
+  "task_id": "8bb68ace-cc1d-4cea-8886-9899751e6166",
+  "profile_id": null,
+  "status": "completed",
+  "result": {
+    "retrained": false,
+    "example_count": 12,
+    "profile_id": null,
+    "reason": "need at least 30 examples, got 12",
+    "model_path": null,
+    "artifact_path": null,
+    "artifact_version": null,
+    "model_type": null,
+    "training": null,
+    "evaluation": null,
+    "benchmark": null,
+    "feature_importances": null,
+    "distribution_shift_score": null,
+    "started_at": null,
+    "finished_at": "2026-04-23T17:51:45Z",
+    "promotion_decision": null,
+    "metrics_version": null,
+    "lgbm_distilled": false
+  },
+  "error": null,
+  "artifact_path": null,
+  "started_at": null,
+  "finished_at": "2026-04-23T17:51:45Z",
+  "promotion_decision": null,
+  "metrics_version": null
+}

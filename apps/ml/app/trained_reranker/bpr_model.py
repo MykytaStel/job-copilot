@@ -9,6 +9,7 @@ from .artifact import (
     TrainingSummary,
     TrainedRerankerArtifact,
 )
+from .feature_stats import FeatureStatistics
 from .features import extract_features
 from .model import TrainedRerankerModel, compute_feature_importances, sigmoid
 
@@ -28,6 +29,7 @@ def train_bpr_model(
     l2: float = 0.01,
     max_score_delta: int = 8,
     feature_names: list[str] | None = None,
+    feature_statistics: FeatureStatistics | None = None,
 ) -> TrainedRerankerModel:
     examples = _load_examples(datasets)
     if not examples:
@@ -52,8 +54,8 @@ def train_bpr_model(
     for epoch in range(safe_epochs):
         rate = safe_learning_rate / (1.0 + epoch / 100.0)
         for positive, negative in pairs:
-            pos_vector = _feature_vector(positive, feature_names)
-            neg_vector = _feature_vector(negative, feature_names)
+            pos_vector = _feature_vector(positive, feature_names, feature_statistics)
+            neg_vector = _feature_vector(negative, feature_names, feature_statistics)
             diff = [left - right for left, right in zip(pos_vector, neg_vector, strict=True)]
             score_diff = sum(weight * value for weight, value in zip(weights, diff, strict=True))
             prediction = sigmoid(score_diff)
@@ -66,7 +68,7 @@ def train_bpr_model(
         feature_name: round(weight, 8)
         for feature_name, weight in zip(feature_names, weights, strict=True)
     }
-    loss = average_bpr_loss(pairs, weights, feature_names)
+    loss = average_bpr_loss(pairs, weights, feature_names, feature_statistics)
     positive_count = sum(1 for example in examples if example.label == "positive")
     medium_count = sum(1 for example in examples if example.label == "medium")
     negative_count = sum(1 for example in examples if example.label == "negative")
@@ -89,6 +91,7 @@ def train_bpr_model(
         feature_transforms=dict(FEATURE_TRANSFORMS),
         weights=rounded_weights,
         feature_importances=compute_feature_importances(rounded_weights, feature_names),
+        feature_statistics=feature_statistics,
         intercept=0.0,
         max_score_delta=max(1, min(20, max_score_delta)),
         training=TrainingSummary(
@@ -112,14 +115,15 @@ def average_bpr_loss(
     pairs: list[tuple[OutcomeExample, OutcomeExample]],
     weights: list[float],
     feature_names: list[str],
+    feature_statistics: FeatureStatistics | None = None,
 ) -> float:
     if not pairs:
         return 0.0
 
     total = 0.0
     for positive, negative in pairs:
-        pos_vector = _feature_vector(positive, feature_names)
-        neg_vector = _feature_vector(negative, feature_names)
+        pos_vector = _feature_vector(positive, feature_names, feature_statistics)
+        neg_vector = _feature_vector(negative, feature_names, feature_statistics)
         diff = [left - right for left, right in zip(pos_vector, neg_vector, strict=True)]
         score_diff = sum(weight * value for weight, value in zip(weights, diff, strict=True))
         prediction = min(0.999999, max(0.000001, sigmoid(score_diff)))
@@ -156,8 +160,12 @@ def _is_pairwise_positive(example: OutcomeExample) -> bool:
     return example.label == "medium" and bool(getattr(example.signals, "saved", False))
 
 
-def _feature_vector(example: OutcomeExample, feature_names: list[str]) -> list[float]:
-    features = extract_features(example)
+def _feature_vector(
+    example: OutcomeExample,
+    feature_names: list[str],
+    feature_statistics: FeatureStatistics | None = None,
+) -> list[float]:
+    features = extract_features(example, feature_statistics)
     return [features[feature_name] for feature_name in feature_names]
 
 

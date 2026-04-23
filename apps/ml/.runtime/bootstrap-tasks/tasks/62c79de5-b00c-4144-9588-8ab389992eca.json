@@ -1,0 +1,43 @@
+{
+  "task_id": "62c79de5-b00c-4144-9588-8ab389992eca",
+  "profile_id": null,
+  "status": "completed",
+  "result": {
+    "retrained": true,
+    "example_count": 30,
+    "profile_id": null,
+    "reason": null,
+    "model_path": "/tmp/trained-reranker-v3.json",
+    "artifact_path": null,
+    "artifact_version": null,
+    "model_type": null,
+    "training": {
+      "example_count": 30,
+      "positive_count": 10,
+      "medium_count": 10,
+      "negative_count": 10,
+      "saved_only_count": 4,
+      "viewed_only_count": 3,
+      "medium_default_count": 0,
+      "epochs": 500,
+      "learning_rate": 0.08,
+      "l2": 0.01,
+      "loss": 0.123
+    },
+    "evaluation": null,
+    "benchmark": null,
+    "feature_importances": null,
+    "distribution_shift_score": null,
+    "started_at": null,
+    "finished_at": "2026-04-23T17:51:45Z",
+    "promotion_decision": null,
+    "metrics_version": null,
+    "lgbm_distilled": false
+  },
+  "error": null,
+  "artifact_path": null,
+  "started_at": null,
+  "finished_at": "2026-04-23T17:51:45Z",
+  "promotion_decision": null,
+  "metrics_version": null
+}

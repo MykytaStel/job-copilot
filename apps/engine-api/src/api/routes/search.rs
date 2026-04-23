@@ -29,5 +29,5 @@ fn sort_ranked_jobs(ranked_jobs: &mut [RankedJob]) {
 }
 
 #[cfg(test)]
-#[path = "search/tests.rs"]
+#[path = "search/tests/mod.rs"]
 mod tests;

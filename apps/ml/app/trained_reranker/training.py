@@ -19,6 +19,7 @@ from .artifact import (
     TrainingSummary,
     TrainedRerankerArtifact,
 )
+from .feature_stats import FeatureStatistics
 from .features import extract_features
 from .model import TrainedRerankerModel, compute_feature_importances, sigmoid
 
@@ -35,6 +36,7 @@ def train_model(
     temporal_decay_lambda: float = 0.01,
     distilled_labels: list[float] | None = None,
     feature_names: list[str] | None = None,
+    feature_statistics: FeatureStatistics | None = None,
 ) -> TrainedRerankerModel:
     examples: list[OutcomeExample] = []
     policy_versions: set[str] = set()
@@ -59,7 +61,7 @@ def train_model(
     safe_l2 = max(0.0, l2)
     feature_names = list(feature_names or DEFAULT_FEATURE_NAMES)
     vectors = [
-        [extract_features(example)[feature_name] for feature_name in feature_names]
+        [extract_features(example, feature_statistics)[feature_name] for feature_name in feature_names]
         for example in examples
     ]
     if distilled_labels is not None and len(distilled_labels) == len(examples):
@@ -121,6 +123,7 @@ def train_model(
         feature_importances=compute_feature_importances(rounded_weights, feature_names),
         signal_bucket_distribution=bucket_distribution,
         lgbm_distilled=distilled_labels is not None and len(distilled_labels) == len(examples),
+        feature_statistics=feature_statistics,
         intercept=round(intercept, 8),
         max_score_delta=max(1, min(20, max_score_delta)),
         training=TrainingSummary(

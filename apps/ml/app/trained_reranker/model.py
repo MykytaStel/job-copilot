@@ -57,7 +57,7 @@ class TrainedRerankerModel:
             parsed = OutcomeExample.model_validate(example.model_dump())
         else:
             parsed = OutcomeExample.model_validate(example)
-        all_features = extract_features(parsed)
+        all_features = extract_features(parsed, self.artifact.feature_statistics)
         return {name: all_features[name] for name in self.artifact.feature_names}
 
     def predict_probability(self, example: OutcomeExample | dict[str, Any]) -> float:

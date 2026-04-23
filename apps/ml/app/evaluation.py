@@ -111,6 +111,8 @@ def evaluate_variant(
     average_training_weight = safe_ratio(training_weight_sum, len(top_examples))
     ndcg = ndcg_at_k(ordered, top_n)
     mrr = mrr_at_k(ordered, top_n)
+    map_k = map_at_k(ordered, top_n)
+    prec_3 = precision_at_k(ordered, 3)
     bucket_totals = build_signal_bucket_metrics(ordered, top_examples)
 
     return RankingVariantMetrics(
@@ -123,6 +125,8 @@ def evaluate_variant(
         positive_hit_rate=round(safe_ratio(top_positive_count, positive_count), 6),
         ndcg_at_top_n=round(ndcg, 6),
         mrr_at_top_n=round(mrr, 6),
+        map_at_top_n=round(map_k, 6),
+        precision_at_3=round(prec_3, 6),
         signal_bucket_metrics=bucket_totals,
     )
 
@@ -254,6 +258,8 @@ def aggregate_variant_metrics(metrics: list[RankingVariantMetrics]) -> RankingVa
         ),
         ndcg_at_top_n=round(sum(metric.ndcg_at_top_n for metric in metrics) / len(metrics), 6),
         mrr_at_top_n=round(sum(metric.mrr_at_top_n for metric in metrics) / len(metrics), 6),
+        map_at_top_n=round(sum(metric.map_at_top_n for metric in metrics) / len(metrics), 6),
+        precision_at_3=round(sum(metric.precision_at_3 for metric in metrics) / len(metrics), 6),
         signal_bucket_metrics=aggregated_buckets,
     )
 
@@ -282,6 +288,26 @@ def mrr_at_k(ordered: list[OutcomeExample], top_n: int) -> float:
         if example.label == "positive":
             return 1.0 / index
     return 0.0
+
+
+def map_at_k(ordered: list[OutcomeExample], top_n: int) -> float:
+    total_positives = sum(1 for e in ordered if e.label == "positive")
+    if total_positives == 0:
+        return 0.0
+    hits = 0
+    precision_sum = 0.0
+    for index, example in enumerate(ordered[:top_n], start=1):
+        if example.label == "positive":
+            hits += 1
+            precision_sum += hits / index
+    return precision_sum / min(top_n, total_positives)
+
+
+def precision_at_k(ordered: list[OutcomeExample], k: int) -> float:
+    top = ordered[:k]
+    if not top:
+        return 0.0
+    return sum(1 for e in top if e.label == "positive") / len(top)
 
 
 def build_signal_bucket_metrics(

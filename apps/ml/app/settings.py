@@ -19,7 +19,7 @@ DEFAULT_LLM_PROVIDER = "template"
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
-DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 180.0
+DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 90.0
 DEFAULT_TASK_TTL_HOURS = 24
 DEFAULT_READY_TIMEOUT_SECONDS = 2.0
 
@@ -80,6 +80,10 @@ class RuntimeSettings(BaseSettings):
     ready_timeout_seconds: float = Field(
         default=DEFAULT_READY_TIMEOUT_SECONDS,
         validation_alias="ML_READY_TIMEOUT_SECONDS",
+    )
+    llm_request_timeout_seconds: float = Field(
+        default=DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS,
+        validation_alias="ML_LLM_REQUEST_TIMEOUT_SECONDS",
     )
 
     @field_validator("log_level", mode="before")
