@@ -7,7 +7,9 @@ use std::sync::Arc;
 
 use crate::db::repositories::{FeedbackRepository, RepositoryError};
 use crate::domain::feedback::model::{
-    CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackFlags, JobFeedbackRecord,
+    CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackFlags, JobFeedbackReason,
+    JobFeedbackRecord, JobFeedbackTagRecord, LegitimacySignal, SalaryFeedbackSignal,
+    WorkModeFeedbackSignal,
 };
 
 #[cfg(test)]
@@ -176,6 +178,111 @@ impl FeedbackService {
             FeedbackServiceBackend::Stub(stub) => {
                 stub.list_company_feedback_for_names(profile_id, normalized_company_names)
             }
+        }
+    }
+
+    pub async fn set_salary_signal(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        signal: SalaryFeedbackSignal,
+    ) -> Result<JobFeedbackRecord, RepositoryError> {
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository
+                    .set_salary_signal(profile_id, job_id, signal)
+                    .await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(_) => Err(RepositoryError::DatabaseDisabled),
+        }
+    }
+
+    pub async fn set_interest_rating(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        rating: i8,
+    ) -> Result<JobFeedbackRecord, RepositoryError> {
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository
+                    .set_interest_rating(profile_id, job_id, rating)
+                    .await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(_) => Err(RepositoryError::DatabaseDisabled),
+        }
+    }
+
+    pub async fn set_work_mode_signal(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        signal: WorkModeFeedbackSignal,
+    ) -> Result<JobFeedbackRecord, RepositoryError> {
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository
+                    .set_work_mode_signal(profile_id, job_id, signal)
+                    .await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(_) => Err(RepositoryError::DatabaseDisabled),
+        }
+    }
+
+    pub async fn set_legitimacy_signal(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        signal: LegitimacySignal,
+    ) -> Result<JobFeedbackRecord, RepositoryError> {
+        let also_bad_fit = matches!(
+            signal,
+            LegitimacySignal::Spam | LegitimacySignal::Suspicious
+        );
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository
+                    .set_legitimacy_signal(profile_id, job_id, signal, also_bad_fit)
+                    .await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(_) => Err(RepositoryError::DatabaseDisabled),
+        }
+    }
+
+    pub async fn upsert_job_feedback_tags(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        tags: Vec<JobFeedbackReason>,
+    ) -> Result<Vec<JobFeedbackTagRecord>, RepositoryError> {
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository
+                    .upsert_job_feedback_tags(profile_id, job_id, &tags)
+                    .await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(_) => Err(RepositoryError::DatabaseDisabled),
+        }
+    }
+
+    pub async fn list_feedback_tags_for_jobs(
+        &self,
+        profile_id: &str,
+        job_ids: &[String],
+    ) -> Result<Vec<JobFeedbackTagRecord>, RepositoryError> {
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository
+                    .list_feedback_tags_for_jobs(profile_id, job_ids)
+                    .await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(_) => Ok(Vec::new()),
         }
     }
 

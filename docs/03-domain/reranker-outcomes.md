@@ -36,15 +36,16 @@ Each example contains:
   - matched role / skill / keyword counts
   - deterministic fit, behavior, and learned-reranker reasons
 
-Small v2 example:
+Small v3 example:
 
 ```json
 {
   "profile_id": "profile-1",
-  "label_policy_version": "outcome_label_v2",
+  "label_policy_version": "outcome_label_v3",
   "examples": [
     {
       "job_id": "job-123",
+      "label_observed_at": "2026-04-20T00:00:00Z",
       "title": "Senior Backend Engineer",
       "company_name": "NovaLedger",
       "source": "djinni",
@@ -59,6 +60,11 @@ Small v2 example:
         "bad_fit": false,
         "applied": true,
         "dismissed": false,
+        "outcome": "offer_received",
+        "reached_interview": true,
+        "received_offer": true,
+        "was_rejected": false,
+        "was_ghosted": false,
         "explicit_feedback": true,
         "explicit_saved": true,
         "explicit_hidden": false,
@@ -66,7 +72,16 @@ Small v2 example:
         "viewed_event_count": 1,
         "saved_event_count": 1,
         "applied_event_count": 1,
-        "dismissed_event_count": 0
+        "dismissed_event_count": 0,
+        "has_salary_rejection": false,
+        "has_remote_rejection": false,
+        "has_tech_rejection": false,
+        "interest_rating": 2,
+        "work_mode_deal_breaker": false,
+        "scrolled_to_bottom": true,
+        "returned_count": 1,
+        "time_to_apply_days": 2,
+        "legitimacy_suspicious": false
       },
       "ranking": {
         "deterministic_score": 78,
@@ -86,9 +101,9 @@ Small v2 example:
 }
 ```
 
-## Label policy v2
+## Label policy v3
 
-`label_policy_version = outcome_label_v2`
+`label_policy_version = outcome_label_v3`
 
 Labels are assigned deterministically with this precedence:
 
@@ -118,8 +133,15 @@ The export is deterministic:
 - event normalization is processed in ascending `(created_at, id)` order per job
 - label reasons use a fixed precedence order
 
+`label_observed_at` is exported separately from job creation time. It represents the strongest
+known label evidence timestamp with this precedence:
+
+1. application `outcome_date`, else application `updated_at`, for application-based labels
+2. latest relevant user event timestamp for the profile/job
+3. feedback `updated_at`
+
 An export with `"examples": []` is valid when a profile has no labelable job outcomes yet.
-It can be evaluated defensively, but it cannot train `trained_reranker_v2`.
+It can be evaluated defensively, but it cannot train `trained_reranker_v3`.
 
 Application records are not global training labels. `POST /api/v1/applications` emits the
 `application_created` outcome only when the request includes `profile_id`, preserving the
@@ -135,7 +157,7 @@ It compares three orderings:
 - deterministic + behavior score
 - deterministic + behavior + learned reranker score
 
-When passed a trained reranker v2 JSON artifact, the evaluator also compares:
+When passed a trained reranker v3 JSON artifact, the evaluator also compares:
 
 - trained reranker prediction ordering
 
@@ -146,11 +168,17 @@ Metrics are defensive and deterministic:
 - average training weight in the top N
 - positive hit rate over all positive examples
 
+Evaluation now uses a temporal holdout split:
+
+- examples are sorted by `label_observed_at`
+- the last 20% become the held-out test set
+- reported hit-rate metrics are computed on that test set only
+
 Empty datasets and datasets with no positives return zero-valued metrics instead of failing.
 
-## Trained reranker v2
+## Trained reranker v3
 
-`apps/ml/app/trained_reranker.py` trains the first inspectable trained reranker prototype from
+`apps/ml/app/trained_reranker/` trains the first inspectable trained reranker prototype from
 one or more exported outcome datasets. It intentionally uses a dependency-light logistic
 regression implemented in Python instead of a black-box model.
 
@@ -162,8 +190,11 @@ Feature inputs are explicit numeric or boolean fields already present in the exp
 - matched role, skill, and keyword counts
 - source presence
 - role family presence
+- quick apply / delayed apply derived from `time_to_apply_days`
 
 The model does not use text embeddings and does not call an LLM.
+Offline bootstrap also benchmarks a linear BPR candidate on the same temporal holdout when enough
+positive/negative pairs exist, but the persisted production artifact remains logistic by default.
 
 Default ML-side outcome weights stay conservative and inspectable:
 
@@ -179,11 +210,14 @@ mapping, and trained artifacts record the policy version plus the exact weights 
 
 The saved artifact is JSON and includes:
 
-- `artifact_version = trained_reranker_v2`
+- `artifact_version = trained_reranker_v3`
 - `model_type = logistic_regression`
 - signal weight policy version and exact signal weights
+- confidence weight policy version and exact confidence weights
+- `temporal_decay_lambda`
 - feature names and feature transforms
 - feature weights and intercept
+- `feature_importances`
 - training counts and loss
 - `max_score_delta` for bounded optional live use
 
@@ -192,29 +226,46 @@ Example:
 ```bash
 python -m app.trained_reranker \
   ./exports/profile-1-reranker-dataset.json \
-  --output ./models/profile-1-trained-reranker-v2.json \
+  --output ./models/profile-1-trained-reranker-v3.json \
   --top-n 10
 ```
 
 Repo automation:
 
 ```bash
-PROFILE_ID=<profile-id> pnpm train:reranker:v2
+PROFILE_ID=<profile-id> pnpm train:reranker:v3
 ```
 
-This exports the profile dataset, validates label counts, trains a candidate artifact, evaluates
-it, then promotes `apps/ml/models/trained-reranker-v2.json`. For Docker:
+This exports the profile dataset, validates label counts, trains a candidate artifact on the
+temporal training split, evaluates it on the held-out temporal test split, then retrains on the
+full dataset before promoting `apps/ml/models/trained-reranker-v3.json`. For Docker:
 
 ```bash
-PROFILE_ID=<profile-id> pnpm train:reranker:v2:docker
+PROFILE_ID=<profile-id> pnpm train:reranker:v3:docker
 ```
 
 The Docker command restarts `engine-api` with `TRAINED_RERANKER_ENABLED=true` and the promoted
-artifact mounted at `/app/models/trained-reranker-v2.json`.
+artifact mounted at `/app/models/trained-reranker-v3.json`.
+
+## Operational loop
+
+`engine-api` now keeps profile-scoped reranker learning state and history:
+
+- `ml_examples_since_retrain`
+- `ml_last_retrained_at`
+- `ml_last_artifact_version`
+- `ml_last_training_status`
+
+New labelable outcomes increment the counter only once per `(profile_id, job_id)` via a dedicated
+dedupe table. A background poller checks for profiles above the retrain threshold and calls
+`POST /api/v1/reranker/bootstrap` asynchronously. Retrain outcomes are stored in
+`profile_ml_metrics` and exposed via:
+
+- `GET /api/v1/profiles/{id}/reranker/metrics`
 
 ## Optional live integration
 
-`engine-api` can load the trained reranker v2 artifact as a separate experimental additive layer
+`engine-api` can load the trained reranker v3 artifact as a separate experimental additive layer
 after deterministic ranking, explicit feedback scoring, behavior personalization, and learned
 reranker v1.
 
@@ -222,10 +273,10 @@ The layer is disabled by default:
 
 - `RERANKER_RUNTIME_MODE=deterministic|learned|trained`
 - `TRAINED_RERANKER_ENABLED=false`
-- `TRAINED_RERANKER_MODEL_PATH=/path/to/trained-reranker-v2.json`
+- `TRAINED_RERANKER_MODEL_PATH=/path/to/trained-reranker-v3.json`
 
 When enabled and loaded, the model applies only a bounded additive score delta and appends a
-reason containing `Trained reranker v2`. It does not replace deterministic ranking and does not
+reason containing `Trained reranker v3`. It does not replace deterministic ranking and does not
 remove learned reranker v1.
 
 For rollout safety, live search now reports the requested mode, the active mode, and any fallback reason:

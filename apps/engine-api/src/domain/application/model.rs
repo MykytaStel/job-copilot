@@ -1,6 +1,44 @@
 use crate::domain::job::model::Job;
 use crate::domain::resume::model::ResumeVersion;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApplicationOutcome {
+    PhoneScreen,
+    TechnicalInterview,
+    FinalInterview,
+    OfferReceived,
+    Rejected,
+    Ghosted,
+    Withdrew,
+}
+
+impl ApplicationOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::PhoneScreen => "phone_screen",
+            Self::TechnicalInterview => "technical_interview",
+            Self::FinalInterview => "final_interview",
+            Self::OfferReceived => "offer_received",
+            Self::Rejected => "rejected",
+            Self::Ghosted => "ghosted",
+            Self::Withdrew => "withdrew",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim() {
+            "phone_screen" => Some(Self::PhoneScreen),
+            "technical_interview" => Some(Self::TechnicalInterview),
+            "final_interview" => Some(Self::FinalInterview),
+            "offer_received" => Some(Self::OfferReceived),
+            "rejected" => Some(Self::Rejected),
+            "ghosted" => Some(Self::Ghosted),
+            "withdrew" => Some(Self::Withdrew),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Application {
     pub id: String,
@@ -9,6 +47,9 @@ pub struct Application {
     pub status: String,
     pub applied_at: Option<String>,
     pub due_date: Option<String>,
+    pub outcome: Option<ApplicationOutcome>,
+    pub outcome_date: Option<String>,
+    pub rejection_stage: Option<String>,
     pub updated_at: String,
 }
 
@@ -35,6 +76,9 @@ pub struct CreateApplication {
 pub struct UpdateApplication {
     pub status: Option<String>,
     pub due_date: Option<Option<String>>,
+    pub outcome: Option<Option<ApplicationOutcome>>,
+    pub outcome_date: Option<Option<String>>,
+    pub rejection_stage: Option<Option<String>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

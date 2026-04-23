@@ -16,6 +16,8 @@
     "verify:phase8:db": "./scripts/verify_phase8_db.sh",
     "train:reranker:v2": "./scripts/train_reranker_v2.sh",
     "train:reranker:v2:docker": "APPLY_TO_DOCKER=1 ./scripts/train_reranker_v2.sh",
+    "train:reranker:v3": "./scripts/train_reranker_v2.sh",
+    "train:reranker:v3:docker": "APPLY_TO_DOCKER=1 ./scripts/train_reranker_v2.sh",
     "local:ingestion:demo": "./scripts/run_local_ingestion_demo.sh",
     "guard:web-api-imports": "./scripts/check_web_api_barrel_imports.sh",
     "guard:web-profile-scope": "./scripts/check_web_profile_scope_access.sh",

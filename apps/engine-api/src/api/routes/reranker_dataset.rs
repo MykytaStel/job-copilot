@@ -6,7 +6,7 @@ use crate::api::routes::jobs::load_feedback_state;
 use crate::services::behavior::BehaviorService;
 use crate::services::funnel::FunnelService;
 use crate::services::outcome_dataset::{
-    OutcomeDatasetError, OutcomeDatasetService, outcome_job_ids,
+    OutcomeDatasetError, OutcomeDatasetService, application_ids_by_job_id, outcome_job_ids,
 };
 use crate::state::AppState;
 
@@ -36,6 +36,10 @@ pub async fn get_reranker_dataset(
         .list_job_feedback(&profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "feedback_query_failed"))?;
+    let feedback_updated_at_by_job_id = feedback
+        .iter()
+        .map(|record| (record.job_id.clone(), record.updated_at.clone()))
+        .collect();
     let feedback_job_ids = feedback
         .iter()
         .map(|record| record.job_id.clone())
@@ -61,11 +65,14 @@ pub async fn get_reranker_dataset(
         .collect::<Vec<_>>();
     let behavior = BehaviorService::new().build_aggregates(events.iter());
     let funnel = FunnelService::new().build_aggregates(events.iter());
+    let applications_by_job_id = load_profile_applications_by_job_id(&state, &events).await?;
     let dataset = OutcomeDatasetService::new()
         .build(
             &profile,
             &events,
             jobs_with_feedback,
+            &applications_by_job_id,
+            &feedback_updated_at_by_job_id,
             &state.search_ranking,
             &behavior,
             &funnel,
@@ -73,6 +80,29 @@ pub async fn get_reranker_dataset(
         .map_err(outcome_dataset_error)?;
 
     Ok(axum::Json(OutcomeDatasetResponse::from(dataset)))
+}
+
+async fn load_profile_applications_by_job_id(
+    state: &AppState,
+    events: &[crate::domain::user_event::model::UserEventRecord],
+) -> Result<
+    std::collections::BTreeMap<String, crate::domain::application::model::Application>,
+    ApiError,
+> {
+    let mut applications_by_job_id = std::collections::BTreeMap::new();
+
+    for (job_id, application_id) in application_ids_by_job_id(events) {
+        if let Some(application) = state
+            .applications_service
+            .get_by_id(&application_id)
+            .await
+            .map_err(|error| ApiError::from_repository(error, "applications_query_failed"))?
+        {
+            applications_by_job_id.insert(job_id, application);
+        }
+    }
+
+    Ok(applications_by_job_id)
 }
 
 fn outcome_dataset_error(error: OutcomeDatasetError) -> ApiError {
@@ -223,6 +253,10 @@ mod tests {
                     saved: true,
                     hidden: false,
                     bad_fit: false,
+                    salary_signal: None,
+                    interest_rating: None,
+                    work_mode_signal: None,
+                    legitimacy_signal: None,
                     created_at: "2026-04-14T00:00:00Z".to_string(),
                     updated_at: "2026-04-14T00:00:00Z".to_string(),
                 }),
@@ -266,16 +300,21 @@ mod tests {
             serde_json::from_slice(&body).expect("response body should be valid JSON");
 
         assert_eq!(payload["profile_id"], json!("profile-1"));
-        assert_eq!(payload["label_policy_version"], json!("outcome_label_v2"));
+        assert_eq!(payload["label_policy_version"], json!("outcome_label_v3"));
         assert_eq!(payload["examples"].as_array().map(Vec::len), Some(4));
         assert_eq!(payload["examples"][0]["job_id"], json!("job-applied"));
         assert_eq!(payload["examples"][0]["label"], json!("positive"));
         assert_eq!(payload["examples"][0]["label_score"], json!(2));
+        assert_eq!(
+            payload["examples"][0]["label_observed_at"],
+            json!("2026-04-15T00:00:00Z")
+        );
         assert_eq!(payload["examples"][0]["signals"]["applied"], json!(true));
         assert_eq!(
             payload["examples"][0]["signals"]["applied_event_count"],
             json!(1)
         );
+        assert!(payload["examples"][0]["signals"]["outcome"].is_null());
         assert_eq!(payload["examples"][1]["job_id"], json!("job-hidden"));
         assert_eq!(payload["examples"][1]["label"], json!("negative"));
         assert_eq!(payload["examples"][1]["signals"]["dismissed"], json!(true));
@@ -286,10 +325,15 @@ mod tests {
         assert_eq!(payload["examples"][2]["job_id"], json!("job-saved"));
         assert_eq!(payload["examples"][2]["label"], json!("medium"));
         assert_eq!(
+            payload["examples"][2]["label_observed_at"],
+            json!("2026-04-14T00:00:00Z")
+        );
+        assert_eq!(
             payload["examples"][2]["signals"]["explicit_feedback"],
             json!(true)
         );
         assert_eq!(payload["examples"][2]["signals"]["saved"], json!(true));
+        assert!(payload["examples"][2]["signals"]["interest_rating"].is_null());
         assert_eq!(payload["examples"][3]["job_id"], json!("job-viewed"));
         assert_eq!(payload["examples"][3]["label_reasons"], json!(["viewed"]));
         assert_eq!(payload["examples"][3]["signals"]["viewed"], json!(true));

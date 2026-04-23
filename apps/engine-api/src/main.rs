@@ -7,6 +7,7 @@ mod state;
 
 use crate::config::Config;
 use crate::db::Database;
+use crate::services::reranker_automation::spawn_retrain_poller;
 use crate::state::AppState;
 use tokio::net::TcpListener;
 use tracing::info;
@@ -26,6 +27,11 @@ async fn main() {
         .expect("Failed to initialize Postgres foundation");
 
     let state = AppState::new_with_config(database, &config);
+    spawn_retrain_poller(
+        state.clone(),
+        config.ml_retrain_threshold,
+        config.ml_retrain_poll_interval_seconds,
+    );
     let app = api::build_router(state);
 
     let address = format!("0.0.0.0:{}", config.port);

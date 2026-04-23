@@ -33,7 +33,7 @@ Environment variables:
 - `OPENAI_MODEL` default `gpt-4o-mini`
 - `OPENAI_BASE_URL` optional override
 - `OLLAMA_BASE_URL` default `http://localhost:11434`
-- `OLLAMA_MODEL` default `mistral:7b`
+- `OLLAMA_MODEL` default `llama3.1:8b`
 - `ML_CORS_ALLOWED_ORIGINS` comma-separated allowlist; default is local dev origins for `3000` and `5173`
 - `ML_LOG_LEVEL` default `INFO`
 
@@ -42,7 +42,9 @@ Environment variables:
 - `app/api.py` wires the FastAPI app and endpoints
 - `app/api_models.py` owns canonical request/response DTOs for health + scoring routes
 - `app/service_dependencies.py` owns cached enrichment service construction
+- `app/fit_analysis_service.py`, `app/rerank_service.py`, and `app/reranker_bootstrap_service.py` own scoring/bootstrap orchestration
 - `app/scoring.py` owns deterministic fit/rerank helpers
+- `app/engine_api_client.py` owns engine-api client DTOs + upstream client errors
 - `app/settings.py` owns runtime logging and CORS defaults
 - `app/llm_provider_types.py` owns provider protocols
 - `app/llm_provider.py` stays the compatibility/public provider entrypoint, with implementations split across:
@@ -108,12 +110,12 @@ Evaluate a reranker outcome dataset exported by `engine-api`:
 python -m app.reranker_evaluation /path/to/reranker-dataset.json --top-n 10
 ```
 
-Train an inspectable reranker v2 artifact from one or more exported datasets:
+Train an inspectable reranker v3 artifact from one or more exported datasets:
 
 ```bash
 python -m app.trained_reranker \
   /path/to/reranker-dataset.json \
-  --output /path/to/trained-reranker-v2.json \
+  --output /path/to/trained-reranker-v3.json \
   --top-n 10
 ```
 
@@ -122,22 +124,23 @@ is valid for evaluation, but it cannot train a model. Create profile/job outcome
 by saving a job, hiding a job, marking a job bad-fit, or creating an application, then export
 `GET /api/v1/profiles/:id/reranker-dataset` again.
 
-Current exports use `label_policy_version = outcome_label_v2` with normalized `signals`
-(`viewed`, `saved`, `applied`, `dismissed`), explicit feedback flags, and per-signal event
-counts. The canonical shape is documented in `docs/03-domain/reranker-outcomes.md`.
+Current exports use `label_policy_version = outcome_label_v3` with normalized outcome,
+feedback, engagement, legitimacy, and `time_to_apply_days` signals. The canonical shape is
+documented in `docs/03-domain/reranker-outcomes.md`.
 
 Automated local training loop from the repo root:
 
 ```bash
-PROFILE_ID=<profile-id> pnpm train:reranker:v2
+PROFILE_ID=<profile-id> pnpm train:reranker:v3
 ```
 
 The script:
 - exports `apps/ml/reranker-dataset.json`
 - validates minimum label counts
-- trains a candidate model
-- evaluates it with the trained ordering enabled
-- promotes it to `apps/ml/models/trained-reranker-v2.json`
+- trains a candidate logistic model on the temporal training split
+- evaluates it on the held-out temporal test split
+- benchmarks an offline BPR candidate on the same split when enough pairs exist
+- promotes a full-dataset logistic artifact to `apps/ml/models/trained-reranker-v3.json`
 - writes reports under `apps/ml/reports/`
 
 Useful knobs:
@@ -149,13 +152,13 @@ MIN_POSITIVE=3 \
 MIN_MEDIUM=3 \
 MIN_NEGATIVE=5 \
 TOP_N=10 \
-pnpm train:reranker:v2
+pnpm train:reranker:v3
 ```
 
 For a local Docker stack, train and restart `engine-api` with the promoted model enabled:
 
 ```bash
-PROFILE_ID=<profile-id> pnpm train:reranker:v2:docker
+PROFILE_ID=<profile-id> pnpm train:reranker:v3:docker
 ```
 
 The Docker stack mounts `apps/ml/models` into `engine-api` at `/app/models`. The trained
@@ -166,12 +169,15 @@ Evaluate an exported dataset with the trained model as an additional ordering:
 ```bash
 python -m app.reranker_evaluation \
   /path/to/reranker-dataset.json \
-  --trained-model /path/to/trained-reranker-v2.json \
+  --trained-model /path/to/trained-reranker-v3.json \
   --top-n 10
 ```
 
 The artifact is JSON and includes `feature_names`, fixed feature transforms, weights, intercept,
 training counts, loss, and the bounded `max_score_delta` used by optional engine integration.
+
+`POST /api/v1/reranker/bootstrap` now returns the persisted training summary, held-out temporal
+evaluation summary, optional offline BPR benchmark summary, and current feature importances.
 
 Generate additive profile insights from deterministic analytics context:
 

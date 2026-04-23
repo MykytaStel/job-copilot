@@ -78,11 +78,17 @@ function ApplicationDetailContent({ id }: { id: string }) {
         <ApplicationFormSection
           status={applicationForm.applicationStatus}
           dueDate={applicationForm.dueDate}
+          outcome={applicationForm.outcome}
+          outcomeDate={applicationForm.outcomeDate}
+          rejectionStage={applicationForm.rejectionStage}
           isPending={applicationForm.isPending}
           hasChanges={applicationForm.hasApplicationChanges}
           setStatus={applicationForm.setApplicationStatus}
           setDueDate={applicationForm.setDueDate}
           clearDueDate={applicationForm.clearDueDate}
+          setOutcome={applicationForm.setOutcome}
+          setOutcomeDate={applicationForm.setOutcomeDate}
+          setRejectionStage={applicationForm.setRejectionStage}
           onSubmit={applicationForm.saveApplication}
         />
 

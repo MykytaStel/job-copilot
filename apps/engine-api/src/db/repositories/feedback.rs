@@ -3,7 +3,9 @@ use sqlx::FromRow;
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::feedback::model::{
-    CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackFlags, JobFeedbackRecord,
+    CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackFlags, JobFeedbackReason,
+    JobFeedbackRecord, JobFeedbackTagRecord, LegitimacySignal, SalaryFeedbackSignal,
+    WorkModeFeedbackSignal,
 };
 
 #[derive(Clone)]
@@ -18,8 +20,21 @@ struct JobFeedbackRow {
     saved: bool,
     hidden: bool,
     bad_fit: bool,
+    salary_signal: Option<String>,
+    interest_rating: Option<i16>,
+    work_mode_signal: Option<String>,
+    legitimacy_signal: Option<String>,
     created_at: String,
     updated_at: String,
+}
+
+#[derive(FromRow)]
+struct JobFeedbackTagRow {
+    profile_id: String,
+    job_id: String,
+    tag: String,
+    is_negative: bool,
+    created_at: String,
 }
 
 #[derive(FromRow)]
@@ -71,6 +86,10 @@ impl FeedbackRepository {
                 saved,
                 hidden,
                 bad_fit,
+                salary_signal,
+                interest_rating,
+                work_mode_signal,
+                legitimacy_signal,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             "#,
@@ -84,6 +103,278 @@ impl FeedbackRepository {
         .await?;
 
         JobFeedbackRecord::try_from(row)
+    }
+
+    pub async fn set_salary_signal(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        signal: SalaryFeedbackSignal,
+    ) -> Result<JobFeedbackRecord, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, JobFeedbackRow>(
+            r#"
+            INSERT INTO profile_job_feedback (
+                profile_id, job_id, saved, hidden, bad_fit, salary_signal, created_at, updated_at
+            )
+            VALUES ($1, $2, false, false, false, $3, NOW(), NOW())
+            ON CONFLICT (profile_id, job_id)
+            DO UPDATE SET salary_signal = EXCLUDED.salary_signal, updated_at = NOW()
+            RETURNING
+                profile_id, job_id, saved, hidden, bad_fit,
+                salary_signal, interest_rating, work_mode_signal, legitimacy_signal,
+                created_at::text AS created_at, updated_at::text AS updated_at
+            "#,
+        )
+        .bind(profile_id)
+        .bind(job_id)
+        .bind(signal.as_str())
+        .fetch_one(pool)
+        .await?;
+
+        JobFeedbackRecord::try_from(row)
+    }
+
+    pub async fn set_interest_rating(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        rating: i8,
+    ) -> Result<JobFeedbackRecord, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, JobFeedbackRow>(
+            r#"
+            INSERT INTO profile_job_feedback (
+                profile_id, job_id, saved, hidden, bad_fit, interest_rating, created_at, updated_at
+            )
+            VALUES ($1, $2, false, false, false, $3, NOW(), NOW())
+            ON CONFLICT (profile_id, job_id)
+            DO UPDATE SET interest_rating = EXCLUDED.interest_rating, updated_at = NOW()
+            RETURNING
+                profile_id, job_id, saved, hidden, bad_fit,
+                salary_signal, interest_rating, work_mode_signal, legitimacy_signal,
+                created_at::text AS created_at, updated_at::text AS updated_at
+            "#,
+        )
+        .bind(profile_id)
+        .bind(job_id)
+        .bind(i16::from(rating))
+        .fetch_one(pool)
+        .await?;
+
+        JobFeedbackRecord::try_from(row)
+    }
+
+    pub async fn set_work_mode_signal(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        signal: WorkModeFeedbackSignal,
+    ) -> Result<JobFeedbackRecord, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, JobFeedbackRow>(
+            r#"
+            INSERT INTO profile_job_feedback (
+                profile_id, job_id, saved, hidden, bad_fit, work_mode_signal, created_at, updated_at
+            )
+            VALUES ($1, $2, false, false, false, $3, NOW(), NOW())
+            ON CONFLICT (profile_id, job_id)
+            DO UPDATE SET work_mode_signal = EXCLUDED.work_mode_signal, updated_at = NOW()
+            RETURNING
+                profile_id, job_id, saved, hidden, bad_fit,
+                salary_signal, interest_rating, work_mode_signal, legitimacy_signal,
+                created_at::text AS created_at, updated_at::text AS updated_at
+            "#,
+        )
+        .bind(profile_id)
+        .bind(job_id)
+        .bind(signal.as_str())
+        .fetch_one(pool)
+        .await?;
+
+        JobFeedbackRecord::try_from(row)
+    }
+
+    pub async fn set_legitimacy_signal(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        signal: LegitimacySignal,
+        also_bad_fit: bool,
+    ) -> Result<JobFeedbackRecord, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, JobFeedbackRow>(
+            r#"
+            INSERT INTO profile_job_feedback (
+                profile_id, job_id, saved, hidden, bad_fit, legitimacy_signal, created_at, updated_at
+            )
+            VALUES ($1, $2, false, false, $3, $4, NOW(), NOW())
+            ON CONFLICT (profile_id, job_id)
+            DO UPDATE SET
+                legitimacy_signal = EXCLUDED.legitimacy_signal,
+                bad_fit = profile_job_feedback.bad_fit OR EXCLUDED.bad_fit,
+                updated_at = NOW()
+            RETURNING
+                profile_id, job_id, saved, hidden, bad_fit,
+                salary_signal, interest_rating, work_mode_signal, legitimacy_signal,
+                created_at::text AS created_at, updated_at::text AS updated_at
+            "#,
+        )
+        .bind(profile_id)
+        .bind(job_id)
+        .bind(also_bad_fit)
+        .bind(signal.as_str())
+        .fetch_one(pool)
+        .await?;
+
+        JobFeedbackRecord::try_from(row)
+    }
+
+    pub async fn upsert_job_feedback_tags(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        tags: &[JobFeedbackReason],
+    ) -> Result<Vec<JobFeedbackTagRecord>, RepositoryError> {
+        if tags.is_empty() {
+            return self.list_feedback_tags_for_job(profile_id, job_id).await;
+        }
+
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        for tag in tags {
+            sqlx::query(
+                r#"
+                INSERT INTO profile_job_feedback_tags (profile_id, job_id, tag, created_at)
+                VALUES ($1, $2, $3, NOW())
+                ON CONFLICT (profile_id, job_id, tag) DO NOTHING
+                "#,
+            )
+            .bind(profile_id)
+            .bind(job_id)
+            .bind(tag.as_str())
+            .execute(pool)
+            .await?;
+        }
+
+        self.list_feedback_tags_for_job(profile_id, job_id).await
+    }
+
+    pub async fn remove_job_feedback_tag(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+        tag: JobFeedbackReason,
+    ) -> Result<(), RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        sqlx::query(
+            r#"
+            DELETE FROM profile_job_feedback_tags
+            WHERE profile_id = $1 AND job_id = $2 AND tag = $3
+            "#,
+        )
+        .bind(profile_id)
+        .bind(job_id)
+        .bind(tag.as_str())
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn list_feedback_tags_for_job(
+        &self,
+        profile_id: &str,
+        job_id: &str,
+    ) -> Result<Vec<JobFeedbackTagRecord>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let rows = sqlx::query_as::<_, JobFeedbackTagRow>(
+            r#"
+            SELECT profile_id, job_id, tag, is_negative, created_at::text AS created_at
+            FROM profile_job_feedback_tags
+            WHERE profile_id = $1 AND job_id = $2
+            ORDER BY created_at ASC
+            "#,
+        )
+        .bind(profile_id)
+        .bind(job_id)
+        .fetch_all(pool)
+        .await?;
+
+        rows.into_iter()
+            .filter_map(|row| {
+                JobFeedbackReason::parse(&row.tag).map(|tag| {
+                    Ok(JobFeedbackTagRecord {
+                        profile_id: row.profile_id,
+                        job_id: row.job_id,
+                        tag,
+                        is_negative: row.is_negative,
+                        created_at: row.created_at,
+                    })
+                })
+            })
+            .collect::<Result<Vec<_>, RepositoryError>>()
+    }
+
+    pub async fn list_feedback_tags_for_jobs(
+        &self,
+        profile_id: &str,
+        job_ids: &[String],
+    ) -> Result<Vec<JobFeedbackTagRecord>, RepositoryError> {
+        if job_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let rows = sqlx::query_as::<_, JobFeedbackTagRow>(
+            r#"
+            SELECT profile_id, job_id, tag, is_negative, created_at::text AS created_at
+            FROM profile_job_feedback_tags
+            WHERE profile_id = $1 AND job_id = ANY($2)
+            ORDER BY job_id ASC, created_at ASC
+            "#,
+        )
+        .bind(profile_id)
+        .bind(job_ids)
+        .fetch_all(pool)
+        .await?;
+
+        rows.into_iter()
+            .filter_map(|row| {
+                JobFeedbackReason::parse(&row.tag).map(|tag| {
+                    Ok(JobFeedbackTagRecord {
+                        profile_id: row.profile_id,
+                        job_id: row.job_id,
+                        tag,
+                        is_negative: row.is_negative,
+                        created_at: row.created_at,
+                    })
+                })
+            })
+            .collect::<Result<Vec<_>, RepositoryError>>()
     }
 
     pub async fn list_job_feedback(
@@ -102,6 +393,10 @@ impl FeedbackRepository {
                 saved,
                 hidden,
                 bad_fit,
+                salary_signal,
+                interest_rating,
+                work_mode_signal,
+                legitimacy_signal,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             FROM profile_job_feedback
@@ -139,6 +434,10 @@ impl FeedbackRepository {
                 saved,
                 hidden,
                 bad_fit,
+                salary_signal,
+                interest_rating,
+                work_mode_signal,
+                legitimacy_signal,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             FROM profile_job_feedback
@@ -262,7 +561,6 @@ impl FeedbackRepository {
     }
 
     /// Clear specific job-level feedback flags. Only updates flags that are `true` in `flags`.
-    /// Returns the updated record, or `None` if no row exists for this (profile, job) pair.
     pub async fn clear_job_feedback(
         &self,
         profile_id: &str,
@@ -288,6 +586,10 @@ impl FeedbackRepository {
                 saved,
                 hidden,
                 bad_fit,
+                salary_signal,
+                interest_rating,
+                work_mode_signal,
+                legitimacy_signal,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             "#,
@@ -345,12 +647,42 @@ impl TryFrom<JobFeedbackRow> for JobFeedbackRecord {
     type Error = RepositoryError;
 
     fn try_from(row: JobFeedbackRow) -> Result<Self, Self::Error> {
+        let interest_rating = row
+            .interest_rating
+            .map(i8::try_from)
+            .transpose()
+            .map_err(|_| RepositoryError::InvalidData {
+                message: format!(
+                    "interest_rating '{}' is outside the supported i8 range",
+                    row.interest_rating.unwrap_or_default()
+                ),
+            })?;
+        let salary_signal = row
+            .salary_signal
+            .as_deref()
+            .map(SalaryFeedbackSignal::parse)
+            .flatten();
+        let work_mode_signal = row
+            .work_mode_signal
+            .as_deref()
+            .map(WorkModeFeedbackSignal::parse)
+            .flatten();
+        let legitimacy_signal = row
+            .legitimacy_signal
+            .as_deref()
+            .map(LegitimacySignal::parse)
+            .flatten();
+
         Ok(Self {
             profile_id: row.profile_id,
             job_id: row.job_id,
             saved: row.saved,
             hidden: row.hidden,
             bad_fit: row.bad_fit,
+            salary_signal,
+            interest_rating,
+            work_mode_signal,
+            legitimacy_signal,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })

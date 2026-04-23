@@ -3,7 +3,7 @@ use std::fs;
 
 use serde::Deserialize;
 
-const ARTIFACT_VERSION: &str = "trained_reranker_v2";
+const ARTIFACT_VERSION: &str = "trained_reranker_v3";
 const MODEL_TYPE: &str = "logistic_regression";
 
 #[derive(Clone, Debug, PartialEq)]
@@ -11,7 +11,7 @@ pub struct TrainedRerankerModel {
     artifact: TrainedRerankerArtifact,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TrainedRerankerFeatures {
     pub deterministic_score: u8,
     pub behavior_score_delta: i16,
@@ -23,6 +23,26 @@ pub struct TrainedRerankerFeatures {
     pub matched_keyword_count: usize,
     pub source_present: bool,
     pub role_family_present: bool,
+    // Slice 1: outcome signals
+    pub outcome_received_offer: bool,
+    pub outcome_reached_interview: bool,
+    pub outcome_rejected: bool,
+    // Slice 2: rejection/positive tags
+    pub has_salary_rejection: bool,
+    pub has_remote_rejection: bool,
+    pub has_tech_rejection: bool,
+    // Slice 4: interest rating (-2..+2)
+    pub interest_rating_positive: f64,
+    pub interest_rating_negative: f64,
+    // Slice 5: work mode
+    pub work_mode_deal_breaker: bool,
+    // Slice 6: engagement depth
+    pub scrolled_to_bottom: bool,
+    pub returned_count: usize,
+    pub quick_apply: bool,
+    pub delayed_apply: bool,
+    // Slice 7: legitimacy
+    pub legitimacy_suspicious: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,7 +125,7 @@ impl TrainedRerankerModel {
         TrainedRerankerScore {
             score_delta,
             reasons: vec![format!(
-                "Trained reranker v2 applied an inspectable model adjustment ({score_delta:+})"
+                "Trained reranker v3 applied an inspectable model adjustment ({score_delta:+})"
             )],
         }
     }
@@ -137,6 +157,86 @@ fn feature_value(feature_name: &str, features: &TrainedRerankerFeatures) -> f64 
                 0.0
             }
         }
+        "outcome_received_offer" => {
+            if features.outcome_received_offer {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "outcome_reached_interview" => {
+            if features.outcome_reached_interview {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "outcome_rejected" => {
+            if features.outcome_rejected {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "has_salary_rejection" => {
+            if features.has_salary_rejection {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "has_remote_rejection" => {
+            if features.has_remote_rejection {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "has_tech_rejection" => {
+            if features.has_tech_rejection {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "interest_rating_positive" => features.interest_rating_positive.clamp(0.0, 1.0),
+        "interest_rating_negative" => features.interest_rating_negative.clamp(0.0, 1.0),
+        "work_mode_deal_breaker" => {
+            if features.work_mode_deal_breaker {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "scrolled_to_bottom" => {
+            if features.scrolled_to_bottom {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "returned_count" => features.returned_count.min(5) as f64 / 5.0,
+        "quick_apply" => {
+            if features.quick_apply {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "delayed_apply" => {
+            if features.delayed_apply {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        "legitimacy_suspicious" => {
+            if features.legitimacy_suspicious {
+                1.0
+            } else {
+                0.0
+            }
+        }
         _ => 0.0,
     }
 }
@@ -154,6 +254,20 @@ fn is_supported_feature(feature_name: &str) -> bool {
             | "matched_keyword_count"
             | "source_present"
             | "role_family_present"
+            | "outcome_received_offer"
+            | "outcome_reached_interview"
+            | "outcome_rejected"
+            | "has_salary_rejection"
+            | "has_remote_rejection"
+            | "has_tech_rejection"
+            | "interest_rating_positive"
+            | "interest_rating_negative"
+            | "work_mode_deal_breaker"
+            | "scrolled_to_bottom"
+            | "returned_count"
+            | "quick_apply"
+            | "delayed_apply"
+            | "legitimacy_suspicious"
     )
 }
 
@@ -173,9 +287,9 @@ mod tests {
 
     fn artifact_json() -> &'static str {
         r#"{
-          "artifact_version": "trained_reranker_v2",
+          "artifact_version": "trained_reranker_v3",
           "model_type": "logistic_regression",
-          "label_policy_version": "outcome_label_v2",
+          "label_policy_version": "outcome_label_v3",
           "feature_names": ["deterministic_score", "matched_skill_count"],
           "feature_transforms": {},
           "weights": {
@@ -211,18 +325,32 @@ mod tests {
             matched_keyword_count: 0,
             source_present: true,
             role_family_present: true,
+            outcome_received_offer: false,
+            outcome_reached_interview: false,
+            outcome_rejected: false,
+            has_salary_rejection: false,
+            has_remote_rejection: false,
+            has_tech_rejection: false,
+            interest_rating_positive: 0.0,
+            interest_rating_negative: 0.0,
+            work_mode_deal_breaker: false,
+            scrolled_to_bottom: false,
+            returned_count: 0,
+            quick_apply: false,
+            delayed_apply: false,
+            legitimacy_suspicious: false,
         });
 
         assert!(score.score_delta > 0);
         assert!(score.score_delta <= 8);
-        assert!(score.reasons[0].contains("Trained reranker v2"));
+        assert!(score.reasons[0].contains("Trained reranker v3"));
     }
 
     #[test]
     fn rejects_missing_feature_weight() {
         let error = TrainedRerankerModel::from_json_str(
             r#"{
-              "artifact_version": "trained_reranker_v2",
+              "artifact_version": "trained_reranker_v3",
               "model_type": "logistic_regression",
               "feature_names": ["deterministic_score"],
               "weights": {},

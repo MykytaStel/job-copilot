@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type { Application } from '@job-copilot/shared';
+import type { JobFeedbackReason, LegitimacySignal, SalaryFeedbackSignal, WorkModeFeedbackSignal } from '@job-copilot/shared/feedback';
 
 import { createApplication, getApplications } from '../../api/applications';
 import {
@@ -13,6 +14,11 @@ import {
   markJobSaved,
   removeCompanyBlacklist,
   removeCompanyWhitelist,
+  setJobInterestRating,
+  setJobLegitimacySignal,
+  setJobSalarySignal,
+  setJobWorkModeSignal,
+  tagJobFeedback,
   unhideJob,
   unmarkJobBadFit,
   unsaveJob,
@@ -44,6 +50,7 @@ export function useJobDetailsPage() {
   const [copied, setCopied] = useState(false);
   const [generateCoverLetter, setGenerateCoverLetter] = useState(false);
   const [generateInterviewPrep, setGenerateInterviewPrep] = useState(false);
+  const scrollFiredRef = useRef(false);
 
   const {
     data: job,
@@ -70,7 +77,36 @@ export function useJobDetailsPage() {
       jobId: job.id,
       payloadJson: { surface: 'job_details' },
     }).catch(() => null);
+
+    const returnedKey = `job_visited_${job.id}`;
+    if (sessionStorage.getItem(returnedKey)) {
+      void logUserEvent(profileId, { eventType: 'job_returned', jobId: job.id }).catch(() => null);
+    } else {
+      sessionStorage.setItem(returnedKey, '1');
+    }
   }, [job?.id, profileId]);
+
+  useEffect(() => {
+    if (!profileId || !id) return;
+
+    scrollFiredRef.current = false;
+
+    function handleScroll() {
+      if (scrollFiredRef.current) return;
+      const scrolledPct =
+        (window.scrollY + window.innerHeight) / document.documentElement.scrollHeight;
+      if (scrolledPct >= 0.9) {
+        scrollFiredRef.current = true;
+        void logUserEvent(profileId!, {
+          eventType: 'job_scrolled_to_bottom',
+          jobId: id!,
+        }).catch(() => null);
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [id, profileId]);
 
   const { data: fit } = useQuery<FitAnalysis>({
     queryKey: queryKeys.ml.fit(profileId ?? '', id!),
@@ -295,7 +331,59 @@ export function useJobDetailsPage() {
     await navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
+
+    if (profileId && id) {
+      void logUserEvent(profileId, { eventType: 'job_shared', jobId: id }).catch(() => null);
+    }
   };
+
+  const interestRatingMutation = useMutation({
+    mutationFn: async (rating: number) => {
+      if (!profileId) throw new Error('Create a profile first');
+      await setJobInterestRating(profileId, id!, rating);
+    },
+    onSuccess: () => invalidateFeedbackQueries(),
+    onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
+  });
+
+  const salarySignalMutation = useMutation({
+    mutationFn: async (signal: SalaryFeedbackSignal) => {
+      if (!profileId) throw new Error('Create a profile first');
+      await setJobSalarySignal(profileId, id!, signal);
+    },
+    onSuccess: () => invalidateFeedbackQueries(),
+    onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
+  });
+
+  const workModeMutation = useMutation({
+    mutationFn: async (signal: WorkModeFeedbackSignal) => {
+      if (!profileId) throw new Error('Create a profile first');
+      await setJobWorkModeSignal(profileId, id!, signal);
+    },
+    onSuccess: () => invalidateFeedbackQueries(),
+    onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
+  });
+
+  const tagsMutation = useMutation({
+    mutationFn: async (tags: JobFeedbackReason[]) => {
+      if (!profileId) throw new Error('Create a profile first');
+      await tagJobFeedback(profileId, id!, tags);
+    },
+    onSuccess: () => invalidateFeedbackQueries(),
+    onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
+  });
+
+  const legitimacyMutation = useMutation({
+    mutationFn: async (signal: LegitimacySignal) => {
+      if (!profileId) throw new Error('Create a profile first');
+      await setJobLegitimacySignal(profileId, id!, signal);
+    },
+    onSuccess: () => {
+      invalidateFeedbackQueries();
+      toast.success('Дякуємо за відгук');
+    },
+    onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
+  });
 
   return {
     id,
@@ -332,6 +420,11 @@ export function useJobDetailsPage() {
     badFitMutation,
     unmarkBadFitMutation,
     companyFeedbackMutation,
+    interestRatingMutation,
+    salarySignalMutation,
+    workModeMutation,
+    tagsMutation,
+    legitimacyMutation,
   };
 }
 

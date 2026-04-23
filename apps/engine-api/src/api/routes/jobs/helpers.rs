@@ -95,11 +95,16 @@ pub(super) async fn load_profile_ranked_jobs(
     }
 
     if reranker_runtime.apply_trained {
+        let empty_event_signals = HashMap::new();
+        let empty_applications = HashMap::new();
         let (reranked_jobs, _adjusted_count) = apply_trained_reranking(
             state,
             adjusted_jobs,
             &deterministic_score_by_job_id,
             &behavior_score_by_job_id,
+            &feedback_by_job_id,
+            &empty_event_signals,
+            &empty_applications,
         );
         adjusted_jobs = reranked_jobs;
     }

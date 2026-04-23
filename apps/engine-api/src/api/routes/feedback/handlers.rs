@@ -3,10 +3,13 @@ use axum::http::StatusCode;
 
 use crate::api::dto::feedback::{
     CompanyFeedbackResponse, FeedbackOverviewResponse, FeedbackSummary, JobFeedbackResponse,
-    UpdateCompanyFeedbackRequest,
+    SetInterestRatingRequest, SetLegitimacySignalRequest, SetSalaryFeedbackRequest,
+    SetWorkModeFeedbackRequest, TagJobFeedbackRequest, UpdateCompanyFeedbackRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
-use crate::api::routes::events::{load_job_event_metadata, log_user_event_softly};
+use crate::api::routes::events::{
+    load_job_event_metadata, log_user_event_softly, record_labelable_job_softly,
+};
 use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackFlags};
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::feedback::FeedbackService;
@@ -183,6 +186,94 @@ pub async fn remove_company_blacklist(
     ApiJson(payload): ApiJson<UpdateCompanyFeedbackRequest>,
 ) -> Result<StatusCode, ApiError> {
     remove_company_feedback(state, profile_id, payload, CompanyFeedbackStatus::Blacklist).await
+}
+
+pub async fn set_job_salary_signal(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+    ApiJson(payload): ApiJson<SetSalaryFeedbackRequest>,
+) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+    let signal = payload.validate()?;
+    let feedback = state
+        .feedback_service
+        .set_salary_signal(&profile_id, &job_id, signal)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+    Ok(axum::Json(JobFeedbackResponse::from(feedback)))
+}
+
+pub async fn set_job_interest_rating(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+    ApiJson(payload): ApiJson<SetInterestRatingRequest>,
+) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+    let rating = payload.validate()?;
+    let feedback = state
+        .feedback_service
+        .set_interest_rating(&profile_id, &job_id, rating)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+    Ok(axum::Json(JobFeedbackResponse::from(feedback)))
+}
+
+pub async fn set_job_work_mode_signal(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+    ApiJson(payload): ApiJson<SetWorkModeFeedbackRequest>,
+) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+    let signal = payload.validate()?;
+    let feedback = state
+        .feedback_service
+        .set_work_mode_signal(&profile_id, &job_id, signal)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+    if matches!(
+        signal,
+        crate::domain::feedback::model::WorkModeFeedbackSignal::DealBreaker
+    ) {
+        record_labelable_job_softly(&state, &profile_id, &job_id).await;
+    }
+    Ok(axum::Json(JobFeedbackResponse::from(feedback)))
+}
+
+pub async fn set_job_legitimacy_signal(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+    ApiJson(payload): ApiJson<SetLegitimacySignalRequest>,
+) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+    let signal = payload.validate()?;
+    let feedback = state
+        .feedback_service
+        .set_legitimacy_signal(&profile_id, &job_id, signal)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+    if matches!(
+        signal,
+        crate::domain::feedback::model::LegitimacySignal::Spam
+            | crate::domain::feedback::model::LegitimacySignal::Suspicious
+    ) {
+        record_labelable_job_softly(&state, &profile_id, &job_id).await;
+    }
+    Ok(axum::Json(JobFeedbackResponse::from(feedback)))
+}
+
+pub async fn tag_job_feedback(
+    State(state): State<AppState>,
+    Path((profile_id, job_id)): Path<(String, String)>,
+    ApiJson(payload): ApiJson<TagJobFeedbackRequest>,
+) -> Result<axum::http::StatusCode, ApiError> {
+    ensure_profile_exists(&state, &profile_id).await?;
+    let tags = payload.validate()?;
+    state
+        .feedback_service
+        .upsert_job_feedback_tags(&profile_id, &job_id, tags)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
 pub(crate) async fn ensure_profile_exists(

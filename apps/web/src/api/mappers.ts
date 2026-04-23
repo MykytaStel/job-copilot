@@ -62,6 +62,11 @@ function mapJobFeedbackState(feedback: EngineJobFeedbackState): JobFeedbackState
     hidden: feedback.hidden,
     badFit: feedback.bad_fit,
     companyStatus: feedback.company_status ?? undefined,
+    salarySignal: feedback.salary_signal ?? undefined,
+    interestRating: feedback.interest_rating ?? undefined,
+    workModeSignal: feedback.work_mode_signal ?? undefined,
+    legitimacySignal: feedback.legitimacy_signal ?? undefined,
+    tags: feedback.tags ?? undefined,
   };
 }
 
@@ -158,6 +163,9 @@ export function mapApplication(application: EngineApplication): Application {
     status: application.status,
     appliedAt: application.applied_at ?? undefined,
     dueDate: application.due_date ?? undefined,
+    outcome: application.outcome ?? undefined,
+    outcomeDate: application.outcome_date ?? undefined,
+    rejectionStage: application.rejection_stage ?? undefined,
     updatedAt: application.updated_at,
   };
 }

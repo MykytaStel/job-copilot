@@ -5,11 +5,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ML_DIR="$ROOT_DIR/apps/ml"
 DATASET_PATH="${DATASET_PATH:-$ML_DIR/reranker-dataset.json}"
-MODEL_PATH="${MODEL_PATH:-$ML_DIR/models/trained-reranker-v2.json}"
+MODEL_PATH="${MODEL_PATH:-$ML_DIR/models/trained-reranker-v3.json}"
 REPORT_DIR="${REPORT_DIR:-$ML_DIR/reports}"
-CANDIDATE_MODEL_PATH="$ML_DIR/models/.trained-reranker-v2.candidate.json"
-TRAINING_REPORT_PATH="$REPORT_DIR/trained-reranker-v2-training.json"
-EVALUATION_REPORT_PATH="$REPORT_DIR/trained-reranker-v2-evaluation.json"
+CANDIDATE_MODEL_PATH="$ML_DIR/models/.trained-reranker-v3.candidate.json"
+TRAINING_REPORT_PATH="$REPORT_DIR/trained-reranker-v3-training.json"
+EVALUATION_REPORT_PATH="$REPORT_DIR/trained-reranker-v3-evaluation.json"
 
 ENGINE_API_BASE_URL="${ENGINE_API_BASE_URL:-http://localhost:8080}"
 PROFILE_ID="${PROFILE_ID:-}"
@@ -37,7 +37,7 @@ json_count() {
 }
 
 if [[ -z "$PROFILE_ID" ]]; then
-  echo "PROFILE_ID is required. Example: PROFILE_ID=<profile-id> pnpm train:reranker:v2" >&2
+  echo "PROFILE_ID is required. Example: PROFILE_ID=<profile-id> pnpm train:reranker:v3" >&2
   exit 1
 fi
 

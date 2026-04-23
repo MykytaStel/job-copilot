@@ -1,0 +1,95 @@
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.enrichment.shared_job_fit.contract import (
+    CurrentJobFeedbackState,
+    DeterministicFitContext,
+    FeedbackStateContext,
+    RankedJobContext,
+    SearchProfileContext,
+    SearchProfileRoleCandidate,
+)
+from app.enrichment.shared_profile.contract import (
+    MAX_LIST_ITEMS,
+    LlmContextAnalyzedProfile,
+    sanitize_text,
+)
+
+
+class JobFitExplanationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: str
+    analyzed_profile: LlmContextAnalyzedProfile | None = None
+    search_profile: SearchProfileContext | None = None
+    ranked_job: RankedJobContext
+    deterministic_fit: DeterministicFitContext
+    feedback_state: FeedbackStateContext | None = None
+
+    @field_validator("profile_id", mode="before")
+    @classmethod
+    def normalize_profile_id(cls, value: Any) -> str:
+        return sanitize_text(value)
+
+
+class JobFitExplanationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fit_summary: str = ""
+    why_it_matches: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    missing_signals: list[str] = Field(default_factory=list)
+    recommended_next_step: str = ""
+    application_angle: str = ""
+
+    @field_validator("fit_summary", "recommended_next_step", "application_angle", mode="before")
+    @classmethod
+    def normalize_text_field(cls, value: Any) -> str:
+        return sanitize_text(value)
+
+    @field_validator("why_it_matches", "risks", "missing_signals", mode="before")
+    @classmethod
+    def normalize_list_field(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise TypeError("expected a list of strings")
+
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            if not isinstance(item, str):
+                raise TypeError("expected a list of strings")
+            cleaned = sanitize_text(item)
+            if not cleaned:
+                continue
+            key = cleaned.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(cleaned)
+            if len(normalized) >= MAX_LIST_ITEMS:
+                break
+        return normalized
+
+
+class JobFitExplanationPrompt(BaseModel):
+    system_instructions: str
+    context_payload: str
+    output_schema_expectations: str
+    output_schema: dict[str, Any]
+
+
+class JobFitExplanationProviderError(Exception):
+    pass
+
+
+class MalformedJobFitExplanationOutputError(JobFitExplanationProviderError):
+    pass
+
+
+def job_fit_explanation_schema() -> dict[str, Any]:
+    schema = JobFitExplanationResponse.model_json_schema()
+    schema["additionalProperties"] = False
+    return schema

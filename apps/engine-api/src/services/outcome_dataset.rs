@@ -1,5 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use chrono::{DateTime, Utc};
+use serde_json::Value;
+
+use crate::domain::application::model::{Application, ApplicationOutcome};
 use crate::domain::feedback::model::JobFeedbackState;
 use crate::domain::job::model::JobView;
 use crate::domain::matching::JobFit;
@@ -11,7 +15,7 @@ use crate::services::funnel::ProfileFunnelAggregates;
 use crate::services::learned_reranker::LearnedRerankerService;
 use crate::services::search_ranking::SearchRankingService;
 
-pub const OUTCOME_LABEL_POLICY_VERSION: &str = "outcome_label_v2";
+pub const OUTCOME_LABEL_POLICY_VERSION: &str = "outcome_label_v3";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OutcomeDataset {
@@ -28,6 +32,7 @@ pub struct OutcomeExample {
     pub company_name: String,
     pub source: Option<String>,
     pub role_family: Option<String>,
+    pub label_observed_at: Option<String>,
     pub label: OutcomeLabel,
     pub label_score: u8,
     pub label_reasons: Vec<String>,
@@ -58,6 +63,32 @@ pub struct OutcomeSignals {
     pub saved_event_count: usize,
     pub applied_event_count: usize,
     pub dismissed_event_count: usize,
+    // Slice 1: application outcome
+    pub outcome: Option<String>,
+    pub reached_interview: bool,
+    pub received_offer: bool,
+    pub was_rejected: bool,
+    pub was_ghosted: bool,
+    // Slice 2: structured rejection/interest tags
+    pub rejection_tags: Vec<String>,
+    pub positive_tags: Vec<String>,
+    pub has_salary_rejection: bool,
+    pub has_remote_rejection: bool,
+    pub has_tech_rejection: bool,
+    // Slice 3: salary signal
+    pub salary_signal: Option<String>,
+    pub salary_below_expectation: bool,
+    // Slice 4: interest rating
+    pub interest_rating: Option<i8>,
+    // Slice 5: work mode signal
+    pub work_mode_deal_breaker: bool,
+    // Slice 6: engagement depth
+    pub scrolled_to_bottom: bool,
+    pub returned_count: usize,
+    pub time_to_apply_days: Option<u32>,
+    // Slice 7: legitimacy
+    pub legitimacy_suspicious: bool,
+    pub legitimacy_spam: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -96,6 +127,8 @@ impl OutcomeDatasetService {
         profile: &Profile,
         events: &[UserEventRecord],
         jobs: Vec<(JobView, JobFeedbackState)>,
+        applications_by_job_id: &BTreeMap<String, Application>,
+        feedback_updated_at_by_job_id: &BTreeMap<String, String>,
         search_ranking_service: &SearchRankingService,
         behavior: &ProfileBehaviorAggregates,
         funnel: &ProfileFunnelAggregates,
@@ -116,10 +149,19 @@ impl OutcomeDatasetService {
                 .get(&job_id)
                 .cloned()
                 .unwrap_or_default();
-            let signals = normalize_signals(&feedback, event_signals);
+            let application = applications_by_job_id.get(&job_id);
+            let signals = normalize_signals(&feedback, &event_signals, application);
             let Some(label_assignment) = assign_label(&signals) else {
                 continue;
             };
+            let label_observed_at = resolve_label_observed_at(
+                &signals,
+                &event_signals,
+                application,
+                feedback_updated_at_by_job_id
+                    .get(&job_id)
+                    .map(String::as_str),
+            );
 
             let fit = search_ranking_service.score_job(&search_profile, &job);
             let source = job
@@ -158,6 +200,7 @@ impl OutcomeDatasetService {
                 company_name: job.job.company_name,
                 source,
                 role_family,
+                label_observed_at,
                 label: label_assignment.label,
                 label_score: label_assignment.label_score,
                 label_reasons: label_assignment.reasons,
@@ -187,16 +230,21 @@ impl OutcomeLabel {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-struct EventSignals {
-    viewed: bool,
-    saved: bool,
-    hidden: bool,
-    bad_fit: bool,
-    applied: bool,
-    viewed_event_count: usize,
-    saved_event_count: usize,
-    applied_event_count: usize,
-    dismissed_event_count: usize,
+pub(crate) struct EventSignals {
+    pub viewed: bool,
+    pub saved: bool,
+    pub hidden: bool,
+    pub bad_fit: bool,
+    pub applied: bool,
+    pub viewed_event_count: usize,
+    pub saved_event_count: usize,
+    pub applied_event_count: usize,
+    pub dismissed_event_count: usize,
+    pub scrolled_to_bottom: bool,
+    pub returned_count: usize,
+    pub first_viewed_at: Option<String>,
+    pub first_applied_at: Option<String>,
+    pub latest_event_at: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -235,6 +283,34 @@ pub fn outcome_job_ids(events: &[UserEventRecord], feedback_job_ids: &[String]) 
     job_ids.into_iter().collect()
 }
 
+pub(crate) fn application_ids_by_job_id(events: &[UserEventRecord]) -> BTreeMap<String, String> {
+    let mut ordered_events = events
+        .iter()
+        .filter(|event| matches!(event.event_type, UserEventType::ApplicationCreated))
+        .filter_map(|event| {
+            let job_id = normalized_job_id(event.job_id.as_deref())?;
+            let application_id = application_id_from_payload(event.payload_json.as_ref())?;
+            Some((job_id, application_id, &event.created_at, &event.id))
+        })
+        .collect::<Vec<_>>();
+    ordered_events.sort_by(
+        |(left_job_id, _, left_created_at, left_id),
+         (right_job_id, _, right_created_at, right_id)| {
+            left_job_id
+                .cmp(right_job_id)
+                .then_with(|| left_created_at.cmp(right_created_at))
+                .then_with(|| left_id.cmp(right_id))
+        },
+    );
+
+    let mut application_ids = BTreeMap::new();
+    for (job_id, application_id, _, _) in ordered_events {
+        application_ids.insert(job_id, application_id);
+    }
+
+    application_ids
+}
+
 fn search_profile_from_analysis(analysis: &ProfileAnalysis) -> SearchProfile {
     SearchProfile {
         primary_role: analysis.primary_role,
@@ -262,7 +338,9 @@ fn normalized_job_id(job_id: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
-fn event_signals_by_job_id(events: &[UserEventRecord]) -> BTreeMap<String, EventSignals> {
+pub(crate) fn event_signals_by_job_id(
+    events: &[UserEventRecord],
+) -> BTreeMap<String, EventSignals> {
     let mut ordered_events = events
         .iter()
         .filter_map(|event| {
@@ -285,6 +363,9 @@ fn event_signals_by_job_id(events: &[UserEventRecord]) -> BTreeMap<String, Event
             UserEventType::JobOpened => {
                 signals.viewed = true;
                 signals.viewed_event_count += 1;
+                if signals.first_viewed_at.is_none() {
+                    signals.first_viewed_at = Some(event.created_at.clone());
+                }
             }
             UserEventType::JobSaved => {
                 signals.saved = true;
@@ -304,18 +385,86 @@ fn event_signals_by_job_id(events: &[UserEventRecord]) -> BTreeMap<String, Event
             UserEventType::ApplicationCreated => {
                 signals.applied = true;
                 signals.applied_event_count += 1;
+                if signals.first_applied_at.is_none() {
+                    signals.first_applied_at = Some(event.created_at.clone());
+                }
+            }
+            UserEventType::JobScrolledToBottom => {
+                signals.scrolled_to_bottom = true;
+            }
+            UserEventType::JobReturned => {
+                signals.returned_count += 1;
             }
             _ => {}
         }
+
+        signals.latest_event_at = Some(event.created_at.clone());
     }
 
     signals_by_job_id
 }
 
-fn normalize_signals(feedback: &JobFeedbackState, event_signals: EventSignals) -> OutcomeSignals {
+pub(crate) fn normalize_signals(
+    feedback: &JobFeedbackState,
+    event_signals: &EventSignals,
+    application: Option<&Application>,
+) -> OutcomeSignals {
     let saved = feedback.saved || event_signals.saved;
     let hidden = feedback.hidden || event_signals.hidden;
     let bad_fit = feedback.bad_fit || event_signals.bad_fit;
+
+    let rejection_tags: Vec<String> = feedback
+        .tags
+        .iter()
+        .filter(|t| t.is_negative())
+        .map(|t| t.as_str().to_string())
+        .collect();
+    let positive_tags: Vec<String> = feedback
+        .tags
+        .iter()
+        .filter(|t| !t.is_negative())
+        .map(|t| t.as_str().to_string())
+        .collect();
+    let has_salary_rejection = rejection_tags.contains(&"salary_too_low".to_string());
+    let has_remote_rejection = rejection_tags.contains(&"not_remote".to_string());
+    let has_tech_rejection = rejection_tags.contains(&"bad_tech_stack".to_string());
+
+    let salary_signal = feedback.salary_signal.map(|s| s.as_str().to_string());
+    let salary_below_expectation = feedback.salary_signal.is_some_and(|s| {
+        matches!(
+            s,
+            crate::domain::feedback::model::SalaryFeedbackSignal::BelowExpectation
+        )
+    });
+
+    let work_mode_deal_breaker = feedback.work_mode_signal.is_some_and(|s| {
+        matches!(
+            s,
+            crate::domain::feedback::model::WorkModeFeedbackSignal::DealBreaker
+        )
+    });
+
+    let legitimacy_suspicious = feedback.legitimacy_signal.is_some_and(|s| {
+        matches!(
+            s,
+            crate::domain::feedback::model::LegitimacySignal::Suspicious
+        )
+    });
+    let legitimacy_spam = feedback
+        .legitimacy_signal
+        .is_some_and(|s| matches!(s, crate::domain::feedback::model::LegitimacySignal::Spam));
+    let outcome = application
+        .and_then(|record| record.outcome)
+        .map(ApplicationOutcome::as_str)
+        .map(str::to_string);
+    let reached_interview = application.is_some_and(application_reached_interview);
+    let received_offer = application
+        .is_some_and(|record| matches!(record.outcome, Some(ApplicationOutcome::OfferReceived)));
+    let was_rejected = application
+        .is_some_and(|record| matches!(record.outcome, Some(ApplicationOutcome::Rejected)));
+    let was_ghosted = application
+        .is_some_and(|record| matches!(record.outcome, Some(ApplicationOutcome::Ghosted)));
+    let time_to_apply_days = resolve_time_to_apply_days(event_signals, application);
 
     OutcomeSignals {
         viewed: event_signals.viewed,
@@ -332,15 +481,100 @@ fn normalize_signals(feedback: &JobFeedbackState, event_signals: EventSignals) -
         saved_event_count: event_signals.saved_event_count,
         applied_event_count: event_signals.applied_event_count,
         dismissed_event_count: event_signals.dismissed_event_count,
+        outcome,
+        reached_interview,
+        received_offer,
+        was_rejected,
+        was_ghosted,
+        rejection_tags,
+        positive_tags,
+        has_salary_rejection,
+        has_remote_rejection,
+        has_tech_rejection,
+        salary_signal,
+        salary_below_expectation,
+        interest_rating: feedback.interest_rating,
+        work_mode_deal_breaker,
+        scrolled_to_bottom: event_signals.scrolled_to_bottom,
+        returned_count: event_signals.returned_count,
+        time_to_apply_days,
+        legitimacy_suspicious,
+        legitimacy_spam,
     }
 }
 
-fn assign_label(signals: &OutcomeSignals) -> Option<OutcomeLabelAssignment> {
+fn resolve_label_observed_at(
+    signals: &OutcomeSignals,
+    event_signals: &EventSignals,
+    application: Option<&Application>,
+    feedback_updated_at: Option<&str>,
+) -> Option<String> {
     if signals.applied {
+        if let Some(record) = application {
+            if let Some(outcome_date) = record.outcome_date.as_ref() {
+                return Some(outcome_date.clone());
+            }
+            return Some(record.updated_at.clone());
+        }
+    }
+
+    if let Some(created_at) = event_signals.latest_event_at.as_ref() {
+        return Some(created_at.clone());
+    }
+
+    feedback_updated_at.map(str::to_string)
+}
+
+fn assign_label(signals: &OutcomeSignals) -> Option<OutcomeLabelAssignment> {
+    // Legitimacy spam/suspicious forces a negative regardless of other signals.
+    if signals.legitimacy_spam || signals.legitimacy_suspicious {
+        let mut reasons = vec!["dismissed".to_string(), "suspicious_posting".to_string()];
+        if signals.legitimacy_spam {
+            reasons.push("spam".to_string());
+        }
+        return Some(OutcomeLabelAssignment {
+            label: OutcomeLabel::Negative,
+            label_score: 0,
+            reasons,
+        });
+    }
+
+    // Work-mode deal-breaker forces negative regardless of save.
+    if signals.work_mode_deal_breaker && !signals.applied {
+        let mut reasons = vec![
+            "dismissed".to_string(),
+            "work_mode_deal_breaker".to_string(),
+        ];
+        if signals.dismissed {
+            if signals.bad_fit {
+                reasons.push("bad_fit".to_string());
+            }
+            if signals.hidden {
+                reasons.push("hidden".to_string());
+            }
+        }
+        return Some(OutcomeLabelAssignment {
+            label: OutcomeLabel::Negative,
+            label_score: 0,
+            reasons,
+        });
+    }
+
+    if signals.applied {
+        let mut reasons = vec!["applied".to_string()];
+        if signals.received_offer {
+            reasons.push("offer_received".to_string());
+        } else if signals.reached_interview {
+            reasons.push("reached_interview".to_string());
+        } else if signals.was_rejected {
+            reasons.push("outcome_rejected".to_string());
+        } else if signals.was_ghosted {
+            reasons.push("outcome_ghosted".to_string());
+        }
         return Some(OutcomeLabelAssignment {
             label: OutcomeLabel::Positive,
             label_score: 2,
-            reasons: vec!["applied".to_string()],
+            reasons,
         });
     }
 
@@ -352,6 +586,12 @@ fn assign_label(signals: &OutcomeSignals) -> Option<OutcomeLabelAssignment> {
         if signals.hidden {
             reasons.push("hidden".to_string());
         }
+        if signals.has_salary_rejection {
+            reasons.push("salary_too_low".to_string());
+        }
+        if signals.salary_below_expectation && !reasons.contains(&"salary_too_low".to_string()) {
+            reasons.push("salary_too_low".to_string());
+        }
 
         return Some(OutcomeLabelAssignment {
             label: OutcomeLabel::Negative,
@@ -361,18 +601,26 @@ fn assign_label(signals: &OutcomeSignals) -> Option<OutcomeLabelAssignment> {
     }
 
     if signals.saved {
+        let mut reasons = vec!["saved".to_string()];
+        if signals.interest_rating == Some(2) {
+            reasons.push("love_it".to_string());
+        }
         return Some(OutcomeLabelAssignment {
             label: OutcomeLabel::Medium,
             label_score: 1,
-            reasons: vec!["saved".to_string()],
+            reasons,
         });
     }
 
     if signals.viewed {
+        let mut reasons = vec!["viewed".to_string()];
+        if signals.returned_count >= 2 {
+            reasons.push("high_engagement".to_string());
+        }
         return Some(OutcomeLabelAssignment {
             label: OutcomeLabel::Medium,
             label_score: 1,
-            reasons: vec!["viewed".to_string()],
+            reasons,
         });
     }
 
@@ -415,8 +663,58 @@ fn ranking_features(
     }
 }
 
+fn resolve_time_to_apply_days(
+    event_signals: &EventSignals,
+    application: Option<&Application>,
+) -> Option<u32> {
+    let first_viewed_at = parse_timestamp(event_signals.first_viewed_at.as_deref())?;
+    let applied_at = application
+        .and_then(|record| record.applied_at.as_deref())
+        .and_then(|value| parse_timestamp(Some(value)))
+        .or_else(|| parse_timestamp(event_signals.first_applied_at.as_deref()))?;
+
+    let duration = applied_at.signed_duration_since(first_viewed_at);
+    let days = duration.num_days().max(0);
+    u32::try_from(days).ok()
+}
+
+fn parse_timestamp(value: Option<&str>) -> Option<DateTime<Utc>> {
+    let value = value?.trim();
+    if value.is_empty() {
+        return None;
+    }
+
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|timestamp| timestamp.with_timezone(&Utc))
+}
+
+fn application_id_from_payload(payload: Option<&Value>) -> Option<String> {
+    payload
+        .and_then(|value| value.get("application_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn application_reached_interview(application: &Application) -> bool {
+    matches!(
+        application.outcome,
+        Some(
+            ApplicationOutcome::PhoneScreen
+                | ApplicationOutcome::TechnicalInterview
+                | ApplicationOutcome::FinalInterview
+                | ApplicationOutcome::OfferReceived
+        )
+    )
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use crate::domain::application::model::{Application, ApplicationOutcome};
     use crate::domain::feedback::model::JobFeedbackState;
     use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
     use crate::domain::profile::model::{Profile, ProfileAnalysis};
@@ -538,6 +836,8 @@ mod tests {
                         JobFeedbackState::default(),
                     ),
                 ],
+                &BTreeMap::new(),
+                &BTreeMap::new(),
                 &SearchRankingService::new(),
                 &behavior,
                 &funnel,
@@ -594,6 +894,8 @@ mod tests {
                         JobFeedbackState::default(),
                     ),
                 ],
+                &BTreeMap::new(),
+                &BTreeMap::new(),
                 &SearchRankingService::new(),
                 &behavior,
                 &funnel,
@@ -625,8 +927,15 @@ mod tests {
                         hidden: true,
                         bad_fit: false,
                         company_status: None,
+                        salary_signal: None,
+                        interest_rating: None,
+                        work_mode_signal: None,
+                        legitimacy_signal: None,
+                        tags: Vec::new(),
                     },
                 )],
+                &BTreeMap::new(),
+                &BTreeMap::new(),
                 &SearchRankingService::new(),
                 &behavior,
                 &funnel,
@@ -670,6 +979,8 @@ mod tests {
                 &profile(),
                 &events,
                 Vec::new(),
+                &BTreeMap::new(),
+                &BTreeMap::new(),
                 &SearchRankingService::new(),
                 &behavior,
                 &funnel,
@@ -677,5 +988,67 @@ mod tests {
             .expect("empty dataset should build");
 
         assert!(dataset.examples.is_empty());
+    }
+
+    #[test]
+    fn application_outcomes_enrich_signals_and_label_timestamp() {
+        let events = vec![
+            UserEventRecord {
+                id: "evt-0".to_string(),
+                profile_id: "profile-1".to_string(),
+                event_type: UserEventType::JobOpened,
+                job_id: Some("job-positive".to_string()),
+                company_name: Some("NovaLedger".to_string()),
+                source: Some("djinni".to_string()),
+                role_family: Some("engineering".to_string()),
+                payload_json: None,
+                created_at: "2026-04-10T00:00:00Z".to_string(),
+            },
+            event("evt-1", "job-positive", UserEventType::ApplicationCreated),
+        ];
+        let behavior = BehaviorService::new().build_aggregates(events.iter());
+        let funnel = FunnelService::new().build_aggregates(events.iter());
+        let dataset = OutcomeDatasetService::new()
+            .build(
+                &profile(),
+                &events,
+                vec![(
+                    job_view("job-positive", "Senior Backend Engineer", "djinni"),
+                    JobFeedbackState::default(),
+                )],
+                &BTreeMap::from([(
+                    "job-positive".to_string(),
+                    Application {
+                        id: "app-1".to_string(),
+                        job_id: "job-positive".to_string(),
+                        resume_id: None,
+                        status: "offer".to_string(),
+                        applied_at: Some("2026-04-15T00:00:00Z".to_string()),
+                        due_date: None,
+                        outcome: Some(ApplicationOutcome::OfferReceived),
+                        outcome_date: Some("2026-04-20T00:00:00Z".to_string()),
+                        rejection_stage: None,
+                        updated_at: "2026-04-20T00:00:00Z".to_string(),
+                    },
+                )]),
+                &BTreeMap::new(),
+                &SearchRankingService::new(),
+                &behavior,
+                &funnel,
+            )
+            .expect("dataset should build");
+
+        assert_eq!(dataset.examples.len(), 1);
+        assert_eq!(
+            dataset.examples[0].label_observed_at.as_deref(),
+            Some("2026-04-20T00:00:00Z")
+        );
+        assert_eq!(
+            dataset.examples[0].signals.outcome.as_deref(),
+            Some("offer_received")
+        );
+        assert!(dataset.examples[0].signals.received_offer);
+        assert!(dataset.examples[0].signals.reached_interview);
+        assert_eq!(dataset.examples[0].signals.time_to_apply_days, Some(5));
     }
 }

@@ -1,8 +1,10 @@
 import type {
+  ApplicationOutcome,
   ApplicationStatus,
   ContactInput,
   ContactRelationship,
   OfferStatus,
+  RejectionStage,
 } from '@job-copilot/shared';
 
 export const RELATIONSHIP_OPTIONS: ContactRelationship[] = [
@@ -27,6 +29,25 @@ export const APPLICATION_STATUS_OPTIONS: ApplicationStatus[] = [
   'interview',
   'offer',
   'rejected',
+];
+
+export const APPLICATION_OUTCOME_OPTIONS: Array<ApplicationOutcome | ''> = [
+  '',
+  'phone_screen',
+  'technical_interview',
+  'final_interview',
+  'offer_received',
+  'rejected',
+  'ghosted',
+  'withdrew',
+];
+
+export const REJECTION_STAGE_OPTIONS: Array<RejectionStage | ''> = [
+  '',
+  'applied',
+  'phone_screen',
+  'technical_interview',
+  'final_interview',
 ];
 
 export const EMPTY_CONTACT_INPUT: ContactInput = {
