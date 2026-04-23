@@ -3,12 +3,12 @@ from typing import TypeAlias
 import httpx
 from tenacity import AsyncRetrying, Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.enrichment.application_coach import ApplicationCoachPrompt
-from app.enrichment.cover_letter_draft import CoverLetterDraftPrompt
-from app.enrichment.interview_prep import InterviewPrepPrompt
-from app.enrichment.job_fit_explanation import JobFitExplanationPrompt
-from app.enrichment.profile_insights import ProfileInsightsPrompt
-from app.enrichment.weekly_guidance import WeeklyGuidancePrompt
+from app.enrichment.application_coach.contract import ApplicationCoachPrompt
+from app.enrichment.cover_letter_draft.contract import CoverLetterDraftPrompt
+from app.enrichment.interview_prep.contract import InterviewPrepPrompt
+from app.enrichment.job_fit_explanation.contract import JobFitExplanationPrompt
+from app.enrichment.profile_insights.contract import ProfileInsightsPrompt
+from app.enrichment.weekly_guidance.prompt import WeeklyGuidancePrompt
 from app.settings import DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
 
 

@@ -1,3 +1,4 @@
+import ast
 import json
 import subprocess
 import sys
@@ -17,7 +18,31 @@ from app.enrichment.job_fit_explanation import (
     JobFitExplanationPrompt,
     JobFitExplanationRequest,
 )
+from app.enrichment.profile_insights.contract import (
+    LlmContextAnalyzedProfile as ProfileInsightsLlmContextAnalyzedProfile,
+)
+from app.enrichment.profile_insights.contract import (
+    LlmContextEvidenceEntry as ProfileInsightsLlmContextEvidenceEntry,
+)
+from app.enrichment.profile_insights.contract import (
+    LlmContextFeedbackSummary as ProfileInsightsLlmContextFeedbackSummary,
+)
+from app.enrichment.profile_insights.contract import (
+    MAX_LIST_ITEMS as ProfileInsightsMaxListItems,
+)
 from app.enrichment.profile_insights import LlmContextRequest, ProfileInsightsPrompt
+from app.enrichment.profile_insights.contract import sanitize_text as profile_insights_sanitize_text
+from app.enrichment.shared_profile.contract import (
+    LlmContextAnalyzedProfile as SharedLlmContextAnalyzedProfile,
+)
+from app.enrichment.shared_profile.contract import (
+    LlmContextEvidenceEntry as SharedLlmContextEvidenceEntry,
+)
+from app.enrichment.shared_profile.contract import (
+    LlmContextFeedbackSummary as SharedLlmContextFeedbackSummary,
+)
+from app.enrichment.shared_profile.contract import MAX_LIST_ITEMS as SharedMaxListItems
+from app.enrichment.shared_profile.contract import sanitize_text as shared_sanitize_text
 from app.enrichment.weekly_guidance import WeeklyGuidancePrompt, WeeklyGuidanceRequest
 from app.llm_provider_template import TemplateEnrichmentProvider
 from app.llm_provider_types import (
@@ -151,6 +176,14 @@ def test_legacy_flat_modules_remain_aliases_of_enrichment_exports():
     assert LegacyWeeklyGuidanceRequest is WeeklyGuidanceRequest
 
 
+def test_profile_insights_contract_reexports_shared_profile_contract_symbols():
+    assert ProfileInsightsMaxListItems == SharedMaxListItems
+    assert profile_insights_sanitize_text is shared_sanitize_text
+    assert ProfileInsightsLlmContextAnalyzedProfile is SharedLlmContextAnalyzedProfile
+    assert ProfileInsightsLlmContextEvidenceEntry is SharedLlmContextEvidenceEntry
+    assert ProfileInsightsLlmContextFeedbackSummary is SharedLlmContextFeedbackSummary
+
+
 def test_prompt_and_parser_imports_do_not_pull_unrelated_enrichment_reexports():
     expected_absent = {
         "app.enrichment.application_coach.prompt": {
@@ -249,3 +282,67 @@ def test_template_builder_modules_import_enrichment_contracts_without_legacy_fla
         loaded_modules = _loaded_app_modules(module_name)
         assert required_modules.issubset(loaded_modules), module_name
         assert legacy_modules.isdisjoint(loaded_modules), module_name
+
+
+def test_template_provider_imports_narrow_enrichment_internal_modules():
+    provider_path = ML_APP_ROOT / "app" / "llm_provider_template.py"
+    parsed = ast.parse(provider_path.read_text())
+    import_paths = {
+        node.module for node in parsed.body if isinstance(node, ast.ImportFrom) and node.module is not None
+    }
+
+    assert import_paths >= {
+        "app.enrichment.application_coach.contract",
+        "app.enrichment.cover_letter_draft.contract",
+        "app.enrichment.interview_prep.contract",
+        "app.enrichment.job_fit_explanation.contract",
+        "app.enrichment.profile_insights.contract",
+        "app.enrichment.weekly_guidance.contract",
+        "app.enrichment.weekly_guidance.prompt",
+    }
+    assert {
+        "app.enrichment.application_coach",
+        "app.enrichment.cover_letter_draft",
+        "app.enrichment.interview_prep",
+        "app.enrichment.job_fit_explanation",
+        "app.enrichment.profile_insights",
+        "app.enrichment.weekly_guidance",
+    }.isdisjoint(import_paths)
+
+
+def test_enrichment_contracts_import_shared_profile_module_directly():
+    contract_paths = {
+        "app/enrichment/profile_insights/contract.py": {
+            "required": {"app.enrichment.shared_profile.contract"},
+            "forbidden": set(),
+        },
+        "app/enrichment/job_fit_explanation/contract.py": {
+            "required": {"app.enrichment.shared_profile.contract"},
+            "forbidden": {"app.enrichment.profile_insights.contract"},
+        },
+        "app/enrichment/application_coach/contract.py": {
+            "required": {"app.enrichment.shared_profile.contract"},
+            "forbidden": {"app.enrichment.profile_insights.contract"},
+        },
+        "app/enrichment/cover_letter_draft/contract.py": {
+            "required": {"app.enrichment.shared_profile.contract"},
+            "forbidden": {"app.enrichment.profile_insights.contract"},
+        },
+        "app/enrichment/interview_prep/contract.py": {
+            "required": {"app.enrichment.shared_profile.contract"},
+            "forbidden": {"app.enrichment.profile_insights.contract"},
+        },
+        "app/enrichment/weekly_guidance/contract.py": {
+            "required": {"app.enrichment.shared_profile.contract"},
+            "forbidden": {"app.enrichment.profile_insights.contract"},
+        },
+    }
+
+    for relative_path, expectations in contract_paths.items():
+        contract_path = ML_APP_ROOT / relative_path
+        parsed = ast.parse(contract_path.read_text())
+        import_paths = {
+            node.module for node in parsed.body if isinstance(node, ast.ImportFrom) and node.module is not None
+        }
+        assert expectations["required"].issubset(import_paths), relative_path
+        assert expectations["forbidden"].isdisjoint(import_paths), relative_path

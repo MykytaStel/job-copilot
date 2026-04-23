@@ -1,14 +1,27 @@
 import asyncio
 
-from app.enrichment.application_coach import ApplicationCoachProviderError, ApplicationCoachRequest
-from app.enrichment.cover_letter_draft import CoverLetterDraftProviderError, CoverLetterDraftRequest
-from app.enrichment.interview_prep import InterviewPrepProviderError, InterviewPrepRequest
-from app.enrichment.job_fit_explanation import JobFitExplanationProviderError, JobFitExplanationRequest
-from app.enrichment.profile_insights import (
+from app.enrichment.application_coach.contract import (
+    ApplicationCoachProviderError,
+    ApplicationCoachRequest,
+)
+from app.enrichment.cover_letter_draft.contract import (
+    CoverLetterDraftProviderError,
+    CoverLetterDraftRequest,
+)
+from app.enrichment.interview_prep.contract import (
+    InterviewPrepProviderError,
+    InterviewPrepRequest,
+)
+from app.enrichment.job_fit_explanation.contract import (
+    JobFitExplanationProviderError,
+    JobFitExplanationRequest,
+)
+from app.enrichment.profile_insights.contract import (
     LlmContextRequest,
     ProfileInsightsProviderError,
 )
-from app.enrichment.weekly_guidance import WeeklyGuidanceProviderError, WeeklyGuidanceRequest
+from app.enrichment.weekly_guidance.contract import WeeklyGuidanceRequest
+from app.enrichment.weekly_guidance.errors import WeeklyGuidanceProviderError
 from app.llm_providers.common import PromptPayload, build_retrying
 
 

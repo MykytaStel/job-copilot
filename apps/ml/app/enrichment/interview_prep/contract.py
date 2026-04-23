@@ -11,7 +11,7 @@ from app.enrichment.job_fit_explanation.contract import (
     RankedJobContext,
     SearchProfileContext,
 )
-from app.enrichment.profile_insights.contract import (
+from app.enrichment.shared_profile.contract import (
     MAX_LIST_ITEMS,
     LlmContextAnalyzedProfile,
     sanitize_text,

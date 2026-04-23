@@ -1,11 +1,24 @@
 from typing import Any, Protocol
 
-from app.enrichment.application_coach import ApplicationCoachPrompt, ApplicationCoachRequest
-from app.enrichment.cover_letter_draft import CoverLetterDraftPrompt, CoverLetterDraftRequest
-from app.enrichment.interview_prep import InterviewPrepPrompt, InterviewPrepRequest
-from app.enrichment.job_fit_explanation import JobFitExplanationPrompt, JobFitExplanationRequest
-from app.enrichment.profile_insights import LlmContextRequest, ProfileInsightsPrompt
-from app.enrichment.weekly_guidance import WeeklyGuidancePrompt, WeeklyGuidanceRequest
+from app.enrichment.application_coach.contract import (
+    ApplicationCoachPrompt,
+    ApplicationCoachRequest,
+)
+from app.enrichment.cover_letter_draft.contract import (
+    CoverLetterDraftPrompt,
+    CoverLetterDraftRequest,
+)
+from app.enrichment.interview_prep.contract import InterviewPrepPrompt, InterviewPrepRequest
+from app.enrichment.job_fit_explanation.contract import (
+    JobFitExplanationPrompt,
+    JobFitExplanationRequest,
+)
+from app.enrichment.profile_insights.contract import (
+    LlmContextRequest,
+    ProfileInsightsPrompt,
+)
+from app.enrichment.weekly_guidance.contract import WeeklyGuidanceRequest
+from app.enrichment.weekly_guidance.prompt import WeeklyGuidancePrompt
 
 
 class ProfileInsightsProvider(Protocol):
