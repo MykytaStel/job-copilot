@@ -284,7 +284,11 @@ mod tests {
         ];
         for variant in variants {
             let key = variant.as_str();
-            assert_eq!(SalaryFeedbackSignal::parse(key), Some(variant), "parse({key}) failed");
+            assert_eq!(
+                SalaryFeedbackSignal::parse(key),
+                Some(variant),
+                "parse({key}) failed"
+            );
         }
         assert!(SalaryFeedbackSignal::parse("unknown").is_none());
         assert!(SalaryFeedbackSignal::parse("").is_none());
@@ -299,7 +303,11 @@ mod tests {
         ];
         for variant in variants {
             let key = variant.as_str();
-            assert_eq!(WorkModeFeedbackSignal::parse(key), Some(variant), "parse({key}) failed");
+            assert_eq!(
+                WorkModeFeedbackSignal::parse(key),
+                Some(variant),
+                "parse({key}) failed"
+            );
         }
         assert!(WorkModeFeedbackSignal::parse("unknown").is_none());
     }
@@ -314,16 +322,27 @@ mod tests {
         ];
         for variant in variants {
             let key = variant.as_str();
-            assert_eq!(LegitimacySignal::parse(key), Some(variant), "parse({key}) failed");
+            assert_eq!(
+                LegitimacySignal::parse(key),
+                Some(variant),
+                "parse({key}) failed"
+            );
         }
         assert!(LegitimacySignal::parse("unknown").is_none());
     }
 
     #[test]
     fn company_status_parse_and_as_str_are_symmetric() {
-        for variant in [CompanyFeedbackStatus::Whitelist, CompanyFeedbackStatus::Blacklist] {
+        for variant in [
+            CompanyFeedbackStatus::Whitelist,
+            CompanyFeedbackStatus::Blacklist,
+        ] {
             let key = variant.as_str();
-            assert_eq!(CompanyFeedbackStatus::parse(key), Some(variant), "parse({key}) failed");
+            assert_eq!(
+                CompanyFeedbackStatus::parse(key),
+                Some(variant),
+                "parse({key}) failed"
+            );
         }
         assert!(CompanyFeedbackStatus::parse("unknown").is_none());
     }
@@ -434,9 +453,15 @@ mod tests {
         assert!(state.saved);
         assert!(!state.hidden);
         assert!(state.bad_fit);
-        assert_eq!(state.salary_signal, Some(SalaryFeedbackSignal::BelowExpectation));
+        assert_eq!(
+            state.salary_signal,
+            Some(SalaryFeedbackSignal::BelowExpectation)
+        );
         assert_eq!(state.interest_rating, Some(2));
-        assert_eq!(state.work_mode_signal, Some(WorkModeFeedbackSignal::DealBreaker));
+        assert_eq!(
+            state.work_mode_signal,
+            Some(WorkModeFeedbackSignal::DealBreaker)
+        );
         assert_eq!(state.company_status, Some(CompanyFeedbackStatus::Blacklist));
         assert!(state.legitimacy_signal.is_none());
     }

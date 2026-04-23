@@ -241,7 +241,10 @@ mod tests {
         ];
         for variant in variants {
             let metadata = find_role(variant);
-            assert_eq!(metadata.id, variant, "catalog entry for {variant:?} has wrong id");
+            assert_eq!(
+                metadata.id, variant,
+                "catalog entry for {variant:?} has wrong id"
+            );
         }
     }
 
@@ -262,20 +265,33 @@ mod tests {
 
     #[test]
     fn all_canonical_keys_are_unique() {
-        let mut keys: Vec<&str> = ROLE_CATALOG.iter().map(|entry| entry.canonical_key).collect();
+        let mut keys: Vec<&str> = ROLE_CATALOG
+            .iter()
+            .map(|entry| entry.canonical_key)
+            .collect();
         let original_len = keys.len();
         keys.dedup();
         keys.sort_unstable();
         keys.dedup();
-        assert_eq!(keys.len(), original_len, "duplicate canonical keys in ROLE_CATALOG");
+        assert_eq!(
+            keys.len(),
+            original_len,
+            "duplicate canonical keys in ROLE_CATALOG"
+        );
     }
 
     #[test]
     fn generalist_is_the_only_fallback_and_has_no_family() {
-        let fallbacks: Vec<_> = ROLE_CATALOG.iter().filter(|entry| entry.is_fallback).collect();
+        let fallbacks: Vec<_> = ROLE_CATALOG
+            .iter()
+            .filter(|entry| entry.is_fallback)
+            .collect();
         assert_eq!(fallbacks.len(), 1, "expected exactly one fallback role");
         assert_eq!(fallbacks[0].id, RoleId::Generalist);
-        assert!(fallbacks[0].family.is_none(), "Generalist must have no family");
+        assert!(
+            fallbacks[0].family.is_none(),
+            "Generalist must have no family"
+        );
     }
 
     #[test]

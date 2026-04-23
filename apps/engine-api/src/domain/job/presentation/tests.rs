@@ -2,7 +2,7 @@ use serde_json::json;
 
 use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
 
-use super::{assess_description_quality, build_job_view_presentation, JobTextQuality};
+use super::{JobTextQuality, assess_description_quality, build_job_view_presentation};
 
 fn sample_view(
     source: &str,
@@ -66,7 +66,9 @@ fn djinni_normalization_returns_stable_presentation_fields() {
     );
     assert_eq!(
         presentation.summary.as_deref(),
-        Some("Build Rust APIs for high-load recruiting workflows. Remote team with async collaboration")
+        Some(
+            "Build Rust APIs for high-load recruiting workflows. Remote team with async collaboration"
+        )
     );
     assert_eq!(presentation.location_label.as_deref(), Some("Europe"));
     assert_eq!(presentation.work_mode_label.as_deref(), Some("Remote"));
@@ -299,7 +301,10 @@ fn description_quality_is_weak_for_empty_input() {
 
 #[test]
 fn description_quality_is_weak_for_short_text() {
-    assert_eq!(assess_description_quality("Rust developer"), JobTextQuality::Weak);
+    assert_eq!(
+        assess_description_quality("Rust developer"),
+        JobTextQuality::Weak
+    );
 }
 
 #[test]
@@ -309,7 +314,10 @@ fn description_quality_is_strong_for_long_clean_text() {
         and contribute to our open-source tooling. \
         The role requires deep knowledge of async Rust, Postgres, and distributed systems. \
         You will own features end-to-end, from design through production monitoring.";
-    assert_eq!(assess_description_quality(long_text), JobTextQuality::Strong);
+    assert_eq!(
+        assess_description_quality(long_text),
+        JobTextQuality::Strong
+    );
 }
 
 #[test]
@@ -317,7 +325,10 @@ fn description_quality_is_mixed_for_medium_length_text() {
     let medium_text = "Join our team to build reliable backend services. \
         We value clean code, code review discipline, and a good engineering culture. \
         Experience with Rust or Go is a strong plus.";
-    assert_eq!(assess_description_quality(medium_text), JobTextQuality::Mixed);
+    assert_eq!(
+        assess_description_quality(medium_text),
+        JobTextQuality::Mixed
+    );
 }
 
 #[test]
@@ -340,7 +351,10 @@ fn salary_label_shows_range_when_both_present() {
     );
     // sample_view already sets salary_min=5000, salary_max=6500, currency=USD
     let presentation = build_job_view_presentation(&view);
-    assert_eq!(presentation.salary_label.as_deref(), Some("5,000-6,500 USD"));
+    assert_eq!(
+        presentation.salary_label.as_deref(),
+        Some("5,000-6,500 USD")
+    );
 }
 
 #[test]
@@ -372,7 +386,10 @@ fn salary_label_shows_up_to_when_only_max() {
     view.job.salary_currency = Some("USD".to_string());
 
     let presentation = build_job_view_presentation(&view);
-    assert_eq!(presentation.salary_label.as_deref(), Some("up to 6,500 USD"));
+    assert_eq!(
+        presentation.salary_label.as_deref(),
+        Some("up to 6,500 USD")
+    );
 }
 
 #[test]
