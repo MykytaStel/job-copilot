@@ -269,3 +269,196 @@ impl CompanyFeedbackStatus {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn salary_signal_parse_and_as_str_are_symmetric() {
+        let variants = [
+            SalaryFeedbackSignal::AboveExpectation,
+            SalaryFeedbackSignal::AtExpectation,
+            SalaryFeedbackSignal::BelowExpectation,
+            SalaryFeedbackSignal::NotShown,
+        ];
+        for variant in variants {
+            let key = variant.as_str();
+            assert_eq!(SalaryFeedbackSignal::parse(key), Some(variant), "parse({key}) failed");
+        }
+        assert!(SalaryFeedbackSignal::parse("unknown").is_none());
+        assert!(SalaryFeedbackSignal::parse("").is_none());
+    }
+
+    #[test]
+    fn work_mode_signal_parse_and_as_str_are_symmetric() {
+        let variants = [
+            WorkModeFeedbackSignal::MatchesPreference,
+            WorkModeFeedbackSignal::WouldAccept,
+            WorkModeFeedbackSignal::DealBreaker,
+        ];
+        for variant in variants {
+            let key = variant.as_str();
+            assert_eq!(WorkModeFeedbackSignal::parse(key), Some(variant), "parse({key}) failed");
+        }
+        assert!(WorkModeFeedbackSignal::parse("unknown").is_none());
+    }
+
+    #[test]
+    fn legitimacy_signal_parse_and_as_str_are_symmetric() {
+        let variants = [
+            LegitimacySignal::LooksReal,
+            LegitimacySignal::Suspicious,
+            LegitimacySignal::Spam,
+            LegitimacySignal::Duplicate,
+        ];
+        for variant in variants {
+            let key = variant.as_str();
+            assert_eq!(LegitimacySignal::parse(key), Some(variant), "parse({key}) failed");
+        }
+        assert!(LegitimacySignal::parse("unknown").is_none());
+    }
+
+    #[test]
+    fn company_status_parse_and_as_str_are_symmetric() {
+        for variant in [CompanyFeedbackStatus::Whitelist, CompanyFeedbackStatus::Blacklist] {
+            let key = variant.as_str();
+            assert_eq!(CompanyFeedbackStatus::parse(key), Some(variant), "parse({key}) failed");
+        }
+        assert!(CompanyFeedbackStatus::parse("unknown").is_none());
+    }
+
+    #[test]
+    fn feedback_reason_parse_and_as_str_are_symmetric() {
+        let variants = [
+            JobFeedbackReason::SalaryTooLow,
+            JobFeedbackReason::NotRemote,
+            JobFeedbackReason::TooJunior,
+            JobFeedbackReason::TooSenior,
+            JobFeedbackReason::BadTechStack,
+            JobFeedbackReason::SuspiciousPosting,
+            JobFeedbackReason::AlreadyApplied,
+            JobFeedbackReason::DuplicatePosting,
+            JobFeedbackReason::BadCompanyRep,
+            JobFeedbackReason::WrongCity,
+            JobFeedbackReason::WrongIndustry,
+            JobFeedbackReason::VisaSponsorshipRequired,
+            JobFeedbackReason::InterestingChallenge,
+            JobFeedbackReason::GreatCompany,
+            JobFeedbackReason::GoodSalary,
+            JobFeedbackReason::RemoteOk,
+            JobFeedbackReason::GoodTechStack,
+            JobFeedbackReason::FastGrowthCompany,
+            JobFeedbackReason::NiceTitle,
+        ];
+        for variant in variants {
+            let key = variant.as_str();
+            assert_eq!(
+                JobFeedbackReason::parse(key),
+                Some(variant),
+                "parse({key}) failed"
+            );
+        }
+        assert!(JobFeedbackReason::parse("unknown").is_none());
+    }
+
+    #[test]
+    fn negative_reasons_are_correctly_classified() {
+        let negatives = [
+            JobFeedbackReason::SalaryTooLow,
+            JobFeedbackReason::NotRemote,
+            JobFeedbackReason::TooJunior,
+            JobFeedbackReason::TooSenior,
+            JobFeedbackReason::BadTechStack,
+            JobFeedbackReason::SuspiciousPosting,
+            JobFeedbackReason::AlreadyApplied,
+            JobFeedbackReason::DuplicatePosting,
+            JobFeedbackReason::BadCompanyRep,
+            JobFeedbackReason::WrongCity,
+            JobFeedbackReason::WrongIndustry,
+            JobFeedbackReason::VisaSponsorshipRequired,
+        ];
+        for reason in negatives {
+            assert!(reason.is_negative(), "{reason:?} should be negative");
+        }
+    }
+
+    #[test]
+    fn positive_reasons_are_not_negative() {
+        let positives = [
+            JobFeedbackReason::InterestingChallenge,
+            JobFeedbackReason::GreatCompany,
+            JobFeedbackReason::GoodSalary,
+            JobFeedbackReason::RemoteOk,
+            JobFeedbackReason::GoodTechStack,
+            JobFeedbackReason::FastGrowthCompany,
+            JobFeedbackReason::NiceTitle,
+        ];
+        for reason in positives {
+            assert!(!reason.is_negative(), "{reason:?} should not be negative");
+        }
+    }
+
+    #[test]
+    fn feedback_state_from_none_sources_returns_default() {
+        let state = JobFeedbackState::from_sources(None, None);
+        assert_eq!(state, JobFeedbackState::default());
+    }
+
+    #[test]
+    fn feedback_state_from_sources_merges_flags_and_signals() {
+        let job_record = JobFeedbackRecord {
+            profile_id: "p1".to_string(),
+            job_id: "j1".to_string(),
+            saved: true,
+            hidden: false,
+            bad_fit: true,
+            salary_signal: Some(SalaryFeedbackSignal::BelowExpectation),
+            interest_rating: Some(2),
+            work_mode_signal: Some(WorkModeFeedbackSignal::DealBreaker),
+            legitimacy_signal: None,
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+        };
+        let company_record = CompanyFeedbackRecord {
+            profile_id: "p1".to_string(),
+            company_name: "Acme".to_string(),
+            normalized_company_name: "acme".to_string(),
+            status: CompanyFeedbackStatus::Blacklist,
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+        };
+
+        let state = JobFeedbackState::from_sources(Some(&job_record), Some(&company_record));
+
+        assert!(state.saved);
+        assert!(!state.hidden);
+        assert!(state.bad_fit);
+        assert_eq!(state.salary_signal, Some(SalaryFeedbackSignal::BelowExpectation));
+        assert_eq!(state.interest_rating, Some(2));
+        assert_eq!(state.work_mode_signal, Some(WorkModeFeedbackSignal::DealBreaker));
+        assert_eq!(state.company_status, Some(CompanyFeedbackStatus::Blacklist));
+        assert!(state.legitimacy_signal.is_none());
+    }
+
+    #[test]
+    fn feedback_state_company_none_when_no_company_record() {
+        let job_record = JobFeedbackRecord {
+            profile_id: "p1".to_string(),
+            job_id: "j1".to_string(),
+            saved: false,
+            hidden: false,
+            bad_fit: false,
+            salary_signal: None,
+            interest_rating: None,
+            work_mode_signal: None,
+            legitimacy_signal: None,
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+        };
+
+        let state = JobFeedbackState::from_sources(Some(&job_record), None);
+
+        assert!(state.company_status.is_none());
+    }
+}

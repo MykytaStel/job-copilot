@@ -1,0 +1,12 @@
+{
+  "task_id": "fb349ef7-1665-4ed1-a7f0-cdf29ff6bcbe",
+  "profile_id": "profile-1",
+  "status": "failed",
+  "result": null,
+  "error": "engine-api unreachable: boom",
+  "artifact_path": "/Users/mykyta/Documents/projects/job-copilot-ua-starter/apps/ml/models/profiles/profile-1/trained-reranker-v3.json",
+  "started_at": "2026-04-23T17:51:45Z",
+  "finished_at": "2026-04-23T17:51:45Z",
+  "promotion_decision": null,
+  "metrics_version": null
+}

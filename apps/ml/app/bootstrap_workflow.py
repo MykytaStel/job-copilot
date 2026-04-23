@@ -17,8 +17,10 @@ from app.trained_reranker.artifact import DEFAULT_FEATURE_NAMES
 from app.trained_reranker_config import DEFAULT_TRAINED_RERANKER_MODEL_PATH
 from app.trained_reranker import train_model
 from app.trained_reranker.bpr_model import bpr_candidate_available, train_bpr_model
+from app.trained_reranker.feature_stats import compute_ablation_candidates, compute_feature_statistics
 from app.trained_reranker.lgbm_model import distill_lgbm_labels, lgbm_candidate_available
 from app.trained_reranker.model import TrainedRerankerModel
+from app.trained_reranker.validation import validate_label_distribution
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,6 @@ METRICS_VERSION = "reranker_eval_v2"
 MIN_POSITIVE_EXAMPLES = 3
 MIN_MEDIUM_EXAMPLES = 3
 MIN_NEGATIVE_EXAMPLES = 5
-ABLATED_FEATURES = {"learned_reranker_score", "learned_reranker_score_delta"}
 
 FetchLabeledExamples = Callable[[str, str | None], Awaitable[OutcomeDataset]]
 
@@ -91,6 +92,27 @@ async def bootstrap_and_retrain(
             reason=reason,
         )
 
+    label_dist = validate_label_distribution(dataset)
+    if label_dist.label_policy_version_mismatch:
+        logger.warning(
+            "label_policy_version mismatch, skipping retrain: %s (profile=%s)",
+            label_dist.reason,
+            profile_id,
+        )
+        return BootstrapWorkflowResult.insufficient_examples(
+            example_count=example_count,
+            min_examples=min_examples,
+            profile_id=profile_id,
+            artifact_path=artifact_path,
+            model_path=compatibility_model_path,
+            started_at=started_at,
+            finished_at=_utc_now_iso(),
+            promotion_decision="skipped_policy_version_mismatch",
+            metrics_version=METRICS_VERSION,
+            reason=label_dist.reason,
+        )
+
+    feature_statistics = compute_feature_statistics(dataset.examples)
     train_examples, _ = temporal_train_test_split(dataset.examples)
     candidate_dataset = (
         OutcomeDataset(
@@ -102,18 +124,29 @@ async def bootstrap_and_retrain(
         else dataset
     )
     baseline_feature_names = list(DEFAULT_FEATURE_NAMES)
+    ablation_candidates = compute_ablation_candidates(
+        baseline_feature_names, train_examples or dataset.examples
+    )
     ablated_feature_names = [
-        feature_name for feature_name in baseline_feature_names if feature_name not in ABLATED_FEATURES
+        feature_name for feature_name in baseline_feature_names if feature_name not in ablation_candidates
     ]
 
     candidate_model = await asyncio.to_thread(
-        lambda: train_model([candidate_dataset], feature_names=baseline_feature_names)
+        lambda: train_model(
+            [candidate_dataset],
+            feature_names=baseline_feature_names,
+            feature_statistics=feature_statistics,
+        )
     )
     baseline_evaluation = await asyncio.to_thread(
         lambda: evaluate_dataset(dataset, trained_model=candidate_model)
     )
     ablated_candidate_model = await asyncio.to_thread(
-        lambda: train_model([candidate_dataset], feature_names=ablated_feature_names)
+        lambda: train_model(
+            [candidate_dataset],
+            feature_names=ablated_feature_names,
+            feature_statistics=feature_statistics,
+        )
     )
     ablated_evaluation = await asyncio.to_thread(
         lambda: evaluate_dataset(dataset, trained_model=ablated_candidate_model)
@@ -127,7 +160,11 @@ async def bootstrap_and_retrain(
     benchmark = None
     if bpr_candidate_available([candidate_dataset]):
         bpr_model = await asyncio.to_thread(
-            lambda: train_bpr_model([candidate_dataset], feature_names=selected_feature_names)
+            lambda: train_bpr_model(
+                [candidate_dataset],
+                feature_names=selected_feature_names,
+                feature_statistics=feature_statistics,
+            )
         )
         bpr_evaluation = await asyncio.to_thread(
             lambda: evaluate_dataset(dataset, trained_model=bpr_model)

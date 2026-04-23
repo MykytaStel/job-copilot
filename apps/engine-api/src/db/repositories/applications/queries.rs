@@ -1,154 +1,20 @@
-use sqlx::FromRow;
 use uuid::Uuid;
 
-use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::application::model::{
-    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote,
-    ApplicationOutcome, Contact, CreateApplication, CreateApplicationContact, CreateContact,
-    CreateNote, Offer, Task, UpdateApplication, UpsertOffer,
+    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, Contact,
+    CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer, Task,
+    UpdateApplication, UpsertOffer,
 };
-use crate::domain::job::model::Job;
-use crate::domain::resume::model::ResumeVersion;
 use crate::domain::search::global::ApplicationSearchHit;
 
-#[derive(Clone)]
-pub struct ApplicationsRepository {
-    database: Database,
-}
-
-#[derive(FromRow)]
-struct ApplicationRow {
-    id: String,
-    job_id: String,
-    resume_id: Option<String>,
-    status: String,
-    applied_at: Option<String>,
-    due_date: Option<String>,
-    outcome: Option<String>,
-    outcome_date: Option<String>,
-    rejection_stage: Option<String>,
-    updated_at: String,
-}
-
-#[derive(FromRow)]
-struct NoteRow {
-    id: String,
-    application_id: String,
-    content: String,
-    created_at: String,
-}
-
-#[derive(FromRow)]
-struct ContactRow {
-    id: String,
-    name: String,
-    email: Option<String>,
-    phone: Option<String>,
-    linkedin_url: Option<String>,
-    company: Option<String>,
-    role: Option<String>,
-    created_at: String,
-}
-
-#[derive(FromRow)]
-struct ContactJoinRow {
-    id: String,
-    application_id: String,
-    relationship: String,
-    contact_id: String,
-    contact_name: String,
-    contact_email: Option<String>,
-    contact_phone: Option<String>,
-    contact_linkedin_url: Option<String>,
-    contact_company: Option<String>,
-    contact_role: Option<String>,
-    contact_created_at: String,
-}
-
-#[derive(FromRow)]
-struct OfferRow {
-    id: String,
-    application_id: String,
-    status: String,
-    compensation_min: Option<i32>,
-    compensation_max: Option<i32>,
-    compensation_currency: Option<String>,
-    starts_at: Option<String>,
-    notes: Option<String>,
-    created_at: String,
-    updated_at: String,
-}
-
-#[derive(FromRow)]
-struct ActivityRow {
-    id: String,
-    application_id: String,
-    activity_type: String,
-    description: String,
-    happened_at: String,
-    created_at: String,
-}
-
-#[derive(FromRow)]
-struct TaskRow {
-    id: String,
-    application_id: String,
-    title: String,
-    remind_at: Option<String>,
-    done: bool,
-    created_at: String,
-}
-
-#[derive(FromRow)]
-struct ApplicationDetailRow {
-    application_id: String,
-    application_job_id: String,
-    application_resume_id: Option<String>,
-    application_status: String,
-    application_applied_at: Option<String>,
-    application_due_date: Option<String>,
-    application_outcome: Option<String>,
-    application_outcome_date: Option<String>,
-    application_rejection_stage: Option<String>,
-    application_updated_at: String,
-    job_id: String,
-    job_title: String,
-    job_company_name: String,
-    job_remote_type: Option<String>,
-    job_seniority: Option<String>,
-    job_description_text: String,
-    job_salary_min: Option<i32>,
-    job_salary_max: Option<i32>,
-    job_salary_currency: Option<String>,
-    job_posted_at: Option<String>,
-    job_last_seen_at: String,
-    job_is_active: bool,
-    resume_version: Option<i32>,
-    resume_filename: Option<String>,
-    resume_raw_text: Option<String>,
-    resume_is_active: Option<bool>,
-    resume_uploaded_at: Option<String>,
-}
-
-#[derive(FromRow)]
-struct ApplicationSearchHitRow {
-    id: String,
-    job_id: String,
-    resume_id: Option<String>,
-    status: String,
-    applied_at: Option<String>,
-    due_date: Option<String>,
-    updated_at: String,
-    job_title: String,
-    company_name: String,
-}
+use super::ApplicationsRepository;
+use super::rows::{
+    ActivityRow, ApplicationDetailRow, ApplicationRow, ApplicationSearchHitRow, ContactJoinRow,
+    ContactRow, NoteRow, OfferRow, TaskRow,
+};
 
 impl ApplicationsRepository {
-    pub fn new(database: Database) -> Self {
-        Self { database }
-    }
-
     pub async fn create(
         &self,
         application: &CreateApplication,
@@ -307,11 +173,11 @@ impl ApplicationsRepository {
         .fetch_all(pool)
         .await?
         .into_iter()
-        .map(|r| ApplicationNote {
-            id: r.id,
-            application_id: r.application_id,
-            content: r.content,
-            created_at: r.created_at,
+        .map(|row| ApplicationNote {
+            id: row.id,
+            application_id: row.application_id,
+            content: row.content,
+            created_at: row.created_at,
         })
         .collect();
 
@@ -338,21 +204,7 @@ impl ApplicationsRepository {
         .fetch_all(pool)
         .await?
         .into_iter()
-        .map(|r| ApplicationContact {
-            id: r.id,
-            application_id: r.application_id,
-            relationship: r.relationship,
-            contact: Contact {
-                id: r.contact_id,
-                name: r.contact_name,
-                email: r.contact_email,
-                phone: r.contact_phone,
-                linkedin_url: r.contact_linkedin_url,
-                company: r.contact_company,
-                role: r.contact_role,
-                created_at: r.contact_created_at,
-            },
-        })
+        .map(ApplicationContact::from)
         .collect();
 
         let activities: Vec<Activity> = sqlx::query_as::<_, ActivityRow>(
@@ -373,13 +225,13 @@ impl ApplicationsRepository {
         .fetch_all(pool)
         .await?
         .into_iter()
-        .map(|r| Activity {
-            id: r.id,
-            application_id: r.application_id,
-            activity_type: r.activity_type,
-            description: r.description,
-            happened_at: r.happened_at,
-            created_at: r.created_at,
+        .map(|row| Activity {
+            id: row.id,
+            application_id: row.application_id,
+            activity_type: row.activity_type,
+            description: row.description,
+            happened_at: row.happened_at,
+            created_at: row.created_at,
         })
         .collect();
 
@@ -401,13 +253,13 @@ impl ApplicationsRepository {
         .fetch_all(pool)
         .await?
         .into_iter()
-        .map(|r| Task {
-            id: r.id,
-            application_id: r.application_id,
-            title: r.title,
-            remind_at: r.remind_at,
-            done: r.done,
-            created_at: r.created_at,
+        .map(|row| Task {
+            id: row.id,
+            application_id: row.application_id,
+            title: row.title,
+            remind_at: row.remind_at,
+            done: row.done,
+            created_at: row.created_at,
         })
         .collect();
 
@@ -535,18 +387,28 @@ impl ApplicationsRepository {
         .bind(id)
         .bind(&update.status)
         .bind(update.due_date.is_some())
-        .bind(update.due_date.as_ref().and_then(|v| v.as_deref()))
+        .bind(update.due_date.as_ref().and_then(|value| value.as_deref()))
         .bind(update.outcome.is_some())
         .bind(
             update
                 .outcome
                 .as_ref()
-                .and_then(|v| v.as_ref().map(|o| o.as_str())),
+                .and_then(|value| value.as_ref().map(|outcome| outcome.as_str())),
         )
         .bind(update.outcome_date.is_some())
-        .bind(update.outcome_date.as_ref().and_then(|v| v.as_deref()))
+        .bind(
+            update
+                .outcome_date
+                .as_ref()
+                .and_then(|value| value.as_deref()),
+        )
         .bind(update.rejection_stage.is_some())
-        .bind(update.rejection_stage.as_ref().and_then(|v| v.as_deref()))
+        .bind(
+            update
+                .rejection_stage
+                .as_ref()
+                .and_then(|value| value.as_deref()),
+        )
         .fetch_optional(pool)
         .await?;
 
@@ -815,220 +677,5 @@ impl ApplicationsRepository {
         .await?;
 
         Ok(row.map(Application::from))
-    }
-}
-
-impl From<ApplicationRow> for Application {
-    fn from(row: ApplicationRow) -> Self {
-        Self {
-            id: row.id,
-            job_id: row.job_id,
-            resume_id: row.resume_id,
-            status: row.status,
-            applied_at: row.applied_at,
-            due_date: row.due_date,
-            outcome: row.outcome.as_deref().and_then(ApplicationOutcome::parse),
-            outcome_date: row.outcome_date,
-            rejection_stage: row.rejection_stage,
-            updated_at: row.updated_at,
-        }
-    }
-}
-
-impl From<ApplicationSearchHitRow> for ApplicationSearchHit {
-    fn from(row: ApplicationSearchHitRow) -> Self {
-        Self {
-            id: row.id,
-            job_id: row.job_id,
-            resume_id: row.resume_id,
-            status: row.status,
-            applied_at: row.applied_at,
-            due_date: row.due_date,
-            updated_at: row.updated_at,
-            job_title: row.job_title,
-            company_name: row.company_name,
-        }
-    }
-}
-
-impl
-    TryFrom<(
-        ApplicationDetailRow,
-        Option<Offer>,
-        Vec<ApplicationNote>,
-        Vec<ApplicationContact>,
-        Vec<Activity>,
-        Vec<Task>,
-    )> for ApplicationDetail
-{
-    type Error = RepositoryError;
-
-    fn try_from(
-        (row, offer, notes, contacts, activities, tasks): (
-            ApplicationDetailRow,
-            Option<Offer>,
-            Vec<ApplicationNote>,
-            Vec<ApplicationContact>,
-            Vec<Activity>,
-            Vec<Task>,
-        ),
-    ) -> Result<Self, Self::Error> {
-        let resume = match row.resume_version {
-            None => None,
-            Some(version) => Some(ResumeVersion {
-                id: row.application_resume_id.clone().ok_or_else(|| {
-                    RepositoryError::InvalidData {
-                        message: "resume_id missing on joined resume row".into(),
-                    }
-                })?,
-                version,
-                filename: row
-                    .resume_filename
-                    .ok_or_else(|| RepositoryError::InvalidData {
-                        message: "resume filename missing on joined resume row".into(),
-                    })?,
-                raw_text: row
-                    .resume_raw_text
-                    .ok_or_else(|| RepositoryError::InvalidData {
-                        message: "resume raw_text missing on joined resume row".into(),
-                    })?,
-                is_active: row
-                    .resume_is_active
-                    .ok_or_else(|| RepositoryError::InvalidData {
-                        message: "resume is_active missing on joined resume row".into(),
-                    })?,
-                uploaded_at: row.resume_uploaded_at.ok_or_else(|| {
-                    RepositoryError::InvalidData {
-                        message: "resume uploaded_at missing on joined resume row".into(),
-                    }
-                })?,
-            }),
-        };
-
-        Ok(Self {
-            application: Application {
-                id: row.application_id,
-                job_id: row.application_job_id,
-                resume_id: row.application_resume_id,
-                status: row.application_status,
-                applied_at: row.application_applied_at,
-                due_date: row.application_due_date,
-                outcome: row
-                    .application_outcome
-                    .as_deref()
-                    .and_then(ApplicationOutcome::parse),
-                outcome_date: row.application_outcome_date,
-                rejection_stage: row.application_rejection_stage,
-                updated_at: row.application_updated_at,
-            },
-            job: Job {
-                id: row.job_id,
-                title: row.job_title,
-                company_name: row.job_company_name,
-                location: None,
-                remote_type: row.job_remote_type,
-                seniority: row.job_seniority,
-                description_text: row.job_description_text,
-                salary_min: row.job_salary_min,
-                salary_max: row.job_salary_max,
-                salary_currency: row.job_salary_currency,
-                posted_at: row.job_posted_at,
-                last_seen_at: row.job_last_seen_at,
-                is_active: row.job_is_active,
-            },
-            resume,
-            offer,
-            notes,
-            contacts,
-            activities,
-            tasks,
-        })
-    }
-}
-
-impl From<ContactRow> for Contact {
-    fn from(row: ContactRow) -> Self {
-        Self {
-            id: row.id,
-            name: row.name,
-            email: row.email,
-            phone: row.phone,
-            linkedin_url: row.linkedin_url,
-            company: row.company,
-            role: row.role,
-            created_at: row.created_at,
-        }
-    }
-}
-
-impl From<ContactJoinRow> for ApplicationContact {
-    fn from(row: ContactJoinRow) -> Self {
-        Self {
-            id: row.id,
-            application_id: row.application_id,
-            relationship: row.relationship,
-            contact: Contact {
-                id: row.contact_id,
-                name: row.contact_name,
-                email: row.contact_email,
-                phone: row.contact_phone,
-                linkedin_url: row.contact_linkedin_url,
-                company: row.contact_company,
-                role: row.contact_role,
-                created_at: row.contact_created_at,
-            },
-        }
-    }
-}
-
-impl From<OfferRow> for Offer {
-    fn from(row: OfferRow) -> Self {
-        Self {
-            id: row.id,
-            application_id: row.application_id,
-            status: row.status,
-            compensation_min: row.compensation_min,
-            compensation_max: row.compensation_max,
-            compensation_currency: row.compensation_currency,
-            starts_at: row.starts_at,
-            notes: row.notes,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::db::Database;
-    use crate::db::repositories::{ApplicationsRepository, RepositoryError};
-    use crate::domain::application::model::CreateApplication;
-
-    #[tokio::test]
-    async fn returns_disabled_error_without_database() {
-        let repository = ApplicationsRepository::new(Database::disabled());
-
-        let error = repository
-            .get_by_id("application-1")
-            .await
-            .expect_err("repository should fail without configured database");
-
-        assert!(matches!(error, RepositoryError::DatabaseDisabled));
-    }
-
-    #[tokio::test]
-    async fn create_returns_disabled_without_database() {
-        let repository = ApplicationsRepository::new(Database::disabled());
-
-        let error = repository
-            .create(&CreateApplication {
-                job_id: "job-1".to_string(),
-                status: "saved".to_string(),
-                applied_at: None,
-            })
-            .await
-            .expect_err("repository should fail without configured database");
-
-        assert!(matches!(error, RepositoryError::DatabaseDisabled));
     }
 }

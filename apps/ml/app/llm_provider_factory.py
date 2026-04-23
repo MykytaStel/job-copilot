@@ -6,7 +6,7 @@ from app.enrichment.profile_insights.contract import ProfileInsightsProviderErro
 from app.enrichment.weekly_guidance.errors import WeeklyGuidanceProviderError
 from app.llm_provider_remote import OllamaEnrichmentProvider, OpenAIEnrichmentProvider
 from app.llm_provider_template import TemplateEnrichmentProvider
-from app.settings import DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS, get_runtime_settings
+from app.settings import get_runtime_settings
 
 
 EnrichmentProvider = (
@@ -36,7 +36,7 @@ def build_enrichment_provider() -> EnrichmentProvider:
         return OllamaEnrichmentProvider(
             base_url=settings.ollama_base_url,
             model=settings.ollama_model,
-            timeout_seconds=DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS,
+            timeout_seconds=settings.llm_request_timeout_seconds,
         )
 
     raise ProfileInsightsProviderError(f"Unsupported ML_LLM_PROVIDER: {provider_name}")
