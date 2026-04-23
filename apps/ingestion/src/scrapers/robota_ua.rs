@@ -16,9 +16,9 @@ use tracing::{info, warn};
 
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
-    DetailSnapshot, ScraperConfig, cleanup_description_text, infer_remote_type, infer_seniority,
-    merge_detail_into_result, normalize_company_name, normalized_non_empty, parse_salary_range,
-    polite_delay,
+    DetailSnapshot, ScraperConfig, cleanup_description_text, headers::build_default_headers,
+    infer_remote_type, infer_seniority, merge_detail_into_result, normalize_company_name,
+    normalized_non_empty, parse_salary_range, polite_delay,
 };
 
 const SOURCE: &str = "robota_ua";
@@ -31,17 +31,18 @@ pub struct RobotaUaScraper {
 
 impl RobotaUaScraper {
     pub fn new() -> Result<Self, String> {
+        let headers = build_default_headers(
+            "application/json, text/plain, */*",
+            "uk-UA,uk;q=0.9,en;q=0.8",
+            &[
+                ("Origin", "https://robota.ua"),
+                ("Referer", "https://robota.ua/"),
+            ],
+        )?;
         let client = Client::builder()
             .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
             .timeout(Duration::from_secs(20))
-            .default_headers({
-                let mut h = reqwest::header::HeaderMap::new();
-                h.insert("Accept", "application/json, text/plain, */*".parse().unwrap());
-                h.insert("Accept-Language", "uk-UA,uk;q=0.9,en;q=0.8".parse().unwrap());
-                h.insert("Origin", "https://robota.ua".parse().unwrap());
-                h.insert("Referer", "https://robota.ua/".parse().unwrap());
-                h
-            })
+            .default_headers(headers)
             .build()
             .map_err(|e| format!("failed to build HTTP client: {e}"))?;
         Ok(Self { client })

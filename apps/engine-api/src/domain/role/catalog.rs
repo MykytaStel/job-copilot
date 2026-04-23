@@ -214,3 +214,94 @@ pub fn find_role_by_key(canonical_key: &str) -> Option<&'static RoleMetadata> {
         .iter()
         .find(|role| role.canonical_key == canonical_key)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::domain::role::RoleId;
+
+    use super::{ROLE_CATALOG, find_role, find_role_by_key};
+
+    #[test]
+    fn find_role_returns_matching_metadata_for_every_variant() {
+        let variants = [
+            RoleId::FrontendEngineer,
+            RoleId::BackendEngineer,
+            RoleId::FullstackEngineer,
+            RoleId::MobileEngineer,
+            RoleId::DevopsEngineer,
+            RoleId::DataEngineer,
+            RoleId::MlEngineer,
+            RoleId::QaEngineer,
+            RoleId::ProductDesigner,
+            RoleId::ProductManager,
+            RoleId::ProjectManager,
+            RoleId::TechLead,
+            RoleId::EngineeringManager,
+            RoleId::Generalist,
+        ];
+        for variant in variants {
+            let metadata = find_role(variant);
+            assert_eq!(
+                metadata.id, variant,
+                "catalog entry for {variant:?} has wrong id"
+            );
+        }
+    }
+
+    #[test]
+    fn find_role_by_key_returns_metadata_for_every_canonical_key() {
+        for entry in ROLE_CATALOG {
+            let found = find_role_by_key(entry.canonical_key)
+                .unwrap_or_else(|| panic!("canonical key '{}' not found", entry.canonical_key));
+            assert_eq!(found.id, entry.id);
+        }
+    }
+
+    #[test]
+    fn find_role_by_key_returns_none_for_unknown_key() {
+        assert!(find_role_by_key("not_a_real_role").is_none());
+        assert!(find_role_by_key("").is_none());
+    }
+
+    #[test]
+    fn all_canonical_keys_are_unique() {
+        let mut keys: Vec<&str> = ROLE_CATALOG
+            .iter()
+            .map(|entry| entry.canonical_key)
+            .collect();
+        let original_len = keys.len();
+        keys.dedup();
+        keys.sort_unstable();
+        keys.dedup();
+        assert_eq!(
+            keys.len(),
+            original_len,
+            "duplicate canonical keys in ROLE_CATALOG"
+        );
+    }
+
+    #[test]
+    fn generalist_is_the_only_fallback_and_has_no_family() {
+        let fallbacks: Vec<_> = ROLE_CATALOG
+            .iter()
+            .filter(|entry| entry.is_fallback)
+            .collect();
+        assert_eq!(fallbacks.len(), 1, "expected exactly one fallback role");
+        assert_eq!(fallbacks[0].id, RoleId::Generalist);
+        assert!(
+            fallbacks[0].family.is_none(),
+            "Generalist must have no family"
+        );
+    }
+
+    #[test]
+    fn non_fallback_roles_all_have_a_family() {
+        for entry in ROLE_CATALOG.iter().filter(|entry| !entry.is_fallback) {
+            assert!(
+                entry.family.is_some(),
+                "non-fallback role '{}' has no family",
+                entry.canonical_key
+            );
+        }
+    }
+}

@@ -35,6 +35,15 @@ def build_retrying(retryable_errors: tuple[type[BaseException], ...]) -> Retryin
     )
 
 
+def build_rate_limit_retrying(rate_limit_error: type[BaseException]) -> Retrying:
+    return Retrying(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(min=1, max=60),
+        retry=retry_if_exception_type(rate_limit_error),
+        reraise=True,
+    )
+
+
 def build_async_retrying(retryable_errors: tuple[type[BaseException], ...]) -> AsyncRetrying:
     return AsyncRetrying(
         stop=stop_after_attempt(3),
