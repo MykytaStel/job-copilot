@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.profile_insights import (
+from app.enrichment.profile_insights.contract import (
     MAX_LIST_ITEMS,
     LlmContextAnalyzedProfile,
     LlmContextEvidenceEntry,

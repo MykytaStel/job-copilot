@@ -2,16 +2,20 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.application_coach import ApplicationCoachResponse
-from app.cover_letter_draft import CoverLetterDraftResponse
-from app.job_fit_explanation import (
+from app.enrichment.application_coach.contract import ApplicationCoachResponse
+from app.enrichment.cover_letter_draft.contract import CoverLetterDraftResponse
+from app.enrichment.job_fit_explanation.contract import (
     DeterministicFitContext,
     FeedbackStateContext,
     JobFitExplanationResponse,
     RankedJobContext,
     SearchProfileContext,
 )
-from app.profile_insights import MAX_LIST_ITEMS, LlmContextAnalyzedProfile, sanitize_text
+from app.enrichment.profile_insights.contract import (
+    MAX_LIST_ITEMS,
+    LlmContextAnalyzedProfile,
+    sanitize_text,
+)
 
 MAX_SUMMARY_LENGTH = 320
 MAX_LIST_TEXT_LENGTH = 200

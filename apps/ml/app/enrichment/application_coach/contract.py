@@ -2,14 +2,18 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.job_fit_explanation import (
+from app.enrichment.job_fit_explanation.contract import (
     DeterministicFitContext,
     FeedbackStateContext,
     JobFitExplanationResponse,
     RankedJobContext,
     SearchProfileContext,
 )
-from app.profile_insights import MAX_LIST_ITEMS, LlmContextAnalyzedProfile, sanitize_text
+from app.enrichment.profile_insights.contract import (
+    MAX_LIST_ITEMS,
+    LlmContextAnalyzedProfile,
+    sanitize_text,
+)
 
 
 class ApplicationCoachRequest(BaseModel):
