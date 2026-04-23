@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.interview_prep import InterviewPrepRequest
+from app.enrichment.interview_prep.contract import InterviewPrepRequest
 
 
 def build_interview_prep(context: InterviewPrepRequest) -> dict[str, Any]:

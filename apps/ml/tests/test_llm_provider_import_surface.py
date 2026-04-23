@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any, get_args
 
 from app.application_coach import ApplicationCoachRequest as LegacyApplicationCoachRequest
@@ -31,6 +32,8 @@ from app.llm_providers.common import PromptPayload
 from app.llm_providers.ollama_provider import OllamaEnrichmentProvider
 from app.llm_providers.openai_provider import OpenAIEnrichmentProvider
 
+ML_APP_ROOT = Path(__file__).resolve().parents[1]
+
 
 def _loaded_enrichment_modules(module_name: str) -> set[str]:
     script = """
@@ -46,6 +49,27 @@ print(json.dumps(loaded))
         [sys.executable, "-c", script, module_name],
         check=True,
         capture_output=True,
+        cwd=ML_APP_ROOT,
+        text=True,
+    )
+    return set(json.loads(completed.stdout))
+
+
+def _loaded_app_modules(module_name: str) -> set[str]:
+    script = """
+import importlib
+import json
+import sys
+
+importlib.import_module(sys.argv[1])
+loaded = sorted(name for name in sys.modules if name.startswith("app."))
+print(json.dumps(loaded))
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script, module_name],
+        check=True,
+        capture_output=True,
+        cwd=ML_APP_ROOT,
         text=True,
     )
     return set(json.loads(completed.stdout))
@@ -198,3 +222,30 @@ def test_prompt_and_parser_imports_do_not_pull_unrelated_enrichment_reexports():
     for module_name, absent_modules in expected_absent.items():
         loaded_modules = _loaded_enrichment_modules(module_name)
         assert absent_modules.isdisjoint(loaded_modules), module_name
+
+
+def test_template_builder_modules_import_enrichment_contracts_without_legacy_flat_modules():
+    expected_modules = {
+        "app.template_application_coach": {"app.enrichment.application_coach.contract"},
+        "app.template_cover_letter_draft": {"app.enrichment.cover_letter_draft.contract"},
+        "app.template_interview_prep": {"app.enrichment.interview_prep.contract"},
+        "app.template_job_fit_explanation": {"app.enrichment.job_fit_explanation.contract"},
+        "app.template_profile_insights": {"app.enrichment.profile_insights.contract"},
+        "app.template_weekly_guidance": {
+            "app.enrichment.weekly_guidance.contract",
+            "app.enrichment.weekly_guidance.prompt",
+        },
+    }
+    legacy_modules = {
+        "app.application_coach",
+        "app.cover_letter_draft",
+        "app.interview_prep",
+        "app.job_fit_explanation",
+        "app.profile_insights",
+        "app.weekly_guidance",
+    }
+
+    for module_name, required_modules in expected_modules.items():
+        loaded_modules = _loaded_app_modules(module_name)
+        assert required_modules.issubset(loaded_modules), module_name
+        assert legacy_modules.isdisjoint(loaded_modules), module_name

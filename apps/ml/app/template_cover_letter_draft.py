@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.cover_letter_draft import CoverLetterDraftRequest
+from app.enrichment.cover_letter_draft.contract import CoverLetterDraftRequest
 
 
 def build_cover_letter_draft(context: CoverLetterDraftRequest) -> dict[str, Any]:

@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.profile_insights import LlmContextRequest, ProfileInsightsPrompt
+from app.enrichment.profile_insights.contract import LlmContextRequest, ProfileInsightsPrompt
 
 
 def build_profile_insights(

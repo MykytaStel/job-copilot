@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.application_coach import ApplicationCoachRequest
+from app.enrichment.application_coach.contract import ApplicationCoachRequest
 
 
 def build_application_coach(context: ApplicationCoachRequest) -> dict[str, Any]:
