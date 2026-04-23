@@ -32,6 +32,18 @@ from app.enrichment.profile_insights.contract import (
 )
 from app.enrichment.profile_insights import LlmContextRequest, ProfileInsightsPrompt
 from app.enrichment.profile_insights.contract import sanitize_text as profile_insights_sanitize_text
+from app.enrichment.shared_job_fit.contract import (
+    CurrentJobFeedbackState as SharedCurrentJobFeedbackState,
+)
+from app.enrichment.shared_job_fit.contract import (
+    DeterministicFitContext as SharedDeterministicFitContext,
+)
+from app.enrichment.shared_job_fit.contract import FeedbackStateContext as SharedFeedbackStateContext
+from app.enrichment.shared_job_fit.contract import RankedJobContext as SharedRankedJobContext
+from app.enrichment.shared_job_fit.contract import SearchProfileContext as SharedSearchProfileContext
+from app.enrichment.shared_job_fit.contract import (
+    SearchProfileRoleCandidate as SharedSearchProfileRoleCandidate,
+)
 from app.enrichment.shared_profile.contract import (
     LlmContextAnalyzedProfile as SharedLlmContextAnalyzedProfile,
 )
@@ -184,6 +196,65 @@ def test_profile_insights_contract_reexports_shared_profile_contract_symbols():
     assert ProfileInsightsLlmContextFeedbackSummary is SharedLlmContextFeedbackSummary
 
 
+def test_job_fit_explanation_contract_reexports_shared_job_fit_contract_symbols():
+    from app.enrichment.job_fit_explanation.contract import CurrentJobFeedbackState
+    from app.enrichment.job_fit_explanation.contract import DeterministicFitContext
+    from app.enrichment.job_fit_explanation.contract import FeedbackStateContext
+    from app.enrichment.job_fit_explanation.contract import RankedJobContext
+    from app.enrichment.job_fit_explanation.contract import SearchProfileContext
+    from app.enrichment.job_fit_explanation.contract import SearchProfileRoleCandidate
+
+    assert SearchProfileRoleCandidate is SharedSearchProfileRoleCandidate
+    assert SearchProfileContext is SharedSearchProfileContext
+    assert RankedJobContext is SharedRankedJobContext
+    assert DeterministicFitContext is SharedDeterministicFitContext
+    assert CurrentJobFeedbackState is SharedCurrentJobFeedbackState
+    assert FeedbackStateContext is SharedFeedbackStateContext
+
+
+def test_downstream_contracts_import_shared_job_fit_types_from_internal_module():
+    expected_shared_imports = {
+        "app/enrichment/application_coach/contract.py": {
+            "DeterministicFitContext",
+            "FeedbackStateContext",
+            "RankedJobContext",
+            "SearchProfileContext",
+        },
+        "app/enrichment/cover_letter_draft/contract.py": {
+            "DeterministicFitContext",
+            "FeedbackStateContext",
+            "RankedJobContext",
+            "SearchProfileContext",
+        },
+        "app/enrichment/interview_prep/contract.py": {
+            "DeterministicFitContext",
+            "FeedbackStateContext",
+            "RankedJobContext",
+            "SearchProfileContext",
+        },
+    }
+
+    for relative_path, expected_names in expected_shared_imports.items():
+        contract_path = ML_APP_ROOT / relative_path
+        parsed = ast.parse(contract_path.read_text())
+
+        imported_from_shared_job_fit = {
+            alias.name
+            for node in parsed.body
+            if isinstance(node, ast.ImportFrom) and node.module == "app.enrichment.shared_job_fit.contract"
+            for alias in node.names
+        }
+        imported_from_job_fit_explanation = {
+            alias.name
+            for node in parsed.body
+            if isinstance(node, ast.ImportFrom) and node.module == "app.enrichment.job_fit_explanation.contract"
+            for alias in node.names
+        }
+
+        assert expected_names.issubset(imported_from_shared_job_fit), relative_path
+        assert expected_names.isdisjoint(imported_from_job_fit_explanation), relative_path
+
+
 def test_prompt_and_parser_imports_do_not_pull_unrelated_enrichment_reexports():
     expected_absent = {
         "app.enrichment.application_coach.prompt": {
@@ -317,19 +388,31 @@ def test_enrichment_contracts_import_shared_profile_module_directly():
             "forbidden": set(),
         },
         "app/enrichment/job_fit_explanation/contract.py": {
-            "required": {"app.enrichment.shared_profile.contract"},
+            "required": {
+                "app.enrichment.shared_job_fit.contract",
+                "app.enrichment.shared_profile.contract",
+            },
             "forbidden": {"app.enrichment.profile_insights.contract"},
         },
         "app/enrichment/application_coach/contract.py": {
-            "required": {"app.enrichment.shared_profile.contract"},
+            "required": {
+                "app.enrichment.shared_job_fit.contract",
+                "app.enrichment.shared_profile.contract",
+            },
             "forbidden": {"app.enrichment.profile_insights.contract"},
         },
         "app/enrichment/cover_letter_draft/contract.py": {
-            "required": {"app.enrichment.shared_profile.contract"},
+            "required": {
+                "app.enrichment.shared_job_fit.contract",
+                "app.enrichment.shared_profile.contract",
+            },
             "forbidden": {"app.enrichment.profile_insights.contract"},
         },
         "app/enrichment/interview_prep/contract.py": {
-            "required": {"app.enrichment.shared_profile.contract"},
+            "required": {
+                "app.enrichment.shared_job_fit.contract",
+                "app.enrichment.shared_profile.contract",
+            },
             "forbidden": {"app.enrichment.profile_insights.contract"},
         },
         "app/enrichment/weekly_guidance/contract.py": {

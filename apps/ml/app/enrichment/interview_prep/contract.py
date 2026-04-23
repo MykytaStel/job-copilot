@@ -5,9 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.enrichment.application_coach.contract import ApplicationCoachResponse
 from app.enrichment.cover_letter_draft.contract import CoverLetterDraftResponse
 from app.enrichment.job_fit_explanation.contract import (
+    JobFitExplanationResponse,
+)
+from app.enrichment.shared_job_fit.contract import (
     DeterministicFitContext,
     FeedbackStateContext,
-    JobFitExplanationResponse,
     RankedJobContext,
     SearchProfileContext,
 )
