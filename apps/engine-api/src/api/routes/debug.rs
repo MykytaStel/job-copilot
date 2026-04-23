@@ -25,7 +25,7 @@ mod tests {
     fn trained_reranker_model() -> TrainedRerankerModel {
         TrainedRerankerModel::from_json_str(
             r#"{
-              "artifact_version": "trained_reranker_v2",
+              "artifact_version": "trained_reranker_v3",
               "model_type": "logistic_regression",
               "feature_names": ["deterministic_score"],
               "weights": {

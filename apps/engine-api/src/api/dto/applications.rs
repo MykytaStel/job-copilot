@@ -5,9 +5,9 @@ use crate::api::dto::jobs::JobResponse;
 use crate::api::dto::resumes::ResumeVersionResponse;
 use crate::api::error::ApiError;
 use crate::domain::application::model::{
-    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, Contact,
-    CreateActivity, CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer,
-    Task, UpdateApplication, UpsertOffer,
+    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote,
+    ApplicationOutcome, Contact, CreateActivity, CreateApplication, CreateApplicationContact,
+    CreateContact, CreateNote, Offer, Task, UpdateApplication, UpsertOffer,
 };
 
 #[derive(Default, Deserialize)]
@@ -24,6 +24,10 @@ pub struct UpdateApplicationRequest {
     pub status: Option<String>,
     #[serde(default, deserialize_with = "deserialize_patch_due_date")]
     pub due_date: Option<Option<String>>,
+    pub outcome: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_patch_outcome_date")]
+    pub outcome_date: Option<Option<String>>,
+    pub rejection_stage: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -80,6 +84,9 @@ pub struct ApplicationResponse {
     pub status: String,
     pub applied_at: Option<String>,
     pub due_date: Option<String>,
+    pub outcome: Option<String>,
+    pub outcome_date: Option<String>,
+    pub rejection_stage: Option<String>,
     pub updated_at: String,
 }
 
@@ -211,19 +218,36 @@ impl CreateApplicationContactRequest {
 
 impl UpdateApplicationRequest {
     pub fn validate(self) -> Result<UpdateApplication, ApiError> {
-        if self.status.is_none() && self.due_date.is_none() {
+        if self.status.is_none()
+            && self.due_date.is_none()
+            && self.outcome.is_none()
+            && self.outcome_date.is_none()
+            && self.rejection_stage.is_none()
+        {
             return Err(ApiError::bad_request_with_details(
                 "empty_application_patch",
                 "PATCH /applications/:id requires at least one field",
                 json!({
-                    "allowed_fields": ["status", "due_date"]
+                    "allowed_fields": ["status", "due_date", "outcome", "outcome_date", "rejection_stage"]
                 }),
             ));
         }
 
+        let outcome = self.outcome.map(|v| validate_outcome(v)).transpose()?;
+
+        let rejection_stage = self
+            .rejection_stage
+            .as_deref()
+            .map(validate_rejection_stage)
+            .transpose()?
+            .map(str::to_string);
+
         Ok(UpdateApplication {
             status: self.status.map(validate_status).transpose()?,
             due_date: self.due_date,
+            outcome: outcome.map(Some),
+            outcome_date: self.outcome_date,
+            rejection_stage: rejection_stage.map(Some),
         })
     }
 }
@@ -237,6 +261,9 @@ impl From<Application> for ApplicationResponse {
             status: application.status,
             applied_at: application.applied_at,
             due_date: application.due_date,
+            outcome: application.outcome.map(|o| o.as_str().to_string()),
+            outcome_date: application.outcome_date,
+            rejection_stage: application.rejection_stage,
             updated_at: application.updated_at,
         }
     }
@@ -455,6 +482,15 @@ where
     Ok(Some(Option::<String>::deserialize(deserializer)?))
 }
 
+fn deserialize_patch_outcome_date<'de, D>(
+    deserializer: D,
+) -> Result<Option<Option<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Some(Option::<String>::deserialize(deserializer)?))
+}
+
 fn validate_optional_email(value: Option<String>) -> Result<Option<String>, ApiError> {
     validate_optional_trimmed(value)
         .map(validate_email)
@@ -536,6 +572,42 @@ fn validate_status(value: String) -> Result<String, ApiError> {
     }
 
     Ok(value)
+}
+
+fn validate_outcome(value: String) -> Result<ApplicationOutcome, ApiError> {
+    let value = validate_required("outcome", value)?;
+    ApplicationOutcome::parse(&value).ok_or_else(|| {
+        ApiError::bad_request_with_details(
+            "invalid_application_outcome",
+            "Unsupported application outcome",
+            json!({
+                "field": "outcome",
+                "allowed_values": [
+                    "phone_screen", "technical_interview", "final_interview",
+                    "offer_received", "rejected", "ghosted", "withdrew"
+                ],
+                "received": value,
+            }),
+        )
+    })
+}
+
+fn validate_rejection_stage(value: &str) -> Result<&str, ApiError> {
+    if !matches!(
+        value.trim(),
+        "applied" | "phone_screen" | "technical_interview" | "final_interview"
+    ) {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_rejection_stage",
+            "Unsupported rejection stage",
+            json!({
+                "field": "rejection_stage",
+                "allowed_values": ["applied", "phone_screen", "technical_interview", "final_interview"],
+                "received": value,
+            }),
+        ));
+    }
+    Ok(value.trim())
 }
 
 #[cfg(test)]

@@ -18,10 +18,13 @@ pub enum UserEventType {
     CoverLetterDraftRequested,
     InterviewPrepRequested,
     ApplicationCreated,
+    JobScrolledToBottom,
+    JobReturned,
+    JobShared,
 }
 
 impl UserEventType {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 19] = [
         Self::JobImpression,
         Self::JobOpened,
         Self::JobSaved,
@@ -38,6 +41,9 @@ impl UserEventType {
         Self::CoverLetterDraftRequested,
         Self::InterviewPrepRequested,
         Self::ApplicationCreated,
+        Self::JobScrolledToBottom,
+        Self::JobReturned,
+        Self::JobShared,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -58,6 +64,9 @@ impl UserEventType {
             Self::CoverLetterDraftRequested => "cover_letter_draft_requested",
             Self::InterviewPrepRequested => "interview_prep_requested",
             Self::ApplicationCreated => "application_created",
+            Self::JobScrolledToBottom => "job_scrolled_to_bottom",
+            Self::JobReturned => "job_returned",
+            Self::JobShared => "job_shared",
         }
     }
 
@@ -79,6 +88,9 @@ impl UserEventType {
             "cover_letter_draft_requested" => Some(Self::CoverLetterDraftRequested),
             "interview_prep_requested" => Some(Self::InterviewPrepRequested),
             "application_created" => Some(Self::ApplicationCreated),
+            "job_scrolled_to_bottom" => Some(Self::JobScrolledToBottom),
+            "job_returned" => Some(Self::JobReturned),
+            "job_shared" => Some(Self::JobShared),
             _ => None,
         }
     }

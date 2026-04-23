@@ -10,6 +10,7 @@ pub mod market;
 pub mod notifications;
 pub mod profile;
 pub mod reranker_dataset;
+pub mod reranker_metrics;
 pub mod resumes;
 pub mod roles;
 pub mod search;
@@ -72,6 +73,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/profiles/{id}/reranker-dataset",
             get(reranker_dataset::get_reranker_dataset),
         )
+        .route(
+            "/api/v1/profiles/{id}/reranker/metrics",
+            get(reranker_metrics::get_reranker_metrics),
+        )
         .route("/api/v1/profiles/{id}/events", post(events::log_user_event))
         .route(
             "/api/v1/profiles/{id}/events/summary",
@@ -88,6 +93,26 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/profiles/{id}/jobs/{job_id}/bad-fit",
             put(feedback::mark_job_bad_fit).delete(feedback::unmark_job_bad_fit),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/salary-signal",
+            put(feedback::set_job_salary_signal),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/interest-rating",
+            put(feedback::set_job_interest_rating),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/work-mode-signal",
+            put(feedback::set_job_work_mode_signal),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/legitimacy-signal",
+            put(feedback::set_job_legitimacy_signal),
+        )
+        .route(
+            "/api/v1/profiles/{id}/jobs/{job_id}/tags",
+            put(feedback::tag_job_feedback),
         )
         .route(
             "/api/v1/profiles/{id}/companies/whitelist",

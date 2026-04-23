@@ -2,6 +2,7 @@ use tracing::warn;
 
 use crate::services::search_ranking::runtime::RerankerRuntimeMode;
 
+#[derive(Clone)]
 pub struct Config {
     pub port: u16,
     pub database_url: Option<String>,
@@ -11,6 +12,10 @@ pub struct Config {
     pub learned_reranker_enabled: bool,
     pub trained_reranker_enabled: bool,
     pub trained_reranker_model_path: Option<String>,
+    pub ml_sidecar_base_url: String,
+    pub ml_sidecar_timeout_seconds: u64,
+    pub ml_retrain_threshold: usize,
+    pub ml_retrain_poll_interval_seconds: u64,
 }
 
 impl Config {
@@ -67,6 +72,23 @@ impl Config {
             .ok()
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
+        let ml_sidecar_base_url = std::env::var("ML_SIDECAR_BASE_URL")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "http://localhost:8000".to_string());
+        let ml_sidecar_timeout_seconds = std::env::var("ML_SIDECAR_TIMEOUT_SECONDS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(15);
+        let ml_retrain_threshold = std::env::var("ML_RETRAIN_THRESHOLD")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(15);
+        let ml_retrain_poll_interval_seconds = std::env::var("ML_RETRAIN_POLL_INTERVAL_SECONDS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(21_600);
 
         Self {
             port,
@@ -77,6 +99,10 @@ impl Config {
             learned_reranker_enabled,
             trained_reranker_enabled,
             trained_reranker_model_path,
+            ml_sidecar_base_url,
+            ml_sidecar_timeout_seconds,
+            ml_retrain_threshold,
+            ml_retrain_poll_interval_seconds,
         }
     }
 }

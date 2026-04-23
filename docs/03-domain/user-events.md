@@ -155,9 +155,9 @@ The layer is gated by `LEARNED_RERANKER_ENABLED` and defaults to enabled. `/api/
 - `learned_reranker_enabled`
 - `learned_reranker_adjusted_jobs`
 
-## Trained reranker v2
+## Trained reranker v3
 
-`engine-api` can optionally apply a trained reranker v2 JSON artifact after learned reranker v1.
+`engine-api` can optionally apply a trained reranker v3 JSON artifact after learned reranker v1.
 This is an experimental additive layer only: deterministic ranking, explicit feedback scoring,
 behavior scoring, and learned reranker v1 remain intact.
 
@@ -165,7 +165,7 @@ The layer is gated separately and defaults to disabled:
 
 - `RERANKER_RUNTIME_MODE=deterministic|learned|trained`
 - `TRAINED_RERANKER_ENABLED=false`
-- `TRAINED_RERANKER_MODEL_PATH=/path/to/trained-reranker-v2.json`
+- `TRAINED_RERANKER_MODEL_PATH=/path/to/trained-reranker-v3.json`
 
 `RERANKER_RUNTIME_MODE` selects the requested live path. If `trained` is requested but the
 artifact is missing or invalid, `engine-api` now falls back to `learned` when that layer is

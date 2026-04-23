@@ -1,8 +1,10 @@
 import type {
   ActivityType,
+  ApplicationOutcome,
   ApplicationStatus,
   ContactRelationship,
   OfferStatus,
+  RejectionStage,
 } from '@job-copilot/shared/applications';
 
 import type { EngineContact } from './contacts';
@@ -16,6 +18,9 @@ export type EngineApplication = {
   status: ApplicationStatus;
   applied_at: string | null;
   due_date: string | null;
+  outcome: ApplicationOutcome | null;
+  outcome_date: string | null;
+  rejection_stage: RejectionStage | null;
   updated_at: string;
 };
 

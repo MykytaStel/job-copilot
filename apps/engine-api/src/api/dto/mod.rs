@@ -10,6 +10,7 @@ pub mod notifications;
 pub mod profile;
 pub mod ranking;
 pub mod reranker_dataset;
+pub mod reranker_metrics;
 pub mod resumes;
 pub mod roles;
 pub mod search;

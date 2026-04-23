@@ -4,10 +4,11 @@ from app.reranker_evaluation import OutcomeDataset, evaluate_dataset
 def dataset_payload():
     return {
         "profile_id": "profile-1",
-        "label_policy_version": "outcome_label_v2",
+        "label_policy_version": "outcome_label_v3",
         "examples": [
             {
                 "job_id": "job-positive-low",
+                "label_observed_at": "2026-04-10T00:00:00Z",
                 "label": "positive",
                 "label_score": 2,
                 "label_reasons": ["applied"],
@@ -35,6 +36,7 @@ def dataset_payload():
             },
             {
                 "job_id": "job-medium-high",
+                "label_observed_at": "2026-04-11T00:00:00Z",
                 "label": "medium",
                 "label_score": 1,
                 "label_reasons": ["viewed"],
@@ -62,6 +64,7 @@ def dataset_payload():
             },
             {
                 "job_id": "job-negative-mid",
+                "label_observed_at": "2026-04-12T00:00:00Z",
                 "label": "negative",
                 "label_score": 0,
                 "label_reasons": ["dismissed", "hidden"],
@@ -89,6 +92,7 @@ def dataset_payload():
             },
             {
                 "job_id": "job-positive-behavior",
+                "label_observed_at": "2026-04-13T00:00:00Z",
                 "label": "positive",
                 "label_score": 2,
                 "label_reasons": ["applied"],
@@ -127,48 +131,42 @@ def test_evaluator_compares_ranking_variants_with_deterministic_tiebreaks():
     metrics = metrics_by_variant(summary)
 
     assert summary.example_count == 4
-    assert summary.positive_count == 2
-    assert summary.signal_weight_policy_version == "outcome_signal_weight_v1"
-    assert metrics["deterministic"].ordered_job_ids == [
-        "job-medium-high",
-        "job-negative-mid",
-        "job-positive-low",
-        "job-positive-behavior",
-    ]
-    assert metrics["deterministic"].top_k_positives == 0
-    assert metrics["deterministic"].average_label_score_top_n == 0.5
-    assert metrics["deterministic"].average_training_weight_top_n == 0.2
-    assert metrics["deterministic"].positive_hit_rate == 0.0
+    assert summary.train_example_count == 3
+    assert summary.test_example_count == 1
+    assert summary.split_method == "temporal"
+    assert summary.positive_count == 1
+    assert summary.signal_weight_policy_version == "outcome_signal_weight_v2"
+    assert metrics["deterministic"].ordered_job_ids == ["job-positive-behavior"]
+    assert metrics["deterministic"].top_k_positives == 1
+    assert metrics["deterministic"].average_label_score_top_n == 2.0
+    assert metrics["deterministic"].average_training_weight_top_n == 1.0
+    assert metrics["deterministic"].positive_hit_rate == 1.0
 
-    assert metrics["deterministic_behavior"].ordered_job_ids[:2] == [
-        "job-positive-behavior",
-        "job-medium-high",
-    ]
+    assert metrics["deterministic_behavior"].ordered_job_ids == ["job-positive-behavior"]
     assert metrics["deterministic_behavior"].top_k_positives == 1
-    assert metrics["deterministic_behavior"].average_label_score_top_n == 1.5
-    assert metrics["deterministic_behavior"].average_training_weight_top_n == 0.7
-    assert metrics["deterministic_behavior"].positive_hit_rate == 0.5
+    assert metrics["deterministic_behavior"].average_label_score_top_n == 2.0
+    assert metrics["deterministic_behavior"].average_training_weight_top_n == 1.0
+    assert metrics["deterministic_behavior"].positive_hit_rate == 1.0
 
-    assert metrics["deterministic_behavior_learned"].ordered_job_ids[:2] == [
-        "job-positive-behavior",
-        "job-medium-high",
-    ]
+    assert metrics["deterministic_behavior_learned"].ordered_job_ids == ["job-positive-behavior"]
 
 
 def test_evaluator_handles_empty_dataset_without_divide_by_zero():
     summary = evaluate_dataset(
         {
             "profile_id": "profile-1",
-            "label_policy_version": "outcome_label_v2",
+            "label_policy_version": "outcome_label_v3",
             "examples": [],
         },
         top_n=0,
     )
 
     assert summary.example_count == 0
+    assert summary.train_example_count == 0
+    assert summary.test_example_count == 0
     assert summary.positive_count == 0
     assert summary.top_n == 1
-    assert summary.signal_weight_policy_version == "outcome_signal_weight_v1"
+    assert summary.signal_weight_policy_version == "outcome_signal_weight_v2"
     for metrics in summary.variants:
         assert metrics.ordered_job_ids == []
         assert metrics.top_k_positives == 0
@@ -182,5 +180,5 @@ def test_evaluator_accepts_validated_dataset_model():
     summary = evaluate_dataset(dataset, top_n=3)
 
     assert summary.profile_id == "profile-1"
-    assert summary.label_policy_version == "outcome_label_v2"
+    assert summary.label_policy_version == "outcome_label_v3"
     assert summary.variants[0].top_n == 3

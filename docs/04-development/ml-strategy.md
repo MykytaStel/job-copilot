@@ -35,7 +35,7 @@
 - Saturation: `count / SATURATION`, max 1.0
 
 ### Рівень 3 — Trained reranker (Logistic Regression, Python)
-**Файл:** `apps/ml/app/trained_reranker.py`
+**Пакет:** `apps/ml/app/trained_reranker/`
 
 **Проблема зараз:** 4 labeled examples → ваги ~0.
 
@@ -44,7 +44,7 @@
 ```python
 # apps/ml/app/bootstrap_training.py
 # Працює з export dataset від engine-api, а не з сирим event→label маппінгом.
-# export already uses label_policy_version = outcome_label_v2
+# export already uses label_policy_version = outcome_label_v3
 
 example["signals"] = {
     "viewed": True,
@@ -61,15 +61,33 @@ example["signals"] = {
     "saved_event_count": 1,
     "applied_event_count": 0,
     "dismissed_event_count": 0,
+    "reached_interview": False,
+    "received_offer": False,
+    "was_rejected": False,
+    "was_ghosted": False,
+    "has_salary_rejection": False,
+    "has_remote_rejection": False,
+    "has_tech_rejection": False,
+    "interest_rating": 1,
+    "work_mode_deal_breaker": False,
+    "scrolled_to_bottom": True,
+    "returned_count": 1,
+    "legitimacy_suspicious": False,
 }
 # label_reasons: ["saved"] / ["viewed"] / ["applied"] / ["dismissed", ...]
 # Далі передає готові normalized examples в trained_reranker.train()
 ```
 
 **Коли retrain:**
-- Порогова умова: ≥ 30 labelable outcome examples після v2 normalization
-- Тригер: ручний виклик `POST /api/v1/reranker/retrain` або CLI
-- Зберігати нову модель в `models/trained-reranker-v2.json`
+- Порогова умова: ≥ 30 labelable outcome examples після v3 normalization
+- Тригер: `POST /api/v1/reranker/bootstrap` або CLI
+- Зберігати нову модель в `models/trained-reranker-v3.json`
+
+**Training hygiene зараз:**
+- target labels лишаються inspectable через `signal_weights`
+- sample weighting живе окремо через `confidence_weights`
+- старіші labels downweight-яться через temporal decay по `label_observed_at`
+- evaluation використовує temporal holdout, а persisted artifact retrain-иться на full dataset
 
 **Реалістична мета:** після 2-3 тижнів активного використання, 50+ feedbacks.
 
@@ -91,7 +109,7 @@ example["signals"] = {
 
 ```python
 class OllamaEnrichmentProvider:
-    def __init__(self, base_url: str, model: str = "mistral:7b"):
+    def __init__(self, base_url: str, model: str = "llama3.1:8b"):
         self.base_url = base_url  # OLLAMA_BASE_URL env
         self.model = model        # OLLAMA_MODEL env
 
@@ -101,7 +119,7 @@ class OllamaEnrichmentProvider:
 ```
 
 **Моделі для розгляду:**
-- `mistral:7b` — хороший баланс якість/розмір
+- `llama3.1:8b` — краща якість за замовчуванням, але важча
 - `qwen2.5:3b` — менший, швидший, гірший
 - `llama3.1:8b` — кращий але важчий
 
@@ -111,7 +129,7 @@ class OllamaEnrichmentProvider:
 ```
 ML_LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://ollama:11434
-OLLAMA_MODEL=mistral:7b
+OLLAMA_MODEL=llama3.1:8b
 ```
 
 ### Рівень 6 — Real LLM API (тільки paid tier, Фаза 5)

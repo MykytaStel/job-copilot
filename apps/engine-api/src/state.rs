@@ -2,8 +2,8 @@ use crate::config::Config;
 use crate::db::Database;
 use crate::db::repositories::{
     ActivitiesRepository, ApplicationsRepository, FeedbackRepository, FitScoresRepository,
-    JobsRepository, NotificationsRepository, ProfilesRepository, ResumesRepository,
-    TasksRepository, UserEventsRepository,
+    JobsRepository, NotificationsRepository, ProfileMlMetricsRepository, ProfileMlStateRepository,
+    ProfilesRepository, ResumesRepository, TasksRepository, UserEventsRepository,
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
@@ -13,7 +13,10 @@ use crate::services::followup::FollowUpService;
 use crate::services::jobs::JobsService;
 use crate::services::notifications::NotificationsService;
 use crate::services::profile_analysis::ProfileAnalysisService;
+use crate::services::profile_ml_metrics::ProfileMlMetricsService;
+use crate::services::profile_ml_state::ProfileMlStateService;
 use crate::services::profile_records::ProfileRecordsService;
+use crate::services::reranker_bootstrap::RerankerBootstrapService;
 use crate::services::resumes::ResumesService;
 use crate::services::salary::SalaryService;
 use crate::services::search_profile_builder::SearchProfileBuilder;
@@ -33,6 +36,8 @@ pub struct AppState {
     pub version: String,
     pub database: Database,
     pub profile_records: ProfileRecordsService,
+    pub profile_ml_state: ProfileMlStateService,
+    pub profile_ml_metrics: ProfileMlMetricsService,
     pub jobs_service: JobsService,
     pub search_ranking: SearchRankingService,
     pub applications_service: ApplicationsService,
@@ -52,6 +57,7 @@ pub struct AppState {
     pub trained_reranker_enabled: bool,
     pub trained_reranker_availability: TrainedRerankerAvailability,
     pub trained_reranker_model: Option<TrainedRerankerModel>,
+    pub reranker_bootstrap: RerankerBootstrapService,
 }
 
 impl AppState {
@@ -64,6 +70,11 @@ impl AppState {
             config.trained_reranker_enabled,
             config.trained_reranker_model_path.as_deref(),
         );
+        let reranker_bootstrap = RerankerBootstrapService::new(
+            config.ml_sidecar_base_url.clone(),
+            config.ml_sidecar_timeout_seconds,
+        )
+        .expect("valid ML sidecar client configuration");
 
         Self::new_with_rerankers(
             database,
@@ -72,6 +83,7 @@ impl AppState {
             config.trained_reranker_enabled,
             trained_reranker_availability,
             trained_reranker_model,
+            reranker_bootstrap,
         )
     }
 
@@ -82,8 +94,11 @@ impl AppState {
         trained_reranker_enabled: bool,
         trained_reranker_availability: TrainedRerankerAvailability,
         trained_reranker_model: Option<TrainedRerankerModel>,
+        reranker_bootstrap: RerankerBootstrapService,
     ) -> Self {
         let profiles_repository = ProfilesRepository::new(database.clone());
+        let profile_ml_state_repository = ProfileMlStateRepository::new(database.clone());
+        let profile_ml_metrics_repository = ProfileMlMetricsRepository::new(database.clone());
         let jobs_repository = JobsRepository::new(database.clone());
         let applications_repository = ApplicationsRepository::new(database.clone());
         let feedback_repository = FeedbackRepository::new(database.clone());
@@ -104,6 +119,8 @@ impl AppState {
             version: env!("CARGO_PKG_VERSION").to_string(),
             database,
             profile_records,
+            profile_ml_state: ProfileMlStateService::new(profile_ml_state_repository),
+            profile_ml_metrics: ProfileMlMetricsService::new(profile_ml_metrics_repository),
             jobs_service: JobsService::new(jobs_repository.clone()),
             search_ranking,
             applications_service: ApplicationsService::new(applications_repository),
@@ -123,6 +140,7 @@ impl AppState {
             trained_reranker_enabled,
             trained_reranker_availability,
             trained_reranker_model,
+            reranker_bootstrap,
         }
     }
 }

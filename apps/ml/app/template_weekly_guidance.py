@@ -1,6 +1,7 @@
 from typing import Any
 
-from app.weekly_guidance import WeeklyGuidancePrompt, WeeklyGuidanceRequest
+from app.enrichment.weekly_guidance.contract import WeeklyGuidanceRequest
+from app.enrichment.weekly_guidance.prompt import WeeklyGuidancePrompt
 
 
 def build_weekly_guidance(

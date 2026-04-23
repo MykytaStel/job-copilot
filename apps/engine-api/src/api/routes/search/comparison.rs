@@ -6,6 +6,7 @@ use crate::api::dto::search::{
 };
 use crate::domain::feedback::model::JobFeedbackState;
 use crate::domain::matching::RerankerMode;
+use crate::services::outcome_dataset::event_signals_by_job_id;
 use crate::services::search_ranking::RankedJob;
 use crate::services::search_ranking::runtime::{
     ResolvedRerankerRuntime, resolve_reranker_runtime_comparison,
@@ -107,11 +108,24 @@ fn apply_reranker_runtime_path(
     }
 
     if runtime.apply_trained {
+        let event_signals_by_job_id = learning_aggregates
+            .map(|aggregates| {
+                event_signals_by_job_id(&aggregates.events)
+                    .into_iter()
+                    .collect::<HashMap<_, _>>()
+            })
+            .unwrap_or_default();
+        let applications_by_job_id = learning_aggregates
+            .map(|aggregates| aggregates.applications_by_job_id.clone())
+            .unwrap_or_default();
         let (reranked_jobs, _) = apply_trained_reranking(
             state,
             ranked_jobs,
             deterministic_score_by_job_id,
             behavior_score_by_job_id,
+            feedback_by_job_id,
+            &event_signals_by_job_id,
+            &applications_by_job_id,
         );
         ranked_jobs = reranked_jobs;
     }

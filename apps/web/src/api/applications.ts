@@ -3,9 +3,11 @@ import type {
   ApplicationDetail,
   ApplicationInput,
   ApplicationNote,
+  ApplicationOutcome,
   ApplicationStatus,
   Offer,
   OfferInput,
+  RejectionStage,
 } from '@job-copilot/shared/applications';
 import type { DashboardStats } from '@job-copilot/shared/analytics';
 
@@ -71,20 +73,18 @@ export async function updateApplication(
   payload: {
     status?: ApplicationStatus;
     dueDate?: string | null;
+    outcome?: ApplicationOutcome | null;
+    outcomeDate?: string | null;
+    rejectionStage?: RejectionStage | null;
   },
 ): Promise<Application> {
-  const body: {
-    status?: ApplicationStatus;
-    due_date?: string | null;
-  } = {};
+  const body: Record<string, unknown> = {};
 
-  if (payload.status !== undefined) {
-    body.status = payload.status;
-  }
-
-  if (payload.dueDate !== undefined) {
-    body.due_date = payload.dueDate;
-  }
+  if (payload.status !== undefined) body.status = payload.status;
+  if (payload.dueDate !== undefined) body.due_date = payload.dueDate;
+  if (payload.outcome !== undefined) body.outcome = payload.outcome;
+  if (payload.outcomeDate !== undefined) body.outcome_date = payload.outcomeDate;
+  if (payload.rejectionStage !== undefined) body.rejection_stage = payload.rejectionStage;
 
   const application = await request<EngineApplication>(
     `/api/v1/applications/${id}`,

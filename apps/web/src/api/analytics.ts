@@ -116,6 +116,34 @@ type EngineLlmContextResponse = {
   top_negative_evidence: EngineLlmContextEvidenceEntry[];
 };
 
+type EngineProfileMlState = {
+  profile_id: string;
+  last_retrained_at: string | null;
+  examples_since_retrain: number;
+  last_artifact_version: string | null;
+  last_training_status: string | null;
+};
+
+type EngineProfileMlMetricRecord = {
+  id: string;
+  profile_id: string;
+  retrained_at: string;
+  status: string;
+  artifact_version: string | null;
+  model_type: string | null;
+  reason: string | null;
+  metrics: Record<string, unknown> | null;
+  training: Record<string, unknown> | null;
+  feature_importances: Record<string, number> | null;
+  benchmark: Record<string, unknown> | null;
+};
+
+type EngineRerankerMetricsResponse = {
+  profile_id: string;
+  state: EngineProfileMlState;
+  runs: EngineProfileMlMetricRecord[];
+};
+
 export type JobsBySourceEntry = {
   source: string;
   count: number;
@@ -230,6 +258,34 @@ export type LlmContext = {
   topNegativeEvidence: LlmContextEvidenceEntry[];
 };
 
+export type RerankerMlState = {
+  profileId: string;
+  lastRetrainedAt: string | null;
+  examplesSinceRetrain: number;
+  lastArtifactVersion: string | null;
+  lastTrainingStatus: string | null;
+};
+
+export type RerankerMetricRecord = {
+  id: string;
+  profileId: string;
+  retrainedAt: string;
+  status: string;
+  artifactVersion: string | null;
+  modelType: string | null;
+  reason: string | null;
+  metrics: Record<string, unknown> | null;
+  training: Record<string, unknown> | null;
+  featureImportances: Record<string, number> | null;
+  benchmark: Record<string, unknown> | null;
+};
+
+export type RerankerMetrics = {
+  profileId: string;
+  state: RerankerMlState;
+  runs: RerankerMetricRecord[];
+};
+
 function mapFeedbackSummarySection(
   summary: EngineFeedbackSummarySection,
 ): AnalyticsFeedbackSummary {
@@ -261,6 +317,32 @@ function mapBehaviorSignalCount(signal: EngineBehaviorSignalCountResponse): Beha
     positiveCount: signal.positive_count,
     negativeCount: signal.negative_count,
     netScore: signal.net_score,
+  };
+}
+
+function mapRerankerMetrics(response: EngineRerankerMetricsResponse): RerankerMetrics {
+  return {
+    profileId: response.profile_id,
+    state: {
+      profileId: response.state.profile_id,
+      lastRetrainedAt: response.state.last_retrained_at,
+      examplesSinceRetrain: response.state.examples_since_retrain,
+      lastArtifactVersion: response.state.last_artifact_version,
+      lastTrainingStatus: response.state.last_training_status,
+    },
+    runs: response.runs.map((run) => ({
+      id: run.id,
+      profileId: run.profile_id,
+      retrainedAt: run.retrained_at,
+      status: run.status,
+      artifactVersion: run.artifact_version,
+      modelType: run.model_type,
+      reason: run.reason,
+      metrics: run.metrics,
+      training: run.training,
+      featureImportances: run.feature_importances,
+      benchmark: run.benchmark,
+    })),
   };
 }
 
@@ -357,4 +439,12 @@ export async function getLlmContext(profileId: string): Promise<LlmContext> {
     topPositiveEvidence: response.top_positive_evidence,
     topNegativeEvidence: response.top_negative_evidence,
   };
+}
+
+export async function getRerankerMetrics(profileId: string): Promise<RerankerMetrics> {
+  const response = await request<EngineRerankerMetricsResponse>(
+    `/api/v1/profiles/${profileId}/reranker/metrics`,
+  );
+
+  return mapRerankerMetrics(response);
 }

@@ -1,6 +1,9 @@
 from typing import Any
 
-from app.job_fit_explanation import JobFitExplanationPrompt, JobFitExplanationRequest
+from app.enrichment.job_fit_explanation.contract import (
+    JobFitExplanationPrompt,
+    JobFitExplanationRequest,
+)
 
 
 def build_job_fit_explanation(

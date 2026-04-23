@@ -6,6 +6,7 @@ import {
   getBehaviorSummary,
   getFunnelSummary,
   getLlmContext,
+  getRerankerMetrics,
 } from '../../api/analytics';
 import { getProfileInsights, getWeeklyGuidance } from '../../api/enrichment';
 import { readProfileId } from '../../lib/profileSession';
@@ -36,6 +37,12 @@ export function useAnalyticsPage() {
   const { data: llmCtx, isLoading: ctxLoading } = useQuery({
     queryKey: queryKeys.analytics.llmContext(profileId ?? ''),
     queryFn: () => getLlmContext(profileId!),
+    enabled: !!profileId,
+  });
+
+  const { data: rerankerMetrics, isLoading: rerankerMetricsLoading } = useQuery({
+    queryKey: queryKeys.analytics.rerankerMetrics(profileId ?? ''),
+    queryFn: () => getRerankerMetrics(profileId!),
     enabled: !!profileId,
   });
 
@@ -91,10 +98,16 @@ export function useAnalyticsPage() {
     behavior,
     funnel,
     llmCtx,
+    rerankerMetrics,
     profileInsights,
     weeklyGuidance,
     aiInsights,
-    isLoading: summaryLoading || behaviorLoading || funnelLoading || ctxLoading,
+    isLoading:
+      summaryLoading ||
+      behaviorLoading ||
+      funnelLoading ||
+      ctxLoading ||
+      rerankerMetricsLoading,
     insightsLoading,
     insightsError,
     weeklyGuidanceLoading,

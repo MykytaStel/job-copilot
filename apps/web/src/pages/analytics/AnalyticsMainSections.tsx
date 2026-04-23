@@ -17,6 +17,7 @@ import type {
   BehaviorSummary,
   FunnelSummary,
   LlmContext,
+  RerankerMetrics,
 } from '../../api/analytics';
 import type { ProfileInsights, WeeklyGuidance } from '../../api/enrichment';
 
@@ -41,6 +42,7 @@ export function AnalyticsMainSections({
   behavior,
   funnel,
   llmCtx,
+  rerankerMetrics,
   weeklyGuidance,
   weeklyGuidanceLoading,
   weeklyGuidanceError,
@@ -52,6 +54,7 @@ export function AnalyticsMainSections({
   behavior: BehaviorSummary | undefined;
   funnel: FunnelSummary | undefined;
   llmCtx: LlmContext | undefined;
+  rerankerMetrics: RerankerMetrics | undefined;
   weeklyGuidance: WeeklyGuidance | undefined;
   weeklyGuidanceLoading: boolean;
   weeklyGuidanceError: unknown;
@@ -59,6 +62,37 @@ export function AnalyticsMainSections({
   insightsLoading: boolean;
   insightsError: unknown;
 }) {
+  const latestRerankerRun = rerankerMetrics?.runs[0];
+  const rerankerTrend = (rerankerMetrics?.runs ?? [])
+    .map((run, index) => {
+      const variants = Array.isArray(run.metrics?.variants) ? run.metrics.variants : [];
+      const trainedVariant = variants.find(
+        (variant) =>
+          typeof variant === 'object' &&
+          variant !== null &&
+          'variant' in variant &&
+          variant.variant === 'trained_reranker_prediction',
+      ) as { positive_hit_rate?: number } | undefined;
+
+      return {
+        label: new Date(run.retrainedAt).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        }),
+        value: Math.round((trainedVariant?.positive_hit_rate ?? 0) * 100),
+        tone: index === 0 ? ('primary' as const) : ('muted' as const),
+      };
+    })
+    .slice(0, 6);
+  const topFeatureImportances = Object.entries(latestRerankerRun?.featureImportances ?? {})
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5)
+    .map(([label, value], index) => ({
+      label,
+      value: Math.round(value * 100),
+      tone: index === 0 ? ('success' as const) : ('primary' as const),
+    }));
+
   return (
     <div className="space-y-8">
       {funnel ? (
@@ -183,6 +217,50 @@ export function AnalyticsMainSections({
               description="Role groups repeatedly marked as weak or irrelevant."
               items={behavior.topNegativeRoleFamilies}
               tone="danger"
+            />
+          </div>
+        </Section>
+      ) : null}
+
+      {rerankerMetrics ? (
+        <Section
+          title="Model Health"
+          description="Track retrain cadence, held-out ranking quality, and the strongest current model features."
+          icon={Brain}
+          eyebrow="Trained reranker"
+        >
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            <StatCard
+              title="Pending Labels"
+              value={rerankerMetrics.state.examplesSinceRetrain}
+              icon={Layers}
+            />
+            <StatCard
+              title="Last Status"
+              value={rerankerMetrics.state.lastTrainingStatus ?? 'idle'}
+              icon={Zap}
+            />
+            <StatCard
+              title="Last Artifact"
+              value={rerankerMetrics.state.lastArtifactVersion ?? 'none'}
+              icon={Sparkles}
+            />
+            <StatCard
+              title="Last Retrained"
+              value={
+                rerankerMetrics.state.lastRetrainedAt
+                  ? new Date(rerankerMetrics.state.lastRetrainedAt).toLocaleDateString('en-US')
+                  : 'never'
+              }
+              icon={TrendingUp}
+            />
+          </div>
+
+          <div className="mt-6 grid gap-4 xl:grid-cols-2">
+            <BarList items={rerankerTrend} emptyMessage="No retrain history yet." />
+            <BarList
+              items={topFeatureImportances}
+              emptyMessage="No feature importances available yet."
             />
           </div>
         </Section>

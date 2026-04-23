@@ -57,6 +57,10 @@ impl FeedbackServiceStub {
             saved: false,
             hidden: false,
             bad_fit: false,
+            salary_signal: None,
+            interest_rating: None,
+            work_mode_signal: None,
+            legitimacy_signal: None,
             created_at: "2026-04-14T00:00:00+00:00".to_string(),
             updated_at: "2026-04-14T00:00:00+00:00".to_string(),
         });

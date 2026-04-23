@@ -12,6 +12,7 @@ use crate::api::routes::events::log_user_event_softly;
 use crate::api::routes::jobs::load_feedback_state;
 use crate::domain::feedback::model::CompanyFeedbackStatus;
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
+use crate::services::outcome_dataset::event_signals_by_job_id;
 use crate::services::search_ranking::runtime::{RerankerRuntimeMode, resolve_reranker_runtime};
 use crate::services::search_ranking::summarize_match_quality;
 use crate::state::AppState;
@@ -149,11 +150,28 @@ pub async fn run_search(
     }
     let mut trained_reranker_adjusted_jobs = 0usize;
     if reranker_runtime.apply_trained {
+        let empty_event_signals = HashMap::new();
+        let empty_applications = HashMap::new();
+        let event_signals_by_job_id = learning_aggregates
+            .as_ref()
+            .map(|aggregates| {
+                event_signals_by_job_id(&aggregates.events)
+                    .into_iter()
+                    .collect::<HashMap<_, _>>()
+            })
+            .unwrap_or(empty_event_signals);
+        let applications_by_job_id = learning_aggregates
+            .as_ref()
+            .map(|aggregates| aggregates.applications_by_job_id.clone())
+            .unwrap_or(empty_applications);
         let (reranked_jobs, adjusted_count) = apply_trained_reranking(
             &state,
             adjusted_jobs,
             &deterministic_score_by_job_id,
             &behavior_score_by_job_id,
+            &feedback_by_job_id,
+            &event_signals_by_job_id,
+            &applications_by_job_id,
         );
         adjusted_jobs = reranked_jobs;
         trained_reranker_adjusted_jobs = adjusted_count;

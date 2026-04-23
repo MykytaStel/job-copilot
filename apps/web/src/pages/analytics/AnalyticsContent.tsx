@@ -7,8 +7,20 @@ import { AnalyticsMainSections } from './AnalyticsMainSections';
 import { AnalyticsSidebar } from './AnalyticsSidebar';
 
 export function AnalyticsContent({ state }: { state: AnalyticsPageState }) {
-  const { summary, behavior, funnel, aiInsights, llmCtx, weeklyGuidance, weeklyGuidanceLoading, weeklyGuidanceError, profileInsights, insightsLoading, insightsError } =
-    state;
+  const {
+    summary,
+    behavior,
+    funnel,
+    aiInsights,
+    llmCtx,
+    rerankerMetrics,
+    weeklyGuidance,
+    weeklyGuidanceLoading,
+    weeklyGuidanceError,
+    profileInsights,
+    insightsLoading,
+    insightsError,
+  } = state;
 
   if (!summary) {
     return null;
@@ -30,6 +42,7 @@ export function AnalyticsContent({ state }: { state: AnalyticsPageState }) {
           behavior={behavior}
           funnel={funnel}
           llmCtx={llmCtx}
+          rerankerMetrics={rerankerMetrics}
           weeklyGuidance={weeklyGuidance}
           weeklyGuidanceLoading={weeklyGuidanceLoading}
           weeklyGuidanceError={weeklyGuidanceError}

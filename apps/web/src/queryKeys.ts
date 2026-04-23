@@ -95,6 +95,7 @@ export const queryKeys = {
     behavior: (profileId: string) => ['analytics', 'behavior', profileId] as const,
     funnel: (profileId: string) => ['analytics', 'funnel', profileId] as const,
     llmContext: (profileId: string) => ['analytics', 'llmContext', profileId] as const,
+    rerankerMetrics: (profileId: string) => ['analytics', 'rerankerMetrics', profileId] as const,
     profileInsights: (profileId: string, contextVersion: string) =>
       ['analytics', 'profileInsights', profileId, contextVersion] as const,
     weeklyGuidance: (profileId: string, contextVersion: string) =>

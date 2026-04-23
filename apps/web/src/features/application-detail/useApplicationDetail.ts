@@ -4,10 +4,12 @@ import toast from 'react-hot-toast';
 import type {
   ApplicationDetail,
   ApplicationContact,
+  ApplicationOutcome,
   ApplicationStatus,
   ContactInput,
   ContactRelationship,
   OfferStatus,
+  RejectionStage,
 } from '@job-copilot/shared';
 
 import {
@@ -35,6 +37,9 @@ type OfferFormState = {
 type ApplicationFormState = {
   status: ApplicationStatus;
   dueDate: string;
+  outcome: ApplicationOutcome | '';
+  outcomeDate: string;
+  rejectionStage: RejectionStage | '';
 };
 
 function getOfferFormState(offer: ApplicationDetail['offer']): OfferFormState {
@@ -60,11 +65,14 @@ function getOfferFormState(offer: ApplicationDetail['offer']): OfferFormState {
 }
 
 function getApplicationFormState(
-  detail: { status: ApplicationStatus; dueDate?: string } | undefined,
-) {
+  detail: { status: ApplicationStatus; dueDate?: string; outcome?: ApplicationOutcome; outcomeDate?: string; rejectionStage?: RejectionStage } | undefined,
+): ApplicationFormState {
   return {
     status: detail?.status ?? 'saved',
     dueDate: normalizeDateInput(detail?.dueDate),
+    outcome: detail?.outcome ?? '',
+    outcomeDate: normalizeDateInput(detail?.outcomeDate),
+    rejectionStage: detail?.rejectionStage ?? '',
   };
 }
 
@@ -192,6 +200,9 @@ export function useApplicationDetail(id?: string) {
       updateApplication(id!, {
         status: applicationForm.status,
         dueDate: applicationForm.dueDate || null,
+        outcome: applicationForm.outcome || null,
+        outcomeDate: applicationForm.outcomeDate || null,
+        rejectionStage: applicationForm.rejectionStage || null,
       }),
     onSuccess: async () => {
       setApplicationDraft(null);
@@ -205,7 +216,10 @@ export function useApplicationDetail(id?: string) {
 
   const hasApplicationChanges = detail
     ? applicationForm.status !== baseApplicationForm.status ||
-      applicationForm.dueDate !== baseApplicationForm.dueDate
+      applicationForm.dueDate !== baseApplicationForm.dueDate ||
+      applicationForm.outcome !== baseApplicationForm.outcome ||
+      applicationForm.outcomeDate !== baseApplicationForm.outcomeDate ||
+      applicationForm.rejectionStage !== baseApplicationForm.rejectionStage
     : false;
 
   function setApplicationStatus(value: ApplicationStatus) {
@@ -219,6 +233,27 @@ export function useApplicationDetail(id?: string) {
     setApplicationDraft((current) => ({
       ...(current ?? applicationForm),
       dueDate: value,
+    }));
+  }
+
+  function setOutcome(value: ApplicationOutcome | '') {
+    setApplicationDraft((current) => ({
+      ...(current ?? applicationForm),
+      outcome: value,
+    }));
+  }
+
+  function setOutcomeDate(value: string) {
+    setApplicationDraft((current) => ({
+      ...(current ?? applicationForm),
+      outcomeDate: value,
+    }));
+  }
+
+  function setRejectionStage(value: RejectionStage | '') {
+    setApplicationDraft((current) => ({
+      ...(current ?? applicationForm),
+      rejectionStage: value,
     }));
   }
 
@@ -317,11 +352,17 @@ export function useApplicationDetail(id?: string) {
     applicationForm: {
       applicationStatus: applicationForm.status,
       dueDate: applicationForm.dueDate,
+      outcome: applicationForm.outcome,
+      outcomeDate: applicationForm.outcomeDate,
+      rejectionStage: applicationForm.rejectionStage,
       hasApplicationChanges,
       isPending: applicationMutation.isPending,
       setApplicationStatus,
       setDueDate,
       clearDueDate: () => setDueDate(''),
+      setOutcome,
+      setOutcomeDate,
+      setRejectionStage,
       saveApplication,
     },
     noteForm: {

@@ -137,20 +137,20 @@ Job Copilot monorepo. ML сервіс на Python FastAPI.
 Задача: reranker натренований на 4 прикладах (ваги ~0, модель не працює). Треба написати скрипт що генерує labeled examples з реальних user events.
 
 Контекст:
-- Файл: `apps/ml/app/trained_reranker.py` — там є train() pipeline і структура labeled examples
-- Файл: `apps/ml/models/trained-reranker-v2.json` — поточна (нефункціональна) модель
+- Пакет: `apps/ml/app/trained_reranker/` — там є train() pipeline і структура labeled examples
+- Файл: `apps/ml/models/trained-reranker-v3.json` — поточна inspectable модель
 - Engine-API має endpoint для export dataset — перевір `apps/engine-api/src/api/` (шукай reranker_dataset)
 - Файл: `apps/ml/app/engine_api_client.py` — клієнт до engine-api
 
 Нормалізація labels already lives in engine-api export:
-- `label_policy_version = outcome_label_v2`
+- `label_policy_version = outcome_label_v3`
 - `applied` → `positive`
 - `dismissed` (`hidden` / `bad_fit`) → `negative`
 - `saved` or viewed-only → `medium`
 - export `signals` already includes `viewed`, `saved`, `applied`, `dismissed`, explicit feedback flags, and event-count fields
 
 Що зробити:
-1. Прочитай `apps/ml/app/trained_reranker.py` — зрозумій формат labeled examples (які features потрібні)
+1. Прочитай `apps/ml/app/trained_reranker/` — зрозумій формат labeled examples (які features потрібні)
 2. Прочитай `apps/ml/app/engine_api_client.py` — зрозумій як спілкуватися з engine-api
 3. Знайди endpoint для export reranker dataset в engine-api
 4. Створи `apps/ml/app/bootstrap_training.py`:
@@ -501,7 +501,7 @@ Job Copilot monorepo. Python ML сервіс.
    - Парс відповіді (Ollama повертає plain text, треба витягти JSON якщо потрібно)
    - Fallback до TemplateEnrichmentProvider якщо Ollama недоступна
 3. Для JSON output від Ollama — додай prompt prefix "Respond with valid JSON only:" і парс з try/except → fallback
-4. Додай endpoint `POST /api/v1/reranker/retrain` в main.py:
+4. Додай endpoint `POST /api/v1/reranker/bootstrap` в main.py:
    - Викликає bootstrap_training.py логіку
    - Повертає {status, examples_count, model_updated}
 5. Додай `GET /api/v1/reranker/status` — повертає {examples_count, last_trained_at, model_loss}

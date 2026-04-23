@@ -1,10 +1,21 @@
-import type { CompanyFeedbackStatus } from '@job-copilot/shared/feedback';
+import type {
+  CompanyFeedbackStatus,
+  JobFeedbackReason,
+  LegitimacySignal,
+  SalaryFeedbackSignal,
+  WorkModeFeedbackSignal,
+} from '@job-copilot/shared/feedback';
 
 export type EngineJobFeedbackState = {
   saved: boolean;
   hidden: boolean;
   bad_fit: boolean;
   company_status?: CompanyFeedbackStatus | null;
+  salary_signal?: SalaryFeedbackSignal | null;
+  interest_rating?: number | null;
+  work_mode_signal?: WorkModeFeedbackSignal | null;
+  legitimacy_signal?: LegitimacySignal | null;
+  tags?: JobFeedbackReason[] | null;
 };
 
 export type EngineJobFeedbackRecord = {

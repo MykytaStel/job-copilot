@@ -35,10 +35,10 @@ Active runtime paths:
 4. ~~Fix web navigation stale-data behavior.~~ — DONE (TanStack Query invalidation in place)
 5. ~~Ranking v2: deterministic baseline + explainable fit.~~ — DONE (scoring.rs, salary.rs, reranking.rs)
 6. ~~Lists and controls: saved, hidden, bad, whitelist, blacklist.~~ — DONE (FeedbackCenter + ApplicationBoard)
-7. ML/LLM enrichment with strict Rust-side validation — enrichment works end-to-end; Rust-side output validation not yet added.
+7. ~~ML training pipeline quality.~~ — DONE (temporal decay, temporal split, sample weights by signal quality, BPR pairwise training, feature importances, auto-retrain at 15 examples/6h, model health dashboard, data drift detection all shipped; `ARTIFACT_VERSION=trained_reranker_v3`). Next: LightGBM backend (`lgbm_model.py`) when ≥50 labeled examples.
 8. Market Intelligence is partially live — overview, companies, salary trends, and role demand ship from live `jobs` queries; snapshot aggregation is still missing.
-9. Profile compensation and languages are done end-to-end in schema, API, persistence, and UI.
-10. Notifications and global search are already live in web + engine-api.
+9. ~~Profile compensation and languages.~~ — DONE end-to-end in schema, API, persistence, and UI.
+10. ~~Notifications and global search.~~ — DONE in web + engine-api.
 
 ## UX direction
 Quiet operator dashboard:

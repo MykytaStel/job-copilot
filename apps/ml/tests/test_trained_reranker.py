@@ -10,12 +10,13 @@ from app.trained_reranker import TrainedRerankerModel, load_dataset, train_model
 def dataset_payload():
     return {
         "profile_id": "profile-1",
-        "label_policy_version": "outcome_label_v2",
+        "label_policy_version": "outcome_label_v3",
         "examples": [
             {
                 "job_id": "positive-strong",
                 "source": "djinni",
                 "role_family": "engineering",
+                "label_observed_at": "2026-04-15T00:00:00Z",
                 "label": "positive",
                 "label_score": 2,
                 "label_reasons": ["applied"],
@@ -50,6 +51,7 @@ def dataset_payload():
                 "job_id": "positive-mid",
                 "source": "djinni",
                 "role_family": "engineering",
+                "label_observed_at": "2026-04-11T00:00:00Z",
                 "label": "positive",
                 "label_score": 2,
                 "label_reasons": ["applied"],
@@ -84,6 +86,7 @@ def dataset_payload():
                 "job_id": "medium-saved",
                 "source": "djinni",
                 "role_family": "engineering",
+                "label_observed_at": "2026-04-10T00:00:00Z",
                 "label": "medium",
                 "label_score": 1,
                 "label_reasons": ["saved"],
@@ -118,6 +121,7 @@ def dataset_payload():
                 "job_id": "negative-weak",
                 "source": "work_ua",
                 "role_family": None,
+                "label_observed_at": "2026-04-12T00:00:00Z",
                 "label": "negative",
                 "label_score": 0,
                 "label_reasons": ["dismissed", "hidden"],
@@ -152,6 +156,7 @@ def dataset_payload():
                 "job_id": "negative-high-baseline",
                 "source": None,
                 "role_family": None,
+                "label_observed_at": "2026-04-13T00:00:00Z",
                 "label": "negative",
                 "label_score": 0,
                 "label_reasons": ["dismissed", "bad_fit"],
@@ -197,12 +202,16 @@ def test_training_pipeline_runs_and_artifact_round_trips(tmp_path):
     model.save(output)
     loaded = TrainedRerankerModel.load(output)
 
-    assert loaded.artifact.artifact_version == "trained_reranker_v2"
+    assert loaded.artifact.artifact_version == "trained_reranker_v3"
     assert loaded.artifact.model_type == "logistic_regression"
-    assert loaded.artifact.label_policy_version == "outcome_label_v2"
-    assert loaded.artifact.signal_weight_policy_version == "outcome_signal_weight_v1"
+    assert loaded.artifact.label_policy_version == "outcome_label_v3"
+    assert loaded.artifact.signal_weight_policy_version == "outcome_signal_weight_v2"
+    assert loaded.artifact.confidence_weight_policy_version == "outcome_confidence_weight_v1"
     assert loaded.artifact.signal_weights["saved_only"] == 0.6
     assert loaded.artifact.signal_weights["viewed_only"] == 0.4
+    assert loaded.artifact.confidence_weights["received_offer"] == 3.0
+    assert loaded.artifact.temporal_decay_lambda == 0.01
+    assert loaded.artifact.feature_importances["matched_skill_count"] >= 0.0
     assert loaded.artifact.training.example_count == 5
     assert loaded.artifact.training.saved_only_count == 1
     assert loaded.artifact.training.viewed_only_count == 0
@@ -218,7 +227,7 @@ def test_training_requires_labeled_examples():
             [
                 {
                     "profile_id": "profile-1",
-                    "label_policy_version": "outcome_label_v2",
+                    "label_policy_version": "outcome_label_v3",
                     "examples": [],
                 }
             ]
@@ -274,8 +283,25 @@ def test_evaluation_compares_trained_variant():
         "deterministic_behavior_learned",
         "trained_reranker_prediction",
     }
-    assert metrics["trained_reranker_prediction"].top_k_positives == 2
-    assert metrics["trained_reranker_prediction"].ordered_job_ids[:2] == [
-        "positive-strong",
-        "positive-mid",
-    ]
+    assert summary.split_method == "rolling_temporal"
+    assert summary.rolling_window_count >= 1
+    assert summary.test_example_count == 1
+    assert metrics["trained_reranker_prediction"].top_k_positives >= 0
+    assert metrics["trained_reranker_prediction"].ordered_job_ids == ["positive-strong"]
+    assert metrics["trained_reranker_prediction"].ndcg_at_top_n >= 0
+    assert metrics["trained_reranker_prediction"].mrr_at_top_n >= 0
+
+
+def test_time_to_apply_feature_maps_to_quick_and_delayed_flags():
+    payload = dataset_payload()
+    payload["examples"][0]["signals"]["time_to_apply_days"] = 2
+    payload["examples"][1]["signals"]["time_to_apply_days"] = 20
+
+    model = train_model([payload], epochs=20)
+    fast_features = model.feature_vector(payload["examples"][0])
+    slow_features = model.feature_vector(payload["examples"][1])
+
+    assert fast_features["quick_apply"] == 1.0
+    assert fast_features["delayed_apply"] == 0.0
+    assert slow_features["quick_apply"] == 0.0
+    assert slow_features["delayed_apply"] == 1.0

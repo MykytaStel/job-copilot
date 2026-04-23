@@ -10,7 +10,10 @@ use crate::services::followup::FollowUpService;
 use crate::services::jobs::JobsService;
 use crate::services::notifications::NotificationsService;
 use crate::services::profile_analysis::ProfileAnalysisService;
+use crate::services::profile_ml_metrics::ProfileMlMetricsService;
+use crate::services::profile_ml_state::ProfileMlStateService;
 use crate::services::profile_records::ProfileRecordsService;
+use crate::services::reranker_bootstrap::RerankerBootstrapService;
 use crate::services::resumes::ResumesService;
 use crate::services::salary::SalaryService;
 use crate::services::search_profile_builder::SearchProfileBuilder;
@@ -39,6 +42,12 @@ impl AppState {
             version: env!("CARGO_PKG_VERSION").to_string(),
             database: Database::disabled(),
             profile_records,
+            profile_ml_state: ProfileMlStateService::for_tests(
+                crate::services::profile_ml_state::ProfileMlStateServiceStub::default(),
+            ),
+            profile_ml_metrics: ProfileMlMetricsService::for_tests(
+                crate::services::profile_ml_metrics::ProfileMlMetricsServiceStub::default(),
+            ),
             jobs_service,
             search_ranking: SearchRankingService::new(),
             applications_service,
@@ -66,6 +75,11 @@ impl AppState {
             trained_reranker_enabled: false,
             trained_reranker_availability: TrainedRerankerAvailability::DisabledByFlag,
             trained_reranker_model: None,
+            reranker_bootstrap: RerankerBootstrapService::new(
+                "http://localhost:8000".to_string(),
+                15,
+            )
+            .expect("test ML sidecar client should build"),
         }
     }
 
@@ -84,6 +98,22 @@ impl AppState {
         notifications_service: NotificationsService,
     ) -> Self {
         self.notifications_service = notifications_service;
+        self
+    }
+
+    pub fn with_profile_ml_state_service(
+        mut self,
+        profile_ml_state: ProfileMlStateService,
+    ) -> Self {
+        self.profile_ml_state = profile_ml_state;
+        self
+    }
+
+    pub fn with_profile_ml_metrics_service(
+        mut self,
+        profile_ml_metrics: ProfileMlMetricsService,
+    ) -> Self {
+        self.profile_ml_metrics = profile_ml_metrics;
         self
     }
 
@@ -123,6 +153,14 @@ impl AppState {
 
     pub fn with_reranker_runtime_mode(mut self, mode: RerankerRuntimeMode) -> Self {
         self.reranker_runtime_mode = mode;
+        self
+    }
+
+    pub fn with_reranker_bootstrap_service(
+        mut self,
+        reranker_bootstrap: RerankerBootstrapService,
+    ) -> Self {
+        self.reranker_bootstrap = reranker_bootstrap;
         self
     }
 }

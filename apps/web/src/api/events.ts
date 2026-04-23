@@ -16,7 +16,10 @@ export type UserEventType =
   | 'application_coach_requested'
   | 'cover_letter_draft_requested'
   | 'interview_prep_requested'
-  | 'application_created';
+  | 'application_created'
+  | 'job_scrolled_to_bottom'
+  | 'job_returned'
+  | 'job_shared';
 
 type UserEventLogInput = {
   eventType: UserEventType;
