@@ -1,5 +1,7 @@
 import json
 import math
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -35,9 +37,18 @@ class TrainedRerankerModel:
     def save(self, path: str | Path) -> None:
         output_path = Path(path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as handle:
-            handle.write(self.artifact.model_dump_json(indent=2))
-            handle.write("\n")
+        content = self.artifact.model_dump_json(indent=2) + "\n"
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=output_path.parent, suffix=".tmp")
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as handle:
+                handle.write(content)
+            os.replace(tmp_path, output_path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     def feature_vector(self, example: OutcomeExample | dict[str, Any]) -> dict[str, float]:
         if isinstance(example, OutcomeExample):

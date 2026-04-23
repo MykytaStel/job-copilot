@@ -15,7 +15,7 @@ EnrichmentProvider = (
 )
 
 
-def _build_enrichment_provider() -> EnrichmentProvider:
+def build_enrichment_provider() -> EnrichmentProvider:
     settings = get_runtime_settings()
     provider_name = settings.llm_provider
 
@@ -44,13 +44,13 @@ def _build_enrichment_provider() -> EnrichmentProvider:
 
 
 def build_profile_insights_provider() -> EnrichmentProvider:
-    provider = _build_enrichment_provider()
+    provider = build_enrichment_provider()
     return provider
 
 
 def build_job_fit_explanation_provider() -> EnrichmentProvider:
     try:
-        provider = _build_enrichment_provider()
+        provider = build_enrichment_provider()
     except ProfileInsightsProviderError as exc:
         raise JobFitExplanationProviderError(str(exc)) from exc
     return provider
@@ -58,7 +58,7 @@ def build_job_fit_explanation_provider() -> EnrichmentProvider:
 
 def build_application_coach_provider() -> EnrichmentProvider:
     try:
-        provider = _build_enrichment_provider()
+        provider = build_enrichment_provider()
     except ProfileInsightsProviderError as exc:
         raise ApplicationCoachProviderError(str(exc)) from exc
     return provider
@@ -66,7 +66,7 @@ def build_application_coach_provider() -> EnrichmentProvider:
 
 def build_cover_letter_draft_provider() -> EnrichmentProvider:
     try:
-        provider = _build_enrichment_provider()
+        provider = build_enrichment_provider()
     except ProfileInsightsProviderError as exc:
         raise CoverLetterDraftProviderError(str(exc)) from exc
     return provider
@@ -74,7 +74,7 @@ def build_cover_letter_draft_provider() -> EnrichmentProvider:
 
 def build_interview_prep_provider() -> EnrichmentProvider:
     try:
-        provider = _build_enrichment_provider()
+        provider = build_enrichment_provider()
     except ProfileInsightsProviderError as exc:
         raise InterviewPrepProviderError(str(exc)) from exc
     return provider
@@ -82,7 +82,7 @@ def build_interview_prep_provider() -> EnrichmentProvider:
 
 def build_weekly_guidance_provider() -> EnrichmentProvider:
     try:
-        provider = _build_enrichment_provider()
+        provider = build_enrichment_provider()
     except ProfileInsightsProviderError as exc:
         raise WeeklyGuidanceProviderError(str(exc)) from exc
     return provider

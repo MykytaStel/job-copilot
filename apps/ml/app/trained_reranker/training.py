@@ -33,6 +33,8 @@ def train_model(
     signal_weights: OutcomeSignalWeightConfig = DEFAULT_OUTCOME_SIGNAL_WEIGHTS,
     confidence_weights: OutcomeConfidenceWeightConfig = DEFAULT_OUTCOME_CONFIDENCE_WEIGHTS,
     temporal_decay_lambda: float = 0.01,
+    distilled_labels: list[float] | None = None,
+    feature_names: list[str] | None = None,
 ) -> TrainedRerankerModel:
     examples: list[OutcomeExample] = []
     policy_versions: set[str] = set()
@@ -55,15 +57,15 @@ def train_model(
     safe_epochs = max(1, epochs)
     safe_learning_rate = max(0.0001, learning_rate)
     safe_l2 = max(0.0, l2)
-    feature_names = list(DEFAULT_FEATURE_NAMES)
+    feature_names = list(feature_names or DEFAULT_FEATURE_NAMES)
     vectors = [
         [extract_features(example)[feature_name] for feature_name in feature_names]
         for example in examples
     ]
-    labels = [
-        training_target_for_example(example, signal_weights)
-        for example in examples
-    ]
+    if distilled_labels is not None and len(distilled_labels) == len(examples):
+        labels = [max(0.0, min(1.0, v)) for v in distilled_labels]
+    else:
+        labels = [training_target_for_example(example, signal_weights) for example in examples]
     sample_weights = build_sample_weights(
         examples,
         confidence_weights=confidence_weights,
@@ -101,6 +103,11 @@ def train_model(
     label_policy_version = (
         next(iter(policy_versions)) if len(policy_versions) == 1 else "mixed"
     )
+    total_examples = len(examples)
+    bucket_distribution = {
+        bucket: round(count / total_examples, 6) if total_examples > 0 else 0.0
+        for bucket, count in bucket_counts.items()
+    }
     artifact = TrainedRerankerArtifact(
         label_policy_version=label_policy_version,
         signal_weight_policy_version=signal_weights.policy_version,
@@ -112,6 +119,8 @@ def train_model(
         feature_transforms=dict(FEATURE_TRANSFORMS),
         weights=rounded_weights,
         feature_importances=compute_feature_importances(rounded_weights, feature_names),
+        signal_bucket_distribution=bucket_distribution,
+        lgbm_distilled=distilled_labels is not None and len(distilled_labels) == len(examples),
         intercept=round(intercept, 8),
         max_score_delta=max(1, min(20, max_score_delta)),
         training=TrainingSummary(

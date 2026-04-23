@@ -1,152 +1,109 @@
 from functools import lru_cache
 
-from app import bootstrap_training
+from fastapi import Request
+
 from app.application_coach import (
     ApplicationCoachProviderError,
     http_error_from_application_coach_error,
 )
-from app.application_coach_service import ApplicationCoachService
-from app.engine_api_client import engine_api_client_context
-from app.fit_analysis_service import FitAnalysisService
 from app.cover_letter_draft import (
     CoverLetterDraftProviderError,
     http_error_from_cover_letter_draft_error,
 )
-from app.cover_letter_draft_service import CoverLetterDraftService
-from app.interview_prep import (
-    InterviewPrepProviderError,
-    http_error_from_interview_prep_error,
-)
-from app.interview_prep_service import InterviewPrepService
-from app.job_fit_explanation import (
-    JobFitExplanationProviderError,
-    http_error_from_job_fit_explanation_error,
-)
-from app.job_fit_explanation_service import JobFitExplanationService
-from app.llm_provider_factory import (
-    build_application_coach_provider,
-    build_cover_letter_draft_provider,
-    build_interview_prep_provider,
-    build_job_fit_explanation_provider,
-    build_profile_insights_provider,
-    build_weekly_guidance_provider,
-)
+from app.core.runtime import AppServices
+from app.interview_prep import InterviewPrepProviderError, http_error_from_interview_prep_error
+from app.job_fit_explanation import JobFitExplanationProviderError, http_error_from_job_fit_explanation_error
 from app.profile_insights import (
     ProfileInsightsProviderError,
     http_error_from_provider_error,
 )
-from app.profile_insights_service import ProfileInsightsService
-from app.rerank_service import RerankService
-from app.reranker_bootstrap_service import RerankerBootstrapService
-from app.trained_reranker_config import DEFAULT_TRAINED_RERANKER_MODEL_PATH
 from app.weekly_guidance import (
     WeeklyGuidanceProviderError,
     http_error_from_weekly_guidance_error,
 )
-from app.weekly_guidance_service import WeeklyGuidanceService
+from app.engine_api_client import engine_api_client_context
+from app.reranker_bootstrap_service import RerankerBootstrapService
+from app import bootstrap_training
+from app.settings import DEFAULT_BOOTSTRAP_TASKS_DIR
+from app.trained_reranker_config import DEFAULT_TRAINED_RERANKER_MODEL_PATH
+
+def get_app_services(request: Request) -> AppServices:
+    return request.app.state.services
 
 
 def engine_api_client_factory():
     return engine_api_client_context()
 
 
-@lru_cache(maxsize=1)
-def build_cached_job_fit_explanation_service() -> JobFitExplanationService:
-    return JobFitExplanationService(build_job_fit_explanation_provider())
+def get_fit_analysis_service(request: Request):
+    return get_app_services(request).fit_analysis_service
 
 
-def get_job_fit_explanation_service() -> JobFitExplanationService:
-    try:
-        return build_cached_job_fit_explanation_service()
-    except JobFitExplanationProviderError as exc:
-        raise http_error_from_job_fit_explanation_error(exc) from exc
+def get_rerank_service(request: Request):
+    return get_app_services(request).rerank_service
 
 
-@lru_cache(maxsize=1)
-def build_cached_application_coach_service() -> ApplicationCoachService:
-    return ApplicationCoachService(build_application_coach_provider())
-
-
-def get_application_coach_service() -> ApplicationCoachService:
-    try:
-        return build_cached_application_coach_service()
-    except ApplicationCoachProviderError as exc:
-        raise http_error_from_application_coach_error(exc) from exc
+def get_reranker_bootstrap_service(request: Request):
+    return get_app_services(request).reranker_bootstrap_service
 
 
 @lru_cache(maxsize=1)
-def build_cached_cover_letter_draft_service() -> CoverLetterDraftService:
-    return CoverLetterDraftService(build_cover_letter_draft_provider())
-
-
-def get_cover_letter_draft_service() -> CoverLetterDraftService:
-    try:
-        return build_cached_cover_letter_draft_service()
-    except CoverLetterDraftProviderError as exc:
-        raise http_error_from_cover_letter_draft_error(exc) from exc
-
-
-@lru_cache(maxsize=1)
-def build_cached_interview_prep_service() -> InterviewPrepService:
-    return InterviewPrepService(build_interview_prep_provider())
-
-
-def get_interview_prep_service() -> InterviewPrepService:
-    try:
-        return build_cached_interview_prep_service()
-    except InterviewPrepProviderError as exc:
-        raise http_error_from_interview_prep_error(exc) from exc
-
-
-@lru_cache(maxsize=1)
-def build_cached_profile_insights_service() -> ProfileInsightsService:
-    return ProfileInsightsService(build_profile_insights_provider())
-
-
-def get_profile_insights_service() -> ProfileInsightsService:
-    try:
-        return build_cached_profile_insights_service()
-    except ProfileInsightsProviderError as exc:
-        raise http_error_from_provider_error(exc) from exc
-
-
-@lru_cache(maxsize=1)
-def build_cached_weekly_guidance_service() -> WeeklyGuidanceService:
-    return WeeklyGuidanceService(build_weekly_guidance_provider())
-
-
-def get_weekly_guidance_service() -> WeeklyGuidanceService:
-    try:
-        return build_cached_weekly_guidance_service()
-    except WeeklyGuidanceProviderError as exc:
-        raise http_error_from_weekly_guidance_error(exc) from exc
-
-
-@lru_cache(maxsize=1)
-def build_cached_fit_analysis_service() -> FitAnalysisService:
-    return FitAnalysisService(engine_api_client_factory)
-
-
-def get_fit_analysis_service() -> FitAnalysisService:
-    return build_cached_fit_analysis_service()
-
-
-@lru_cache(maxsize=1)
-def build_cached_rerank_service() -> RerankService:
-    return RerankService(engine_api_client_factory)
-
-
-def get_rerank_service() -> RerankService:
-    return build_cached_rerank_service()
-
-
-@lru_cache(maxsize=1)
-def build_cached_reranker_bootstrap_service() -> RerankerBootstrapService:
+def build_cached_reranker_bootstrap_service():
     return RerankerBootstrapService(
         bootstrap_workflow=bootstrap_training.bootstrap_and_retrain,
         model_path=DEFAULT_TRAINED_RERANKER_MODEL_PATH,
     )
 
 
-def get_reranker_bootstrap_service() -> RerankerBootstrapService:
-    return build_cached_reranker_bootstrap_service()
+def get_profile_insights_service(request: Request):
+    services = get_app_services(request)
+    if services.profile_insights_service is not None:
+        return services.profile_insights_service
+    raise http_error_from_provider_error(
+        ProfileInsightsProviderError(services.enrichment_provider_error or "provider unavailable")
+    )
+
+
+def get_job_fit_explanation_service(request: Request):
+    services = get_app_services(request)
+    if services.job_fit_explanation_service is not None:
+        return services.job_fit_explanation_service
+    raise http_error_from_job_fit_explanation_error(
+        JobFitExplanationProviderError(services.enrichment_provider_error or "provider unavailable")
+    )
+
+
+def get_application_coach_service(request: Request):
+    services = get_app_services(request)
+    if services.application_coach_service is not None:
+        return services.application_coach_service
+    raise http_error_from_application_coach_error(
+        ApplicationCoachProviderError(services.enrichment_provider_error or "provider unavailable")
+    )
+
+
+def get_cover_letter_draft_service(request: Request):
+    services = get_app_services(request)
+    if services.cover_letter_draft_service is not None:
+        return services.cover_letter_draft_service
+    raise http_error_from_cover_letter_draft_error(
+        CoverLetterDraftProviderError(services.enrichment_provider_error or "provider unavailable")
+    )
+
+
+def get_interview_prep_service(request: Request):
+    services = get_app_services(request)
+    if services.interview_prep_service is not None:
+        return services.interview_prep_service
+    raise http_error_from_interview_prep_error(
+        InterviewPrepProviderError(services.enrichment_provider_error or "provider unavailable")
+    )
+
+
+def get_weekly_guidance_service(request: Request):
+    services = get_app_services(request)
+    if services.weekly_guidance_service is not None:
+        return services.weekly_guidance_service
+    raise http_error_from_weekly_guidance_error(
+        WeeklyGuidanceProviderError(services.enrichment_provider_error or "provider unavailable")
+    )

@@ -1,17 +1,17 @@
 from typing import Any
 
-from app.application_coach import ApplicationCoachPrompt, ApplicationCoachRequest
-from app.cover_letter_draft import CoverLetterDraftPrompt, CoverLetterDraftRequest
-from app.interview_prep import InterviewPrepPrompt, InterviewPrepRequest
-from app.job_fit_explanation import JobFitExplanationPrompt, JobFitExplanationRequest
-from app.profile_insights import LlmContextRequest, ProfileInsightsPrompt
+from app.enrichment.application_coach import ApplicationCoachPrompt, ApplicationCoachRequest
+from app.enrichment.cover_letter_draft import CoverLetterDraftPrompt, CoverLetterDraftRequest
+from app.enrichment.interview_prep import InterviewPrepPrompt, InterviewPrepRequest
+from app.enrichment.job_fit_explanation import JobFitExplanationPrompt, JobFitExplanationRequest
+from app.enrichment.profile_insights import LlmContextRequest, ProfileInsightsPrompt
+from app.enrichment.weekly_guidance import WeeklyGuidancePrompt, WeeklyGuidanceRequest
 from app.template_application_coach import build_application_coach
 from app.template_cover_letter_draft import build_cover_letter_draft
 from app.template_interview_prep import build_interview_prep
 from app.template_job_fit_explanation import build_job_fit_explanation
 from app.template_profile_insights import build_profile_insights
 from app.template_weekly_guidance import build_weekly_guidance
-from app.weekly_guidance import WeeklyGuidancePrompt, WeeklyGuidanceRequest
 
 
 class TemplateEnrichmentProvider:

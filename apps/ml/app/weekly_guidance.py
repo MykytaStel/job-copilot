@@ -1,4 +1,5 @@
-from app.weekly_guidance_flow.contract import (
+from app.enrichment.weekly_guidance import (
+    MalformedWeeklyGuidanceOutputError,
     WeeklyGuidanceAnalyticsSummary,
     WeeklyGuidanceBehaviorSignalCount,
     WeeklyGuidanceBehaviorSummary,
@@ -8,18 +9,17 @@ from app.weekly_guidance_flow.contract import (
     WeeklyGuidanceJobsByLifecycle,
     WeeklyGuidanceJobsBySourceEntry,
     WeeklyGuidanceLlmContext,
+    WeeklyGuidancePrompt,
+    WeeklyGuidanceProviderError,
     WeeklyGuidanceRecentFeedbackSummary,
     WeeklyGuidanceRecentSearchSummary,
     WeeklyGuidanceRequest,
     WeeklyGuidanceResponse,
-)
-from app.weekly_guidance_flow.errors import (
-    MalformedWeeklyGuidanceOutputError,
-    WeeklyGuidanceProviderError,
+    build_weekly_guidance_prompt,
     http_error_from_weekly_guidance_error,
+    parse_weekly_guidance_output,
+    weekly_guidance_schema,
 )
-from app.weekly_guidance_flow.parser import parse_weekly_guidance_output
-from app.weekly_guidance_flow.prompt import WeeklyGuidancePrompt, build_weekly_guidance_prompt
 
 __all__ = [
     "MalformedWeeklyGuidanceOutputError",
@@ -41,4 +41,5 @@ __all__ = [
     "build_weekly_guidance_prompt",
     "http_error_from_weekly_guidance_error",
     "parse_weekly_guidance_output",
+    "weekly_guidance_schema",
 ]

@@ -14,6 +14,7 @@ from .artifact import (
     load_dataset,
 )
 from .bpr_model import bpr_candidate_available, train_bpr_model
+from .lgbm_model import distill_lgbm_labels, lgbm_available, lgbm_candidate_available
 from .features import clamp, extract_features, has_text
 from .model import TrainedRerankerModel, sigmoid
 from .training import average_log_loss, dot, smoothed_logit, train_model
@@ -30,6 +31,9 @@ __all__ = [
     "train_model",
     "train_bpr_model",
     "bpr_candidate_available",
+    "distill_lgbm_labels",
+    "lgbm_available",
+    "lgbm_candidate_available",
     "load_dataset",
     "clamp",
     "has_text",

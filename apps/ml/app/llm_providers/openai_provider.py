@@ -1,15 +1,15 @@
 import asyncio
 
-from app.application_coach import ApplicationCoachProviderError, ApplicationCoachRequest
-from app.cover_letter_draft import CoverLetterDraftProviderError, CoverLetterDraftRequest
-from app.interview_prep import InterviewPrepProviderError, InterviewPrepRequest
-from app.job_fit_explanation import JobFitExplanationProviderError, JobFitExplanationRequest
-from app.llm_providers.common import PromptPayload, build_retrying
-from app.profile_insights import (
+from app.enrichment.application_coach import ApplicationCoachProviderError, ApplicationCoachRequest
+from app.enrichment.cover_letter_draft import CoverLetterDraftProviderError, CoverLetterDraftRequest
+from app.enrichment.interview_prep import InterviewPrepProviderError, InterviewPrepRequest
+from app.enrichment.job_fit_explanation import JobFitExplanationProviderError, JobFitExplanationRequest
+from app.enrichment.profile_insights import (
     LlmContextRequest,
     ProfileInsightsProviderError,
 )
-from app.weekly_guidance import WeeklyGuidanceProviderError, WeeklyGuidanceRequest
+from app.enrichment.weekly_guidance import WeeklyGuidanceProviderError, WeeklyGuidanceRequest
+from app.llm_providers.common import PromptPayload, build_retrying
 
 
 class _OpenAIJsonSchemaProvider:

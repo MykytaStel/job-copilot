@@ -97,6 +97,9 @@ class TrainedRerankerArtifact(BaseModel):
     feature_transforms: dict[str, str]
     weights: dict[str, float]
     feature_importances: dict[str, float] = Field(default_factory=dict)
+    signal_bucket_distribution: dict[str, float] = Field(default_factory=dict)
+    distribution_shift_score: float | None = None
+    lgbm_distilled: bool = False
     intercept: float
     max_score_delta: int = Field(default=8, ge=1, le=20)
     training: TrainingSummary

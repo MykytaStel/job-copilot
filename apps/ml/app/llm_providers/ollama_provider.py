@@ -1,16 +1,16 @@
 import httpx
 
-from app.application_coach import ApplicationCoachProviderError, ApplicationCoachRequest
-from app.cover_letter_draft import CoverLetterDraftProviderError, CoverLetterDraftRequest
-from app.interview_prep import InterviewPrepProviderError, InterviewPrepRequest
-from app.job_fit_explanation import JobFitExplanationProviderError, JobFitExplanationRequest
-from app.llm_providers.common import build_async_client, build_async_retrying
-from app.profile_insights import (
+from app.enrichment.application_coach import ApplicationCoachProviderError, ApplicationCoachRequest
+from app.enrichment.cover_letter_draft import CoverLetterDraftProviderError, CoverLetterDraftRequest
+from app.enrichment.interview_prep import InterviewPrepProviderError, InterviewPrepRequest
+from app.enrichment.job_fit_explanation import JobFitExplanationProviderError, JobFitExplanationRequest
+from app.enrichment.profile_insights import (
     LlmContextRequest,
     ProfileInsightsProviderError,
 )
+from app.enrichment.weekly_guidance import WeeklyGuidanceProviderError, WeeklyGuidanceRequest
+from app.llm_providers.common import build_async_client, build_async_retrying
 from app.settings import DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
-from app.weekly_guidance import WeeklyGuidanceProviderError, WeeklyGuidanceRequest
 
 
 RETRYABLE_OLLAMA_ERRORS = (
@@ -34,6 +34,9 @@ class OllamaEnrichmentProvider:
         self._client = build_async_client(timeout_seconds)
         self._base_url = base_url.rstrip("/")
         self._model = model
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
     async def _request_with_retry(self, *, system_prompt: str, context_payload: str):
         async for attempt in build_async_retrying(RETRYABLE_OLLAMA_ERRORS):

@@ -27,13 +27,18 @@ async def fetch_labeled_examples(
 async def bootstrap_and_retrain(
     profile_id: str,
     min_examples: int = 30,
-    model_path: Path = DEFAULT_MODEL_PATH,
+    model_path: Path | None = None,
+    artifact_path: Path = DEFAULT_MODEL_PATH,
+    compatibility_model_path: Path = DEFAULT_TRAINED_RERANKER_MODEL_PATH,
     base_url: str | None = None,
 ) -> BootstrapWorkflowResult:
+    resolved_artifact_path = model_path or artifact_path
+    resolved_compatibility_path = model_path or compatibility_model_path
     return await _bootstrap_and_retrain(
         profile_id=profile_id,
         min_examples=min_examples,
-        model_path=model_path,
+        artifact_path=resolved_artifact_path,
+        compatibility_model_path=resolved_compatibility_path,
         base_url=base_url,
         fetch_examples=fetch_labeled_examples,
     )

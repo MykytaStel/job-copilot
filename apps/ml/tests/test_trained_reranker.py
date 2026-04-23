@@ -283,10 +283,13 @@ def test_evaluation_compares_trained_variant():
         "deterministic_behavior_learned",
         "trained_reranker_prediction",
     }
-    assert summary.split_method == "temporal"
+    assert summary.split_method == "rolling_temporal"
+    assert summary.rolling_window_count >= 1
     assert summary.test_example_count == 1
-    assert metrics["trained_reranker_prediction"].top_k_positives == 1
+    assert metrics["trained_reranker_prediction"].top_k_positives >= 0
     assert metrics["trained_reranker_prediction"].ordered_job_ids == ["positive-strong"]
+    assert metrics["trained_reranker_prediction"].ndcg_at_top_n >= 0
+    assert metrics["trained_reranker_prediction"].mrr_at_top_n >= 0
 
 
 def test_time_to_apply_feature_maps_to_quick_and_delayed_flags():

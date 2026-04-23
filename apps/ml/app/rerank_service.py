@@ -30,9 +30,23 @@ class RerankService:
         async with self._client_factory() as client_or_engine_api:
             engine_api = self._coerce_engine_api_client(client_or_engine_api)
             profile = await engine_api.fetch_profile(payload.profile_id)
-            jobs = await asyncio.gather(
-                *(engine_api.fetch_job_lifecycle(job_id) for job_id in unique_job_ids)
+            raw_results = await asyncio.gather(
+                *(engine_api.fetch_job_lifecycle(job_id) for job_id in unique_job_ids),
+                return_exceptions=True,
             )
+
+        jobs = []
+        for job_id, result in zip(unique_job_ids, raw_results):
+            if isinstance(result, Exception):
+                logger.warning(
+                    "failed to fetch job lifecycle",
+                    extra={"job_id": job_id, "error": str(result)},
+                )
+            else:
+                jobs.append(result)
+
+        if not jobs:
+            raise InvalidRerankRequestError("no jobs could be fetched")
 
         ranked_jobs: list[RerankedJob] = []
 

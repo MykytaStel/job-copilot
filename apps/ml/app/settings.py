@@ -1,5 +1,6 @@
 import logging
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Any
 
 from pydantic import Field, field_validator
@@ -19,6 +20,16 @@ DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 180.0
+DEFAULT_TASK_TTL_HOURS = 24
+DEFAULT_READY_TIMEOUT_SECONDS = 2.0
+
+
+def _ml_root_dir() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+DEFAULT_ARTIFACTS_DIR = _ml_root_dir() / "models" / "profiles"
+DEFAULT_BOOTSTRAP_TASKS_DIR = _ml_root_dir() / ".runtime" / "bootstrap-tasks"
 
 
 def _split_csv(value: str) -> tuple[str, ...]:
@@ -29,6 +40,7 @@ class RuntimeSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     log_level: str = Field(default="INFO", validation_alias="ML_LOG_LEVEL")
+    log_format: str = Field(default="plain", validation_alias="ML_LOG_FORMAT")
     cors_allowed_origins: Annotated[tuple[str, ...], NoDecode] = Field(
         default=DEFAULT_CORS_ALLOWED_ORIGINS,
         validation_alias="ML_CORS_ALLOWED_ORIGINS",
@@ -53,6 +65,22 @@ class RuntimeSettings(BaseSettings):
         validation_alias="OLLAMA_BASE_URL",
     )
     ollama_model: str = Field(default=DEFAULT_OLLAMA_MODEL, validation_alias="OLLAMA_MODEL")
+    internal_token: str | None = Field(default=None, validation_alias="ML_INTERNAL_TOKEN")
+    engine_api_internal_token: str | None = Field(
+        default=None,
+        validation_alias="ENGINE_API_INTERNAL_TOKEN",
+    )
+    model_path: str | None = Field(default=None, validation_alias="ML_MODEL_PATH")
+    artifacts_dir: str | None = Field(default=None, validation_alias="ML_ARTIFACTS_DIR")
+    bootstrap_tasks_dir: str | None = Field(
+        default=None,
+        validation_alias="ML_BOOTSTRAP_TASKS_DIR",
+    )
+    task_ttl_hours: int = Field(default=DEFAULT_TASK_TTL_HOURS, validation_alias="ML_TASK_TTL_HOURS")
+    ready_timeout_seconds: float = Field(
+        default=DEFAULT_READY_TIMEOUT_SECONDS,
+        validation_alias="ML_READY_TIMEOUT_SECONDS",
+    )
 
     @field_validator("log_level", mode="before")
     @classmethod
@@ -60,6 +88,14 @@ class RuntimeSettings(BaseSettings):
         if not isinstance(value, str):
             return "INFO"
         return value.strip().upper() or "INFO"
+
+    @field_validator("log_format", mode="before")
+    @classmethod
+    def normalize_log_format(cls, value: Any) -> str:
+        if not isinstance(value, str):
+            return "plain"
+        cleaned = value.strip().lower()
+        return cleaned if cleaned in {"plain", "json"} else "plain"
 
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
@@ -95,6 +131,22 @@ class RuntimeSettings(BaseSettings):
         except (TypeError, ValueError):
             return DEFAULT_ENGINE_API_TIMEOUT_SECONDS
 
+    @field_validator("ready_timeout_seconds", mode="before")
+    @classmethod
+    def normalize_ready_timeout(cls, value: Any) -> float:
+        try:
+            return max(0.2, float(value))
+        except (TypeError, ValueError):
+            return DEFAULT_READY_TIMEOUT_SECONDS
+
+    @field_validator("task_ttl_hours", mode="before")
+    @classmethod
+    def normalize_task_ttl_hours(cls, value: Any) -> int:
+        try:
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return DEFAULT_TASK_TTL_HOURS
+
     @field_validator("llm_provider", mode="before")
     @classmethod
     def normalize_llm_provider(cls, value: Any) -> str:
@@ -102,7 +154,16 @@ class RuntimeSettings(BaseSettings):
             return DEFAULT_LLM_PROVIDER
         return value.strip().lower() or DEFAULT_LLM_PROVIDER
 
-    @field_validator("openai_api_key", "openai_base_url", mode="before")
+    @field_validator(
+        "openai_api_key",
+        "openai_base_url",
+        "internal_token",
+        "engine_api_internal_token",
+        "model_path",
+        "artifacts_dir",
+        "bootstrap_tasks_dir",
+        mode="before",
+    )
     @classmethod
     def normalize_optional_string(cls, value: Any) -> str | None:
         if value is None:
@@ -130,7 +191,18 @@ def get_runtime_settings() -> RuntimeSettings:
 def configure_logging() -> None:
     settings = get_runtime_settings()
     level = getattr(logging, settings.log_level, logging.INFO)
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    handlers: dict[str, Any] = {"level": level}
+    if settings.log_format == "json":
+        try:
+            from pythonjsonlogger.json import JsonFormatter
+
+            handler = logging.StreamHandler()
+            handler.setFormatter(
+                JsonFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+            )
+            handlers["handlers"] = [handler]
+        except ImportError:
+            handlers["format"] = "%(asctime)s %(levelname)s %(name)s %(message)s"
+    else:
+        handlers["format"] = "%(asctime)s %(levelname)s %(name)s %(message)s"
+    logging.basicConfig(**handlers)

@@ -27,6 +27,7 @@ def train_bpr_model(
     learning_rate: float = 0.05,
     l2: float = 0.01,
     max_score_delta: int = 8,
+    feature_names: list[str] | None = None,
 ) -> TrainedRerankerModel:
     examples = _load_examples(datasets)
     if not examples:
@@ -37,7 +38,7 @@ def train_bpr_model(
     if len(positives) < 20 or len(negatives) < 20:
         raise ValueError("BPR requires at least 20 positive and 20 negative examples")
 
-    feature_names = list(DEFAULT_FEATURE_NAMES)
+    feature_names = list(feature_names or DEFAULT_FEATURE_NAMES)
     weights = [0.0 for _ in feature_names]
     pairs = _pair_examples(examples)
 

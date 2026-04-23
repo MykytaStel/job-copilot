@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -6,7 +7,7 @@ import httpx
 from pydantic import BaseModel, field_validator
 
 from app.dataset import OutcomeDataset
-from app.settings import get_runtime_settings
+from app.settings import RuntimeSettings, get_runtime_settings
 
 
 class EngineApiError(BaseModel):
@@ -125,6 +126,29 @@ def engine_api_timeout_seconds() -> float:
     return get_runtime_settings().engine_api_timeout_seconds
 
 
+def build_shared_http_client(settings: RuntimeSettings) -> httpx.AsyncClient:
+    headers: dict[str, str] = {}
+    if settings.engine_api_internal_token:
+        headers["X-Internal-Token"] = settings.engine_api_internal_token
+    kwargs = {
+        "timeout": httpx.Timeout(settings.engine_api_timeout_seconds),
+        "limits": httpx.Limits(max_connections=100, max_keepalive_connections=20),
+        "headers": headers or None,
+    }
+    try:
+        return httpx.AsyncClient(**kwargs)
+    except TypeError:
+        return httpx.AsyncClient(timeout=kwargs["timeout"])
+
+
+_shared_client: httpx.AsyncClient | None = None
+
+
+def configure_shared_client(client: httpx.AsyncClient | None) -> None:
+    global _shared_client
+    _shared_client = client
+
+
 class EngineApiClient:
     def __init__(self, client: httpx.AsyncClient, *, base_url: str | None = None):
         self._client = client
@@ -142,12 +166,12 @@ class EngineApiClient:
         payload = await self._fetch_json(f"/api/v1/profiles/{profile_id}/reranker-dataset")
         return OutcomeDataset.model_validate(payload)
 
+    async def probe_health(self) -> dict[str, Any]:
+        return await self._fetch_json("/health")
+
     async def _fetch_json(self, path: str) -> dict[str, Any]:
         url = self._build_url(path)
-        try:
-            response = await self._client.get(url)
-        except httpx.HTTPError as exc:
-            raise EngineApiUnavailableError(f"engine-api request failed: {exc}") from exc
+        response = await self._get_with_retry(url)
 
         if response.status_code >= 400:
             try:
@@ -160,6 +184,38 @@ class EngineApiClient:
 
         return response.json()
 
+    async def _get_with_retry(self, url: str) -> httpx.Response:
+        retryable_errors = (
+            httpx.ConnectError,
+            httpx.PoolTimeout,
+            httpx.ReadTimeout,
+            httpx.RemoteProtocolError,
+            httpx.WriteError,
+            httpx.WriteTimeout,
+        )
+        retryable_status_codes = {502, 503, 504}
+        last_error: Exception | None = None
+
+        for attempt in range(3):
+            try:
+                response = await self._client.get(url)
+            except retryable_errors as exc:
+                last_error = exc
+                if attempt == 2:
+                    break
+                await asyncio.sleep(0.2 * (attempt + 1))
+                continue
+            except httpx.HTTPError as exc:
+                raise EngineApiUnavailableError(f"engine-api request failed: {exc}") from exc
+
+            if response.status_code in retryable_status_codes and attempt < 2:
+                await asyncio.sleep(0.2 * (attempt + 1))
+                continue
+            return response
+
+        detail = f"engine-api request failed: {last_error}" if last_error else "engine-api unavailable"
+        raise EngineApiUnavailableError(detail)
+
     def _build_url(self, path: str) -> str:
         return f"{self._base_url or engine_api_base_url()}{path}"
 
@@ -169,6 +225,8 @@ async def engine_api_client_context(
     *,
     base_url: str | None = None,
 ) -> AsyncIterator[EngineApiClient]:
-    timeout = httpx.Timeout(engine_api_timeout_seconds())
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    if _shared_client is not None:
+        yield EngineApiClient(_shared_client, base_url=base_url)
+        return
+    async with build_shared_http_client(get_runtime_settings()) as client:
         yield EngineApiClient(client, base_url=base_url)

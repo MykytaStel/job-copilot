@@ -184,7 +184,11 @@ def test_engine_api_client_context_uses_timeout_and_base_url(monkeypatch):
             captured["base_url"] = base_url
 
     monkeypatch.setattr(engine_api_client_module, "engine_api_timeout_seconds", lambda: 12.5)
-    monkeypatch.setattr(engine_api_client_module.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(
+        engine_api_client_module,
+        "build_shared_http_client",
+        lambda settings: FakeAsyncClient(timeout=engine_api_client_module.httpx.Timeout(12.5)),
+    )
     monkeypatch.setattr(engine_api_client_module, "EngineApiClient", FakeEngineApiClient)
 
     async def open_client() -> None:
@@ -247,6 +251,8 @@ def test_reranker_bootstrap_service_uses_injected_workflow_and_model_path():
         captured["model_path"] = model_path
         return BootstrapWorkflowResult.trained_model(
             example_count=30,
+            profile_id=profile_id,
+            artifact_path=model_path,
             model_path=model_path,
             training=training,
         )
@@ -268,14 +274,22 @@ def test_reranker_bootstrap_service_uses_injected_workflow_and_model_path():
     assert response.model_dump() == {
         "retrained": True,
         "example_count": 30,
+        "profile_id": "profile-1",
         "reason": None,
         "model_path": str(bootstrap_training.DEFAULT_MODEL_PATH),
+        "artifact_path": str(bootstrap_training.DEFAULT_MODEL_PATH),
         "artifact_version": "trained_reranker_v3",
         "model_type": "logistic_regression",
         "training": training_summary_payload(),
         "evaluation": None,
         "benchmark": None,
         "feature_importances": None,
+        "distribution_shift_score": None,
+        "started_at": None,
+        "finished_at": None,
+        "promotion_decision": None,
+        "metrics_version": None,
+        "lgbm_distilled": False,
     }
 
 
@@ -298,14 +312,22 @@ def test_reranker_bootstrap_service_keeps_public_response_shape_when_workflow_sk
     assert response.model_dump() == {
         "retrained": False,
         "example_count": 2,
+        "profile_id": None,
         "reason": "need at least 3 examples, got 2",
         "model_path": None,
+        "artifact_path": None,
         "artifact_version": None,
         "model_type": None,
         "training": None,
         "evaluation": None,
         "benchmark": None,
         "feature_importances": None,
+        "distribution_shift_score": None,
+        "started_at": None,
+        "finished_at": None,
+        "promotion_decision": None,
+        "metrics_version": None,
+        "lgbm_distilled": False,
     }
 
 
@@ -329,12 +351,15 @@ def test_bootstrap_and_retrain_uses_bootstrap_training_fetch_compat_surface(monk
         )
     )
 
-    assert result.to_payload() == {
-        "retrained": False,
-        "example_count": 2,
-        "min_examples": 3,
-        "reason": "need at least 3 examples, got 2",
-    }
+    payload = result.to_payload()
+    assert payload["retrained"] is False
+    assert payload["example_count"] == 2
+    assert payload["min_examples"] == 3
+    assert payload["reason"] == "need at least 3 examples, got 2"
+    assert payload["profile_id"] == "profile-1"
+    assert payload["promotion_decision"] == "skipped_min_examples"
+    assert payload["metrics_version"] == "reranker_eval_v2"
+    assert payload["lgbm_distilled"] is False
 
 
 def test_main_uses_default_model_path_and_prints_json(monkeypatch, capsys):
@@ -352,6 +377,8 @@ def test_main_uses_default_model_path_and_prints_json(monkeypatch, capsys):
         captured["base_url"] = base_url
         return BootstrapWorkflowResult.trained_model(
             example_count=30,
+            profile_id=profile_id,
+            artifact_path=model_path,
             model_path=model_path,
             training=TrainingSummary.model_validate(training_summary_payload(loss=0.123)),
         )
@@ -379,10 +406,13 @@ def test_main_uses_default_model_path_and_prints_json(monkeypatch, capsys):
     assert output == {
         "retrained": True,
         "example_count": 30,
+        "profile_id": "profile-1",
         "model_path": str(DEFAULT_TRAINED_RERANKER_MODEL_PATH),
+        "artifact_path": str(DEFAULT_TRAINED_RERANKER_MODEL_PATH),
         "artifact_version": "trained_reranker_v3",
         "model_type": "logistic_regression",
         "training": training_summary_payload(loss=0.123),
+        "lgbm_distilled": False,
     }
 
 
