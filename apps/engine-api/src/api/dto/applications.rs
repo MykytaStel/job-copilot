@@ -5,9 +5,9 @@ use crate::api::dto::jobs::JobResponse;
 use crate::api::dto::resumes::ResumeVersionResponse;
 use crate::api::error::ApiError;
 use crate::domain::application::model::{
-    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, ApplicationOutcome,
-    Contact, CreateActivity, CreateApplication, CreateApplicationContact, CreateContact, CreateNote,
-    Offer, Task, UpdateApplication, UpsertOffer,
+    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote,
+    ApplicationOutcome, Contact, CreateActivity, CreateApplication, CreateApplicationContact,
+    CreateContact, CreateNote, Offer, Task, UpdateApplication, UpsertOffer,
 };
 
 #[derive(Default, Deserialize)]
@@ -233,10 +233,7 @@ impl UpdateApplicationRequest {
             ));
         }
 
-        let outcome = self
-            .outcome
-            .map(|v| validate_outcome(v))
-            .transpose()?;
+        let outcome = self.outcome.map(|v| validate_outcome(v)).transpose()?;
 
         let rejection_stage = self
             .rejection_stage

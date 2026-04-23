@@ -62,11 +62,7 @@ pub async fn run_retrain_cycle(state: &AppState, retrain_threshold: usize) {
     }
 }
 
-pub fn spawn_retrain_poller(
-    state: AppState,
-    retrain_threshold: usize,
-    poll_interval_seconds: u64,
-) {
+pub fn spawn_retrain_poller(state: AppState, retrain_threshold: usize, poll_interval_seconds: u64) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(
             poll_interval_seconds.max(60),
@@ -147,7 +143,11 @@ async fn persist_bootstrap_response(
         last_training_status: Some(Some(status.clone())),
     };
 
-    if let Err(error) = state.profile_ml_state.update_state(profile_id, update).await {
+    if let Err(error) = state
+        .profile_ml_state
+        .update_state(profile_id, update)
+        .await
+    {
         error!(error = %error, profile_id, "failed to update profile ML state");
         return;
     }
@@ -164,11 +164,13 @@ async fn persist_bootstrap_response(
 mod tests {
     use serde_json::json;
 
-    use crate::domain::profile::ml::{ProfileMlState, ProfileMlMetricRecord};
+    use crate::domain::profile::ml::{ProfileMlMetricRecord, ProfileMlState};
     use crate::domain::profile::model::Profile;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
-    use crate::services::profile_ml_metrics::{ProfileMlMetricsService, ProfileMlMetricsServiceStub};
+    use crate::services::profile_ml_metrics::{
+        ProfileMlMetricsService, ProfileMlMetricsServiceStub,
+    };
     use crate::services::profile_ml_state::{ProfileMlStateService, ProfileMlStateServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::reranker_bootstrap::{
@@ -318,9 +320,8 @@ mod tests {
             ProfileMlMetricsServiceStub::default(),
         ))
         .with_reranker_bootstrap_service(RerankerBootstrapService::for_tests(
-            RerankerBootstrapServiceStub::default().with_response(Err(
-                RerankerBootstrapError::Http("boom".to_string()),
-            )),
+            RerankerBootstrapServiceStub::default()
+                .with_response(Err(RerankerBootstrapError::Http("boom".to_string()))),
         ));
 
         run_retrain_cycle(&state, 15).await;
@@ -344,10 +345,7 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].status, "bootstrap_failed");
         assert_eq!(records[0].reason.as_deref(), Some("boom"));
-        assert_eq!(
-            records[0].metrics_json,
-            None::<serde_json::Value>
-        );
+        assert_eq!(records[0].metrics_json, None::<serde_json::Value>);
         let _typed: &ProfileMlMetricRecord = &records[0];
         let _ = json!({});
     }

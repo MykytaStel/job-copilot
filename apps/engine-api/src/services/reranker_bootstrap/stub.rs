@@ -1,9 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
-use super::{
-    BootstrapRequestPayload, BootstrapResponsePayload, RerankerBootstrapError,
-};
+use super::{BootstrapRequestPayload, BootstrapResponsePayload, RerankerBootstrapError};
 
 #[derive(Default)]
 pub struct RerankerBootstrapServiceStub {

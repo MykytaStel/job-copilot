@@ -158,7 +158,9 @@ impl OutcomeDatasetService {
                 &signals,
                 &event_signals,
                 application,
-                feedback_updated_at_by_job_id.get(&job_id).map(String::as_str),
+                feedback_updated_at_by_job_id
+                    .get(&job_id)
+                    .map(String::as_str),
             );
 
             let fit = search_ranking_service.score_job(&search_profile, &job);
@@ -292,7 +294,8 @@ pub(crate) fn application_ids_by_job_id(events: &[UserEventRecord]) -> BTreeMap<
         })
         .collect::<Vec<_>>();
     ordered_events.sort_by(
-        |(left_job_id, _, left_created_at, left_id), (right_job_id, _, right_created_at, right_id)| {
+        |(left_job_id, _, left_created_at, left_id),
+         (right_job_id, _, right_created_at, right_id)| {
             left_job_id
                 .cmp(right_job_id)
                 .then_with(|| left_created_at.cmp(right_created_at))
@@ -335,7 +338,9 @@ fn normalized_job_id(job_id: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
-pub(crate) fn event_signals_by_job_id(events: &[UserEventRecord]) -> BTreeMap<String, EventSignals> {
+pub(crate) fn event_signals_by_job_id(
+    events: &[UserEventRecord],
+) -> BTreeMap<String, EventSignals> {
     let mut ordered_events = events
         .iter()
         .filter_map(|event| {
@@ -425,17 +430,26 @@ pub(crate) fn normalize_signals(
     let has_tech_rejection = rejection_tags.contains(&"bad_tech_stack".to_string());
 
     let salary_signal = feedback.salary_signal.map(|s| s.as_str().to_string());
-    let salary_below_expectation = feedback
-        .salary_signal
-        .is_some_and(|s| matches!(s, crate::domain::feedback::model::SalaryFeedbackSignal::BelowExpectation));
+    let salary_below_expectation = feedback.salary_signal.is_some_and(|s| {
+        matches!(
+            s,
+            crate::domain::feedback::model::SalaryFeedbackSignal::BelowExpectation
+        )
+    });
 
-    let work_mode_deal_breaker = feedback
-        .work_mode_signal
-        .is_some_and(|s| matches!(s, crate::domain::feedback::model::WorkModeFeedbackSignal::DealBreaker));
+    let work_mode_deal_breaker = feedback.work_mode_signal.is_some_and(|s| {
+        matches!(
+            s,
+            crate::domain::feedback::model::WorkModeFeedbackSignal::DealBreaker
+        )
+    });
 
-    let legitimacy_suspicious = feedback
-        .legitimacy_signal
-        .is_some_and(|s| matches!(s, crate::domain::feedback::model::LegitimacySignal::Suspicious));
+    let legitimacy_suspicious = feedback.legitimacy_signal.is_some_and(|s| {
+        matches!(
+            s,
+            crate::domain::feedback::model::LegitimacySignal::Suspicious
+        )
+    });
     let legitimacy_spam = feedback
         .legitimacy_signal
         .is_some_and(|s| matches!(s, crate::domain::feedback::model::LegitimacySignal::Spam));
@@ -444,15 +458,12 @@ pub(crate) fn normalize_signals(
         .map(ApplicationOutcome::as_str)
         .map(str::to_string);
     let reached_interview = application.is_some_and(application_reached_interview);
-    let received_offer = application.is_some_and(|record| {
-        matches!(record.outcome, Some(ApplicationOutcome::OfferReceived))
-    });
-    let was_rejected = application.is_some_and(|record| {
-        matches!(record.outcome, Some(ApplicationOutcome::Rejected))
-    });
-    let was_ghosted = application.is_some_and(|record| {
-        matches!(record.outcome, Some(ApplicationOutcome::Ghosted))
-    });
+    let received_offer = application
+        .is_some_and(|record| matches!(record.outcome, Some(ApplicationOutcome::OfferReceived)));
+    let was_rejected = application
+        .is_some_and(|record| matches!(record.outcome, Some(ApplicationOutcome::Rejected)));
+    let was_ghosted = application
+        .is_some_and(|record| matches!(record.outcome, Some(ApplicationOutcome::Ghosted)));
     let time_to_apply_days = resolve_time_to_apply_days(event_signals, application);
 
     OutcomeSignals {
@@ -530,7 +541,10 @@ fn assign_label(signals: &OutcomeSignals) -> Option<OutcomeLabelAssignment> {
 
     // Work-mode deal-breaker forces negative regardless of save.
     if signals.work_mode_deal_breaker && !signals.applied {
-        let mut reasons = vec!["dismissed".to_string(), "work_mode_deal_breaker".to_string()];
+        let mut reasons = vec![
+            "dismissed".to_string(),
+            "work_mode_deal_breaker".to_string(),
+        ];
         if signals.dismissed {
             if signals.bad_fit {
                 reasons.push("bad_fit".to_string());
@@ -1029,7 +1043,10 @@ mod tests {
             dataset.examples[0].label_observed_at.as_deref(),
             Some("2026-04-20T00:00:00Z")
         );
-        assert_eq!(dataset.examples[0].signals.outcome.as_deref(), Some("offer_received"));
+        assert_eq!(
+            dataset.examples[0].signals.outcome.as_deref(),
+            Some("offer_received")
+        );
         assert!(dataset.examples[0].signals.received_offer);
         assert!(dataset.examples[0].signals.reached_interview);
         assert_eq!(dataset.examples[0].signals.time_to_apply_days, Some(5));

@@ -85,8 +85,10 @@ pub async fn get_reranker_dataset(
 async fn load_profile_applications_by_job_id(
     state: &AppState,
     events: &[crate::domain::user_event::model::UserEventRecord],
-) -> Result<std::collections::BTreeMap<String, crate::domain::application::model::Application>, ApiError>
-{
+) -> Result<
+    std::collections::BTreeMap<String, crate::domain::application::model::Application>,
+    ApiError,
+> {
     let mut applications_by_job_id = std::collections::BTreeMap::new();
 
     for (job_id, application_id) in application_ids_by_job_id(events) {

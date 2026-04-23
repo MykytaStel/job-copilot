@@ -53,7 +53,9 @@ impl ProfileMlStateService {
                 repository.record_labelable_job(profile_id, job_id).await
             }
             #[cfg(test)]
-            ProfileMlStateServiceBackend::Stub(stub) => stub.record_labelable_job(profile_id, job_id),
+            ProfileMlStateServiceBackend::Stub(stub) => {
+                stub.record_labelable_job(profile_id, job_id)
+            }
         }
     }
 

@@ -4,9 +4,9 @@ use uuid::Uuid;
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::application::model::{
-    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, ApplicationOutcome,
-    Contact, CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer, Task,
-    UpdateApplication, UpsertOffer,
+    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote,
+    ApplicationOutcome, Contact, CreateApplication, CreateApplicationContact, CreateContact,
+    CreateNote, Offer, Task, UpdateApplication, UpsertOffer,
 };
 use crate::domain::job::model::Job;
 use crate::domain::resume::model::ResumeVersion;
@@ -882,20 +882,26 @@ impl
                     }
                 })?,
                 version,
-                filename: row.resume_filename.ok_or_else(|| RepositoryError::InvalidData {
-                    message: "resume filename missing on joined resume row".into(),
-                })?,
-                raw_text: row.resume_raw_text.ok_or_else(|| RepositoryError::InvalidData {
-                    message: "resume raw_text missing on joined resume row".into(),
-                })?,
-                is_active: row.resume_is_active.ok_or_else(|| RepositoryError::InvalidData {
-                    message: "resume is_active missing on joined resume row".into(),
-                })?,
-                uploaded_at: row
-                    .resume_uploaded_at
+                filename: row
+                    .resume_filename
                     .ok_or_else(|| RepositoryError::InvalidData {
-                        message: "resume uploaded_at missing on joined resume row".into(),
+                        message: "resume filename missing on joined resume row".into(),
                     })?,
+                raw_text: row
+                    .resume_raw_text
+                    .ok_or_else(|| RepositoryError::InvalidData {
+                        message: "resume raw_text missing on joined resume row".into(),
+                    })?,
+                is_active: row
+                    .resume_is_active
+                    .ok_or_else(|| RepositoryError::InvalidData {
+                        message: "resume is_active missing on joined resume row".into(),
+                    })?,
+                uploaded_at: row.resume_uploaded_at.ok_or_else(|| {
+                    RepositoryError::InvalidData {
+                        message: "resume uploaded_at missing on joined resume row".into(),
+                    }
+                })?,
             }),
         };
 

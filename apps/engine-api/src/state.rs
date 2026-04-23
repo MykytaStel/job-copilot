@@ -2,9 +2,8 @@ use crate::config::Config;
 use crate::db::Database;
 use crate::db::repositories::{
     ActivitiesRepository, ApplicationsRepository, FeedbackRepository, FitScoresRepository,
-    JobsRepository, NotificationsRepository, ProfileMlMetricsRepository,
-    ProfileMlStateRepository, ProfilesRepository, ResumesRepository, TasksRepository,
-    UserEventsRepository,
+    JobsRepository, NotificationsRepository, ProfileMlMetricsRepository, ProfileMlStateRepository,
+    ProfilesRepository, ResumesRepository, TasksRepository, UserEventsRepository,
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;

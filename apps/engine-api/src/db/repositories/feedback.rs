@@ -647,14 +647,16 @@ impl TryFrom<JobFeedbackRow> for JobFeedbackRecord {
     type Error = RepositoryError;
 
     fn try_from(row: JobFeedbackRow) -> Result<Self, Self::Error> {
-        let interest_rating = row.interest_rating.map(i8::try_from).transpose().map_err(|_| {
-            RepositoryError::InvalidData {
+        let interest_rating = row
+            .interest_rating
+            .map(i8::try_from)
+            .transpose()
+            .map_err(|_| RepositoryError::InvalidData {
                 message: format!(
                     "interest_rating '{}' is outside the supported i8 range",
                     row.interest_rating.unwrap_or_default()
                 ),
-            }
-        })?;
+            })?;
         let salary_signal = row
             .salary_signal
             .as_deref()

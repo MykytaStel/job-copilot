@@ -34,8 +34,13 @@ pub async fn log_user_event(
         .log_event(event)
         .await
         .map_err(|error| ApiError::from_repository(error, "user_event_write_failed"))?;
-    maybe_record_labelable_outcome(&state, &event.profile_id, event.job_id.as_deref(), event.event_type)
-        .await;
+    maybe_record_labelable_outcome(
+        &state,
+        &event.profile_id,
+        event.job_id.as_deref(),
+        event.event_type,
+    )
+    .await;
 
     Ok((
         axum::http::StatusCode::CREATED,
@@ -135,11 +140,7 @@ pub(crate) async fn log_user_event_softly(state: &AppState, event: CreateUserEve
     }
 }
 
-pub(crate) async fn record_labelable_job_softly(
-    state: &AppState,
-    profile_id: &str,
-    job_id: &str,
-) {
+pub(crate) async fn record_labelable_job_softly(state: &AppState, profile_id: &str, job_id: &str) {
     if let Err(error) = state
         .profile_ml_state
         .record_labelable_job(profile_id, job_id)

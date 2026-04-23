@@ -35,7 +35,9 @@ impl ProfileMlMetricsService {
         input: CreateProfileMlMetric,
     ) -> Result<ProfileMlMetricRecord, RepositoryError> {
         match &self.backend {
-            ProfileMlMetricsServiceBackend::Repository(repository) => repository.create(&input).await,
+            ProfileMlMetricsServiceBackend::Repository(repository) => {
+                repository.create(&input).await
+            }
             #[cfg(test)]
             ProfileMlMetricsServiceBackend::Stub(stub) => stub.create(input),
         }

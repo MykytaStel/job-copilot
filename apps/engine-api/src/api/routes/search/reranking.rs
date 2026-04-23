@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use tracing::warn;
 
-use crate::domain::application::model::Application;
 use crate::api::error::ApiError;
+use crate::domain::application::model::Application;
 use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackState};
 use crate::domain::matching::RerankerMode;
 use crate::services::behavior::{BehaviorService, ProfileBehaviorAggregates};
@@ -241,7 +241,8 @@ pub(crate) fn apply_trained_reranking(
         let event_signals = event_signals_by_job_id
             .get(job_id)
             .unwrap_or(&default_event_signals);
-        let signals = normalize_signals(&feedback, event_signals, applications_by_job_id.get(job_id));
+        let signals =
+            normalize_signals(&feedback, event_signals, applications_by_job_id.get(job_id));
         let rating = signals.interest_rating.unwrap_or(0);
         let quick_apply = signals.time_to_apply_days.is_some_and(|days| days <= 3);
         let delayed_apply = signals.time_to_apply_days.is_some_and(|days| days > 14);

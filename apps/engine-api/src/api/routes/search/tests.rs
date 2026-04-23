@@ -2031,8 +2031,8 @@ async fn trained_reranker_uses_application_outcome_signals_in_live_scoring() {
                 Some("remote"),
                 "djinni",
             ))),
-            ApplicationsService::for_tests(
-                ApplicationsServiceStub::default().with_application(Application {
+            ApplicationsService::for_tests(ApplicationsServiceStub::default().with_application(
+                Application {
                     id: "app-1".to_string(),
                     job_id: "job-1".to_string(),
                     resume_id: None,
@@ -2043,8 +2043,8 @@ async fn trained_reranker_uses_application_outcome_signals_in_live_scoring() {
                     outcome_date: Some("2026-04-20T00:00:00Z".to_string()),
                     rejection_stage: None,
                     updated_at: "2026-04-20T00:00:00Z".to_string(),
-                }),
-            ),
+                },
+            )),
             ResumesService::for_tests(ResumesServiceStub::default()),
         )
         .with_learned_reranker_enabled(false)

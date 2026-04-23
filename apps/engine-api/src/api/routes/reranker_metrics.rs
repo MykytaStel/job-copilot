@@ -1,7 +1,9 @@
 use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 
-use crate::api::dto::reranker_metrics::{RerankerMetricsResponse, ProfileMlStateResponse, ProfileMlMetricRecordResponse};
+use crate::api::dto::reranker_metrics::{
+    ProfileMlMetricRecordResponse, ProfileMlStateResponse, RerankerMetricsResponse,
+};
 use crate::api::error::ApiError;
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::domain::profile::ml::ProfileMlState;
@@ -55,7 +57,9 @@ mod tests {
     use crate::domain::profile::model::Profile;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
-    use crate::services::profile_ml_metrics::{ProfileMlMetricsService, ProfileMlMetricsServiceStub};
+    use crate::services::profile_ml_metrics::{
+        ProfileMlMetricsService, ProfileMlMetricsServiceStub,
+    };
     use crate::services::profile_ml_state::{ProfileMlStateService, ProfileMlStateServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
@@ -87,22 +91,21 @@ mod tests {
     #[tokio::test]
     async fn returns_reranker_metrics_for_profile() {
         let metrics_service = ProfileMlMetricsService::for_tests(
-            ProfileMlMetricsServiceStub::default()
-                .with_record(
-                    ProfileMlMetricsServiceStub::default()
-                        .create(CreateProfileMlMetric {
-                            profile_id: "profile-1".to_string(),
-                            status: "trained".to_string(),
-                            artifact_version: Some("trained_reranker_v3".to_string()),
-                            model_type: Some("logistic_regression".to_string()),
-                            reason: None,
-                            metrics_json: Some(json!({ "variants": [] })),
-                            training_json: Some(json!({ "example_count": 18 })),
-                            feature_importances_json: Some(json!({ "matched_skill_count": 0.4 })),
-                            benchmark_json: Some(json!({ "winner": "logistic_regression" })),
-                        })
-                        .expect("stub metric should be created"),
-                ),
+            ProfileMlMetricsServiceStub::default().with_record(
+                ProfileMlMetricsServiceStub::default()
+                    .create(CreateProfileMlMetric {
+                        profile_id: "profile-1".to_string(),
+                        status: "trained".to_string(),
+                        artifact_version: Some("trained_reranker_v3".to_string()),
+                        model_type: Some("logistic_regression".to_string()),
+                        reason: None,
+                        metrics_json: Some(json!({ "variants": [] })),
+                        training_json: Some(json!({ "example_count": 18 })),
+                        feature_importances_json: Some(json!({ "matched_skill_count": 0.4 })),
+                        benchmark_json: Some(json!({ "winner": "logistic_regression" })),
+                    })
+                    .expect("stub metric should be created"),
+            ),
         );
         let state = AppState::for_services(
             ProfilesService::for_tests(

@@ -189,7 +189,9 @@ impl FeedbackService {
     ) -> Result<JobFeedbackRecord, RepositoryError> {
         match &self.backend {
             FeedbackServiceBackend::Repository(repository) => {
-                repository.set_salary_signal(profile_id, job_id, signal).await
+                repository
+                    .set_salary_signal(profile_id, job_id, signal)
+                    .await
             }
             #[cfg(test)]
             FeedbackServiceBackend::Stub(_) => Err(RepositoryError::DatabaseDisabled),
@@ -204,7 +206,9 @@ impl FeedbackService {
     ) -> Result<JobFeedbackRecord, RepositoryError> {
         match &self.backend {
             FeedbackServiceBackend::Repository(repository) => {
-                repository.set_interest_rating(profile_id, job_id, rating).await
+                repository
+                    .set_interest_rating(profile_id, job_id, rating)
+                    .await
             }
             #[cfg(test)]
             FeedbackServiceBackend::Stub(_) => Err(RepositoryError::DatabaseDisabled),
@@ -219,7 +223,9 @@ impl FeedbackService {
     ) -> Result<JobFeedbackRecord, RepositoryError> {
         match &self.backend {
             FeedbackServiceBackend::Repository(repository) => {
-                repository.set_work_mode_signal(profile_id, job_id, signal).await
+                repository
+                    .set_work_mode_signal(profile_id, job_id, signal)
+                    .await
             }
             #[cfg(test)]
             FeedbackServiceBackend::Stub(_) => Err(RepositoryError::DatabaseDisabled),
