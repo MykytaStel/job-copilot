@@ -191,6 +191,156 @@ def test_provider_implementations_annotate_contexts_from_enrichment_packages():
     assert OllamaEnrichmentProvider.generate_weekly_guidance.__annotations__["prompt"] is WeeklyGuidancePrompt
 
 
+def test_llm_providers_package_reexports_remote_providers_lazily():
+    loaded_modules = _loaded_app_modules("app.llm_providers")
+    assert "app.llm_providers.openai_provider" not in loaded_modules
+    assert "app.llm_providers.ollama_provider" not in loaded_modules
+
+    script = """
+import json
+import sys
+
+from app.llm_providers import OllamaEnrichmentProvider, OpenAIEnrichmentProvider
+
+print(
+    json.dumps(
+        {
+            "names": [
+                OpenAIEnrichmentProvider.__name__,
+                OllamaEnrichmentProvider.__name__,
+            ],
+            "loaded": sorted(
+                name
+                for name in sys.modules
+                if name in {
+                    "app.llm_providers.openai_provider",
+                    "app.llm_providers.ollama_provider",
+                }
+            ),
+        }
+    )
+)
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        cwd=ML_APP_ROOT,
+        text=True,
+    )
+    resolved = json.loads(completed.stdout)
+
+    assert resolved["names"] == [
+        "OpenAIEnrichmentProvider",
+        "OllamaEnrichmentProvider",
+    ]
+    assert resolved["loaded"] == [
+        "app.llm_providers.ollama_provider",
+        "app.llm_providers.openai_provider",
+    ]
+
+
+def test_weekly_guidance_flow_package_reexports_symbols_lazily():
+    script = """
+import json
+import sys
+
+import app.weekly_guidance_flow as package
+
+initial_loaded = sorted(
+    name
+    for name in sys.modules
+    if name.startswith("app.weekly_guidance_flow")
+    or name.startswith("app.enrichment.weekly_guidance")
+)
+
+from app.weekly_guidance_flow import (
+    WeeklyGuidancePrompt,
+    WeeklyGuidanceRequest,
+    parse_weekly_guidance_output,
+)
+from app.enrichment.weekly_guidance.contract import (
+    WeeklyGuidanceRequest as EnrichmentWeeklyGuidanceRequest,
+)
+from app.enrichment.weekly_guidance.parser import (
+    parse_weekly_guidance_output as enrichment_parse_weekly_guidance_output,
+)
+from app.enrichment.weekly_guidance.prompt import (
+    WeeklyGuidancePrompt as EnrichmentWeeklyGuidancePrompt,
+)
+
+resolved_loaded = sorted(
+    name
+    for name in sys.modules
+    if name.startswith("app.weekly_guidance_flow")
+    or name.startswith("app.enrichment.weekly_guidance")
+)
+
+print(
+    json.dumps(
+        {
+            "all": package.__all__,
+            "initial_loaded": initial_loaded,
+            "resolved_loaded": resolved_loaded,
+            "matches": {
+                "request": WeeklyGuidanceRequest is EnrichmentWeeklyGuidanceRequest,
+                "prompt": WeeklyGuidancePrompt is EnrichmentWeeklyGuidancePrompt,
+                "parser": parse_weekly_guidance_output is enrichment_parse_weekly_guidance_output,
+            },
+        }
+    )
+)
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        cwd=ML_APP_ROOT,
+        text=True,
+    )
+    resolved = json.loads(completed.stdout)
+
+    assert resolved["all"] == [
+        "MalformedWeeklyGuidanceOutputError",
+        "WeeklyGuidanceAnalyticsSummary",
+        "WeeklyGuidanceBehaviorSignalCount",
+        "WeeklyGuidanceBehaviorSummary",
+        "WeeklyGuidanceFunnelConversionRates",
+        "WeeklyGuidanceFunnelSourceCount",
+        "WeeklyGuidanceFunnelSummary",
+        "WeeklyGuidanceJobsByLifecycle",
+        "WeeklyGuidanceJobsBySourceEntry",
+        "WeeklyGuidanceLlmContext",
+        "WeeklyGuidancePrompt",
+        "WeeklyGuidanceProviderError",
+        "WeeklyGuidanceRecentFeedbackSummary",
+        "WeeklyGuidanceRecentSearchSummary",
+        "WeeklyGuidanceRequest",
+        "WeeklyGuidanceResponse",
+        "build_weekly_guidance_prompt",
+        "http_error_from_weekly_guidance_error",
+        "parse_weekly_guidance_output",
+        "weekly_guidance_schema",
+    ]
+    assert resolved["initial_loaded"] == ["app.weekly_guidance_flow"]
+    assert resolved["resolved_loaded"] == [
+        "app.enrichment.weekly_guidance",
+        "app.enrichment.weekly_guidance.contract",
+        "app.enrichment.weekly_guidance.errors",
+        "app.enrichment.weekly_guidance.parser",
+        "app.enrichment.weekly_guidance.prompt",
+        "app.weekly_guidance_flow",
+        "app.weekly_guidance_flow.contract",
+        "app.weekly_guidance_flow.parser",
+        "app.weekly_guidance_flow.prompt",
+    ]
+    assert resolved["matches"] == {
+        "request": True,
+        "prompt": True,
+        "parser": True,
+    }
+
+
 def test_legacy_flat_modules_remain_aliases_of_enrichment_exports():
     assert LegacyLlmContextRequest is LlmContextRequest
     assert LegacyJobFitExplanationRequest is JobFitExplanationRequest
