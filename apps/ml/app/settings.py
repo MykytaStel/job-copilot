@@ -22,6 +22,7 @@ DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = 90.0
 DEFAULT_TASK_TTL_HOURS = 24
 DEFAULT_READY_TIMEOUT_SECONDS = 2.0
+DEFAULT_BOOTSTRAP_MAX_CONCURRENT_JOBS = 2
 
 
 def _ml_root_dir() -> Path:
@@ -40,7 +41,7 @@ class RuntimeSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     log_level: str = Field(default="INFO", validation_alias="ML_LOG_LEVEL")
-    log_format: str = Field(default="plain", validation_alias="ML_LOG_FORMAT")
+    log_format: str = Field(default="json", validation_alias="ML_LOG_FORMAT")
     cors_allowed_origins: Annotated[tuple[str, ...], NoDecode] = Field(
         default=DEFAULT_CORS_ALLOWED_ORIGINS,
         validation_alias="ML_CORS_ALLOWED_ORIGINS",
@@ -77,6 +78,10 @@ class RuntimeSettings(BaseSettings):
         validation_alias="ML_BOOTSTRAP_TASKS_DIR",
     )
     task_ttl_hours: int = Field(default=DEFAULT_TASK_TTL_HOURS, validation_alias="ML_TASK_TTL_HOURS")
+    bootstrap_max_concurrent_jobs: int = Field(
+        default=DEFAULT_BOOTSTRAP_MAX_CONCURRENT_JOBS,
+        validation_alias="ML_BOOTSTRAP_MAX_CONCURRENT_JOBS",
+    )
     ready_timeout_seconds: float = Field(
         default=DEFAULT_READY_TIMEOUT_SECONDS,
         validation_alias="ML_READY_TIMEOUT_SECONDS",
@@ -97,9 +102,9 @@ class RuntimeSettings(BaseSettings):
     @classmethod
     def normalize_log_format(cls, value: Any) -> str:
         if not isinstance(value, str):
-            return "plain"
+            return "json"
         cleaned = value.strip().lower()
-        return cleaned if cleaned in {"plain", "json"} else "plain"
+        return cleaned if cleaned in {"plain", "json"} else "json"
 
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
@@ -150,6 +155,14 @@ class RuntimeSettings(BaseSettings):
             return max(1, int(value))
         except (TypeError, ValueError):
             return DEFAULT_TASK_TTL_HOURS
+
+    @field_validator("bootstrap_max_concurrent_jobs", mode="before")
+    @classmethod
+    def normalize_bootstrap_max_concurrent_jobs(cls, value: Any) -> int:
+        try:
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return DEFAULT_BOOTSTRAP_MAX_CONCURRENT_JOBS
 
     @field_validator("llm_provider", mode="before")
     @classmethod

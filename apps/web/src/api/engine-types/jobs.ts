@@ -2,7 +2,6 @@ import type { EngineJobFeedbackState } from './feedback';
 
 export type EngineJobPrimaryVariant = {
   source: string;
-  source_job_id: string;
   source_url: string;
   fetched_at: string;
   last_seen_at: string;

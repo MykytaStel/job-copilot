@@ -39,6 +39,13 @@ Active runtime paths:
 8. Market Intelligence is partially live — overview, companies, salary trends, and role demand ship from live `jobs` queries; snapshot aggregation is still missing.
 9. ~~Profile compensation and languages.~~ — DONE end-to-end in schema, API, persistence, and UI.
 10. ~~Notifications and global search.~~ — DONE in web + engine-api.
+11. ~~Structured logging + X-Request-ID correlation.~~ — DONE (JSON logs, tower-http request ID propagation, ML middleware, log correlation across engine-api → ML).
+12. ~~Silent failure fixes + error enrichment.~~ — DONE (feature_stats.py, api.py ready-check, task_store.py, engine-api error logging).
+13. ~~PostgreSQL optimization.~~ — DONE (performance indexes migration, pool tuning min/acquire/idle, slow-query logging in docker-compose).
+14. ~~Observability stack.~~ — DONE (Prometheus + Grafana in docker-compose, `/metrics` on engine-api and ML, pre-built dashboard).
+15. ~~ML legacy removal.~~ — DONE (inspect.signature() shim removed, bootstrap workflow interface standardized, all tests updated).
+16. ~~Applications page redesign.~~ — DONE (table+panel layout with inline status change, quick-panel slide-in, search/filter header).
+17. ~~Internal ID cleanup.~~ — DONE (`application_id` removed from nested DTOs, `source_job_id` removed from job variant responses, no UUIDs rendered to users).
 
 ## UX direction
 Quiet operator dashboard:
@@ -55,6 +62,8 @@ Quiet operator dashboard:
 - Do not move domain truth into the frontend.
 - Do not make LLM output authoritative without Rust-side validation.
 - Do not add broad abstractions unless a real second use-case exists.
+- Do not render raw UUIDs to users — IDs may appear in URL paths and `key` props but never in visible text.
+- Observability: all new services must emit structured JSON logs and accept/propagate `X-Request-ID`.
 
 ## Preferred working style
 - Make one vertical slice at a time.
@@ -65,5 +74,8 @@ Quiet operator dashboard:
 
 ## Good next slices
 - CV tailoring endpoint in ML sidecar + web modal
-- settings expansion (dedicated notification prefs + more profile preference controls)
+- Settings expansion (dedicated notification prefs + more profile preference controls)
 - Rust-side validation of LLM enrichment output before storing
+- LightGBM backend (`lgbm_model.py`) when ≥50 labeled examples
+- Market Intelligence snapshot aggregation (complete the partially-live market page)
+- `BootstrapContext` dataclass threading through bootstrap_workflow for full request-id correlation in ML logs

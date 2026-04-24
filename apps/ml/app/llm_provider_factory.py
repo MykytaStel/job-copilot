@@ -30,6 +30,7 @@ def build_enrichment_provider() -> EnrichmentProvider:
             api_key=api_key,
             model=settings.openai_model,
             base_url=settings.openai_base_url,
+            timeout_seconds=settings.llm_request_timeout_seconds,
         )
 
     if provider_name == "ollama":

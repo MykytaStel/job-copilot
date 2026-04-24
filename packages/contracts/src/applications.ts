@@ -25,7 +25,6 @@ export type RejectionStage =
 
 export interface ApplicationNote {
   id: string;
-  applicationId: string;
   content: string;
   createdAt: string;
 }
@@ -79,7 +78,6 @@ export interface ContactInput {
 
 export interface ApplicationContact {
   id: string;
-  applicationId: string;
   contact: Contact;
   relationship: ContactRelationship;
 }
@@ -88,7 +86,6 @@ export type ActivityType = 'email' | 'call' | 'interview' | 'follow_up' | 'note'
 
 export interface Activity {
   id: string;
-  applicationId: string;
   type: ActivityType;
   description: string;
   happenedAt: string;
@@ -103,7 +100,6 @@ export interface ActivityInput {
 
 export interface Task {
   id: string;
-  applicationId: string;
   title: string;
   remindAt?: string;
   done: boolean;
@@ -154,7 +150,6 @@ export type OfferStatus = 'draft' | 'received' | 'accepted' | 'declined' | 'expi
 
 export interface Offer {
   id: string;
-  applicationId: string;
   status: OfferStatus;
   compensationMin?: number;
   compensationMax?: number;

@@ -91,7 +91,7 @@ def test_engine_api_client_fetch_reranker_dataset_uses_dataset_endpoint_and_vali
             return dataset_payload()
 
     class FakeAsyncClient:
-        async def get(self, url: str) -> FakeResponse:
+        async def get(self, url: str, **kwargs) -> FakeResponse:
             captured["url"] = url
             return FakeResponse()
 
@@ -117,7 +117,7 @@ def test_engine_api_client_fetch_reranker_dataset_maps_upstream_error_payload_li
             return {"code": "profile_not_found", "message": "profile not found"}
 
     class FakeAsyncClient:
-        async def get(self, url: str) -> FakeResponse:
+        async def get(self, url: str, **kwargs) -> FakeResponse:
             assert url == "http://engine.test/api/v1/profiles/profile-1/reranker-dataset"
             return FakeResponse()
 
@@ -179,7 +179,7 @@ def test_engine_api_client_context_uses_timeout_and_base_url(monkeypatch):
             return None
 
     class FakeEngineApiClient:
-        def __init__(self, client, *, base_url=None):
+        def __init__(self, client, *, base_url=None, request_id=None):
             captured["client"] = client
             captured["base_url"] = base_url
 
@@ -205,15 +205,13 @@ def test_engine_api_client_context_uses_timeout_and_base_url(monkeypatch):
     assert captured["engine_api"] is not None
 
 
-def test_reranker_bootstrap_service_maps_engine_api_response_error_to_stable_contract(
-):
-    async def fake_bootstrap_and_retrain(profile_id: str, min_examples: int, model_path):
+def test_reranker_bootstrap_service_maps_engine_api_response_error_to_stable_contract():
+    async def fake_bootstrap_and_retrain(
+        profile_id: str, min_examples: int, *, artifact_path, compatibility_model_path
+    ):
         raise EngineApiResponseError(status_code=404, detail="profile not found")
 
-    service = RerankerBootstrapService(
-        bootstrap_workflow=fake_bootstrap_and_retrain,
-        model_path=bootstrap_training.DEFAULT_MODEL_PATH,
-    )
+    service = RerankerBootstrapService(bootstrap_workflow=fake_bootstrap_and_retrain)
     payload = BootstrapRequest(profile_id="profile-1", min_examples=30)
 
     with pytest.raises(RerankerBootstrapUpstreamHttpError) as exc_info:
@@ -223,15 +221,13 @@ def test_reranker_bootstrap_service_maps_engine_api_response_error_to_stable_con
     assert str(exc_info.value) == "engine-api error: 404"
 
 
-def test_reranker_bootstrap_service_maps_engine_api_unavailable_error_to_stable_contract(
-):
-    async def fake_bootstrap_and_retrain(profile_id: str, min_examples: int, model_path):
+def test_reranker_bootstrap_service_maps_engine_api_unavailable_error_to_stable_contract():
+    async def fake_bootstrap_and_retrain(
+        profile_id: str, min_examples: int, *, artifact_path, compatibility_model_path
+    ):
         raise EngineApiUnavailableError("engine-api request failed: timed out")
 
-    service = RerankerBootstrapService(
-        bootstrap_workflow=fake_bootstrap_and_retrain,
-        model_path=bootstrap_training.DEFAULT_MODEL_PATH,
-    )
+    service = RerankerBootstrapService(bootstrap_workflow=fake_bootstrap_and_retrain)
     payload = BootstrapRequest(profile_id="profile-1", min_examples=30)
 
     with pytest.raises(RerankerBootstrapUpstreamUnavailableError) as exc_info:
@@ -241,69 +237,47 @@ def test_reranker_bootstrap_service_maps_engine_api_unavailable_error_to_stable_
     assert str(exc_info.value) == "engine-api unreachable: engine-api request failed: timed out"
 
 
-def test_reranker_bootstrap_service_uses_injected_workflow_and_model_path():
+def test_reranker_bootstrap_service_uses_injected_workflow():
     captured: dict[str, object] = {}
     training = TrainingSummary.model_validate(training_summary_payload())
 
-    async def fake_bootstrap_and_retrain(profile_id: str, min_examples: int, model_path):
+    async def fake_bootstrap_and_retrain(
+        profile_id: str, min_examples: int, *, artifact_path, compatibility_model_path
+    ):
         captured["profile_id"] = profile_id
         captured["min_examples"] = min_examples
-        captured["model_path"] = model_path
+        captured["artifact_path"] = artifact_path
         return BootstrapWorkflowResult.trained_model(
             example_count=30,
             profile_id=profile_id,
-            artifact_path=model_path,
-            model_path=model_path,
+            artifact_path=artifact_path,
+            model_path=compatibility_model_path,
             training=training,
         )
 
-    service = RerankerBootstrapService(
-        bootstrap_workflow=fake_bootstrap_and_retrain,
-        model_path=bootstrap_training.DEFAULT_MODEL_PATH,
-    )
+    service = RerankerBootstrapService(bootstrap_workflow=fake_bootstrap_and_retrain)
 
     response = asyncio.run(
         service.bootstrap(BootstrapRequest(profile_id="profile-1", min_examples=30))
     )
 
-    assert captured == {
-        "profile_id": "profile-1",
-        "min_examples": 30,
-        "model_path": bootstrap_training.DEFAULT_MODEL_PATH,
-    }
-    assert response.model_dump() == {
-        "retrained": True,
-        "example_count": 30,
-        "profile_id": "profile-1",
-        "reason": None,
-        "model_path": str(bootstrap_training.DEFAULT_MODEL_PATH),
-        "artifact_path": str(bootstrap_training.DEFAULT_MODEL_PATH),
-        "artifact_version": "trained_reranker_v3",
-        "model_type": "logistic_regression",
-        "training": training_summary_payload(),
-        "evaluation": None,
-        "benchmark": None,
-        "feature_importances": None,
-        "distribution_shift_score": None,
-        "started_at": None,
-        "finished_at": None,
-        "promotion_decision": None,
-        "metrics_version": None,
-        "lgbm_distilled": False,
-    }
+    assert captured["profile_id"] == "profile-1"
+    assert captured["min_examples"] == 30
+    assert str(captured["artifact_path"]).endswith("/profiles/profile-1/trained-reranker-v3.json")
+    assert response.retrained is True
+    assert response.example_count == 30
 
 
 def test_reranker_bootstrap_service_keeps_public_response_shape_when_workflow_skips_retrain():
-    async def fake_bootstrap_and_retrain(profile_id: str, min_examples: int, model_path):
+    async def fake_bootstrap_and_retrain(
+        profile_id: str, min_examples: int, *, artifact_path, compatibility_model_path
+    ):
         return BootstrapWorkflowResult.insufficient_examples(
             example_count=2,
             min_examples=3,
         )
 
-    service = RerankerBootstrapService(
-        bootstrap_workflow=fake_bootstrap_and_retrain,
-        model_path=bootstrap_training.DEFAULT_MODEL_PATH,
-    )
+    service = RerankerBootstrapService(bootstrap_workflow=fake_bootstrap_and_retrain)
 
     response = asyncio.run(
         service.bootstrap(BootstrapRequest(profile_id="profile-1", min_examples=3))
@@ -329,6 +303,83 @@ def test_reranker_bootstrap_service_keeps_public_response_shape_when_workflow_sk
         "metrics_version": None,
         "lgbm_distilled": False,
     }
+
+
+def test_reranker_bootstrap_service_applies_global_concurrency_cap(tmp_path):
+    active = {"count": 0, "max": 0}
+
+    async def fake_bootstrap_and_retrain(
+        profile_id: str,
+        min_examples: int,
+        *,
+        artifact_path,
+        compatibility_model_path,
+    ):
+        active["count"] += 1
+        active["max"] = max(active["max"], active["count"])
+        try:
+            await asyncio.sleep(0.05)
+            return BootstrapWorkflowResult.trained_model(
+                example_count=min_examples,
+                profile_id=profile_id,
+                artifact_path=artifact_path,
+                model_path=compatibility_model_path,
+                training=TrainingSummary.model_validate(training_summary_payload()),
+            )
+        finally:
+            active["count"] -= 1
+
+    service = RerankerBootstrapService(
+        bootstrap_workflow=fake_bootstrap_and_retrain,
+        lock_dir=tmp_path / "locks",
+        max_concurrent_jobs=1,
+    )
+
+    async def run_two_bootstraps():
+        return await asyncio.gather(
+            service.bootstrap(BootstrapRequest(profile_id="profile-1", min_examples=3)),
+            service.bootstrap(BootstrapRequest(profile_id="profile-2", min_examples=4)),
+        )
+
+    responses = asyncio.run(run_two_bootstraps())
+
+    assert [response.example_count for response in responses] == [3, 4]
+    assert active["max"] == 1
+
+
+def test_reranker_bootstrap_service_passes_named_profile_and_runtime_paths():
+    captured: dict[str, object] = {}
+    training = TrainingSummary.model_validate(training_summary_payload())
+
+    async def fake_bootstrap_and_retrain(
+        profile_id: str,
+        min_examples: int,
+        *,
+        artifact_path,
+        compatibility_model_path,
+    ):
+        captured["profile_id"] = profile_id
+        captured["min_examples"] = min_examples
+        captured["artifact_path"] = artifact_path
+        captured["compatibility_model_path"] = compatibility_model_path
+        return BootstrapWorkflowResult.trained_model(
+            example_count=30,
+            profile_id=profile_id,
+            artifact_path=artifact_path,
+            model_path=compatibility_model_path,
+            training=training,
+        )
+
+    service = RerankerBootstrapService(bootstrap_workflow=fake_bootstrap_and_retrain)
+
+    response = asyncio.run(
+        service.bootstrap(BootstrapRequest(profile_id="profile-1", min_examples=30))
+    )
+
+    assert captured["profile_id"] == "profile-1"
+    assert captured["min_examples"] == 30
+    assert str(captured["artifact_path"]).endswith("/profiles/profile-1/trained-reranker-v3.json")
+    assert response.artifact_path == str(captured["artifact_path"])
 
 
 def test_bootstrap_and_retrain_uses_bootstrap_training_fetch_compat_surface(monkeypatch):
@@ -360,6 +411,99 @@ def test_bootstrap_and_retrain_uses_bootstrap_training_fetch_compat_surface(monk
     assert payload["promotion_decision"] == "skipped_min_examples"
     assert payload["metrics_version"] == "reranker_eval_v2"
     assert payload["lgbm_distilled"] is False
+
+
+def test_bootstrap_and_retrain_preserves_distinct_profile_and_runtime_paths(monkeypatch):
+    captured: dict[str, object] = {}
+    profile_path = bootstrap_training.DEFAULT_MODEL_PATH.parent / "profiles" / "profile-1.json"
+    runtime_path = bootstrap_training.DEFAULT_MODEL_PATH
+
+    async def fake_bootstrap_and_retrain(
+        *,
+        profile_id: str,
+        min_examples: int,
+        artifact_path,
+        compatibility_model_path,
+        base_url: str | None = None,
+        fetch_examples,
+    ) -> BootstrapWorkflowResult:
+        captured["profile_id"] = profile_id
+        captured["min_examples"] = min_examples
+        captured["artifact_path"] = artifact_path
+        captured["compatibility_model_path"] = compatibility_model_path
+        captured["base_url"] = base_url
+        captured["fetch_examples"] = fetch_examples
+        return BootstrapWorkflowResult.trained_model(
+            example_count=30,
+            profile_id=profile_id,
+            artifact_path=artifact_path,
+            model_path=compatibility_model_path,
+            training=TrainingSummary.model_validate(training_summary_payload()),
+        )
+
+    monkeypatch.setattr(bootstrap_training, "_bootstrap_and_retrain", fake_bootstrap_and_retrain)
+
+    result = asyncio.run(
+        bootstrap_training.bootstrap_and_retrain(
+            "profile-1",
+            30,
+            artifact_path=profile_path,
+            compatibility_model_path=runtime_path,
+            base_url="http://engine.test",
+        )
+    )
+
+    assert captured == {
+        "profile_id": "profile-1",
+        "min_examples": 30,
+        "artifact_path": profile_path,
+        "compatibility_model_path": runtime_path,
+        "base_url": "http://engine.test",
+        "fetch_examples": bootstrap_training.fetch_labeled_examples,
+    }
+    assert result.artifact_path == str(profile_path)
+    assert result.model_path == str(runtime_path)
+
+
+def test_bootstrap_and_retrain_keeps_legacy_single_model_path_behavior(monkeypatch):
+    captured: dict[str, object] = {}
+    model_path = bootstrap_training.DEFAULT_MODEL_PATH.parent / "legacy-model.json"
+
+    async def fake_bootstrap_and_retrain(
+        *,
+        profile_id: str,
+        min_examples: int,
+        artifact_path,
+        compatibility_model_path,
+        base_url: str | None = None,
+        fetch_examples,
+    ) -> BootstrapWorkflowResult:
+        captured["artifact_path"] = artifact_path
+        captured["compatibility_model_path"] = compatibility_model_path
+        return BootstrapWorkflowResult.trained_model(
+            example_count=30,
+            profile_id=profile_id,
+            artifact_path=artifact_path,
+            model_path=compatibility_model_path,
+            training=TrainingSummary.model_validate(training_summary_payload()),
+        )
+
+    monkeypatch.setattr(bootstrap_training, "_bootstrap_and_retrain", fake_bootstrap_and_retrain)
+
+    result = asyncio.run(
+        bootstrap_training.bootstrap_and_retrain(
+            "profile-1",
+            30,
+            model_path=model_path,
+        )
+    )
+
+    assert captured == {
+        "artifact_path": model_path,
+        "compatibility_model_path": model_path,
+    }
+    assert result.artifact_path == str(model_path)
+    assert result.model_path == str(model_path)
 
 
 def test_main_uses_default_model_path_and_prints_json(monkeypatch, capsys):

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.api_models import BootstrapResponse, BootstrapTaskStatus
 
+logger = logging.getLogger(__name__)
+
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 class BootstrapTaskStore:
@@ -103,6 +106,31 @@ class BootstrapTaskStore:
                 path.unlink()
             except FileNotFoundError:
                 continue
+
+    def status_counts(self) -> dict[str, int]:
+        self.cleanup_expired()
+        counts = {
+            "accepted": 0,
+            "running": 0,
+            "completed": 0,
+            "failed": 0,
+        }
+        for path in self._tasks_dir.glob("*.json"):
+            try:
+                with path.open("r", encoding="utf-8") as handle:
+                    payload = json.load(handle)
+            except FileNotFoundError:
+                continue
+            except json.JSONDecodeError as exc:
+                logger.error(
+                    "task file corrupt; skipping",
+                    extra={"path": str(path), "error": str(exc)},
+                )
+                continue
+            status = str(payload.get("status", "")).strip().lower()
+            if status in counts:
+                counts[status] += 1
+        return counts
 
     def _task_path(self, task_id: str) -> Path:
         return self._tasks_dir / f"{task_id}.json"

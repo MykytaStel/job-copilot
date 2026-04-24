@@ -27,6 +27,7 @@ impl ApplicationsRepository {
             r#"
             INSERT INTO applications (
                 id,
+                profile_id,
                 job_id,
                 resume_id,
                 status,
@@ -34,7 +35,7 @@ impl ApplicationsRepository {
                 due_date,
                 updated_at
             )
-            VALUES ($1, $2, NULL, $3, $4::timestamptz, NULL, NOW())
+            VALUES ($1, $2, $3, NULL, $4, $5::timestamptz, NULL, NOW())
             RETURNING
                 id,
                 job_id,
@@ -49,11 +50,13 @@ impl ApplicationsRepository {
             "#,
         )
         .bind(Uuid::now_v7().to_string())
+        .bind(&application.profile_id)
         .bind(&application.job_id)
         .bind(&application.status)
         .bind(&application.applied_at)
         .fetch_one(pool)
-        .await?;
+        .await
+        .map_err(|error| map_create_application_error(error, application))?;
 
         Ok(Application::from(row))
     }
@@ -678,4 +681,25 @@ impl ApplicationsRepository {
 
         Ok(row.map(Application::from))
     }
+}
+
+fn map_create_application_error(
+    error: sqlx::Error,
+    application: &CreateApplication,
+) -> RepositoryError {
+    if let sqlx::Error::Database(database_error) = &error
+        && database_error.code().as_deref() == Some("23505")
+    {
+        let scope = application
+            .profile_id
+            .as_deref()
+            .unwrap_or("global application scope");
+        return RepositoryError::Conflict {
+            message: format!(
+                "application already exists for scope '{scope}' and job '{}'",
+                application.job_id
+            ),
+        };
+    }
+    RepositoryError::Sqlx(error)
 }

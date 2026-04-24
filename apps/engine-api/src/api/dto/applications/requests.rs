@@ -67,18 +67,18 @@ pub struct UpsertOfferRequest {
 
 pub struct ValidatedCreateApplicationRequest {
     pub application: CreateApplication,
-    pub profile_id: Option<String>,
 }
 
 impl CreateApplicationRequest {
     pub fn validate(self) -> Result<ValidatedCreateApplicationRequest, ApiError> {
+        let profile_id = validate_optional_trimmed(self.profile_id);
         Ok(ValidatedCreateApplicationRequest {
             application: CreateApplication {
+                profile_id: profile_id.clone(),
                 job_id: validate_required("job_id", self.job_id)?,
                 status: validate_status(self.status)?,
                 applied_at: self.applied_at,
             },
-            profile_id: validate_optional_trimmed(self.profile_id),
         })
     }
 }

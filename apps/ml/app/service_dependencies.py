@@ -23,9 +23,8 @@ from app.weekly_guidance import (
 )
 from app.engine_api_client import engine_api_client_context
 from app.reranker_bootstrap_service import RerankerBootstrapService
-from app import bootstrap_training
+from app import bootstrap_workflow
 from app.settings import DEFAULT_BOOTSTRAP_TASKS_DIR
-from app.trained_reranker_config import DEFAULT_TRAINED_RERANKER_MODEL_PATH
 
 def get_app_services(request: Request) -> AppServices:
     return request.app.state.services
@@ -50,8 +49,7 @@ def get_reranker_bootstrap_service(request: Request):
 @lru_cache(maxsize=1)
 def build_cached_reranker_bootstrap_service():
     return RerankerBootstrapService(
-        bootstrap_workflow=bootstrap_training.bootstrap_and_retrain,
-        model_path=DEFAULT_TRAINED_RERANKER_MODEL_PATH,
+        bootstrap_workflow=bootstrap_workflow.bootstrap_and_retrain,
     )
 
 

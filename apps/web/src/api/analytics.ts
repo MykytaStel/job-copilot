@@ -141,6 +141,14 @@ type EngineProfileMlMetricRecord = {
 type EngineRerankerMetricsResponse = {
   profile_id: string;
   state: EngineProfileMlState;
+  summary: {
+    run_count: number;
+    trained_run_count: number;
+    skipped_run_count: number;
+    failed_run_count: number;
+    warning_run_count: number;
+    last_warning_reason: string | null;
+  };
   runs: EngineProfileMlMetricRecord[];
 };
 
@@ -283,6 +291,14 @@ export type RerankerMetricRecord = {
 export type RerankerMetrics = {
   profileId: string;
   state: RerankerMlState;
+  summary: {
+    runCount: number;
+    trainedRunCount: number;
+    skippedRunCount: number;
+    failedRunCount: number;
+    warningRunCount: number;
+    lastWarningReason: string | null;
+  };
   runs: RerankerMetricRecord[];
 };
 
@@ -329,6 +345,14 @@ function mapRerankerMetrics(response: EngineRerankerMetricsResponse): RerankerMe
       examplesSinceRetrain: response.state.examples_since_retrain,
       lastArtifactVersion: response.state.last_artifact_version,
       lastTrainingStatus: response.state.last_training_status,
+    },
+    summary: {
+      runCount: response.summary.run_count,
+      trainedRunCount: response.summary.trained_run_count,
+      skippedRunCount: response.summary.skipped_run_count,
+      failedRunCount: response.summary.failed_run_count,
+      warningRunCount: response.summary.warning_run_count,
+      lastWarningReason: response.summary.last_warning_reason,
     },
     runs: response.runs.map((run) => ({
       id: run.id,

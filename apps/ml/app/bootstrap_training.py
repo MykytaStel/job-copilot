@@ -32,8 +32,21 @@ async def bootstrap_and_retrain(
     compatibility_model_path: Path = DEFAULT_TRAINED_RERANKER_MODEL_PATH,
     base_url: str | None = None,
 ) -> BootstrapWorkflowResult:
-    resolved_artifact_path = model_path or artifact_path
-    resolved_compatibility_path = model_path or compatibility_model_path
+    resolved_artifact_path = artifact_path
+    resolved_compatibility_path = compatibility_model_path
+    if model_path is not None:
+        # Preserve the legacy single-path surface for CLI callers that only know
+        # about `model_path`, but keep distinct profile/runtime paths for the
+        # newer bootstrap service which still reaches this wrapper positionally.
+        if (
+            artifact_path != DEFAULT_MODEL_PATH
+            and compatibility_model_path == DEFAULT_TRAINED_RERANKER_MODEL_PATH
+        ):
+            resolved_artifact_path = model_path
+            resolved_compatibility_path = artifact_path
+        else:
+            resolved_artifact_path = model_path
+            resolved_compatibility_path = model_path
     return await _bootstrap_and_retrain(
         profile_id=profile_id,
         min_examples=min_examples,

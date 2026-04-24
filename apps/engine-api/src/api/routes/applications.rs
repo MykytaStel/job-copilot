@@ -67,7 +67,7 @@ pub async fn create_application(
     ApiJson(payload): ApiJson<CreateApplicationRequest>,
 ) -> Result<(axum::http::StatusCode, axum::Json<ApplicationResponse>), ApiError> {
     let payload = payload.validate()?;
-    let profile_id = payload.profile_id.clone();
+    let profile_id = payload.application.profile_id.clone();
 
     let Some(_) = state
         .jobs_service
