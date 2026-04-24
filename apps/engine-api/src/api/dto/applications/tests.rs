@@ -1,8 +1,8 @@
 use axum::response::IntoResponse;
 
 use super::{
-    CreateApplicationContactRequest, CreateContactRequest, UpdateApplicationRequest,
-    UpsertOfferRequest,
+    CreateApplicationContactRequest, CreateApplicationRequest, CreateContactRequest,
+    UpdateApplicationRequest, UpsertOfferRequest,
 };
 
 #[test]
@@ -26,6 +26,23 @@ fn rejects_invalid_contact_relationship() {
     .into_response();
 
     assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+}
+
+#[test]
+fn carries_profile_scope_into_validated_application() {
+    let validated = CreateApplicationRequest {
+        job_id: "job-1".to_string(),
+        status: "saved".to_string(),
+        applied_at: None,
+        profile_id: Some(" profile-1 ".to_string()),
+    }
+    .validate()
+    .expect("application payload should validate");
+
+    assert_eq!(
+        validated.application.profile_id.as_deref(),
+        Some("profile-1")
+    );
 }
 
 #[test]

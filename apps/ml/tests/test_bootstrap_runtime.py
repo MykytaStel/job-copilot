@@ -49,6 +49,29 @@ def test_bootstrap_task_store_cleans_expired_files(tmp_path):
     assert store.get("task-old") is None
 
 
+def test_bootstrap_task_store_reports_status_counts(tmp_path):
+    store = BootstrapTaskStore(tmp_path, task_ttl_hours=24)
+    store.create(task_id="accepted-task", profile_id="profile-1")
+    store.create(task_id="running-task", profile_id="profile-1")
+    store.mark_running("running-task")
+    store.create(task_id="completed-task", profile_id="profile-1")
+    store.mark_completed(
+        "completed-task",
+        BootstrapResponse(retrained=False, example_count=12, profile_id="profile-1"),
+    )
+    store.create(task_id="failed-task", profile_id="profile-1")
+    store.mark_failed(task_id="failed-task", profile_id="profile-1", error="boom")
+
+    counts = store.status_counts()
+
+    assert counts == {
+        "accepted": 1,
+        "running": 1,
+        "completed": 1,
+        "failed": 1,
+    }
+
+
 def test_profile_bootstrap_lock_rejects_second_holder(tmp_path):
     path = tmp_path / "locks" / "profile-1.lock"
     first = ProfileBootstrapLock(path)
@@ -76,3 +99,22 @@ def test_ready_route_reports_degraded_engine_api(monkeypatch):
     assert body["status"] == "degraded"
     checks = {item["name"]: item for item in body["checks"]}
     assert checks["engine_api"]["status"] == "degraded"
+
+
+def test_ready_route_reports_bootstrap_runtime_saturation():
+    with TestClient(app) as client:
+        services = client.app.state.services
+        services.task_store.create(task_id="accepted-1", profile_id="profile-1")
+        services.task_store.create(task_id="accepted-2", profile_id="profile-2")
+        services.reranker_bootstrap_service._active_jobs = (
+            services.reranker_bootstrap_service._max_concurrent_jobs
+        )
+
+        response = client.get("/ready")
+
+    body = response.json()
+    checks = {item["name"]: item for item in body["checks"]}
+    assert checks["bootstrap_runtime"]["status"] == "degraded"
+    assert "active=" in (checks["bootstrap_runtime"]["detail"] or "")
+    assert "queued=2" in (checks["bootstrap_runtime"]["detail"] or "")
+    assert "accepted=2" in (checks["bootstrap_runtime"]["detail"] or "")

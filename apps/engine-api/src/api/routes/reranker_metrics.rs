@@ -3,6 +3,7 @@ use serde::Deserialize;
 
 use crate::api::dto::reranker_metrics::{
     ProfileMlMetricRecordResponse, ProfileMlStateResponse, RerankerMetricsResponse,
+    RerankerMetricsSummaryResponse,
 };
 use crate::api::error::ApiError;
 use crate::api::routes::feedback::ensure_profile_exists;
@@ -36,15 +37,58 @@ pub async fn get_reranker_metrics(
         .list_recent(&profile_id, limit)
         .await
         .map_err(|error| ApiError::from_repository(error, "reranker_metrics_query_failed"))?;
+    let summary = summarize_runs(&runs);
 
     Ok(axum::Json(RerankerMetricsResponse {
         profile_id,
         state: ProfileMlStateResponse::from(current_state),
+        summary,
         runs: runs
             .into_iter()
             .map(ProfileMlMetricRecordResponse::from)
             .collect(),
     }))
+}
+
+fn summarize_runs(
+    runs: &[crate::domain::profile::ml::ProfileMlMetricRecord],
+) -> RerankerMetricsSummaryResponse {
+    let mut trained_run_count = 0;
+    let mut skipped_run_count = 0;
+    let mut failed_run_count = 0;
+    let mut warning_run_count = 0;
+    let mut last_warning_reason = None;
+
+    for run in runs {
+        let status = run.status.trim().to_ascii_lowercase();
+        if status == "trained" {
+            trained_run_count += 1;
+        } else if status.contains("failed") {
+            failed_run_count += 1;
+        } else if status.starts_with("skipped") {
+            skipped_run_count += 1;
+        }
+
+        if run
+            .reason
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+        {
+            warning_run_count += 1;
+            if last_warning_reason.is_none() {
+                last_warning_reason = run.reason.clone();
+            }
+        }
+    }
+
+    RerankerMetricsSummaryResponse {
+        run_count: runs.len(),
+        trained_run_count,
+        skipped_run_count,
+        failed_run_count,
+        warning_run_count,
+        last_warning_reason,
+    }
 }
 
 #[cfg(test)]
@@ -137,7 +181,79 @@ mod tests {
         let response: RerankerMetricsResponse = response;
         assert_eq!(response.profile_id, "profile-1");
         assert_eq!(response.state.examples_since_retrain, 4);
+        assert_eq!(response.summary.run_count, 1);
+        assert_eq!(response.summary.trained_run_count, 1);
+        assert_eq!(response.summary.failed_run_count, 0);
+        assert_eq!(response.summary.warning_run_count, 0);
         assert_eq!(response.runs.len(), 1);
         assert_eq!(response.runs[0].status, "trained");
+    }
+
+    #[tokio::test]
+    async fn summarizes_warning_and_failure_runs() {
+        let metrics_service = ProfileMlMetricsService::for_tests(
+            ProfileMlMetricsServiceStub::default()
+                .with_record(
+                    ProfileMlMetricsServiceStub::default()
+                        .create(CreateProfileMlMetric {
+                            profile_id: "profile-1".to_string(),
+                            status: "bootstrap_failed".to_string(),
+                            artifact_version: None,
+                            model_type: None,
+                            reason: Some("engine-api unavailable".to_string()),
+                            metrics_json: None,
+                            training_json: None,
+                            feature_importances_json: None,
+                            benchmark_json: None,
+                        })
+                        .expect("failed record should be created"),
+                )
+                .with_record(
+                    ProfileMlMetricsServiceStub::default()
+                        .create(CreateProfileMlMetric {
+                            profile_id: "profile-1".to_string(),
+                            status: "trained".to_string(),
+                            artifact_version: Some("trained_reranker_v3".to_string()),
+                            model_type: Some("logistic_regression".to_string()),
+                            reason: Some(
+                                "insufficient temporal spread across examples".to_string(),
+                            ),
+                            metrics_json: Some(json!({ "variants": [] })),
+                            training_json: None,
+                            feature_importances_json: None,
+                            benchmark_json: None,
+                        })
+                        .expect("warning record should be created"),
+                ),
+        );
+        let state = AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(sample_profile()),
+            ),
+            JobsService::for_tests(JobsServiceStub::default()),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_profile_ml_state_service(ProfileMlStateService::for_tests(
+            ProfileMlStateServiceStub::default(),
+        ))
+        .with_profile_ml_metrics_service(metrics_service);
+
+        let axum::Json(response) = get_reranker_metrics(
+            State(state),
+            Path("profile-1".to_string()),
+            Query(RerankerMetricsQuery { limit: Some(10) }),
+        )
+        .await
+        .expect("metrics route should succeed");
+
+        assert_eq!(response.summary.run_count, 2);
+        assert_eq!(response.summary.trained_run_count, 1);
+        assert_eq!(response.summary.failed_run_count, 1);
+        assert_eq!(response.summary.warning_run_count, 2);
+        assert_eq!(
+            response.summary.last_warning_reason.as_deref(),
+            Some("insufficient temporal spread across examples")
+        );
     }
 }

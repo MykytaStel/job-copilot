@@ -5,6 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PIP_DEFAULT_TIMEOUT=120
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 RUN python -m pip install --no-cache-dir --retries 10 -r requirements.txt
 
 COPY app/ ./app/

@@ -46,7 +46,12 @@ def test_openai_provider_retries_transient_errors_and_returns_output(monkeypatch
         pass
 
     class FakeOpenAI:
-        def __init__(self, api_key: str, base_url: str | None = None):
+        def __init__(
+            self,
+            api_key: str,
+            base_url: str | None = None,
+            timeout: float | None = None,
+        ):
             self.responses = types.SimpleNamespace(create=self.create)
 
         def create(self, **kwargs):
@@ -75,7 +80,12 @@ def test_openai_provider_raises_on_empty_response(monkeypatch):
         pass
 
     class FakeOpenAI:
-        def __init__(self, api_key: str, base_url: str | None = None):
+        def __init__(
+            self,
+            api_key: str,
+            base_url: str | None = None,
+            timeout: float | None = None,
+        ):
             self.responses = types.SimpleNamespace(create=self.create)
 
         def create(self, **kwargs):
@@ -93,6 +103,51 @@ def test_openai_provider_raises_on_empty_response(monkeypatch):
 
     with pytest.raises(ProfileInsightsProviderError, match="empty response"):
         asyncio.run(provider.generate_profile_insights(sample_context(), sample_prompt()))
+
+
+def test_openai_provider_passes_timeout_to_sdk(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class RetryableError(Exception):
+        pass
+
+    class FakeOpenAI:
+        def __init__(
+            self,
+            api_key: str,
+            base_url: str | None = None,
+            timeout: float | None = None,
+        ):
+            captured["api_key"] = api_key
+            captured["base_url"] = base_url
+            captured["timeout"] = timeout
+            self.responses = types.SimpleNamespace(create=self.create)
+
+        def create(self, **kwargs):
+            return types.SimpleNamespace(output_text='{"profile_summary":"ok"}')
+
+    fake_module = types.ModuleType("openai")
+    fake_module.OpenAI = FakeOpenAI
+    fake_module.APIConnectionError = RetryableError
+    fake_module.APITimeoutError = RetryableError
+    fake_module.InternalServerError = RetryableError
+    fake_module.RateLimitError = RetryableError
+    monkeypatch.setitem(sys.modules, "openai", fake_module)
+
+    provider = OpenAIEnrichmentProvider(
+        api_key="key",
+        model="gpt-test",
+        base_url="https://openai.test",
+        timeout_seconds=12.5,
+    )
+    result = asyncio.run(provider.generate_profile_insights(sample_context(), sample_prompt()))
+
+    assert result == '{"profile_summary":"ok"}'
+    assert captured == {
+        "api_key": "key",
+        "base_url": "https://openai.test",
+        "timeout": 12.5,
+    }
 
 
 def test_ollama_provider_retries_transient_errors_and_returns_output(monkeypatch):

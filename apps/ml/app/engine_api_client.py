@@ -1,10 +1,14 @@
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from time import perf_counter
 from typing import Any
 
 import httpx
 from pydantic import BaseModel, field_validator
+
+logger = logging.getLogger(__name__)
 
 from app.dataset import OutcomeDataset
 from app.settings import RuntimeSettings, get_runtime_settings
@@ -150,9 +154,16 @@ def configure_shared_client(client: httpx.AsyncClient | None) -> None:
 
 
 class EngineApiClient:
-    def __init__(self, client: httpx.AsyncClient, *, base_url: str | None = None):
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        *,
+        base_url: str | None = None,
+        request_id: str | None = None,
+    ):
         self._client = client
         self._base_url = base_url.rstrip("/") if base_url else None
+        self._request_id = request_id
 
     async def fetch_profile(self, profile_id: str) -> EngineProfile:
         payload = await self._fetch_json(f"/api/v1/profiles/{profile_id}")
@@ -195,10 +206,14 @@ class EngineApiClient:
         )
         retryable_status_codes = {502, 503, 504}
         last_error: Exception | None = None
+        extra_headers: dict[str, str] = {}
+        if self._request_id:
+            extra_headers["x-request-id"] = self._request_id
 
         for attempt in range(3):
+            started = perf_counter()
             try:
-                response = await self._client.get(url)
+                response = await self._client.get(url, headers=extra_headers or None)
             except retryable_errors as exc:
                 last_error = exc
                 if attempt == 2:
@@ -207,6 +222,18 @@ class EngineApiClient:
                 continue
             except httpx.HTTPError as exc:
                 raise EngineApiUnavailableError(f"engine-api request failed: {exc}") from exc
+
+            duration_ms = round((perf_counter() - started) * 1000, 2)
+            log_extra = {
+                "url": url,
+                "status_code": response.status_code,
+                "duration_ms": duration_ms,
+                "request_id": self._request_id or "-",
+            }
+            if response.status_code >= 400:
+                logger.warning("engine-api request returned error", extra=log_extra)
+            else:
+                logger.debug("engine-api request completed", extra=log_extra)
 
             if response.status_code in retryable_status_codes and attempt < 2:
                 await asyncio.sleep(0.2 * (attempt + 1))
@@ -224,9 +251,10 @@ class EngineApiClient:
 async def engine_api_client_context(
     *,
     base_url: str | None = None,
+    request_id: str | None = None,
 ) -> AsyncIterator[EngineApiClient]:
     if _shared_client is not None:
-        yield EngineApiClient(_shared_client, base_url=base_url)
+        yield EngineApiClient(_shared_client, base_url=base_url, request_id=request_id)
         return
     async with build_shared_http_client(get_runtime_settings()) as client:
-        yield EngineApiClient(client, base_url=base_url)
+        yield EngineApiClient(client, base_url=base_url, request_id=request_id)

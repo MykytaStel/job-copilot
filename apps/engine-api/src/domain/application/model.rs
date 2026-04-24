@@ -67,6 +67,7 @@ pub struct ApplicationDetail {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateApplication {
+    pub profile_id: Option<String>,
     pub job_id: String,
     pub status: String,
     pub applied_at: Option<String>,

@@ -32,7 +32,7 @@ def lgbm_available() -> bool:
         import lightgbm  # noqa: F401
         import numpy  # noqa: F401
         return True
-    except ImportError:
+    except (ImportError, OSError):
         return False
 
 
@@ -44,12 +44,13 @@ def lgbm_candidate_available(datasets: list[OutcomeDataset]) -> bool:
     negative = sum(
         1 for dataset in datasets for example in dataset.examples if example.label == "negative"
     )
-    return (
-        lgbm_available()
-        and total >= _MIN_EXAMPLES_FOR_LGBM
-        and positive >= _MIN_POSITIVE_FOR_LGBM
-        and negative >= _MIN_NEGATIVE_FOR_LGBM
-    )
+    if total < _MIN_EXAMPLES_FOR_LGBM:
+        return False
+    if positive < _MIN_POSITIVE_FOR_LGBM:
+        return False
+    if negative < _MIN_NEGATIVE_FOR_LGBM:
+        return False
+    return lgbm_available()
 
 
 def distill_lgbm_labels(

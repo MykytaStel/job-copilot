@@ -32,7 +32,6 @@ export async function linkContact(
 ): Promise<ApplicationContact> {
   const contact = await request<{
     id: string;
-    application_id: string;
     relationship: ApplicationContact['relationship'];
     contact: EngineContact;
   }>(
@@ -45,7 +44,6 @@ export async function linkContact(
 
   return {
     id: contact.id,
-    applicationId: contact.application_id,
     relationship: contact.relationship,
     contact: mapContact(contact.contact),
   };

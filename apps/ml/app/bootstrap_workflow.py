@@ -111,9 +111,28 @@ async def bootstrap_and_retrain(
             metrics_version=METRICS_VERSION,
             reason=label_dist.reason,
         )
+    if label_dist.is_imbalanced:
+        logger.warning(
+            "label distribution imbalance, skipping retrain: %s (profile=%s)",
+            label_dist.reason,
+            profile_id,
+        )
+        return BootstrapWorkflowResult.insufficient_examples(
+            example_count=example_count,
+            min_examples=min_examples,
+            profile_id=profile_id,
+            artifact_path=artifact_path,
+            model_path=compatibility_model_path,
+            started_at=started_at,
+            finished_at=_utc_now_iso(),
+            promotion_decision="skipped_label_imbalance",
+            metrics_version=METRICS_VERSION,
+            reason=label_dist.reason,
+        )
 
-    feature_statistics = compute_feature_statistics(dataset.examples)
     train_examples, _ = temporal_train_test_split(dataset.examples)
+    stats_examples = train_examples or dataset.examples
+    feature_statistics = compute_feature_statistics(stats_examples)
     candidate_dataset = (
         OutcomeDataset(
             profile_id=dataset.profile_id,
@@ -123,12 +142,22 @@ async def bootstrap_and_retrain(
         if train_examples
         else dataset
     )
+    success_reason = None
+    if label_dist.has_insufficient_temporal_spread:
+        success_reason = label_dist.reason
+        logger.warning(
+            "label distribution warning, retraining with limited temporal spread: %s (profile=%s)",
+            label_dist.reason,
+            profile_id,
+        )
     baseline_feature_names = list(DEFAULT_FEATURE_NAMES)
-    ablation_candidates = compute_ablation_candidates(
-        baseline_feature_names, train_examples or dataset.examples
+    ablation_report = compute_ablation_candidates(
+        baseline_feature_names, stats_examples
     )
     ablated_feature_names = [
-        feature_name for feature_name in baseline_feature_names if feature_name not in ablation_candidates
+        feature_name
+        for feature_name in baseline_feature_names
+        if feature_name not in ablation_report.candidates
     ]
 
     candidate_model = await asyncio.to_thread(
@@ -215,6 +244,9 @@ async def bootstrap_and_retrain(
         "trained_reranker_prediction",
         "positive_hit_rate",
     )
+    benchmark["ablation_fallback_used"] = ablation_report.fallback_used
+    if ablation_report.fallback_reason:
+        benchmark["ablation_fallback_reason"] = ablation_report.fallback_reason
     benchmark["baseline_positive_hit_rate"] = _metric_value(
         evaluation,
         "trained_reranker_prediction",
@@ -233,6 +265,7 @@ async def bootstrap_and_retrain(
                 [dataset],
                 distilled_labels=distilled_labels,
                 feature_names=selected_feature_names,
+                feature_statistics=feature_statistics,
             )
         )
         distilled_evaluation = await asyncio.to_thread(
@@ -268,6 +301,7 @@ async def bootstrap_and_retrain(
             [dataset],
             distilled_labels=distilled_labels,
             feature_names=selected_feature_names,
+            feature_statistics=feature_statistics,
         )
     )
     distribution_shift_score = None
@@ -311,6 +345,7 @@ async def bootstrap_and_retrain(
         artifact_path=artifact_path,
         model_path=compatibility_model_path,
         training=model.artifact.training,
+        reason=success_reason,
         evaluation=evaluation,
         benchmark=benchmark,
         feature_importances=model.feature_importances(),
@@ -350,7 +385,7 @@ def _class_mix_counts(dataset: OutcomeDataset) -> dict[str, int]:
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _metric_value(

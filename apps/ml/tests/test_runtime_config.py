@@ -1,12 +1,15 @@
 import pytest
 
 from app.llm_provider import TemplateEnrichmentProvider, build_profile_insights_provider
+from app.llm_provider_factory import build_enrichment_provider
 from app.profile_insights import ProfileInsightsProviderError
 from app.settings import (
+    DEFAULT_BOOTSTRAP_MAX_CONCURRENT_JOBS,
     DEFAULT_CORS_ALLOWED_ORIGINS,
     DEFAULT_ENGINE_API_BASE_URL,
     DEFAULT_ENGINE_API_TIMEOUT_SECONDS,
     DEFAULT_LLM_PROVIDER,
+    DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS,
     DEFAULT_OLLAMA_BASE_URL,
     DEFAULT_OLLAMA_MODEL,
     DEFAULT_OPENAI_MODEL,
@@ -41,6 +44,8 @@ def test_runtime_settings_defaults_to_local_dev_cors_origins(monkeypatch):
     assert settings.openai_model == DEFAULT_OPENAI_MODEL
     assert settings.ollama_base_url == DEFAULT_OLLAMA_BASE_URL
     assert settings.ollama_model == DEFAULT_OLLAMA_MODEL
+    assert settings.llm_request_timeout_seconds == DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
+    assert settings.bootstrap_max_concurrent_jobs == DEFAULT_BOOTSTRAP_MAX_CONCURRENT_JOBS
 
 
 def test_runtime_settings_reads_explicit_cors_origin_list(monkeypatch):
@@ -74,3 +79,73 @@ def test_openai_provider_requires_api_key(monkeypatch):
 
     with pytest.raises(ProfileInsightsProviderError, match="OPENAI_API_KEY"):
         build_profile_insights_provider()
+
+
+def test_runtime_settings_read_llm_timeout_and_bootstrap_concurrency(monkeypatch):
+    monkeypatch.setenv("ML_LLM_REQUEST_TIMEOUT_SECONDS", "12.5")
+    monkeypatch.setenv("ML_BOOTSTRAP_MAX_CONCURRENT_JOBS", "4")
+
+    settings = get_runtime_settings()
+
+    assert settings.llm_request_timeout_seconds == 12.5
+    assert settings.bootstrap_max_concurrent_jobs == 4
+
+
+def test_build_enrichment_provider_passes_timeout_to_ollama(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeOllamaProvider:
+        def __init__(self, *, base_url: str, model: str, timeout_seconds: float):
+            captured["base_url"] = base_url
+            captured["model"] = model
+            captured["timeout_seconds"] = timeout_seconds
+
+    monkeypatch.setenv("ML_LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://ollama.test")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama-test")
+    monkeypatch.setenv("ML_LLM_REQUEST_TIMEOUT_SECONDS", "22.5")
+    monkeypatch.setattr("app.llm_provider_factory.OllamaEnrichmentProvider", FakeOllamaProvider)
+
+    provider = build_enrichment_provider()
+
+    assert isinstance(provider, FakeOllamaProvider)
+    assert captured == {
+        "base_url": "http://ollama.test",
+        "model": "llama-test",
+        "timeout_seconds": 22.5,
+    }
+
+
+def test_build_enrichment_provider_passes_timeout_to_openai(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIProvider:
+        def __init__(
+            self,
+            *,
+            api_key: str,
+            model: str,
+            base_url: str | None = None,
+            timeout_seconds: float | None = None,
+        ):
+            captured["api_key"] = api_key
+            captured["model"] = model
+            captured["base_url"] = base_url
+            captured["timeout_seconds"] = timeout_seconds
+
+    monkeypatch.setenv("ML_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://openai.test")
+    monkeypatch.setenv("ML_LLM_REQUEST_TIMEOUT_SECONDS", "18.0")
+    monkeypatch.setattr("app.llm_provider_factory.OpenAIEnrichmentProvider", FakeOpenAIProvider)
+
+    provider = build_enrichment_provider()
+
+    assert isinstance(provider, FakeOpenAIProvider)
+    assert captured == {
+        "api_key": "test-key",
+        "model": "gpt-test",
+        "base_url": "https://openai.test",
+        "timeout_seconds": 18.0,
+    }

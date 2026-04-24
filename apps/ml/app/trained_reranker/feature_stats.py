@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
+
 from pydantic import BaseModel, Field
 
 from app.dataset import OutcomeExample
+
+logger = logging.getLogger(__name__)
 
 FALLBACK_ABLATED_FEATURES = frozenset({"learned_reranker_score", "learned_reranker_score_delta"})
 _LOW_VARIANCE_THRESHOLD = 1e-4
@@ -16,6 +21,13 @@ class FeatureStatistics(BaseModel):
     returned_count_p95: float = Field(default=5.0, ge=1.0)
     interest_rating_min: float = Field(default=-2.0)
     interest_rating_max: float = Field(default=2.0)
+
+
+@dataclass(frozen=True)
+class AblationCandidatesReport:
+    candidates: set[str]
+    fallback_used: bool
+    fallback_reason: str | None = None
 
 
 def compute_feature_statistics(examples: list[OutcomeExample]) -> FeatureStatistics:
@@ -48,9 +60,13 @@ def compute_feature_statistics(examples: list[OutcomeExample]) -> FeatureStatist
 def compute_ablation_candidates(
     feature_names: list[str],
     examples: list[OutcomeExample],
-) -> set[str]:
+) -> AblationCandidatesReport:
     if len(examples) < _MIN_EXAMPLES_FOR_STATS:
-        return set(FALLBACK_ABLATED_FEATURES)
+        return AblationCandidatesReport(
+            candidates=set(FALLBACK_ABLATED_FEATURES),
+            fallback_used=True,
+            fallback_reason="insufficient_examples_for_variance",
+        )
 
     try:
         from app.trained_reranker.features import extract_features
@@ -66,9 +82,24 @@ def compute_ablation_candidates(
             for name in feature_names
             if _variance(vectors[name]) < _LOW_VARIANCE_THRESHOLD
         }
-        return candidates if candidates else set(FALLBACK_ABLATED_FEATURES)
-    except Exception:
-        return set(FALLBACK_ABLATED_FEATURES)
+        if candidates:
+            return AblationCandidatesReport(candidates=candidates, fallback_used=False)
+        return AblationCandidatesReport(
+            candidates=set(FALLBACK_ABLATED_FEATURES),
+            fallback_used=True,
+            fallback_reason="no_low_variance_features_detected",
+        )
+    except Exception as exc:
+        logger.error(
+            "ablation candidate extraction failed; using fallback features",
+            exc_info=True,
+            extra={"fallback_features": sorted(FALLBACK_ABLATED_FEATURES), "error": str(exc)},
+        )
+        return AblationCandidatesReport(
+            candidates=set(FALLBACK_ABLATED_FEATURES),
+            fallback_used=True,
+            fallback_reason="feature_extraction_failed",
+        )
 
 
 def _p95(values: list[float | int]) -> float:

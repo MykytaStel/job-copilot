@@ -54,7 +54,9 @@ def create_app() -> FastAPI:
     @application.middleware("http")
     async def record_request_duration(request: Request, call_next):
         started_at = perf_counter()
+        request_id = request.headers.get("x-request-id", "-")
         response = await call_next(request)
+        response.headers["x-request-id"] = request_id
         logger.info(
             "request completed",
             extra={
@@ -62,6 +64,7 @@ def create_app() -> FastAPI:
                 "method": request.method,
                 "status_code": response.status_code,
                 "duration_ms": round((perf_counter() - started_at) * 1000, 2),
+                "request_id": request_id,
             },
         )
         return response
@@ -91,17 +94,30 @@ def create_app() -> FastAPI:
     async def ready(request: Request) -> ReadyResponse:
         services = request.app.state.services
         checks: list[ReadyCheck] = []
+        request_id = request.headers.get("x-request-id")
 
         try:
-            engine_api = EngineApiClient(services._http_client)
+            engine_api = EngineApiClient(services._http_client, request_id=request_id)
             await asyncio.wait_for(
                 engine_api.probe_health(),
                 timeout=settings.ready_timeout_seconds,
             )
             checks.append(ReadyCheck(name="engine_api", status="ok"))
-        except Exception:
+        except asyncio.TimeoutError:
+            logger.warning(
+                "engine-api health probe timed out",
+                extra={"timeout_seconds": settings.ready_timeout_seconds, "request_id": request_id or "-"},
+            )
             checks.append(
-                ReadyCheck(name="engine_api", status="degraded", detail="engine-api unavailable")
+                ReadyCheck(name="engine_api", status="degraded", detail="engine-api health probe timed out")
+            )
+        except Exception as exc:
+            logger.warning(
+                "engine-api health probe failed",
+                extra={"error": type(exc).__name__, "detail": str(exc), "request_id": request_id or "-"},
+            )
+            checks.append(
+                ReadyCheck(name="engine_api", status="degraded", detail=f"engine-api unavailable: {type(exc).__name__}")
             )
 
         if services.enrichment_provider_error:
@@ -138,6 +154,31 @@ def create_app() -> FastAPI:
                     detail="profile artifact directory missing",
                 )
             )
+
+        bootstrap_runtime = services.reranker_bootstrap_service.runtime_snapshot()
+        task_counts = services.task_store.status_counts()
+        queued_jobs = task_counts["accepted"] + max(
+            0,
+            task_counts["running"] - bootstrap_runtime["active_jobs"],
+        )
+        bootstrap_saturated = (
+            bootstrap_runtime["active_jobs"] >= bootstrap_runtime["max_concurrent_jobs"]
+            and queued_jobs > 0
+        )
+        checks.append(
+            ReadyCheck(
+                name="bootstrap_runtime",
+                status="degraded" if bootstrap_saturated else "ok",
+                detail=(
+                    "active="
+                    f"{bootstrap_runtime['active_jobs']}/{bootstrap_runtime['max_concurrent_jobs']}, "
+                    f"available_slots={bootstrap_runtime['available_slots']}, "
+                    f"queued={queued_jobs}, "
+                    f"accepted={task_counts['accepted']}, running={task_counts['running']}, "
+                    f"completed={task_counts['completed']}, failed={task_counts['failed']}"
+                ),
+            )
+        )
 
         status_value = "ok" if all(check.status == "ok" for check in checks) else "degraded"
         return ReadyResponse(status=status_value, service="ml", checks=checks)

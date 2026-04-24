@@ -28,9 +28,20 @@ pub struct ProfileMlMetricRecordResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct RerankerMetricsSummaryResponse {
+    pub run_count: usize,
+    pub trained_run_count: usize,
+    pub skipped_run_count: usize,
+    pub failed_run_count: usize,
+    pub warning_run_count: usize,
+    pub last_warning_reason: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct RerankerMetricsResponse {
     pub profile_id: String,
     pub state: ProfileMlStateResponse,
+    pub summary: RerankerMetricsSummaryResponse,
     pub runs: Vec<ProfileMlMetricRecordResponse>,
 }
 

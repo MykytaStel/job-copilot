@@ -1,4 +1,4 @@
-import { CalendarClock, MapPin } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
 import type { JobDetailsPageState } from '../../features/job-details/useJobDetailsPage';
 import { formatOptionalDate } from '../../lib/format';
 
@@ -41,7 +41,6 @@ export function JobDetailsLifecycleTab({
           value={formatOptionalDate(job.reactivatedAt) ?? 'n/a'}
           icon={CalendarClock}
         />
-        <HeroMetric label="Source id" value={job.primaryVariant?.sourceJobId ?? 'n/a'} icon={MapPin} />
       </div>
     </Section>
   );

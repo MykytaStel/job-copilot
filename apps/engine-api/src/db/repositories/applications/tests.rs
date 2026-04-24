@@ -20,6 +20,7 @@ async fn create_returns_disabled_without_database() {
 
     let error = repository
         .create(&CreateApplication {
+            profile_id: None,
             job_id: "job-1".to_string(),
             status: "saved".to_string(),
             applied_at: None,

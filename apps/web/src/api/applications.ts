@@ -107,14 +107,12 @@ export async function setDueDate(id: string, dueDate: string | null): Promise<Ap
 export async function addNote(applicationId: string, content: string): Promise<ApplicationNote> {
   const note = await request<{
     id: string;
-    application_id: string;
     content: string;
     created_at: string;
   }>(`/api/v1/applications/${applicationId}/notes`, json('POST', { content }));
 
   return {
     id: note.id,
-    applicationId: note.application_id,
     content: note.content,
     createdAt: note.created_at,
   };

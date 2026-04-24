@@ -12,7 +12,6 @@ export interface JobPostingInput {
 
 export interface JobSourceVariant {
   source: string;
-  sourceJobId: string;
   sourceUrl: string;
   fetchedAt: string;
   lastSeenAt: string;

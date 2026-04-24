@@ -19,7 +19,10 @@ async fn main() {
         .or_else(|_| EnvFilter::try_new("info"))
         .expect("valid tracing filter");
 
-    tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    tracing_subscriber::fmt()
+        .json()
+        .with_env_filter(env_filter)
+        .init();
 
     let config = Config::from_env();
     let database = Database::from_config(&config)

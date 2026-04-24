@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app import bootstrap_training
+from app import bootstrap_workflow
 from app.application_coach import ApplicationCoachProviderError
 from app.application_coach_service import ApplicationCoachService
 from app.bootstrap.task_store import BootstrapTaskStore
@@ -66,8 +66,9 @@ async def build_app_services(settings: RuntimeSettings) -> AppServices:
     fit_analysis_service = FitAnalysisService(engine_api_client_factory)
     rerank_service = RerankService(engine_api_client_factory)
     reranker_bootstrap_service = RerankerBootstrapService(
-        bootstrap_workflow=bootstrap_training.bootstrap_and_retrain,
+        bootstrap_workflow=bootstrap_workflow.bootstrap_and_retrain,
         lock_dir=task_store.locks_dir,
+        max_concurrent_jobs=settings.bootstrap_max_concurrent_jobs,
     )
 
     enrichment_provider = None

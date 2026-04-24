@@ -1,0 +1,12 @@
+{
+  "task_id": "accepted-2",
+  "profile_id": "profile-2",
+  "status": "accepted",
+  "result": null,
+  "error": null,
+  "artifact_path": null,
+  "started_at": null,
+  "finished_at": null,
+  "promotion_decision": null,
+  "metrics_version": null
+}

@@ -190,7 +190,6 @@ export function buildRankedJobPayload(job: JobPosting) {
     description_text: job.description,
     summary: job.presentation?.summary,
     source: job.primaryVariant?.source,
-    source_job_id: job.primaryVariant?.sourceJobId,
     source_url: job.primaryVariant?.sourceUrl ?? job.url,
     remote_type: job.remoteType,
     seniority: job.seniority,

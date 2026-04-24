@@ -249,6 +249,7 @@ mod tests {
                 evaluation: Some(BootstrapEvaluationSummary {
                     profile_id: "profile-1".to_string(),
                     label_policy_version: "outcome_label_v3".to_string(),
+                    metrics_version: "reranker_eval_v2".to_string(),
                     signal_weight_policy_version: "outcome_signal_weight_v2".to_string(),
                     split_method: "temporal".to_string(),
                     example_count: 16,
@@ -256,6 +257,7 @@ mod tests {
                     test_example_count: 4,
                     positive_count: 5,
                     top_n: 10,
+                    rolling_window_count: 0,
                     variants: vec![BootstrapVariantMetrics {
                         variant: "trained_reranker_prediction".to_string(),
                         top_n: 10,
@@ -264,9 +266,28 @@ mod tests {
                         average_label_score_top_n: 1.0,
                         average_training_weight_top_n: 1.0,
                         positive_hit_rate: 1.0,
+                        ndcg_at_top_n: 0.9,
+                        mrr_at_top_n: 0.8,
+                        map_at_top_n: 0.7,
+                        precision_at_3: 0.6,
                     }],
                 }),
-                benchmark: None,
+                benchmark: Some(
+                    crate::services::reranker_bootstrap::BootstrapBenchmarkSummary {
+                        baseline_model_type: "logistic_regression".to_string(),
+                        candidate_model_type: "bpr".to_string(),
+                        baseline_positive_hit_rate: 0.5,
+                        candidate_positive_hit_rate: 0.6,
+                        candidate_available: true,
+                        winner: "bpr".to_string(),
+                        feature_set_winner: Some("full_feature_set".to_string()),
+                        ablated_positive_hit_rate: Some(0.55),
+                        ablation_fallback_used: true,
+                        ablation_fallback_reason: Some(
+                            "no_low_variance_features_detected".to_string(),
+                        ),
+                    },
+                ),
                 feature_importances: Some(std::collections::BTreeMap::from([(
                     "matched_skill_count".to_string(),
                     0.4,
@@ -295,6 +316,30 @@ mod tests {
             .expect("metrics query should work");
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].status, "trained");
+        let metrics_json = records[0]
+            .metrics_json
+            .as_ref()
+            .expect("metrics json should be stored");
+        assert_eq!(metrics_json["metrics_version"], json!("reranker_eval_v2"));
+        assert_eq!(metrics_json["rolling_window_count"], json!(0));
+        assert_eq!(metrics_json["variants"][0]["ndcg_at_top_n"], json!(0.9));
+        assert_eq!(metrics_json["variants"][0]["mrr_at_top_n"], json!(0.8));
+        assert_eq!(metrics_json["variants"][0]["map_at_top_n"], json!(0.7));
+        assert_eq!(metrics_json["variants"][0]["precision_at_3"], json!(0.6));
+        let benchmark_json = records[0]
+            .benchmark_json
+            .as_ref()
+            .expect("benchmark json should be stored");
+        assert_eq!(
+            benchmark_json["feature_set_winner"],
+            json!("full_feature_set")
+        );
+        assert_eq!(benchmark_json["ablated_positive_hit_rate"], json!(0.55));
+        assert_eq!(benchmark_json["ablation_fallback_used"], json!(true));
+        assert_eq!(
+            benchmark_json["ablation_fallback_reason"],
+            json!("no_low_variance_features_detected")
+        );
     }
 
     #[tokio::test]

@@ -12,7 +12,6 @@ use crate::domain::job::presentation::{
 #[derive(Debug, Serialize)]
 pub struct JobSourceVariantResponse {
     pub source: String,
-    pub source_job_id: String,
     pub source_url: String,
     pub fetched_at: String,
     pub last_seen_at: String,
@@ -222,7 +221,6 @@ impl From<JobSourceVariant> for JobSourceVariantResponse {
     fn from(value: JobSourceVariant) -> Self {
         Self {
             source: value.source,
-            source_job_id: value.source_job_id,
             source_url: value.source_url,
             fetched_at: value.fetched_at,
             last_seen_at: value.last_seen_at,

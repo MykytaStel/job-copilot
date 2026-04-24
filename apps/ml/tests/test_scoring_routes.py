@@ -45,7 +45,9 @@ class StubRerankerBootstrapService:
         self._response = response
         self._error = error
 
-    async def bootstrap(self, payload):
+    async def bootstrap(self, payload, *, on_started=None):
+        if on_started is not None:
+            on_started()
         if self._error is not None:
             raise self._error
         return self._response

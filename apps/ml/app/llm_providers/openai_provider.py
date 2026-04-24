@@ -32,7 +32,13 @@ from app.llm_providers.common import PromptPayload, build_rate_limit_retrying, b
 
 
 class _OpenAIJsonSchemaProvider:
-    def __init__(self, api_key: str, model: str, base_url: str | None = None):
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        base_url: str | None = None,
+        timeout_seconds: float | None = None,
+    ):
         try:
             from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
         except ImportError as exc:
@@ -40,7 +46,7 @@ class _OpenAIJsonSchemaProvider:
                 "OpenAI provider is configured but the openai package is not installed."
             ) from exc
 
-        self._client = OpenAI(api_key=api_key, base_url=base_url)
+        self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout_seconds)
         self._model = model
         self._conn_errors = (APIConnectionError, APITimeoutError, InternalServerError)
         self._rate_limit_error = RateLimitError

@@ -41,7 +41,6 @@ export type EngineGlobalSearchApplication = {
 
 export type EngineOffer = {
   id: string;
-  application_id: string;
   status: OfferStatus;
   compensation_min?: number | null;
   compensation_max?: number | null;
@@ -54,21 +53,18 @@ export type EngineOffer = {
 
 export type EngineApplicationNote = {
   id: string;
-  application_id: string;
   content: string;
   created_at: string;
 };
 
 export type EngineApplicationContactLink = {
   id: string;
-  application_id: string;
   relationship: ContactRelationship;
   contact: EngineContact;
 };
 
 export type EngineApplicationActivity = {
   id: string;
-  application_id: string;
   activity_type: ActivityType;
   description: string;
   happened_at: string;
@@ -77,7 +73,6 @@ export type EngineApplicationActivity = {
 
 export type EngineApplicationTask = {
   id: string;
-  application_id: string;
   title: string;
   remind_at?: string | null;
   done: boolean;

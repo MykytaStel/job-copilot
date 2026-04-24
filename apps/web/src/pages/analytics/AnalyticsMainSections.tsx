@@ -254,6 +254,16 @@ export function AnalyticsMainSections({
               }
               icon={TrendingUp}
             />
+            <StatCard
+              title="Warnings"
+              value={rerankerMetrics.summary.warningRunCount}
+              icon={Sparkles}
+            />
+            <StatCard
+              title="Failures"
+              value={rerankerMetrics.summary.failedRunCount}
+              icon={BarChart2}
+            />
           </div>
 
           <div className="mt-6 grid gap-4 xl:grid-cols-2">
@@ -263,6 +273,17 @@ export function AnalyticsMainSections({
               emptyMessage="No feature importances available yet."
             />
           </div>
+
+          {rerankerMetrics.summary.lastWarningReason ? (
+            <div className="mt-6 rounded-2xl border border-warning/30 bg-warning/8 px-4 py-3">
+              <p className="m-0 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Latest warning
+              </p>
+              <p className="m-0 mt-2 text-sm leading-6 text-card-foreground">
+                {rerankerMetrics.summary.lastWarningReason}
+              </p>
+            </div>
+          ) : null}
         </Section>
       ) : null}
 

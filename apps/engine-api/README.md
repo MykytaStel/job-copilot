@@ -2,21 +2,54 @@
 
 Rust backend for the frontend-facing API.
 
-## Runtime
+## Architecture
 
-Environment variables:
-- `PORT` default `8080`
-- `DATABASE_URL` optional Postgres connection string
-- `DATABASE_MAX_CONNECTIONS` default `5`
-- `RUN_DB_MIGRATIONS` default `true`
-- `LEARNED_RERANKER_ENABLED` default `true`
-- `TRAINED_RERANKER_ENABLED` default `false`
-- `TRAINED_RERANKER_MODEL_PATH` optional JSON artifact path for trained reranker v2
+- Domain truth lives in Rust: all canonical identifiers, scoring, and role catalog live here.
+- ML sidecar (`apps/ml`) is an enrichment layer called over HTTP — its output is validated and stored by engine-api, not treated as authoritative on its own.
+- All state is in Postgres. engine-api opens a connection pool on startup and applies embedded SQL migrations.
+
+## Runtime Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `8080` | HTTP listen port |
+| `DATABASE_URL` | — | Postgres connection string. If unset, API starts but DB endpoints return 503 |
+| `DATABASE_MAX_CONNECTIONS` | `5` | Max pool connections (docker-compose sets `20`) |
+| `RUN_DB_MIGRATIONS` | `true` | Apply embedded migrations from `migrations/` on startup |
+| `LEARNED_RERANKER_ENABLED` | `true` | Enable heuristic reranker |
+| `TRAINED_RERANKER_ENABLED` | `false` | Enable ML-trained reranker (requires `TRAINED_RERANKER_MODEL_PATH`) |
+| `TRAINED_RERANKER_MODEL_PATH` | — | Path to trained reranker JSON artifact |
+| `ML_SIDECAR_BASE_URL` | — | Base URL for the ML sidecar (e.g. `http://ml:8000`) |
+| `RUST_LOG` | `info` | Tracing filter — accepts `debug`, `info`, `warn`, `error` or module-specific filters like `engine_api=debug` |
 
 Behavior:
 - if `DATABASE_URL` is not set, `engine-api` still starts and reports database status as `disabled`
-- if `DATABASE_URL` is set, `engine-api` opens a Postgres pool on startup
+- if `DATABASE_URL` is set, `engine-api` opens a Postgres pool on startup with `min_connections=2`, `acquire_timeout=5s`, `idle_timeout=600s`
 - if `RUN_DB_MIGRATIONS=true`, embedded SQL migrations from `migrations/` are applied on startup
+- for the local Docker stack, `infra/docker-compose.yml` sets `DATABASE_MAX_CONNECTIONS=20`
+
+## Logging & Tracing
+
+Logs are emitted as structured JSON to stdout. Every request receives a UUID v7 `x-request-id` header. The same ID is forwarded to the ML sidecar and included in all log fields for correlation.
+
+```bash
+# Stream and pretty-print logs
+docker compose logs -f engine-api | jq .
+```
+
+Key log fields:
+
+| Field | Description |
+|---|---|
+| `request_id` | UUID v7, unique per HTTP request |
+| `method` / `uri` | HTTP method and path |
+| `status` | HTTP response status code |
+| `latency_ms` | Request duration in milliseconds |
+
+Adjust verbosity:
+```bash
+RUST_LOG=engine_api=debug cargo run
+```
 
 ## Local Setup
 
@@ -254,6 +287,26 @@ Useful flags:
 - `PGPORT=15433 pnpm verify:phase8:db` runs the verification Postgres on a different local port
 - by default the verification script uses `PORT=18080` to avoid collisions with local dev servers
 - `PORT=18081 pnpm verify:phase8:db` runs `engine-api` on a different local port
+
+## Database Diagnostics
+
+Enable slow query logging by setting `log_min_duration_statement=200` on Postgres (already set in `infra/docker-compose.yml`). To analyze query performance:
+
+```sql
+-- Top slow queries (requires pg_stat_statements extension)
+SELECT query, calls, total_exec_time/calls AS avg_ms, rows
+FROM pg_stat_statements ORDER BY avg_ms DESC LIMIT 20;
+
+-- Missing index candidates for key tables
+SELECT schemaname, tablename, attname, n_distinct, correlation
+FROM pg_stats WHERE tablename IN ('jobs','applications','job_feedback')
+ORDER BY n_distinct DESC;
+```
+
+Connect to the local Postgres:
+```bash
+psql postgres://jobcopilot:jobcopilot@localhost:5432/jobcopilot
+```
 
 ## Error Contract
 

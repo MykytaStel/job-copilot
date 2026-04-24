@@ -7,7 +7,6 @@ describe('api mappers', () => {
   it('maps offer without enum casts', () => {
     const offer: EngineOffer = {
       id: 'offer-1',
-      application_id: 'app-1',
       status: 'extended',
       compensation_min: 1000,
       compensation_max: 2000,
@@ -20,7 +19,6 @@ describe('api mappers', () => {
 
     expect(mapOffer(offer)).toEqual({
       id: 'offer-1',
-      applicationId: 'app-1',
       status: 'extended',
       compensationMin: 1000,
       compensationMax: 2000,

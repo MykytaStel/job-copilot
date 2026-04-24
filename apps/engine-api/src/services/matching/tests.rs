@@ -477,13 +477,24 @@ fn canonical_frontend_terms_survive_matching_and_explanations() {
 fn react_native_matching_keeps_phrase_safe_internal_tokens_internal() {
     let service = SearchMatchingService::new();
     let profile = mobile_profile();
-    let job = job_view(
+    let base = job_view(
         "job-mobile-1",
         "Senior React-Native Developer",
         "Remote EU role building React Native apps with TypeScript and distributed systems work",
         Some("remote"),
         "djinni",
     );
+    // Pin to a far-future date so freshness decay is never applied, keeping the
+    // test stable regardless of when it runs.
+    let job = JobView {
+        job: Job {
+            posted_at: Some("2099-01-01T00:00:00Z".to_string()),
+            last_seen_at: "2099-01-01T00:00:00Z".to_string(),
+            ..base.job.clone()
+        },
+        first_seen_at: "2099-01-01T00:00:00Z".to_string(),
+        ..base
+    };
 
     let fit = service.score_job(&profile, &job);
 

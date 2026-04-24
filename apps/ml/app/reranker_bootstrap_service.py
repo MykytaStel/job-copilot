@@ -1,6 +1,6 @@
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
-import inspect
 from pathlib import Path
 
 from app.api_models import BootstrapRequest, BootstrapResponse
@@ -9,6 +9,8 @@ from app.bootstrap_contract import BootstrapWorkflowResult
 from app.engine_api_client import EngineApiResponseError, EngineApiUnavailableError
 from app.trained_reranker_config import profile_artifact_path
 from app.trained_reranker_config import get_trained_reranker_model_path
+
+logger = logging.getLogger(__name__)
 
 
 class RerankerBootstrapServiceError(Exception):
@@ -32,6 +34,7 @@ class RerankerBootstrapConflictError(RerankerBootstrapServiceError):
 
 
 BootstrapWorkflow = Callable[[str, int, Path, Path], Awaitable[BootstrapWorkflowResult]]
+StartedCallback = Callable[[], None]
 
 
 class RerankerBootstrapService:
@@ -40,13 +43,20 @@ class RerankerBootstrapService:
         *,
         bootstrap_workflow: BootstrapWorkflow,
         lock_dir: Path | None = None,
-        model_path: Path | None = None,
+        max_concurrent_jobs: int = 2,
     ) -> None:
         self._bootstrap_workflow = bootstrap_workflow
-        self._lock_dir = lock_dir or (model_path.parent / ".bootstrap-locks" if model_path else Path(".bootstrap-locks"))
-        self._legacy_model_path = model_path
+        self._lock_dir = lock_dir or Path(".bootstrap-locks")
+        self._max_concurrent_jobs = max(1, max_concurrent_jobs)
+        self._bootstrap_semaphore = asyncio.Semaphore(self._max_concurrent_jobs)
+        self._active_jobs = 0
 
-    async def bootstrap(self, payload: BootstrapRequest) -> BootstrapResponse:
+    async def bootstrap(
+        self,
+        payload: BootstrapRequest,
+        *,
+        on_started: StartedCallback | None = None,
+    ) -> BootstrapResponse:
         lock = ProfileBootstrapLock(self._lock_dir / f"{payload.profile_id}.lock")
         try:
             await asyncio.to_thread(lock.acquire)
@@ -56,21 +66,29 @@ class RerankerBootstrapService:
         profile_model_path = profile_artifact_path(payload.profile_id)
         runtime_model_path = get_trained_reranker_model_path()
 
+        logger.info(
+            "bootstrap starting",
+            extra={
+                "profile_id": payload.profile_id,
+                "min_examples": payload.min_examples,
+                "artifact_path": str(profile_model_path),
+            },
+        )
+
         try:
-            workflow_params = len(inspect.signature(self._bootstrap_workflow).parameters)
-            if workflow_params <= 3 and self._legacy_model_path is not None:
-                result = await self._bootstrap_workflow(
-                    payload.profile_id,
-                    payload.min_examples,
-                    self._legacy_model_path,
-                )
-            else:
-                result = await self._bootstrap_workflow(
-                    payload.profile_id,
-                    payload.min_examples,
-                    profile_model_path,
-                    runtime_model_path,
-                )
+            async with self._bootstrap_semaphore:
+                self._active_jobs += 1
+                try:
+                    if on_started is not None:
+                        on_started()
+                    result = await self._bootstrap_workflow(
+                        payload.profile_id,
+                        payload.min_examples,
+                        artifact_path=profile_model_path,
+                        compatibility_model_path=runtime_model_path,
+                    )
+                finally:
+                    self._active_jobs -= 1
         except EngineApiResponseError as exc:
             raise RerankerBootstrapUpstreamHttpError(exc.status_code) from exc
         except EngineApiUnavailableError as exc:
@@ -80,4 +98,21 @@ class RerankerBootstrapService:
         finally:
             await asyncio.to_thread(lock.release)
 
+        logger.info(
+            "bootstrap completed",
+            extra={
+                "profile_id": payload.profile_id,
+                "retrained": result.retrained,
+                "reason": result.reason,
+            },
+        )
+
         return result.to_response()
+
+    def runtime_snapshot(self) -> dict[str, int]:
+        active_jobs = max(0, self._active_jobs)
+        return {
+            "active_jobs": active_jobs,
+            "max_concurrent_jobs": self._max_concurrent_jobs,
+            "available_slots": max(0, self._max_concurrent_jobs - active_jobs),
+        }

@@ -303,7 +303,6 @@ async fn creates_note_for_existing_application() {
     .expect("handler should create note");
 
     assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(note.application_id, "application-1");
 }
 
 #[tokio::test]
@@ -333,7 +332,6 @@ async fn links_contact_to_application() {
     .expect("handler should link contact");
 
     assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(link.application_id, "application-1");
     assert_eq!(link.contact.id, "contact-1");
 }
 
@@ -391,6 +389,5 @@ async fn upserts_offer_for_existing_application() {
     .await
     .expect("handler should upsert offer");
 
-    assert_eq!(offer.application_id, "application-1");
     assert_eq!(offer.status, "received");
 }
