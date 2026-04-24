@@ -6,7 +6,9 @@ use axum::Router;
 use axum::http::{HeaderValue, Request};
 use axum_prometheus::PrometheusMetricLayer;
 use tower_http::cors::CorsLayer;
-use tower_http::request_id::{MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer};
+use tower_http::request_id::{
+    MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer,
+};
 use tower_http::trace::TraceLayer;
 
 use crate::state::AppState;
