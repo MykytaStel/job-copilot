@@ -96,7 +96,6 @@ export function mapJob(job: EngineJob): JobPosting {
     primaryVariant: job.primary_variant
       ? {
           source: job.primary_variant.source,
-          sourceJobId: job.primary_variant.source_job_id,
           sourceUrl: job.primary_variant.source_url,
           fetchedAt: job.primary_variant.fetched_at,
           lastSeenAt: job.primary_variant.last_seen_at,
@@ -204,7 +203,6 @@ export function mapContact(contact: EngineContact): Contact {
 export function mapOffer(offer: EngineOffer): Offer {
   return {
     id: offer.id,
-    applicationId: offer.application_id,
     status: offer.status,
     compensationMin: offer.compensation_min ?? undefined,
     compensationMax: offer.compensation_max ?? undefined,
@@ -248,19 +246,16 @@ export function mapApplicationDetail(detail: EngineApplicationDetail): Applicati
     offer: detail.offer ? mapOffer(detail.offer) : undefined,
     notes: detail.notes.map((note) => ({
       id: note.id,
-      applicationId: note.application_id,
       content: note.content,
       createdAt: note.created_at,
     })),
     contacts: detail.contacts.map((contact) => ({
       id: contact.id,
-      applicationId: contact.application_id,
       relationship: contact.relationship,
       contact: mapContact(contact.contact),
     })),
     activities: detail.activities.map((activity) => ({
       id: activity.id,
-      applicationId: activity.application_id,
       type: activity.activity_type,
       description: activity.description,
       happenedAt: activity.happened_at,
@@ -268,7 +263,6 @@ export function mapApplicationDetail(detail: EngineApplicationDetail): Applicati
     })),
     tasks: detail.tasks.map((task) => ({
       id: task.id,
-      applicationId: task.application_id,
       title: task.title,
       remindAt: task.remind_at ?? undefined,
       done: task.done,

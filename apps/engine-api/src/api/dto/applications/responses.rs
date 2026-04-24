@@ -10,7 +10,6 @@ use crate::domain::application::model::{
 #[derive(Debug, Serialize)]
 pub struct NoteResponse {
     pub id: String,
-    pub application_id: String,
     pub content: String,
     pub created_at: String,
 }
@@ -32,7 +31,6 @@ pub struct ApplicationResponse {
 #[derive(Debug, Serialize)]
 pub struct ApplicationNoteResponse {
     pub id: String,
-    pub application_id: String,
     pub content: String,
     pub created_at: String,
 }
@@ -52,7 +50,6 @@ pub struct ContactResponse {
 #[derive(Debug, Serialize)]
 pub struct ApplicationContactResponse {
     pub id: String,
-    pub application_id: String,
     pub contact: ContactResponse,
     pub relationship: String,
 }
@@ -60,7 +57,6 @@ pub struct ApplicationContactResponse {
 #[derive(Debug, Serialize)]
 pub struct OfferResponse {
     pub id: String,
-    pub application_id: String,
     pub status: String,
     pub compensation_min: Option<i32>,
     pub compensation_max: Option<i32>,
@@ -74,7 +70,6 @@ pub struct OfferResponse {
 #[derive(Debug, Serialize)]
 pub struct ActivityResponse {
     pub id: String,
-    pub application_id: String,
     pub activity_type: String,
     pub description: String,
     pub happened_at: String,
@@ -84,7 +79,6 @@ pub struct ActivityResponse {
 #[derive(Debug, Serialize)]
 pub struct TaskResponse {
     pub id: String,
-    pub application_id: String,
     pub title: String,
     pub remind_at: Option<String>,
     pub done: bool,
@@ -135,7 +129,6 @@ impl From<ApplicationNote> for ApplicationNoteResponse {
     fn from(note: ApplicationNote) -> Self {
         Self {
             id: note.id,
-            application_id: note.application_id,
             content: note.content,
             created_at: note.created_at,
         }
@@ -161,7 +154,6 @@ impl From<ApplicationContact> for ApplicationContactResponse {
     fn from(contact: ApplicationContact) -> Self {
         Self {
             id: contact.id,
-            application_id: contact.application_id,
             contact: ContactResponse::from(contact.contact),
             relationship: contact.relationship,
         }
@@ -172,7 +164,6 @@ impl From<Offer> for OfferResponse {
     fn from(offer: Offer) -> Self {
         Self {
             id: offer.id,
-            application_id: offer.application_id,
             status: offer.status,
             compensation_min: offer.compensation_min,
             compensation_max: offer.compensation_max,
@@ -189,7 +180,6 @@ impl From<ApplicationNote> for NoteResponse {
     fn from(note: ApplicationNote) -> Self {
         Self {
             id: note.id,
-            application_id: note.application_id,
             content: note.content,
             created_at: note.created_at,
         }
@@ -200,7 +190,6 @@ impl From<Activity> for ActivityResponse {
     fn from(activity: Activity) -> Self {
         Self {
             id: activity.id,
-            application_id: activity.application_id,
             activity_type: activity.activity_type,
             description: activity.description,
             happened_at: activity.happened_at,
@@ -213,7 +202,6 @@ impl From<Task> for TaskResponse {
     fn from(task: Task) -> Self {
         Self {
             id: task.id,
-            application_id: task.application_id,
             title: task.title,
             remind_at: task.remind_at,
             done: task.done,

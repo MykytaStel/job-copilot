@@ -4,8 +4,16 @@ services:
   postgres:
     image: postgres:16
     container_name: job-copilot-postgres
-    # shared_preload_libraries must be set at server start — cannot be changed at runtime.
-    command: postgres -c shared_preload_libraries=pg_stat_statements
+    # Flags that must be set at server start (cannot be changed at runtime):
+    #   shared_preload_libraries  — enables pg_stat_statements query tracking
+    #   log_min_duration_statement — logs any query slower than 200 ms to stdout
+    #   log_lock_waits            — logs whenever a lock wait exceeds deadlock_timeout
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c log_min_duration_statement=200
+      -c log_lock_waits=on
+      -c log_line_prefix='%t [%p] %u@%d '
     environment:
       POSTGRES_USER: jobcopilot
       POSTGRES_PASSWORD: jobcopilot
@@ -30,6 +38,7 @@ services:
     container_name: job-copilot-engine-api
     environment:
       DATABASE_URL: postgres://jobcopilot:jobcopilot@postgres:5432/jobcopilot
+      DATABASE_MAX_CONNECTIONS: "${DATABASE_MAX_CONNECTIONS:-20}"
       RUN_DB_MIGRATIONS: "true"
       PORT: "8080"
       TRAINED_RERANKER_ENABLED: "${TRAINED_RERANKER_ENABLED:-false}"
@@ -96,6 +105,8 @@ services:
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o-mini}"
       OPENAI_BASE_URL: "${OPENAI_BASE_URL:-}"
+      ML_LLM_REQUEST_TIMEOUT_SECONDS: "${ML_LLM_REQUEST_TIMEOUT_SECONDS:-90}"
+      ML_BOOTSTRAP_MAX_CONCURRENT_JOBS: "${ML_BOOTSTRAP_MAX_CONCURRENT_JOBS:-2}"
       # host.docker.internal resolves to the host machine where Ollama Desktop runs
       OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
       OLLAMA_MODEL: "${OLLAMA_MODEL:-llama3.1:8b}"
@@ -104,5 +115,39 @@ services:
     depends_on:
       - engine-api
 
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  # Scrapes engine-api:8080/metrics and ml:8000/metrics every 15 s.
+  # UI: http://localhost:9090
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: job-copilot-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - engine-api
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  # Pre-provisioned with Prometheus datasource and engine-api dashboard.
+  # UI: http://localhost:3001  login: admin / admin
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: job-copilot-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
 volumes:
   postgres-data:
+  prometheus-data:
+  grafana-data:

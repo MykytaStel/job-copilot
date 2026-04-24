@@ -130,14 +130,13 @@ def test_rerank_service_accepts_shared_engine_api_factory(monkeypatch):
     }
 
 
-def test_build_cached_reranker_bootstrap_service_injects_workflow_and_model_path(monkeypatch):
+def test_build_cached_reranker_bootstrap_service_injects_workflow(monkeypatch):
     captured: dict[str, object] = {}
 
     service_dependencies.build_cached_reranker_bootstrap_service.cache_clear()
 
-    def fake_service(*, bootstrap_workflow, model_path):
+    def fake_service(*, bootstrap_workflow):
         captured["bootstrap_workflow"] = bootstrap_workflow
-        captured["model_path"] = model_path
         return object()
 
     monkeypatch.setattr(service_dependencies, "RerankerBootstrapService", fake_service)
@@ -145,7 +144,6 @@ def test_build_cached_reranker_bootstrap_service_injects_workflow_and_model_path
     service = service_dependencies.build_cached_reranker_bootstrap_service()
 
     assert service is not None
-    assert captured["bootstrap_workflow"] is service_dependencies.bootstrap_training.bootstrap_and_retrain
-    assert captured["model_path"] == DEFAULT_TRAINED_RERANKER_MODEL_PATH
+    assert captured["bootstrap_workflow"] is service_dependencies.bootstrap_workflow.bootstrap_and_retrain
 
     service_dependencies.build_cached_reranker_bootstrap_service.cache_clear()

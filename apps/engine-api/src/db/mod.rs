@@ -1,5 +1,7 @@
 pub mod repositories;
 
+use std::time::Duration;
+
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgPool, query_scalar};
@@ -27,6 +29,9 @@ impl Database {
 
         let pool = PgPoolOptions::new()
             .max_connections(config.database_max_connections)
+            .min_connections(2)
+            .acquire_timeout(Duration::from_secs(5))
+            .idle_timeout(Duration::from_secs(600))
             .connect(database_url)
             .await
             .map_err(|error| format!("failed to connect to Postgres: {error}"))?;

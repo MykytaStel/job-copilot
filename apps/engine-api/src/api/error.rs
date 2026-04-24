@@ -6,6 +6,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use serde_json::{Value, json};
+use tracing::error;
 
 use crate::db::repositories::RepositoryError;
 
@@ -85,6 +86,17 @@ impl ApiError {
         }
     }
 
+    pub fn conflict(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::CONFLICT,
+            body: ApiErrorResponse {
+                code,
+                message: message.into(),
+                details: None,
+            },
+        }
+    }
+
     pub fn invalid_limit(limit: i64) -> Self {
         Self::bad_request_with_details(
             "invalid_limit",
@@ -116,7 +128,15 @@ impl ApiError {
             RepositoryError::DatabaseDisabled => {
                 Self::service_unavailable("database_unavailable", "Database is not configured")
             }
-            other => Self::internal(query_failed_code, other.to_string()),
+            RepositoryError::Conflict { message } => Self::conflict("resource_conflict", message),
+            other => {
+                error!(
+                    code = query_failed_code,
+                    error = %other,
+                    "repository error surfaced as internal API error"
+                );
+                Self::internal(query_failed_code, other.to_string())
+            }
         }
     }
 }
@@ -139,5 +159,26 @@ where
             Ok(Json(value)) => Ok(Self(value)),
             Err(rejection) => Err(ApiError::bad_request("invalid_json", rejection.body_text())),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ApiError;
+    use crate::db::repositories::RepositoryError;
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+
+    #[test]
+    fn maps_repository_conflict_to_http_409() {
+        let response = ApiError::from_repository(
+            RepositoryError::Conflict {
+                message: "application already exists for this profile and job".to_string(),
+            },
+            "applications_query_failed",
+        )
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 }

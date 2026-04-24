@@ -1,0 +1,70 @@
+{
+  "title": "Job Copilot — Engine API",
+  "uid": "engine-api-overview",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(axum_http_requests_total[1m])) by (method, endpoint)",
+          "legendFormat": "{{method}} {{endpoint}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "HTTP p95 Latency (s)",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(axum_http_requests_duration_seconds_bucket[1m])) by (le, endpoint))",
+          "legendFormat": "p95 {{endpoint}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "HTTP Error Rate (5xx)",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(axum_http_requests_total{status_code=~\"5..\"}[1m]))",
+          "legendFormat": "5xx errors/s"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "HTTP Request Duration Heatmap",
+      "type": "heatmap",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(axum_http_requests_duration_seconds_bucket[1m])) by (le)",
+          "legendFormat": "{{le}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "HTTP Status Code Breakdown",
+      "type": "piechart",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum by (status_code) (increase(axum_http_requests_total[5m]))",
+          "legendFormat": "{{status_code}}"
+        }
+      ]
+    }
+  ]
+}

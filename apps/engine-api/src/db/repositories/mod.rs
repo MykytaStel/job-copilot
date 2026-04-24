@@ -30,6 +30,7 @@ pub use user_events::UserEventsRepository;
 #[derive(Debug)]
 pub enum RepositoryError {
     DatabaseDisabled,
+    Conflict { message: String },
     Sqlx(sqlx::Error),
     Json(serde_json::Error),
     InvalidData { message: String },
@@ -39,6 +40,7 @@ impl fmt::Display for RepositoryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::DatabaseDisabled => formatter.write_str("database is not configured"),
+            Self::Conflict { message } => formatter.write_str(message),
             Self::Sqlx(error) => write!(formatter, "database query failed: {error}"),
             Self::Json(error) => write!(formatter, "json conversion failed: {error}"),
             Self::InvalidData { message } => formatter.write_str(message),

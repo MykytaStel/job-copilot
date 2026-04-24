@@ -98,9 +98,15 @@ async def bootstrap_reranker(
     task_store.create(task_id=task_id, profile_id=payload.profile_id)
 
     async def _run_bootstrap() -> None:
-        running_status = task_store.mark_running(task_id)
+        running_status = None
+
+        def _mark_running() -> None:
+            nonlocal running_status
+            if running_status is None:
+                running_status = task_store.mark_running(task_id)
+
         try:
-            result = await service.bootstrap(payload)
+            result = await service.bootstrap(payload, on_started=_mark_running)
             task_store.mark_completed(task_id, result)
         except RerankerBootstrapServiceError as exc:
             http_exc = http_error_from_reranker_bootstrap_error(exc)
@@ -109,7 +115,7 @@ async def bootstrap_reranker(
                 profile_id=payload.profile_id,
                 error=str(http_exc.detail),
                 artifact_path=str(profile_artifact_path(payload.profile_id)),
-                started_at=running_status.started_at,
+                started_at=running_status.started_at if running_status is not None else None,
             )
         except Exception as exc:
             logger.error("bootstrap task failed unexpectedly: %s", exc, exc_info=True)
@@ -118,7 +124,7 @@ async def bootstrap_reranker(
                 profile_id=payload.profile_id,
                 error="internal error",
                 artifact_path=str(profile_artifact_path(payload.profile_id)),
-                started_at=running_status.started_at,
+                started_at=running_status.started_at if running_status is not None else None,
             )
 
     background_tasks.add_task(_run_bootstrap)
