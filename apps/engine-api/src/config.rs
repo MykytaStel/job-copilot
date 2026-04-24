@@ -16,6 +16,7 @@ pub struct Config {
     pub ml_sidecar_timeout_seconds: u64,
     pub ml_retrain_threshold: usize,
     pub ml_retrain_poll_interval_seconds: u64,
+    pub jwt_secret: Option<String>,
 }
 
 impl Config {
@@ -89,6 +90,10 @@ impl Config {
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(21_600);
+        let jwt_secret = std::env::var("JWT_SECRET")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
 
         Self {
             port,
@@ -103,6 +108,7 @@ impl Config {
             ml_sidecar_timeout_seconds,
             ml_retrain_threshold,
             ml_retrain_poll_interval_seconds,
+            jwt_secret,
         }
     }
 }

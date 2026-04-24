@@ -1,3 +1,4 @@
+use axum::Extension;
 use axum::extract::{Path, State};
 
 use crate::api::dto::analytics::{
@@ -6,6 +7,7 @@ use crate::api::dto::analytics::{
     SalaryIntelligenceResponse,
 };
 use crate::api::error::ApiError;
+use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::domain::feedback::model::CompanyFeedbackStatus;
 use crate::services::funnel::FunnelService;
@@ -32,8 +34,10 @@ pub async fn get_salary_intelligence(
 
 pub async fn get_analytics_summary(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<AnalyticsSummaryResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     ensure_profile_exists(&state, &profile_id).await?;
 
     let profile = state
@@ -119,8 +123,10 @@ pub async fn get_analytics_summary(
 
 pub async fn get_funnel_summary(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<FunnelSummaryResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     ensure_profile_exists(&state, &profile_id).await?;
 
     let events = state
@@ -139,8 +145,10 @@ pub async fn get_funnel_summary(
 
 pub async fn get_llm_context(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<LlmContextResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     ensure_profile_exists(&state, &profile_id).await?;
 
     let profile = state

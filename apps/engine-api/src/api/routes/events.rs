@@ -1,18 +1,22 @@
+use axum::Extension;
 use axum::extract::{Path, State};
 use serde_json::json;
 use tracing::warn;
 
 use crate::api::dto::events::{LogUserEventRequest, UserEventResponse, UserEventSummaryResponse};
 use crate::api::error::{ApiError, ApiJson};
+use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::state::AppState;
 
 pub async fn log_user_event(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
     ApiJson(payload): ApiJson<LogUserEventRequest>,
 ) -> Result<(axum::http::StatusCode, axum::Json<UserEventResponse>), ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     ensure_profile_exists(&state, &profile_id).await?;
 
     let mut event = payload.validate(profile_id)?;
@@ -50,8 +54,10 @@ pub async fn log_user_event(
 
 pub async fn get_user_event_summary(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<UserEventSummaryResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     ensure_profile_exists(&state, &profile_id).await?;
 
     let summary = state
@@ -293,6 +299,7 @@ mod tests {
 
         let (_, Json(response)) = log_user_event(
             State(state.clone()),
+            None,
             Path("profile-1".to_string()),
             ApiJson(LogUserEventRequest {
                 event_type: "fit_explanation_requested".to_string(),
@@ -367,7 +374,7 @@ mod tests {
                 }),
         ));
 
-        let Json(summary) = get_user_event_summary(State(state), Path("profile-1".to_string()))
+        let Json(summary) = get_user_event_summary(State(state), None, Path("profile-1".to_string()))
             .await
             .expect("summary should succeed");
 
@@ -397,6 +404,7 @@ mod tests {
 
         let _ = log_user_event(
             State(state.clone()),
+            None,
             Path("profile-1".to_string()),
             ApiJson(request()),
         )
@@ -404,6 +412,7 @@ mod tests {
         .expect("first event should succeed");
         let _ = log_user_event(
             State(state.clone()),
+            None,
             Path("profile-1".to_string()),
             ApiJson(request()),
         )

@@ -1,5 +1,6 @@
 pub mod dto;
 pub mod error;
+pub mod middleware;
 pub mod routes;
 
 use axum::Router;
@@ -10,6 +11,7 @@ use tower_http::request_id::{
     MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer,
 };
 use tower_http::trace::TraceLayer;
+use tracing::warn;
 
 use crate::state::AppState;
 
@@ -27,12 +29,25 @@ pub fn build_router(state: AppState) -> Router {
     let x_request_id = axum::http::header::HeaderName::from_static("x-request-id");
     let (prometheus_layer, metrics_handle) = PrometheusMetricLayer::pair();
 
+    if state.jwt_secret.is_none() {
+        warn!("JWT_SECRET is not set; all /api/v1/ routes are unauthenticated");
+    }
+
+    let public = routes::public_router().route(
+        "/metrics",
+        axum::routing::get(move || async move { metrics_handle.render() }),
+    );
+
+    let protected = routes::protected_router().route_layer(
+        axum::middleware::from_fn_with_state(
+            state.clone(),
+            middleware::auth::auth_middleware,
+        ),
+    );
+
     Router::new()
-        .merge(routes::router())
-        .route(
-            "/metrics",
-            axum::routing::get(move || async move { metrics_handle.render() }),
-        )
+        .merge(public)
+        .merge(protected)
         .layer(CorsLayer::permissive())
         .layer(prometheus_layer)
         .layer(

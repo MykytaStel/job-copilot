@@ -1,15 +1,19 @@
+use axum::Extension;
 use axum::extract::{Path, State};
 
 use crate::api::dto::behavior::ProfileBehaviorSummaryResponse;
 use crate::api::error::ApiError;
+use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::services::behavior::BehaviorService;
 use crate::state::AppState;
 
 pub async fn get_behavior_summary(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<ProfileBehaviorSummaryResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     ensure_profile_exists(&state, &profile_id).await?;
 
     let events = state
@@ -117,7 +121,7 @@ mod tests {
                 .with_event(event("evt-4", UserEventType::SearchRun, None, None)),
         ));
 
-        let response = get_behavior_summary(State(state), Path("profile-1".to_string()))
+        let response = get_behavior_summary(State(state), None, Path("profile-1".to_string()))
             .await
             .expect("behavior summary should succeed")
             .into_response();
