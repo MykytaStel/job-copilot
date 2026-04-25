@@ -94,6 +94,7 @@ fn build_cors_layer(state: &AppState) -> CorsLayer {
             Method::PUT,
             Method::PATCH,
             Method::DELETE,
+            Method::OPTIONS,
         ])
         .allow_headers(Any)
 }

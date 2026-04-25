@@ -1,5 +1,6 @@
 pub mod analytics;
 pub mod applications;
+pub mod auth;
 pub mod behavior;
 pub mod debug;
 pub mod events;
@@ -25,6 +26,8 @@ pub fn public_router() -> Router<AppState> {
     Router::new()
         .route("/health", get(health::health))
         .route("/api/v1/ping", get(health::ping))
+        .route("/api/v1/auth/register", post(auth::register))
+        .route("/api/v1/auth/login", post(auth::login))
 }
 
 pub fn internal_router() -> Router<AppState> {

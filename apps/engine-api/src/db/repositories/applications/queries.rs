@@ -246,7 +246,11 @@ impl ApplicationsRepository {
         Ok(Some(ApplicationDetail::try_from((row, offer))?))
     }
 
-    pub async fn list_recent(&self, limit: i64) -> Result<Vec<Application>, RepositoryError> {
+    pub async fn list_recent(
+        &self,
+        limit: i64,
+        profile_id: Option<&str>,
+    ) -> Result<Vec<Application>, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
@@ -265,11 +269,13 @@ impl ApplicationsRepository {
                 rejection_stage,
                 updated_at::text AS updated_at
             FROM applications
+            WHERE ($2::text IS NULL OR profile_id = $2)
             ORDER BY updated_at DESC
             LIMIT $1
             "#,
         )
         .bind(limit)
+        .bind(profile_id)
         .fetch_all(pool)
         .await?;
 

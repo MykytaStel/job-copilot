@@ -5,6 +5,7 @@ use crate::services::search_ranking::runtime::RerankerRuntimeMode;
 #[derive(Clone)]
 pub struct Config {
     pub port: u16,
+    pub app_env: String,
     pub database_url: Option<String>,
     pub database_max_connections: u32,
     pub run_db_migrations: bool,
@@ -96,6 +97,13 @@ impl Config {
             .ok()
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
+        let app_env = std::env::var("APP_ENV")
+            .ok()
+            .map(|value| value.trim().to_ascii_lowercase())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "development".to_string());
+
+        let is_production = app_env == "production";
         let cors_allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS")
             .ok()
             .map(|value| {
@@ -107,12 +115,17 @@ impl Config {
             })
             .filter(|origins| !origins.is_empty())
             .unwrap_or_else(|| {
+                if is_production {
+                    panic!("CORS_ALLOWED_ORIGINS must be set in production");
+                }
+
                 vec![
+                    "http://localhost:3000".to_string(),
+                    "http://127.0.0.1:3000".to_string(),
                     "http://localhost:5173".to_string(),
                     "http://127.0.0.1:5173".to_string(),
                 ]
             });
-
         let metrics_port = std::env::var("METRICS_PORT")
             .ok()
             .and_then(|value| value.parse::<u16>().ok())
@@ -121,6 +134,7 @@ impl Config {
         Self {
             port,
             database_url,
+            app_env,
             database_max_connections,
             run_db_migrations,
             reranker_runtime_mode,
