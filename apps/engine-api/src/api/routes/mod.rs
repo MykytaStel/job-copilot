@@ -1,6 +1,6 @@
 pub mod analytics;
-pub mod auth;
 pub mod applications;
+pub mod auth;
 pub mod behavior;
 pub mod debug;
 pub mod events;
