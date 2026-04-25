@@ -3,7 +3,7 @@ use std::time::Duration;
 use chrono::Utc;
 use reqwest::Client;
 use scraper::{ElementRef, Html, Selector};
-use serde_json::json;
+use serde_json::{json, Value};
 use tracing::{info, warn};
 
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
@@ -260,7 +260,159 @@ fn parse_page(html: &str, fetched_at: &str) -> Vec<NormalizationResult> {
         }
     }
 
+		if results.is_empty() {
+   		results.extend(parse_json_ld_jobs(&document, fetched_at));
+		}
+
     results
+}
+fn parse_json_ld_jobs(document: &Html, fetched_at: &str) -> Vec<NormalizationResult> {
+    let selector = Selector::parse(r#"script[type="application/ld+json"]"#).expect("valid selector");
+
+    let mut results = Vec::new();
+
+    for script in document.select(&selector) {
+        let raw_json = script.inner_html();
+
+        let Ok(value) = serde_json::from_str::<Value>(&raw_json) else {
+            continue;
+        };
+
+        let mut postings = Vec::new();
+        collect_job_postings(&value, &mut postings);
+
+        for posting in postings {
+            if let Some(result) = build_from_json_ld_job(posting, fetched_at) {
+                results.push(result);
+            }
+        }
+    }
+
+    results
+}
+
+fn collect_job_postings<'a>(value: &'a Value, out: &mut Vec<&'a Value>) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                collect_job_postings(item, out);
+            }
+        }
+        Value::Object(map) => {
+            if is_job_posting(value) {
+                out.push(value);
+            }
+
+            if let Some(graph) = map.get("@graph") {
+                collect_job_postings(graph, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_job_posting(value: &Value) -> bool {
+    let Some(kind) = value.get("@type") else {
+        return false;
+    };
+
+    match kind {
+        Value::String(value) => value == "JobPosting",
+        Value::Array(values) => values
+            .iter()
+            .any(|value| value.as_str().is_some_and(|value| value == "JobPosting")),
+        _ => false,
+    }
+}
+
+fn build_from_json_ld_job(value: &Value, fetched_at: &str) -> Option<NormalizationResult> {
+    let title = json_string(value, &["title"])?;
+    let source_url = normalize_source_url(
+        json_string(value, &["url"])
+            .or_else(|| json_string(value, &["mainEntityOfPage"]))
+            .as_deref(),
+    )?;
+
+    let source_job_id = extract_job_id(&source_url)
+        .or_else(|| json_string(value, &["identifier", "value"]))
+        .filter(|value| !value.trim().is_empty())?;
+
+    let company_name = json_string(value, &["hiringOrganization", "name"])
+        .and_then(|value| normalize_company_name(&value))?;
+
+    let description_text = json_string(value, &["description"])
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| title.clone());
+
+    let location = extract_json_ld_location(value);
+
+    let posted_at = json_string(value, &["datePosted"])
+        .map(|value| value.get(..10).unwrap_or(&value).to_string())
+        .map(|date| format!("{date}T00:00:00Z"));
+
+    let signal_text = [
+        title.clone(),
+        company_name.clone(),
+        location.clone().unwrap_or_default(),
+        description_text.clone(),
+    ]
+    .join(" ");
+
+    let remote_type = infer_remote_type(&signal_text);
+    let seniority = infer_seniority(&signal_text);
+
+    build_result(
+        source_job_id,
+        source_url,
+        title,
+        Some(company_name),
+        description_text,
+        location,
+        None,
+        None,
+        None,
+        remote_type,
+        seniority,
+        posted_at,
+        fetched_at,
+    )
+}
+
+fn json_string(value: &Value, path: &[&str]) -> Option<String> {
+    let mut current = value;
+
+    for key in path {
+        current = current.get(*key)?;
+    }
+
+    current
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn normalize_source_url(value: Option<&str>) -> Option<String> {
+    let value = value?.trim();
+
+    if value.is_empty() {
+        return None;
+    }
+
+    if value.starts_with("http://") || value.starts_with("https://") {
+        Some(value.to_string())
+    } else if value.starts_with('/') {
+        Some(format!("{BASE_URL}{value}"))
+    } else {
+        Some(format!("{BASE_URL}/{value}"))
+    }
+}
+
+fn extract_json_ld_location(value: &Value) -> Option<String> {
+    json_string(value, &["jobLocation", "address", "addressLocality"])
+        .or_else(|| json_string(value, &["jobLocation", "address", "addressRegion"]))
+        .or_else(|| json_string(value, &["jobLocation", "address", "addressCountry"]))
+        .or_else(|| json_string(value, &["applicantLocationRequirements", "address", "addressCountry"]))
 }
 
 fn parse_item(
@@ -738,4 +890,48 @@ mod tests {
         assert!(description.contains("Improve performance budgets"));
         assert!(!description.contains("How to apply"));
     }
+		#[test]
+		fn parses_djinni_json_ld_listing_fallback() {
+    use crate::scrapers::djinni::parse_page;
+
+    let html = r#"
+        <!doctype html>
+        <html>
+          <head>
+            <script type="application/ld+json">
+              [{
+                "@context": "https://schema.org/",
+                "@type": "JobPosting",
+                "title": "Senior Software Engineer",
+                "description": "React, TypeScript, Node.js product role",
+                "datePosted": "2026-04-25T23:12:41.156144",
+                "url": "https://djinni.co/jobs/12345-senior-software-engineer/",
+                "hiringOrganization": {
+                  "@type": "Organization",
+                  "name": "Test Company"
+                },
+                "jobLocation": {
+                  "@type": "Place",
+                  "address": {
+                    "@type": "PostalAddress",
+                    "addressLocality": "Kyiv",
+                    "addressCountry": "UA"
+                  }
+                }
+              }]
+            </script>
+          </head>
+          <body></body>
+        </html>
+    "#;
+
+    let results = parse_page(html, "2026-04-25T00:00:00Z");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].job.id, "job_djinni_12345");
+    assert_eq!(results[0].job.title, "Senior Software Engineer");
+    assert_eq!(results[0].job.company_name, "Test Company");
+    assert_eq!(results[0].job.location.as_deref(), Some("Kyiv"));
+    assert_eq!(results[0].job.posted_at.as_deref(), Some("2026-04-25T00:00:00Z"));
+	}
 }
