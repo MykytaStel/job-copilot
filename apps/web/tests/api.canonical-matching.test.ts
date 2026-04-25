@@ -123,9 +123,17 @@ describe('canonical matching api', () => {
     const result = await rerankJobs('profile-1', ['job-b', 'job-a', 'job-b']);
 
     expect(fetch).toHaveBeenCalledWith(
-      `${ENGINE_API_URL}/api/v1/profiles/profile-1/jobs/match`,
-      expect.objectContaining({ method: 'POST' }),
-    );
+  `${ENGINE_API_URL}/api/v1/profiles/profile-1/jobs/match`,
+  expect.objectContaining({
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      job_ids: ['job-b', 'job-a'],
+    }),
+  }),
+);
     expect(result.map((item) => item.jobId)).toEqual(['job-a', 'job-b']);
     expect(result[0]).toMatchObject({
       jobId: 'job-a',
@@ -161,9 +169,11 @@ describe('canonical matching api', () => {
     const result = await analyzeFit('profile-1', 'job-1');
 
     expect(fetch).toHaveBeenCalledWith(
-      `${ENGINE_API_URL}/api/v1/profiles/profile-1/jobs/job-1/match`,
-      undefined,
-    );
+  `${ENGINE_API_URL}/api/v1/profiles/profile-1/jobs/job-1/match`,
+  expect.objectContaining({
+    headers: expect.any(Object),
+  }),
+);
     expect(result).toMatchObject({
       profileId: 'profile-1',
       jobId: 'job-1',
