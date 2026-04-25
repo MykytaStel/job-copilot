@@ -17,9 +17,9 @@ use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
 use crate::state::AppState;
 
 use super::{
-    RecentApplicationsQuery, add_application_contact, create_application, create_contact,
-    create_note, get_application_by_id, get_recent_applications, list_contacts, patch_application,
-    upsert_offer,
+    ContactsQuery, RecentApplicationsQuery, add_application_contact, create_application,
+    create_contact, create_note, get_application_by_id, get_recent_applications, list_contacts,
+    patch_application, upsert_offer,
 };
 
 fn sample_job() -> Job {
@@ -273,12 +273,14 @@ async fn lists_contacts() {
         ResumesService::for_tests(ResumesServiceStub::default()),
     );
 
-    let Json(response) = list_contacts(State(state))
+    let Json(response) = list_contacts(State(state), Query(ContactsQuery { offset: None }))
         .await
         .expect("handler should list contacts");
 
     assert_eq!(response.contacts.len(), 1);
     assert_eq!(response.contacts[0].id, "contact-1");
+    assert_eq!(response.total, 1);
+    assert!(response.next_cursor.is_none());
 }
 
 #[tokio::test]

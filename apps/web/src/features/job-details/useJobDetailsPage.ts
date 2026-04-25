@@ -33,7 +33,7 @@ import {
 } from '../../api/enrichment';
 import type { FitAnalysis } from '../../api/jobs';
 import { analyzeFit, getJob } from '../../api/jobs';
-import { logUserEvent } from '../../api/events';
+import { fireEvent } from '../../api/events';
 import {
   invalidateApplicationSummaryQueries,
   invalidateFeedbackViewQueries,
@@ -72,15 +72,15 @@ export function useJobDetailsPage() {
       return;
     }
 
-    void logUserEvent(profileId, {
+    fireEvent(profileId, {
       eventType: 'job_opened',
       jobId: job.id,
       payloadJson: { surface: 'job_details' },
-    }).catch(() => null);
+    });
 
     const returnedKey = `job_visited_${job.id}`;
     if (sessionStorage.getItem(returnedKey)) {
-      void logUserEvent(profileId, { eventType: 'job_returned', jobId: job.id }).catch(() => null);
+      fireEvent(profileId, { eventType: 'job_returned', jobId: job.id });
     } else {
       sessionStorage.setItem(returnedKey, '1');
     }
@@ -97,10 +97,10 @@ export function useJobDetailsPage() {
         (window.scrollY + window.innerHeight) / document.documentElement.scrollHeight;
       if (scrolledPct >= 0.9) {
         scrollFiredRef.current = true;
-        void logUserEvent(profileId!, {
+        fireEvent(profileId!, {
           eventType: 'job_scrolled_to_bottom',
           jobId: id!,
-        }).catch(() => null);
+        });
       }
     }
 
@@ -333,7 +333,7 @@ export function useJobDetailsPage() {
     window.setTimeout(() => setCopied(false), 2000);
 
     if (profileId && id) {
-      void logUserEvent(profileId, { eventType: 'job_shared', jobId: id }).catch(() => null);
+      fireEvent(profileId, { eventType: 'job_shared', jobId: id });
     }
   };
 

@@ -86,6 +86,28 @@ impl ApiError {
         }
     }
 
+    pub fn unauthorized(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::UNAUTHORIZED,
+            body: ApiErrorResponse {
+                code,
+                message: message.into(),
+                details: None,
+            },
+        }
+    }
+
+    pub fn forbidden(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::FORBIDDEN,
+            body: ApiErrorResponse {
+                code,
+                message: message.into(),
+                details: None,
+            },
+        }
+    }
+
     pub fn conflict(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::CONFLICT,

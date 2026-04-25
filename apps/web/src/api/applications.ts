@@ -18,7 +18,7 @@ import type {
   EngineOffer,
   EngineRecentApplicationsResponse,
 } from './engine-types';
-import { logUserEvent } from './events';
+import { fireEvent } from './events';
 import { mapApplication, mapApplicationDetail, mapOffer } from './mappers';
 
 export type GlobalSearchApplicationResult = {
@@ -54,7 +54,7 @@ export async function createApplication(payload: ApplicationInput): Promise<Appl
 
   const profileId = readStoredProfileId();
   if (profileId) {
-    void logUserEvent(profileId, {
+    fireEvent(profileId, {
       eventType: 'application_created',
       jobId: payload.jobId,
       payloadJson: {
@@ -62,7 +62,7 @@ export async function createApplication(payload: ApplicationInput): Promise<Appl
         status: payload.status,
         applied_at: payload.appliedAt ?? null,
       },
-    }).catch(() => null);
+    });
   }
 
   return mapApplication(application);

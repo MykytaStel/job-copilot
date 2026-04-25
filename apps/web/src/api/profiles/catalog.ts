@@ -16,7 +16,6 @@ export async function getRoles(): Promise<RoleCatalogItem[]> {
     id: role.id,
     displayName: role.display_name,
     family: role.family,
-    deprecatedApiIds: role.deprecated_api_ids,
     isFallback: role.is_fallback,
   }));
 }

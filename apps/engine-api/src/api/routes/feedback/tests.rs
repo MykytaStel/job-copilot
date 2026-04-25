@@ -102,18 +102,20 @@ async fn save_and_bad_fit_persist_in_feedback_overview() {
 
     let _ = save_job(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("save should succeed");
     let _ = mark_job_bad_fit(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("bad fit should succeed");
 
-    let response = list_feedback(State(state), Path("profile-1".to_string()))
+    let response = list_feedback(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("listing feedback should succeed")
         .into_response();
@@ -134,6 +136,7 @@ async fn add_company_blacklist_is_visible_in_feedback_overview() {
 
     let _ = add_company_blacklist(
         State(state.clone()),
+        None,
         Path("profile-1".to_string()),
         ApiJson(UpdateCompanyFeedbackRequest {
             company_name: "NovaLedger".to_string(),
@@ -142,7 +145,7 @@ async fn add_company_blacklist_is_visible_in_feedback_overview() {
     .await
     .expect("blacklist should succeed");
 
-    let response = list_feedback(State(state), Path("profile-1".to_string()))
+    let response = list_feedback(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("listing feedback should succeed")
         .into_response();
@@ -183,7 +186,7 @@ async fn list_feedback_uses_existing_stub_records() {
             }),
     ));
 
-    let Json(response) = list_feedback(State(state), Path("profile-1".to_string()))
+    let Json(response) = list_feedback(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("listing feedback should succeed");
 
@@ -213,12 +216,13 @@ async fn unsave_job_clears_saved_flag() {
 
     unsave_job(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("unsave should succeed");
 
-    let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
+    let Json(overview) = list_feedback(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("listing feedback should succeed");
 
@@ -249,12 +253,13 @@ async fn unhide_job_clears_hidden_flag() {
 
     unhide_job(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("unhide should succeed");
 
-    let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
+    let Json(overview) = list_feedback(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("listing feedback should succeed");
 
@@ -285,12 +290,13 @@ async fn unmark_bad_fit_clears_bad_fit_flag() {
 
     unmark_job_bad_fit(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("unmark bad fit should succeed");
 
-    let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
+    let Json(overview) = list_feedback(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("listing feedback should succeed");
 
@@ -307,6 +313,7 @@ async fn undo_on_nonexistent_feedback_succeeds_idempotently() {
 
     let result = unsave_job(
         State(state),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await;
@@ -337,12 +344,13 @@ async fn undo_preserves_other_flags() {
 
     unsave_job(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("unsave should succeed");
 
-    let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
+    let Json(overview) = list_feedback(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("listing feedback should succeed");
 
@@ -386,7 +394,7 @@ async fn feedback_overview_summary_counts_are_correct() {
             }),
     ));
 
-    let Json(overview) = list_feedback(State(state), Path("profile-1".to_string()))
+    let Json(overview) = list_feedback(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("listing feedback should succeed");
 
@@ -403,36 +411,42 @@ async fn feedback_actions_create_expected_user_events() {
 
     let _ = save_job(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("save should succeed");
     unsave_job(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("unsave should succeed");
     let _ = hide_job(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("hide should succeed");
     unhide_job(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("unhide should succeed");
     let _ = mark_job_bad_fit(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
     .expect("bad fit should succeed");
     unmark_job_bad_fit(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await
@@ -460,6 +474,7 @@ async fn company_blacklist_creates_user_event() {
 
     let _ = add_company_blacklist(
         State(state.clone()),
+        None,
         Path("profile-1".to_string()),
         ApiJson(UpdateCompanyFeedbackRequest {
             company_name: "NovaLedger".to_string(),
@@ -490,6 +505,7 @@ async fn save_job_still_succeeds_when_event_logging_fails_softly() {
 
     let result = save_job(
         State(state.clone()),
+        None,
         Path(("profile-1".to_string(), "job-1".to_string())),
     )
     .await;

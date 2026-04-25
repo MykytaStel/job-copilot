@@ -2,16 +2,16 @@ use uuid::Uuid;
 
 use crate::db::repositories::RepositoryError;
 use crate::domain::application::model::{
-    Activity, Application, ApplicationContact, ApplicationDetail, ApplicationNote, Contact,
-    CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer, Task,
+    Application, ApplicationContact, ApplicationDetail, ApplicationNote, Contact,
+    CreateApplication, CreateApplicationContact, CreateContact, CreateNote, Offer,
     UpdateApplication, UpsertOffer,
 };
 use crate::domain::search::global::ApplicationSearchHit;
 
 use super::ApplicationsRepository;
 use super::rows::{
-    ActivityRow, ApplicationDetailRow, ApplicationRow, ApplicationSearchHitRow, ContactJoinRow,
-    ContactRow, NoteRow, OfferRow, TaskRow,
+    ApplicationDetailRow, ApplicationRow, ApplicationSearchHitRow, ContactJoinRow, ContactRow,
+    NoteRow, OfferRow,
 };
 
 impl ApplicationsRepository {
@@ -127,10 +127,89 @@ impl ApplicationsRepository {
                 resumes.filename AS resume_filename,
                 resumes.raw_text AS resume_raw_text,
                 resumes.is_active AS resume_is_active,
-                resumes.uploaded_at::text AS resume_uploaded_at
+                resumes.uploaded_at::text AS resume_uploaded_at,
+                notes_agg.data AS notes_json,
+                contacts_agg.data AS contacts_json,
+                activities_agg.data AS activities_json,
+                tasks_agg.data AS tasks_json
             FROM applications
             INNER JOIN jobs ON jobs.id = applications.job_id
             LEFT JOIN resumes ON resumes.id = applications.resume_id
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', id,
+                            'application_id', application_id,
+                            'content', content,
+                            'created_at', created_at::text
+                        )
+                        ORDER BY created_at DESC
+                    ),
+                    '[]'::json
+                ) AS data
+                FROM application_notes
+                WHERE application_id = applications.id
+            ) notes_agg ON true
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', ac.id,
+                            'application_id', ac.application_id,
+                            'relationship', ac.relationship,
+                            'contact_id', c.id,
+                            'contact_name', c.name,
+                            'contact_email', c.email,
+                            'contact_phone', c.phone,
+                            'contact_linkedin_url', c.linkedin_url,
+                            'contact_company', c.company,
+                            'contact_role', c.role,
+                            'contact_created_at', c.created_at::text
+                        )
+                    ),
+                    '[]'::json
+                ) AS data
+                FROM application_contacts ac
+                JOIN contacts c ON c.id = ac.contact_id
+                WHERE ac.application_id = applications.id
+            ) contacts_agg ON true
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', id,
+                            'application_id', application_id,
+                            'activity_type', activity_type,
+                            'description', description,
+                            'happened_at', happened_at::text,
+                            'created_at', created_at::text
+                        )
+                        ORDER BY happened_at DESC
+                    ),
+                    '[]'::json
+                ) AS data
+                FROM activities
+                WHERE application_id = applications.id
+            ) activities_agg ON true
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', id,
+                            'application_id', application_id,
+                            'title', title,
+                            'remind_at', remind_at::text,
+                            'done', done,
+                            'created_at', created_at::text
+                        )
+                        ORDER BY created_at ASC
+                    ),
+                    '[]'::json
+                ) AS data
+                FROM tasks
+                WHERE application_id = applications.id
+            ) tasks_agg ON true
             WHERE applications.id = $1
             "#,
         )
@@ -164,111 +243,7 @@ impl ApplicationsRepository {
         .await?
         .map(Offer::from);
 
-        let notes: Vec<ApplicationNote> = sqlx::query_as::<_, NoteRow>(
-            r#"
-            SELECT id, application_id, content, created_at::text AS created_at
-            FROM application_notes
-            WHERE application_id = $1
-            ORDER BY created_at DESC
-            "#,
-        )
-        .bind(id)
-        .fetch_all(pool)
-        .await?
-        .into_iter()
-        .map(|row| ApplicationNote {
-            id: row.id,
-            application_id: row.application_id,
-            content: row.content,
-            created_at: row.created_at,
-        })
-        .collect();
-
-        let contacts: Vec<ApplicationContact> = sqlx::query_as::<_, ContactJoinRow>(
-            r#"
-            SELECT
-                ac.id AS id,
-                ac.application_id AS application_id,
-                ac.relationship AS relationship,
-                c.id AS contact_id,
-                c.name AS contact_name,
-                c.email AS contact_email,
-                c.phone AS contact_phone,
-                c.linkedin_url AS contact_linkedin_url,
-                c.company AS contact_company,
-                c.role AS contact_role,
-                c.created_at::text AS contact_created_at
-            FROM application_contacts ac
-            JOIN contacts c ON c.id = ac.contact_id
-            WHERE ac.application_id = $1
-            "#,
-        )
-        .bind(id)
-        .fetch_all(pool)
-        .await?
-        .into_iter()
-        .map(ApplicationContact::from)
-        .collect();
-
-        let activities: Vec<Activity> = sqlx::query_as::<_, ActivityRow>(
-            r#"
-            SELECT
-                id,
-                application_id,
-                activity_type,
-                description,
-                happened_at::text AS happened_at,
-                created_at::text AS created_at
-            FROM activities
-            WHERE application_id = $1
-            ORDER BY happened_at DESC
-            "#,
-        )
-        .bind(id)
-        .fetch_all(pool)
-        .await?
-        .into_iter()
-        .map(|row| Activity {
-            id: row.id,
-            application_id: row.application_id,
-            activity_type: row.activity_type,
-            description: row.description,
-            happened_at: row.happened_at,
-            created_at: row.created_at,
-        })
-        .collect();
-
-        let tasks: Vec<Task> = sqlx::query_as::<_, TaskRow>(
-            r#"
-            SELECT
-                id,
-                application_id,
-                title,
-                remind_at::text AS remind_at,
-                done,
-                created_at::text AS created_at
-            FROM tasks
-            WHERE application_id = $1
-            ORDER BY created_at ASC
-            "#,
-        )
-        .bind(id)
-        .fetch_all(pool)
-        .await?
-        .into_iter()
-        .map(|row| Task {
-            id: row.id,
-            application_id: row.application_id,
-            title: row.title,
-            remind_at: row.remind_at,
-            done: row.done,
-            created_at: row.created_at,
-        })
-        .collect();
-
-        Ok(Some(ApplicationDetail::try_from((
-            row, offer, notes, contacts, activities, tasks,
-        ))?))
+        Ok(Some(ApplicationDetail::try_from((row, offer))?))
     }
 
     pub async fn list_recent(&self, limit: i64) -> Result<Vec<Application>, RepositoryError> {
@@ -489,10 +464,14 @@ impl ApplicationsRepository {
         Ok(Contact::from(row))
     }
 
-    pub async fn list_contacts(&self) -> Result<Vec<Contact>, RepositoryError> {
+    pub async fn list_contacts(&self, offset: i64) -> Result<(Vec<Contact>, i64), RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
+
+        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM contacts")
+            .fetch_one(pool)
+            .await?;
 
         let rows = sqlx::query_as::<_, ContactRow>(
             r#"
@@ -507,12 +486,14 @@ impl ApplicationsRepository {
                 created_at::text AS created_at
             FROM contacts
             ORDER BY created_at DESC, name ASC
+            LIMIT 100 OFFSET $1
             "#,
         )
+        .bind(offset)
         .fetch_all(pool)
         .await?;
 
-        Ok(rows.into_iter().map(Contact::from).collect())
+        Ok((rows.into_iter().map(Contact::from).collect(), total))
     }
 
     pub async fn get_contact_by_id(&self, id: &str) -> Result<Option<Contact>, RepositoryError> {

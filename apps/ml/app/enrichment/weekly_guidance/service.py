@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -15,30 +16,38 @@ _TOP_SIGNAL_COUNT = 5
 
 # Module-level cache: keyed by model path for per-profile artifacts.
 _signals_cache: dict[str, tuple[float, dict[str, float]]] = {}
+_cache_lock = asyncio.Lock()
 
 
-def _load_top_model_signals(profile_id: str) -> dict[str, float] | None:
+async def _load_top_model_signals(profile_id: str) -> dict[str, float] | None:
     model_path = profile_artifact_path(profile_id)
     try:
-        mtime = os.path.getmtime(model_path)
+        mtime = await asyncio.to_thread(os.path.getmtime, model_path)
     except OSError:
         return None
 
     cache_key = str(model_path)
+    # Fast path: dict reads are GIL-atomic so no lock needed on a hit.
     cached = _signals_cache.get(cache_key)
     if cached is not None and cached[0] == mtime:
         return cached[1]
 
-    try:
-        model = TrainedRerankerModel.load(model_path)
-        importances = model.feature_importances()
-        top = sorted(importances.items(), key=lambda kv: kv[1], reverse=True)
-        signals = dict(top[:_TOP_SIGNAL_COUNT])
-        _signals_cache[cache_key] = (mtime, signals)
-        return signals
-    except Exception:
-        logger.debug("no trained reranker model available for weekly guidance signals")
-        return None
+    async with _cache_lock:
+        # Re-check: another coroutine may have loaded while we waited for the lock.
+        cached = _signals_cache.get(cache_key)
+        if cached is not None and cached[0] == mtime:
+            return cached[1]
+
+        try:
+            model = await asyncio.to_thread(TrainedRerankerModel.load, model_path)
+            importances = model.feature_importances()
+            top = sorted(importances.items(), key=lambda kv: kv[1], reverse=True)
+            signals = dict(top[:_TOP_SIGNAL_COUNT])
+            _signals_cache[cache_key] = (mtime, signals)
+            return signals
+        except Exception:
+            logger.debug("no trained reranker model available for weekly guidance signals")
+            return None
 
 
 class WeeklyGuidanceService:
@@ -47,7 +56,7 @@ class WeeklyGuidanceService:
 
     async def enrich(self, context: WeeklyGuidanceRequest) -> WeeklyGuidanceResponse:
         if context.llm_context.top_model_signals is None:
-            context.llm_context.top_model_signals = _load_top_model_signals(context.profile_id)
+            context.llm_context.top_model_signals = await _load_top_model_signals(context.profile_id)
         prompt = build_weekly_guidance_prompt(context)
         return await run_enrichment_call(
             flow="weekly_guidance",

@@ -1,5 +1,5 @@
 import { mlRequest } from '../client';
-import { logUserEvent } from '../events';
+import { fireEvent } from '../events';
 
 import {
   buildAnalyzedProfilePayload,
@@ -44,7 +44,7 @@ export function mapCoverLetterDraftResponse(
 export async function getCoverLetterDraft(
   payload: CoverLetterDraftRequest,
 ): Promise<CoverLetterDraft> {
-  void logUserEvent(payload.profileId, {
+  fireEvent(payload.profileId, {
     eventType: 'cover_letter_draft_requested',
     jobId: payload.rankedJob.id,
     payloadJson: {
@@ -54,7 +54,7 @@ export async function getCoverLetterDraft(
       has_application_coach: Boolean(payload.applicationCoach),
       has_raw_profile_text: Boolean(payload.rawProfileText),
     },
-  }).catch(() => null);
+  });
 
   const response = await mlRequest<MlCoverLetterDraftResponse>(
     '/v1/enrichment/cover-letter-draft',

@@ -78,17 +78,15 @@ pub(super) async fn resolve_batch(
             variant.job_id.clone()
         };
 
-        dedupe_job_ids.insert(variant.dedupe_key.clone(), resolved_job_id.clone());
-
         let mut resolved_job = job.clone();
-        resolved_job.id = resolved_job_id.clone();
+        resolved_job.id = resolved_job_id;
+        dedupe_job_ids.insert(variant.dedupe_key.clone(), resolved_job.id.clone());
+        let mut resolved_variant = variant.clone();
+        resolved_variant.job_id = resolved_job.id.clone();
         jobs_by_id
-            .entry(resolved_job_id.clone())
+            .entry(resolved_job.id.clone())
             .and_modify(|current| merge_job(current, &resolved_job))
             .or_insert(resolved_job);
-
-        let mut resolved_variant = variant.clone();
-        resolved_variant.job_id = resolved_job_id;
         variants.push(resolved_variant);
     }
 

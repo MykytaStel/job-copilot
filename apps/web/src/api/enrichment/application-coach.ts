@@ -1,5 +1,5 @@
 import { mlRequest } from '../client';
-import { logUserEvent } from '../events';
+import { fireEvent } from '../events';
 
 import {
   buildAnalyzedProfilePayload,
@@ -42,7 +42,7 @@ export function mapApplicationCoachResponse(
 export async function getApplicationCoach(
   payload: ApplicationCoachRequest,
 ): Promise<ApplicationCoach> {
-  void logUserEvent(payload.profileId, {
+  fireEvent(payload.profileId, {
     eventType: 'application_coach_requested',
     jobId: payload.rankedJob.id,
     payloadJson: {
@@ -51,7 +51,7 @@ export async function getApplicationCoach(
       has_fit_explanation: Boolean(payload.jobFitExplanation),
       primary_role: payload.searchProfile?.primaryRole ?? null,
     },
-  }).catch(() => null);
+  });
 
   const response = await mlRequest<MlApplicationCoachResponse>('/v1/enrichment/application-coach', {
     method: 'POST',

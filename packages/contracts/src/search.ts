@@ -43,7 +43,6 @@ export type EngineSourceId = 'djinni' | 'dou_ua' | 'work_ua' | 'robota_ua';
 export interface EngineRoleCatalogItemResponse {
   id: EngineRoleId;
   display_name: string;
-  deprecated_api_ids: string[];
   family?: string;
   is_fallback: boolean;
 }

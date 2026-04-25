@@ -45,28 +45,10 @@ impl From<ApplicationSearchHitRow> for ApplicationSearchHit {
     }
 }
 
-impl
-    TryFrom<(
-        ApplicationDetailRow,
-        Option<Offer>,
-        Vec<ApplicationNote>,
-        Vec<ApplicationContact>,
-        Vec<Activity>,
-        Vec<Task>,
-    )> for ApplicationDetail
-{
+impl TryFrom<(ApplicationDetailRow, Option<Offer>)> for ApplicationDetail {
     type Error = RepositoryError;
 
-    fn try_from(
-        (row, offer, notes, contacts, activities, tasks): (
-            ApplicationDetailRow,
-            Option<Offer>,
-            Vec<ApplicationNote>,
-            Vec<ApplicationContact>,
-            Vec<Activity>,
-            Vec<Task>,
-        ),
-    ) -> Result<Self, Self::Error> {
+    fn try_from((row, offer): (ApplicationDetailRow, Option<Offer>)) -> Result<Self, Self::Error> {
         let resume = match row.resume_version {
             None => None,
             Some(version) => Some(ResumeVersion {
@@ -98,6 +80,67 @@ impl
                 })?,
             }),
         };
+
+        let notes = row
+            .notes_json
+            .0
+            .into_iter()
+            .map(|r| ApplicationNote {
+                id: r.id,
+                application_id: r.application_id,
+                content: r.content,
+                created_at: r.created_at,
+            })
+            .collect();
+
+        let contacts = row
+            .contacts_json
+            .0
+            .into_iter()
+            .map(|r| ApplicationContact {
+                id: r.id,
+                application_id: r.application_id,
+                relationship: r.relationship,
+                contact: Contact {
+                    id: r.contact_id,
+                    name: r.contact_name,
+                    email: r.contact_email,
+                    phone: r.contact_phone,
+                    linkedin_url: r.contact_linkedin_url,
+                    company: r.contact_company,
+                    role: r.contact_role,
+                    created_at: r.contact_created_at,
+                },
+            })
+            .collect();
+
+        let activities = row
+            .activities_json
+            .0
+            .into_iter()
+            .map(|r| Activity {
+                id: r.id,
+                application_id: r.application_id,
+                activity_type: r.activity_type,
+                description: r.description,
+                happened_at: r.happened_at,
+                created_at: r.created_at,
+            })
+            .collect();
+
+        let tasks = row
+            .tasks_json
+            .0
+            .into_iter()
+            .map(|r| Task {
+                id: r.id,
+                application_id: r.application_id,
+                title: r.title,
+                remind_at: r.remind_at,
+                done: r.done,
+                created_at: r.created_at,
+            })
+            .collect();
 
         Ok(Self {
             application: Application {

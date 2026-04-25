@@ -35,7 +35,16 @@ async fn main() {
         config.ml_retrain_threshold,
         config.ml_retrain_poll_interval_seconds,
     );
-    let app = api::build_router(state);
+    let routers = api::build_routers(state);
+
+    let internal_listener = TcpListener::bind("127.0.0.1:9090")
+        .await
+        .expect("Failed to bind internal listener");
+    tokio::spawn(async move {
+        axum::serve(internal_listener, routers.internal)
+            .await
+            .expect("Internal server failed");
+    });
 
     let address = format!("0.0.0.0:{}", config.port);
     let listener = TcpListener::bind(&address)
@@ -44,5 +53,7 @@ async fn main() {
 
     info!("engine-api is running on http://{}", address);
 
-    axum::serve(listener, app).await.expect("Server failed");
+    axum::serve(listener, routers.app)
+        .await
+        .expect("Server failed");
 }

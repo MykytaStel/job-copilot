@@ -24,3 +24,7 @@ uuid = { version = "1", features = ["v7"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 axum-prometheus = "0.10.0"
+jsonwebtoken = "9"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

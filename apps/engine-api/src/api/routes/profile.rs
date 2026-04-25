@@ -1,3 +1,4 @@
+use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 
@@ -8,6 +9,7 @@ use crate::api::dto::search_profile::{
     BuildSearchProfileResponse, BuildStoredSearchProfileRequest, SearchProfileResponse,
 };
 use crate::api::error::{ApiError, ApiJson};
+use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 use crate::domain::profile::model::ProfileAnalysis;
 use crate::state::AppState;
 
@@ -29,8 +31,10 @@ pub async fn create_profile(
 
 pub async fn get_profile_by_id(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<ProfileResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     let Some(profile) = state
         .profile_records
         .get_by_id(&profile_id)
@@ -45,9 +49,11 @@ pub async fn get_profile_by_id(
 
 pub async fn update_profile(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
     ApiJson(payload): ApiJson<UpdateProfileRequest>,
 ) -> Result<axum::Json<ProfileResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     let Some(profile) = state
         .profile_records
         .update(&profile_id, payload.validate()?)
@@ -62,8 +68,10 @@ pub async fn update_profile(
 
 pub async fn analyze_profile(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<AnalyzeProfileResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     let Some(profile) = state
         .profile_records
         .get_by_id(&profile_id)
@@ -95,9 +103,11 @@ pub async fn analyze_profile(
 
 pub async fn build_search_profile(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
     ApiJson(payload): ApiJson<BuildStoredSearchProfileRequest>,
 ) -> Result<axum::Json<BuildSearchProfileResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     let Some(profile) = state
         .profile_records
         .get_by_id(&profile_id)
@@ -191,7 +201,7 @@ mod tests {
             ResumesService::for_tests(ResumesServiceStub::default()),
         );
 
-        let response = get_profile_by_id(State(state), Path("missing-profile".to_string()))
+        let response = get_profile_by_id(State(state), None, Path("missing-profile".to_string()))
             .await
             .expect_err("handler should reject unknown profile")
             .into_response();
@@ -225,7 +235,7 @@ mod tests {
         .await
         .expect("setup should create profile");
 
-        let response = analyze_profile(State(state), Path("profile_test_001".to_string()))
+        let response = analyze_profile(State(state), None, Path("profile_test_001".to_string()))
             .await
             .expect("handler should analyze stored profile")
             .into_response();
@@ -267,6 +277,7 @@ mod tests {
 
         let response = build_search_profile(
             State(state),
+            None,
             Path("profile_test_001".to_string()),
             ApiJson(BuildStoredSearchProfileRequest {
                 preferences: crate::api::dto::search_profile::SearchPreferencesRequest {
@@ -304,6 +315,7 @@ mod tests {
 
         let response = update_profile(
             State(state),
+            None,
             Path("profile_test_001".to_string()),
             ApiJson(crate::api::dto::profile::UpdateProfileRequest::default()),
         )
@@ -343,6 +355,7 @@ mod tests {
 
         let updated = update_profile(
             State(state.clone()),
+            None,
             Path("profile_test_001".to_string()),
             ApiJson(crate::api::dto::profile::UpdateProfileRequest {
                 search_preferences: Some(Some(
@@ -383,6 +396,7 @@ mod tests {
 
         let rebuilt = build_search_profile(
             State(state),
+            None,
             Path("profile_test_001".to_string()),
             ApiJson(BuildStoredSearchProfileRequest::default()),
         )

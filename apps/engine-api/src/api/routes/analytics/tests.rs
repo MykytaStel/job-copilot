@@ -262,7 +262,7 @@ fn with_funnel_events(state: AppState) -> AppState {
 async fn analytics_summary_feedback_counts_are_correct() {
     let state = with_feedback(test_state());
 
-    let Json(summary) = get_analytics_summary(State(state), Path("profile-1".to_string()))
+    let Json(summary) = get_analytics_summary(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("analytics summary should succeed");
 
@@ -277,7 +277,7 @@ async fn analytics_summary_feedback_counts_are_correct() {
 async fn analytics_summary_source_aggregation_is_correct() {
     let state = test_state();
 
-    let Json(summary) = get_analytics_summary(State(state), Path("profile-1".to_string()))
+    let Json(summary) = get_analytics_summary(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("analytics summary should succeed");
 
@@ -292,7 +292,7 @@ async fn analytics_summary_source_aggregation_is_correct() {
 async fn analytics_summary_lifecycle_distribution_is_correct() {
     let state = test_state();
 
-    let Json(summary) = get_analytics_summary(State(state), Path("profile-1".to_string()))
+    let Json(summary) = get_analytics_summary(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("analytics summary should succeed");
 
@@ -306,7 +306,7 @@ async fn analytics_summary_lifecycle_distribution_is_correct() {
 async fn analytics_summary_top_matched_come_from_profile_analysis() {
     let state = test_state();
 
-    let Json(summary) = get_analytics_summary(State(state), Path("profile-1".to_string()))
+    let Json(summary) = get_analytics_summary(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("analytics summary should succeed");
 
@@ -319,7 +319,7 @@ async fn analytics_summary_top_matched_come_from_profile_analysis() {
 async fn funnel_summary_counts_impressions_and_actions() {
     let state = with_funnel_events(test_state());
 
-    let Json(summary) = get_funnel_summary(State(state), Path("profile-1".to_string()))
+    let Json(summary) = get_funnel_summary(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("funnel summary should succeed");
 
@@ -343,7 +343,7 @@ async fn funnel_summary_counts_impressions_and_actions() {
 async fn funnel_summary_derived_ratios_are_correct() {
     let state = with_funnel_events(test_state());
 
-    let Json(summary) = get_funnel_summary(State(state), Path("profile-1".to_string()))
+    let Json(summary) = get_funnel_summary(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("funnel summary should succeed");
 
@@ -363,7 +363,7 @@ async fn funnel_summary_avoids_divide_by_zero() {
         )),
     ));
 
-    let Json(summary) = get_funnel_summary(State(state), Path("profile-1".to_string()))
+    let Json(summary) = get_funnel_summary(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("funnel summary should succeed");
 
@@ -378,7 +378,7 @@ async fn funnel_summary_avoids_divide_by_zero() {
 async fn llm_context_payload_shape_is_complete() {
     let state = with_feedback(test_state());
 
-    let Json(ctx) = get_llm_context(State(state), Path("profile-1".to_string()))
+    let Json(ctx) = get_llm_context(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("llm context should succeed");
 
@@ -394,7 +394,7 @@ async fn llm_context_payload_shape_is_complete() {
 async fn llm_context_positive_evidence_includes_saved_jobs_and_whitelisted_companies() {
     let state = with_feedback(test_state());
 
-    let Json(ctx) = get_llm_context(State(state), Path("profile-1".to_string()))
+    let Json(ctx) = get_llm_context(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("llm context should succeed");
 
@@ -423,7 +423,7 @@ async fn llm_context_positive_evidence_includes_saved_jobs_and_whitelisted_compa
 async fn llm_context_negative_evidence_includes_bad_fit_jobs_and_blacklisted_companies() {
     let state = with_feedback(test_state());
 
-    let Json(ctx) = get_llm_context(State(state), Path("profile-1".to_string()))
+    let Json(ctx) = get_llm_context(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("llm context should succeed");
 
@@ -449,7 +449,7 @@ async fn llm_context_negative_evidence_includes_bad_fit_jobs_and_blacklisted_com
 async fn llm_context_analyzed_profile_fields_match_profile_analysis() {
     let state = test_state();
 
-    let Json(ctx) = get_llm_context(State(state), Path("profile-1".to_string()))
+    let Json(ctx) = get_llm_context(State(state), None, Path("profile-1".to_string()))
         .await
         .expect("llm context should succeed");
 

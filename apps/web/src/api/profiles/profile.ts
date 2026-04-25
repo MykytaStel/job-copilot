@@ -89,7 +89,10 @@ export async function saveProfile(
         filename: 'profile.md',
         raw_text: payload.rawText,
       }),
-    ).catch(() => null),
+    ).catch((err: unknown) => {
+      console.warn('Resume upload failed during profile save; profile was still created:', err);
+      return null;
+    }),
   ]);
 
   return {

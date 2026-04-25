@@ -82,7 +82,7 @@ pub async fn create_application(
     };
 
     if let Some(profile_id) = profile_id.as_deref() {
-        ensure_profile_exists(&state, profile_id).await?;
+        ensure_profile_exists(&state, None, profile_id).await?;
     }
 
     let event_metadata = if profile_id.is_some() {
@@ -253,17 +253,32 @@ pub async fn create_contact(
     ))
 }
 
+#[derive(Deserialize)]
+pub struct ContactsQuery {
+    pub offset: Option<i64>,
+}
+
 pub async fn list_contacts(
     State(state): State<AppState>,
+    Query(params): Query<ContactsQuery>,
 ) -> Result<axum::Json<ContactsResponse>, ApiError> {
-    let contacts = state
+    let offset = params.offset.unwrap_or(0).max(0);
+    let (contacts, total) = state
         .applications_service
-        .list_contacts()
+        .list_contacts(offset)
         .await
         .map_err(|error| ApiError::from_repository(error, "contacts_query_failed"))?;
 
+    let next_cursor = if offset + 100 < total {
+        Some(offset + 100)
+    } else {
+        None
+    };
+
     Ok(axum::Json(ContactsResponse {
         contacts: contacts.into_iter().map(ContactResponse::from).collect(),
+        total,
+        next_cursor,
     }))
 }
 

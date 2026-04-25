@@ -1,3 +1,4 @@
+use axum::Extension;
 use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 
@@ -6,6 +7,7 @@ use crate::api::dto::reranker_metrics::{
     RerankerMetricsSummaryResponse,
 };
 use crate::api::error::ApiError;
+use crate::api::middleware::auth::AuthUser;
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::domain::profile::ml::ProfileMlState;
 use crate::state::AppState;
@@ -17,10 +19,11 @@ pub struct RerankerMetricsQuery {
 
 pub async fn get_reranker_metrics(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
     Query(query): Query<RerankerMetricsQuery>,
 ) -> Result<axum::Json<RerankerMetricsResponse>, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth.as_deref(), &profile_id).await?;
 
     let limit = query.limit.unwrap_or(10).clamp(1, 50);
     let current_state = state
@@ -172,6 +175,7 @@ mod tests {
 
         let axum::Json(response) = get_reranker_metrics(
             State(state),
+            None,
             Path("profile-1".to_string()),
             Query(RerankerMetricsQuery { limit: Some(5) }),
         )
@@ -241,6 +245,7 @@ mod tests {
 
         let axum::Json(response) = get_reranker_metrics(
             State(state),
+            None,
             Path("profile-1".to_string()),
             Query(RerankerMetricsQuery { limit: Some(10) }),
         )

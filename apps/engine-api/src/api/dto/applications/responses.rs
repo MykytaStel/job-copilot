@@ -106,6 +106,8 @@ pub struct RecentApplicationsResponse {
 #[derive(Debug, Serialize)]
 pub struct ContactsResponse {
     pub contacts: Vec<ContactResponse>,
+    pub total: i64,
+    pub next_cursor: Option<i64>,
 }
 
 impl From<Application> for ApplicationResponse {

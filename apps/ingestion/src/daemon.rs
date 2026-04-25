@@ -2,6 +2,9 @@ use std::time::Duration;
 
 use tracing::{error, info, warn};
 
+const MAX_SCRAPE_ATTEMPTS: u8 = 3;
+const SCRAPE_BACKOFF_SECS: [u64; 2] = [5, 15];
+
 use crate::cli::{DaemonMode, ScrapeMode, run_scraper};
 use crate::db;
 
@@ -24,7 +27,32 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                 keyword: mode.keyword.clone(),
             };
 
-            match run_scraper(&scrape_mode).await {
+            let scrape_result = {
+                let mut result;
+                let mut attempt = 0u8;
+                loop {
+                    result = run_scraper(&scrape_mode).await;
+                    attempt += 1;
+                    match &result {
+                        Ok(_) => break,
+                        Err(error) if attempt < MAX_SCRAPE_ATTEMPTS => {
+                            let delay = SCRAPE_BACKOFF_SECS[usize::from(attempt - 1)];
+                            warn!(
+                                source = source.name(),
+                                attempt,
+                                delay_secs = delay,
+                                error = %error,
+                                "scrape failed, retrying"
+                            );
+                            tokio::time::sleep(Duration::from_secs(delay)).await;
+                        }
+                        Err(_) => break,
+                    }
+                }
+                result
+            };
+
+            match scrape_result {
                 Ok(batch) => match db::upsert_batch(pool, &batch).await {
                     Ok(summary) => {
                         let market_snapshot_summary = match db::refresh_market_snapshots(pool).await
@@ -59,7 +87,12 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                     }
                 },
                 Err(error) => {
-                    warn!(source = source.name(), error = %error, "scrape failed, skipping source")
+                    error!(
+                        source = source.name(),
+                        attempts = MAX_SCRAPE_ATTEMPTS,
+                        error = %error,
+                        "scrape failed after all retries, skipping source"
+                    )
                 }
             }
         }

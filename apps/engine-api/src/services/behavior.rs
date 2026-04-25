@@ -149,7 +149,7 @@ impl BehaviorService {
         }
     }
 
-    pub fn score_job(
+    pub fn score_job_behavior(
         &self,
         aggregates: &ProfileBehaviorAggregates,
         source: Option<&str>,
@@ -471,7 +471,8 @@ mod tests {
         ];
         let aggregates = service.build_aggregates(events.iter());
 
-        let adjustment = service.score_job(&aggregates, Some("djinni"), Some("engineering"));
+        let adjustment =
+            service.score_job_behavior(&aggregates, Some("djinni"), Some("engineering"));
 
         assert_eq!(adjustment.score_delta, 0);
         assert!(adjustment.reasons.is_empty());
@@ -502,5 +503,95 @@ mod tests {
         assert_eq!(aggregates.hide_count_by_source.get("djinni"), None);
         assert_eq!(summary.top_positive_sources[0].save_count, 1);
         assert_eq!(summary.top_positive_sources[0].positive_count, 1);
+    }
+
+    #[test]
+    fn strong_positive_source_applies_strong_boost() {
+        let service = BehaviorService::new();
+        // net_score = 4 saves ≥ STRONG_SIGNAL_SCORE → SOURCE_STRONG_POSITIVE_BOOST = 4
+        let events: Vec<_> = (0..4)
+            .map(|i| {
+                event(
+                    &format!("evt-{i}"),
+                    UserEventType::JobSaved,
+                    Some("djinni"),
+                    None,
+                )
+            })
+            .collect();
+
+        let aggregates = service.build_aggregates(events.iter());
+        let adjustment = service.score_job_behavior(&aggregates, Some("djinni"), None);
+
+        assert_eq!(adjustment.score_delta, 4);
+        assert_eq!(adjustment.reasons.len(), 1);
+        assert!(adjustment.reasons[0].contains("positive interaction history"));
+    }
+
+    #[test]
+    fn strong_negative_source_applies_strong_penalty() {
+        let service = BehaviorService::new();
+        // net_score = -4 (4 hides) ≤ -STRONG_SIGNAL_SCORE → SOURCE_STRONG_NEGATIVE_PENALTY = -4
+        let events: Vec<_> = (0..4)
+            .map(|i| {
+                event(
+                    &format!("evt-{i}"),
+                    UserEventType::JobHidden,
+                    Some("work_ua"),
+                    None,
+                )
+            })
+            .collect();
+
+        let aggregates = service.build_aggregates(events.iter());
+        let adjustment = service.score_job_behavior(&aggregates, Some("work_ua"), None);
+
+        assert_eq!(adjustment.score_delta, -4);
+        assert!(adjustment.reasons[0].contains("hide/bad-fit signals"));
+    }
+
+    #[test]
+    fn strong_positive_role_family_applies_role_family_boost() {
+        let service = BehaviorService::new();
+        // net_score = 4 saves ≥ STRONG_SIGNAL_SCORE → ROLE_FAMILY_STRONG_POSITIVE_BOOST = 3
+        let events: Vec<_> = (0..4)
+            .map(|i| {
+                event(
+                    &format!("evt-{i}"),
+                    UserEventType::JobSaved,
+                    None,
+                    Some("engineering"),
+                )
+            })
+            .collect();
+
+        let aggregates = service.build_aggregates(events.iter());
+        let adjustment = service.score_job_behavior(&aggregates, None, Some("engineering"));
+
+        assert_eq!(adjustment.score_delta, 3);
+        assert!(adjustment.reasons[0].contains("Role family has positive"));
+    }
+
+    #[test]
+    fn source_and_role_family_boosts_are_additive() {
+        let service = BehaviorService::new();
+        // 4 saves tagged with djinni + engineering → source +4, role family +3, total = +7
+        let events: Vec<_> = (0..4)
+            .map(|i| {
+                event(
+                    &format!("src-{i}"),
+                    UserEventType::JobSaved,
+                    Some("djinni"),
+                    Some("engineering"),
+                )
+            })
+            .collect();
+
+        let aggregates = service.build_aggregates(events.iter());
+        let adjustment =
+            service.score_job_behavior(&aggregates, Some("djinni"), Some("engineering"));
+
+        assert_eq!(adjustment.score_delta, 7);
+        assert_eq!(adjustment.reasons.len(), 2);
     }
 }
