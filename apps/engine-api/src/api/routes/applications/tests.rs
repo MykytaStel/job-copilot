@@ -127,6 +127,7 @@ async fn returns_not_found_for_unknown_application() {
 async fn rejects_invalid_recent_applications_limit() {
     let result = get_recent_applications(
         State(AppState::without_database()),
+        None,
         Query(RecentApplicationsQuery { limit: Some(0) }),
     )
     .await;

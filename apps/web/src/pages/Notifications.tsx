@@ -144,7 +144,7 @@ export default function Notifications() {
     error,
   } = useQuery({
     queryKey: queryKeys.notifications.list(profileId ?? 'none', LIST_LIMIT),
-    queryFn: () => getNotifications(profileId ?? undefined, LIST_LIMIT),
+    queryFn: () => getNotifications(LIST_LIMIT),
     enabled: !!profileId,
   });
 

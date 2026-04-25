@@ -1,4 +1,5 @@
 pub mod analytics;
+pub mod auth;
 pub mod applications;
 pub mod behavior;
 pub mod debug;
