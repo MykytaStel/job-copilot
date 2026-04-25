@@ -84,9 +84,7 @@ impl ProfilesService {
 
     pub async fn get_by_email(&self, email: &str) -> Result<Option<Profile>, RepositoryError> {
         match &self.backend {
-            ProfilesServiceBackend::Repository(repository) => {
-                repository.get_by_email(email).await
-            }
+            ProfilesServiceBackend::Repository(repository) => repository.get_by_email(email).await,
             #[cfg(test)]
             ProfilesServiceBackend::Stub(stub) => stub.get_by_email(email),
         }
