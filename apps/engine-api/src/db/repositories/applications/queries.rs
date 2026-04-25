@@ -464,10 +464,7 @@ impl ApplicationsRepository {
         Ok(Contact::from(row))
     }
 
-    pub async fn list_contacts(
-        &self,
-        offset: i64,
-    ) -> Result<(Vec<Contact>, i64), RepositoryError> {
+    pub async fn list_contacts(&self, offset: i64) -> Result<(Vec<Contact>, i64), RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };

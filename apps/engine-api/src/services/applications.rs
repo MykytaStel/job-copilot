@@ -130,10 +130,7 @@ impl ApplicationsService {
         }
     }
 
-    pub async fn list_contacts(
-        &self,
-        offset: i64,
-    ) -> Result<(Vec<Contact>, i64), RepositoryError> {
+    pub async fn list_contacts(&self, offset: i64) -> Result<(Vec<Contact>, i64), RepositoryError> {
         match &self.backend {
             ApplicationsServiceBackend::Repository(repository) => {
                 repository.list_contacts(offset).await

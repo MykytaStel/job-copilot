@@ -471,7 +471,8 @@ mod tests {
         ];
         let aggregates = service.build_aggregates(events.iter());
 
-        let adjustment = service.score_job_behavior(&aggregates, Some("djinni"), Some("engineering"));
+        let adjustment =
+            service.score_job_behavior(&aggregates, Some("djinni"), Some("engineering"));
 
         assert_eq!(adjustment.score_delta, 0);
         assert!(adjustment.reasons.is_empty());
@@ -509,7 +510,14 @@ mod tests {
         let service = BehaviorService::new();
         // net_score = 4 saves ≥ STRONG_SIGNAL_SCORE → SOURCE_STRONG_POSITIVE_BOOST = 4
         let events: Vec<_> = (0..4)
-            .map(|i| event(&format!("evt-{i}"), UserEventType::JobSaved, Some("djinni"), None))
+            .map(|i| {
+                event(
+                    &format!("evt-{i}"),
+                    UserEventType::JobSaved,
+                    Some("djinni"),
+                    None,
+                )
+            })
             .collect();
 
         let aggregates = service.build_aggregates(events.iter());
@@ -525,7 +533,14 @@ mod tests {
         let service = BehaviorService::new();
         // net_score = -4 (4 hides) ≤ -STRONG_SIGNAL_SCORE → SOURCE_STRONG_NEGATIVE_PENALTY = -4
         let events: Vec<_> = (0..4)
-            .map(|i| event(&format!("evt-{i}"), UserEventType::JobHidden, Some("work_ua"), None))
+            .map(|i| {
+                event(
+                    &format!("evt-{i}"),
+                    UserEventType::JobHidden,
+                    Some("work_ua"),
+                    None,
+                )
+            })
             .collect();
 
         let aggregates = service.build_aggregates(events.iter());

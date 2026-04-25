@@ -48,9 +48,7 @@ impl From<ApplicationSearchHitRow> for ApplicationSearchHit {
 impl TryFrom<(ApplicationDetailRow, Option<Offer>)> for ApplicationDetail {
     type Error = RepositoryError;
 
-    fn try_from(
-        (row, offer): (ApplicationDetailRow, Option<Offer>),
-    ) -> Result<Self, Self::Error> {
+    fn try_from((row, offer): (ApplicationDetailRow, Option<Offer>)) -> Result<Self, Self::Error> {
         let resume = match row.resume_version {
             None => None,
             Some(version) => Some(ResumeVersion {

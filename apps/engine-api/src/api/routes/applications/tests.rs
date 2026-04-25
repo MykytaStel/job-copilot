@@ -273,12 +273,9 @@ async fn lists_contacts() {
         ResumesService::for_tests(ResumesServiceStub::default()),
     );
 
-    let Json(response) = list_contacts(
-        State(state),
-        Query(ContactsQuery { offset: None }),
-    )
-    .await
-    .expect("handler should list contacts");
+    let Json(response) = list_contacts(State(state), Query(ContactsQuery { offset: None }))
+        .await
+        .expect("handler should list contacts");
 
     assert_eq!(response.contacts.len(), 1);
     assert_eq!(response.contacts[0].id, "contact-1");

@@ -210,7 +210,10 @@ impl ApplicationsServiceStub {
             .cloned())
     }
 
-    pub(crate) fn list_contacts(&self, _offset: i64) -> Result<(Vec<Contact>, i64), RepositoryError> {
+    pub(crate) fn list_contacts(
+        &self,
+        _offset: i64,
+    ) -> Result<(Vec<Contact>, i64), RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }

@@ -87,12 +87,12 @@ pub async fn auth_middleware(
 
 #[cfg(test)]
 mod tests {
+    use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use axum::middleware;
     use axum::response::{IntoResponse, Response};
     use axum::routing::get;
-    use axum::Router;
     use tower::util::ServiceExt;
 
     use crate::state::AppState;
@@ -149,10 +149,7 @@ mod tests {
     #[tokio::test]
     async fn passes_through_when_no_secret_configured() {
         let app = app_with_secret(None);
-        let req = Request::builder()
-            .uri("/test")
-            .body(Body::empty())
-            .unwrap();
+        let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
         let resp = send(app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
     }
@@ -160,10 +157,7 @@ mod tests {
     #[tokio::test]
     async fn rejects_missing_authorization_header() {
         let app = app_with_secret(Some("secret".to_string()));
-        let req = Request::builder()
-            .uri("/test")
-            .body(Body::empty())
-            .unwrap();
+        let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
         let resp = send(app, req).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }

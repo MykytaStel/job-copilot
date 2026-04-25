@@ -372,9 +372,10 @@ mod tests {
                 }),
         ));
 
-        let Json(summary) = get_user_event_summary(State(state), None, Path("profile-1".to_string()))
-            .await
-            .expect("summary should succeed");
+        let Json(summary) =
+            get_user_event_summary(State(state), None, Path("profile-1".to_string()))
+                .await
+                .expect("summary should succeed");
 
         assert_eq!(summary.save_count, 1);
         assert_eq!(summary.search_run_count, 1);

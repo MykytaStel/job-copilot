@@ -53,5 +53,7 @@ async fn main() {
 
     info!("engine-api is running on http://{}", address);
 
-    axum::serve(listener, routers.app).await.expect("Server failed");
+    axum::serve(listener, routers.app)
+        .await
+        .expect("Server failed");
 }
