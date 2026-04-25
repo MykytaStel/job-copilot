@@ -22,7 +22,7 @@ pub(super) async fn load_profile_ranked_jobs(
     job_ids: &[String],
     entrypoint: &'static str,
 ) -> Result<ProfileRankedJobsResult, ApiError> {
-    ensure_profile_exists(state, profile_id).await?;
+    ensure_profile_exists(state, None, profile_id).await?;
 
     let profile = state
         .profile_records
@@ -159,7 +159,7 @@ pub(crate) async fn load_feedback_state(
         return Ok(vec![JobFeedbackState::default(); jobs.len()]);
     };
 
-    ensure_profile_exists(state, profile_id).await?;
+    ensure_profile_exists(state, None, profile_id).await?;
 
     let job_ids = jobs
         .iter()

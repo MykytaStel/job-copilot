@@ -32,6 +32,14 @@ def _ml_root_dir() -> Path:
 DEFAULT_ARTIFACTS_DIR = _ml_root_dir() / "models" / "profiles"
 DEFAULT_BOOTSTRAP_TASKS_DIR = _ml_root_dir() / ".runtime" / "bootstrap-tasks"
 
+@field_validator("environment", mode="before")
+@classmethod
+def normalize_environment(cls, value: Any) -> str:
+    if not isinstance(value, str):
+        return "development"
+
+    cleaned = value.strip().lower()
+    return cleaned or "development"
 
 def _split_csv(value: str) -> tuple[str, ...]:
     return tuple(item for item in (part.strip() for part in value.split(",")) if item)
@@ -39,7 +47,7 @@ def _split_csv(value: str) -> tuple[str, ...]:
 
 class RuntimeSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
-
+    environment: str = Field(default="development", validation_alias="ML_ENV")
     log_level: str = Field(default="INFO", validation_alias="ML_LOG_LEVEL")
     log_format: str = Field(default="json", validation_alias="ML_LOG_FORMAT")
     cors_allowed_origins: Annotated[tuple[str, ...], NoDecode] = Field(
@@ -198,6 +206,9 @@ class RuntimeSettings(BaseSettings):
             return default
         cleaned = value.strip()
         return cleaned or default
+    def validate_startup_security(self) -> None:
+    		if self.environment in {"production", "prod"} and not self.internal_token:
+        		raise ValueError("ML_INTERNAL_TOKEN is required when ML_ENV=production")
 
 
 @lru_cache(maxsize=1)

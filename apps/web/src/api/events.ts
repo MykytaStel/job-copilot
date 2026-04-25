@@ -43,3 +43,8 @@ export async function logUserEvent(profileId: string, input: UserEventLogInput):
     }),
   );
 }
+
+// Fire-and-forget variant: event logging is non-fatal, errors are silently dropped.
+export function fireEvent(profileId: string, input: UserEventLogInput): void {
+  void logUserEvent(profileId, input).catch(() => {});
+}

@@ -9,7 +9,6 @@ export type RoleCatalogItem = {
   id: string;
   displayName: string;
   family?: string;
-  deprecatedApiIds: string[];
   isFallback: boolean;
 };
 

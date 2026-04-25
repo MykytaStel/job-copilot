@@ -81,6 +81,7 @@ impl AppState {
             )
             .expect("test ML sidecar client should build"),
             jwt_secret: None,
+            cors_allowed_origins: Vec::new(),
         }
     }
 

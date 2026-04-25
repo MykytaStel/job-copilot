@@ -59,6 +59,7 @@ pub struct AppState {
     pub trained_reranker_model: Option<TrainedRerankerModel>,
     pub reranker_bootstrap: RerankerBootstrapService,
     pub jwt_secret: Option<String>,
+    pub cors_allowed_origins: Vec<String>,
 }
 
 impl AppState {
@@ -87,6 +88,7 @@ impl AppState {
             reranker_bootstrap,
         );
         state.jwt_secret = config.jwt_secret.clone();
+        state.cors_allowed_origins = config.cors_allowed_origins.clone();
         state
     }
 
@@ -145,6 +147,7 @@ impl AppState {
             trained_reranker_model,
             reranker_bootstrap,
             jwt_secret: None,
+            cors_allowed_origins: Vec::new(),
         }
     }
 }

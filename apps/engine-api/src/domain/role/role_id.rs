@@ -37,12 +37,10 @@ impl RoleId {
         find_role(self).search_aliases
     }
 
-    #[allow(dead_code)]
     pub fn family(self) -> Option<&'static str> {
         find_role(self).family
     }
 
-    #[allow(dead_code)]
     pub fn is_fallback(self) -> bool {
         find_role(self).is_fallback
     }
@@ -59,6 +57,10 @@ impl RoleId {
         find_role_by_key(value).map(|role| role.id)
     }
 
+    // TODO(remove by 2026-07-01): used only by ProfileRow deserialization for legacy rows that
+    // still store old-format keys (e.g. "frontend_developer"). Once a migration backfills all
+    // profiles.primary_role values to canonical keys, delete this and switch the call site in
+    // db/repositories/profiles.rs to parse_canonical_key().
     pub fn parse_compat_key(value: &str) -> Option<Self> {
         let normalized = value.trim().to_lowercase();
 

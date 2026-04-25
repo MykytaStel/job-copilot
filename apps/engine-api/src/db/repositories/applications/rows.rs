@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use sqlx::FromRow;
 
 #[derive(FromRow)]
@@ -63,8 +64,33 @@ pub(super) struct OfferRow {
     pub(super) updated_at: String,
 }
 
-#[derive(FromRow)]
-pub(super) struct ActivityRow {
+// JSON aggregated sub-row types — deserialized from json_agg lateral subqueries.
+
+#[derive(Deserialize)]
+pub(super) struct NoteJsonRow {
+    pub(super) id: String,
+    pub(super) application_id: String,
+    pub(super) content: String,
+    pub(super) created_at: String,
+}
+
+#[derive(Deserialize)]
+pub(super) struct ContactJsonRow {
+    pub(super) id: String,
+    pub(super) application_id: String,
+    pub(super) relationship: String,
+    pub(super) contact_id: String,
+    pub(super) contact_name: String,
+    pub(super) contact_email: Option<String>,
+    pub(super) contact_phone: Option<String>,
+    pub(super) contact_linkedin_url: Option<String>,
+    pub(super) contact_company: Option<String>,
+    pub(super) contact_role: Option<String>,
+    pub(super) contact_created_at: String,
+}
+
+#[derive(Deserialize)]
+pub(super) struct ActivityJsonRow {
     pub(super) id: String,
     pub(super) application_id: String,
     pub(super) activity_type: String,
@@ -73,8 +99,8 @@ pub(super) struct ActivityRow {
     pub(super) created_at: String,
 }
 
-#[derive(FromRow)]
-pub(super) struct TaskRow {
+#[derive(Deserialize)]
+pub(super) struct TaskJsonRow {
     pub(super) id: String,
     pub(super) application_id: String,
     pub(super) title: String,
@@ -112,6 +138,10 @@ pub(super) struct ApplicationDetailRow {
     pub(super) resume_raw_text: Option<String>,
     pub(super) resume_is_active: Option<bool>,
     pub(super) resume_uploaded_at: Option<String>,
+    pub(super) notes_json: sqlx::types::Json<Vec<NoteJsonRow>>,
+    pub(super) contacts_json: sqlx::types::Json<Vec<ContactJsonRow>>,
+    pub(super) activities_json: sqlx::types::Json<Vec<ActivityJsonRow>>,
+    pub(super) tasks_json: sqlx::types::Json<Vec<TaskJsonRow>>,
 }
 
 #[derive(FromRow)]

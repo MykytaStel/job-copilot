@@ -1,5 +1,5 @@
 import { mlRequest } from '../client';
-import { logUserEvent } from '../events';
+import { fireEvent } from '../events';
 
 import {
   buildAnalyzedProfilePayload,
@@ -38,7 +38,7 @@ export function mapJobFitExplanationResponse(
 export async function getJobFitExplanation(
   payload: JobFitExplanationRequest,
 ): Promise<JobFitExplanation> {
-  void logUserEvent(payload.profileId, {
+  fireEvent(payload.profileId, {
     eventType: 'fit_explanation_requested',
     jobId: payload.rankedJob.id,
     payloadJson: {
@@ -47,7 +47,7 @@ export async function getJobFitExplanation(
       primary_role: payload.searchProfile?.primaryRole ?? null,
       has_feedback_state: Boolean(payload.feedbackState),
     },
-  }).catch(() => null);
+  });
 
   const response = await mlRequest<MlJobFitExplanationResponse>(
     '/v1/enrichment/job-fit-explanation',

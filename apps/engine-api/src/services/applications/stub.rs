@@ -210,18 +210,20 @@ impl ApplicationsServiceStub {
             .cloned())
     }
 
-    pub(crate) fn list_contacts(&self) -> Result<Vec<Contact>, RepositoryError> {
+    pub(crate) fn list_contacts(&self, _offset: i64) -> Result<(Vec<Contact>, i64), RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }
 
-        Ok(self
+        let contacts: Vec<Contact> = self
             .contacts_by_id
             .lock()
             .expect("contacts stub mutex should not be poisoned")
             .values()
             .cloned()
-            .collect())
+            .collect();
+        let total = contacts.len() as i64;
+        Ok((contacts, total))
     }
 
     pub(crate) fn attach_contact(

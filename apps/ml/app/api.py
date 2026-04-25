@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+import token
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,12 +22,18 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     settings = get_runtime_settings()
+    settings.validate_startup_security()
+
     services = await build_app_services(settings)
     application.state.services = services
+
     logger.info("ML sidecar started")
-    yield
-    await close_app_services(services)
-    logger.info("ML sidecar shutdown")
+
+    try:
+        yield
+    finally:
+        await close_app_services(services)
+        logger.info("ML sidecar shutdown")
 
 
 def create_app() -> FastAPI:
@@ -47,8 +54,10 @@ def create_app() -> FastAPI:
             if request.url.path in {"/health", "/ready"}:
                 return await call_next(request)
             token = request.headers.get("X-Internal-Token", "")
+            if not settings.internal_token:
+                  return JSONResponse({"detail": "internal token is not configured"}, status_code=503)
             if token != settings.internal_token:
-                return JSONResponse({"detail": "unauthorized"}, status_code=401)
+                  return JSONResponse({"detail": "unauthorized"}, status_code=401)
             return await call_next(request)
 
     @application.middleware("http")

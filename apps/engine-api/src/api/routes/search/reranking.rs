@@ -136,7 +136,7 @@ pub(crate) fn apply_behavior_scoring(
             .as_ref()
             .map(|variant| variant.source.as_str());
         let role_family = state.search_ranking.infer_role_family(&ranked.job);
-        let adjustment = behavior_service.score_job(aggregates, source, role_family.as_deref());
+        let adjustment = behavior_service.score_job_behavior(aggregates, source, role_family.as_deref());
 
         if adjustment.score_delta == 0 {
             continue;
@@ -178,7 +178,7 @@ pub(crate) fn apply_learned_reranking(
             .get(&ranked.job.job.id)
             .copied()
             .unwrap_or(ranked.fit.score);
-        let learned_score = learned_reranker.score_job(
+        let learned_score = learned_reranker.score_job_learned(
             deterministic_score,
             source,
             role_family.as_deref(),

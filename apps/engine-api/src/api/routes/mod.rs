@@ -27,12 +27,15 @@ pub fn public_router() -> Router<AppState> {
         .route("/api/v1/ping", get(health::ping))
 }
 
+pub fn internal_router() -> Router<AppState> {
+    Router::new().route(
+        "/api/v1/debug/reranker-status",
+        get(debug::get_reranker_status),
+    )
+}
+
 pub fn protected_router() -> Router<AppState> {
     Router::new()
-        .route(
-            "/api/v1/debug/reranker-status",
-            get(debug::get_reranker_status),
-        )
         .route(
             "/api/v1/applications/recent",
             get(applications::get_recent_applications),

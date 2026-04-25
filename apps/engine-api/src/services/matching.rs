@@ -165,7 +165,7 @@ impl SearchMatchingService {
                 continue;
             }
 
-            let fit = self.score_job(search_profile, &job);
+            let fit = self.score_job_deterministic(search_profile, &job);
             ranked_jobs.push(RankedJob { job, fit });
         }
 
@@ -187,7 +187,7 @@ impl SearchMatchingService {
         }
     }
 
-    pub fn score_job(&self, search_profile: &SearchProfile, job: &JobView) -> JobFit {
+    pub fn score_job_deterministic(&self, search_profile: &SearchProfile, job: &JobView) -> JobFit {
         let prepared_text = PreparedText::new(&build_searchable_text(job));
         let target_roles = collect_target_roles(search_profile);
         let role_alignment = analyze_role_alignment(search_profile, &prepared_text, &target_roles);

@@ -90,7 +90,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use axum::middleware;
-    use axum::response::Response;
+    use axum::response::{IntoResponse, Response};
     use axum::routing::get;
     use axum::Router;
     use tower::util::ServiceExt;

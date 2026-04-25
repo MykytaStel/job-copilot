@@ -17,6 +17,8 @@ pub struct Config {
     pub ml_retrain_threshold: usize,
     pub ml_retrain_poll_interval_seconds: u64,
     pub jwt_secret: Option<String>,
+    pub cors_allowed_origins: Vec<String>,
+    pub metrics_port: u16,
 }
 
 impl Config {
@@ -94,6 +96,27 @@ impl Config {
             .ok()
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
+        let cors_allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS")
+            .ok()
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(|origin| origin.trim().to_string())
+                    .filter(|origin| !origin.is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|origins| !origins.is_empty())
+            .unwrap_or_else(|| {
+                vec![
+                    "http://localhost:5173".to_string(),
+                    "http://127.0.0.1:5173".to_string(),
+                ]
+            });
+
+        let metrics_port = std::env::var("METRICS_PORT")
+            .ok()
+            .and_then(|value| value.parse::<u16>().ok())
+            .unwrap_or(9090);
 
         Self {
             port,
@@ -109,6 +132,8 @@ impl Config {
             ml_retrain_threshold,
             ml_retrain_poll_interval_seconds,
             jwt_secret,
+            cors_allowed_origins,
+            metrics_port,
         }
     }
 }

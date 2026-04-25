@@ -169,7 +169,7 @@ impl LearnedRerankerService {
         }
     }
 
-    pub fn score_job(
+    pub fn score_job_learned(
         &self,
         deterministic_score: u8,
         source: Option<&str>,
@@ -206,7 +206,7 @@ impl LearnedRerankerService {
         let mut evaluations = candidates
             .into_iter()
             .map(|candidate| {
-                let learned_score = self.score_job(
+                let learned_score = self.score_job_learned(
                     candidate.deterministic_score,
                     candidate.source.as_deref(),
                     candidate.role_family.as_deref(),
@@ -408,7 +408,7 @@ mod tests {
             .application_created_count_by_source
             .insert("djinni".to_string(), 1);
 
-        let score = service.score_job(
+        let score = service.score_job_learned(
             72,
             Some("djinni"),
             None,
@@ -438,7 +438,7 @@ mod tests {
             .bad_fit_count_by_source
             .insert("work_ua".to_string(), 2);
 
-        let score = service.score_job(
+        let score = service.score_job_learned(
             72,
             Some("work_ua"),
             None,
@@ -468,7 +468,7 @@ mod tests {
             .application_created_count_by_role_family
             .insert("product".to_string(), 1);
 
-        let score = service.score_job(
+        let score = service.score_job_learned(
             68,
             None,
             Some("product"),
@@ -498,7 +498,7 @@ mod tests {
             .bad_fit_count_by_role_family
             .insert("sales".to_string(), 3);
 
-        let score = service.score_job(
+        let score = service.score_job_learned(
             68,
             None,
             Some("sales"),

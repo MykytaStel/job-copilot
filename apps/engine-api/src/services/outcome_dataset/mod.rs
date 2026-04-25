@@ -79,17 +79,17 @@ impl OutcomeDatasetService {
                     .map(String::as_str),
             );
 
-            let fit = search_ranking_service.score_job(&search_profile, &job);
+            let fit = search_ranking_service.score_job_deterministic(&search_profile, &job);
             let source = job
                 .primary_variant
                 .as_ref()
                 .map(|variant| variant.source.clone());
             let role_family = search_ranking_service.infer_role_family(&job);
             let behavior_adjustment =
-                behavior_service.score_job(behavior, source.as_deref(), role_family.as_deref());
+                behavior_service.score_job_behavior(behavior, source.as_deref(), role_family.as_deref());
             let behavior_score =
                 (fit.score as i16 + behavior_adjustment.score_delta).clamp(0, 100) as u8;
-            let learned_score = learned_reranker.score_job(
+            let learned_score = learned_reranker.score_job_learned(
                 fit.score,
                 source.as_deref(),
                 role_family.as_deref(),

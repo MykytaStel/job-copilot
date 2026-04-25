@@ -1,5 +1,5 @@
 import { mlRequest } from '../client';
-import { logUserEvent } from '../events';
+import { fireEvent } from '../events';
 
 import {
   buildAnalyzedProfilePayload,
@@ -47,7 +47,7 @@ export function mapInterviewPrepResponse(
 export async function getInterviewPrep(
   payload: InterviewPrepRequest,
 ): Promise<InterviewPrep> {
-  void logUserEvent(payload.profileId, {
+  fireEvent(payload.profileId, {
     eventType: 'interview_prep_requested',
     jobId: payload.rankedJob.id,
     payloadJson: {
@@ -58,7 +58,7 @@ export async function getInterviewPrep(
       has_cover_letter_draft: Boolean(payload.coverLetterDraft),
       has_raw_profile_text: Boolean(payload.rawProfileText),
     },
-  }).catch(() => null);
+  });
 
   const response = await mlRequest<MlInterviewPrepResponse>('/v1/enrichment/interview-prep', {
     method: 'POST',

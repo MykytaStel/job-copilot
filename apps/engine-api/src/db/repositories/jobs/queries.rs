@@ -149,40 +149,6 @@ impl JobsRepository {
         Ok(row.map(JobView::from))
     }
 
-    #[allow(dead_code)]
-    pub async fn list_recent(&self, limit: i64) -> Result<Vec<Job>, RepositoryError> {
-        let Some(pool) = self.database.pool() else {
-            return Err(RepositoryError::DatabaseDisabled);
-        };
-
-        let rows = sqlx::query_as::<_, JobRow>(
-            r#"
-            SELECT
-                id,
-                title,
-                company_name,
-                location,
-                remote_type,
-                seniority,
-                description_text,
-                salary_min,
-                salary_max,
-                salary_currency,
-                posted_at::text AS posted_at,
-                last_seen_at::text AS last_seen_at,
-                is_active
-            FROM jobs
-            ORDER BY last_seen_at DESC, posted_at DESC NULLS LAST
-            LIMIT $1
-            "#,
-        )
-        .bind(limit)
-        .fetch_all(pool)
-        .await?;
-
-        Ok(rows.into_iter().map(Job::from).collect())
-    }
-
     pub async fn list_filtered_views(
         &self,
         limit: i64,
@@ -368,28 +334,9 @@ impl JobsRepository {
             FROM jobs
             WHERE
                 is_active = TRUE
-                AND to_tsvector(
-                    'simple',
-                    concat_ws(
-                        ' ',
-                        coalesce(title, ''),
-                        coalesce(company_name, ''),
-                        coalesce(description_text, '')
-                    )
-                ) @@ plainto_tsquery('simple', $1)
+                AND search_vector @@ plainto_tsquery('simple', $1)
             ORDER BY
-                ts_rank_cd(
-                    to_tsvector(
-                        'simple',
-                        concat_ws(
-                            ' ',
-                            coalesce(title, ''),
-                            coalesce(company_name, ''),
-                            coalesce(description_text, '')
-                        )
-                    ),
-                    plainto_tsquery('simple', $1)
-                ) DESC,
+                ts_rank_cd(search_vector, plainto_tsquery('simple', $1)) DESC,
                 last_seen_at DESC,
                 posted_at DESC NULLS LAST
             LIMIT $2

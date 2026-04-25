@@ -25,7 +25,7 @@ pub async fn list_notifications(
     Query(query): Query<NotificationsQuery>,
 ) -> Result<axum::Json<NotificationsResponse>, ApiError> {
     let profile_id = validate_profile_id(query.profile_id)?;
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, None, &profile_id).await?;
 
     let limit = query.limit.unwrap_or(20);
     if !(1..=100).contains(&limit) {
@@ -70,7 +70,7 @@ pub async fn get_unread_count(
     Query(query): Query<NotificationUnreadCountQuery>,
 ) -> Result<axum::Json<UnreadNotificationsCountResponse>, ApiError> {
     let profile_id = validate_profile_id(query.profile_id)?;
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, None, &profile_id).await?;
 
     let unread_count = state
         .notifications_service
