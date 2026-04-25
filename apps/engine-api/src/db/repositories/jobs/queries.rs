@@ -1,7 +1,7 @@
 use crate::db::repositories::RepositoryError;
 use crate::domain::analytics::model::{JobSourceCount, SalaryBucket};
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
-use sqlx::FromRow;
+use sqlx::{FromRow, Postgres, QueryBuilder};
 
 use super::JobsRepository;
 use super::rows::{JobFeedSummaryRow, JobRow, JobViewRow};
@@ -170,7 +170,7 @@ impl JobsRepository {
             _ => None,
         };
 
-        let mut builder = sqlx::QueryBuilder::new(JOB_VIEW_BASE_SELECT);
+        let mut builder = QueryBuilder::<Postgres>::new(JOB_VIEW_BASE_SELECT);
         let mut has_where = false;
 
         if let Some(cond) = lifecycle_cond {
