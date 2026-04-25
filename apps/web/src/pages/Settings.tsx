@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Bell,
@@ -20,14 +21,35 @@ import { Page } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { SurfaceMetric } from '../components/ui/Surface';
 import { readProfileId } from '../lib/profileSession';
+import {
+  readNotificationPrefs,
+  writeNotificationPrefs,
+  type NotificationPrefKey,
+} from '../lib/notificationPrefs';
 import { queryKeys } from '../queryKeys';
 import { buildProfileCompletionState } from '../features/profile/profileCompletion';
 
 const NOTIFICATION_PREVIEW_LIMIT = 20;
 
+const NOTIF_LABELS: Record<NotificationPrefKey, string> = {
+  new_jobs_found: 'New jobs found',
+  job_reactivated: 'Job reactivated',
+  application_due_soon: 'Application due soon',
+};
+
 export default function Settings() {
   const navigate = useNavigate();
   const profileId = readProfileId();
+  const [notifPrefs, setNotifPrefs] = useState(() =>
+    profileId ? readNotificationPrefs(profileId) : null,
+  );
+
+  function toggleNotifPref(key: NotificationPrefKey) {
+    if (!profileId || !notifPrefs) return;
+    const updated = { ...notifPrefs, [key]: !notifPrefs[key] };
+    setNotifPrefs(updated);
+    writeNotificationPrefs(profileId, updated);
+  }
   const { data: profile } = useQuery({
     queryKey: queryKeys.profile.root(),
     queryFn: getProfile,
@@ -39,7 +61,7 @@ export default function Settings() {
   });
   const { data: notifications = [] } = useQuery({
     queryKey: queryKeys.notifications.list(profileId ?? 'none', NOTIFICATION_PREVIEW_LIMIT),
-    queryFn: () => getNotifications(profileId ?? undefined, NOTIFICATION_PREVIEW_LIMIT),
+    queryFn: () => getNotifications(NOTIFICATION_PREVIEW_LIMIT),
     enabled: !!profileId,
   });
 
@@ -237,7 +259,38 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-3">
               <SettingRow label="Unread inbox items" value={String(unreadCount)} />
-              <SettingRow label="Dedicated notification prefs" value="Not implemented yet" />
+              {notifPrefs && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Show in dashboard
+                  </p>
+                  {(Object.keys(NOTIF_LABELS) as NotificationPrefKey[]).map((key) => (
+                    <label
+                      key={key}
+                      className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border/40 bg-surface-muted px-3 py-2"
+                    >
+                      <span className="text-sm text-foreground">{NOTIF_LABELS[key]}</span>
+                      <button
+                        role="switch"
+                        aria-checked={notifPrefs[key]}
+                        onClick={() => toggleNotifPref(key)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                          notifPrefs[key] ? 'bg-primary' : 'bg-surface-soft'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                            notifPrefs[key] ? 'translate-x-4' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                    </label>
+                  ))}
+                  <p className="text-[11px] text-muted-foreground/70">
+                    Stored locally. Backend notification routing coming soon.
+                  </p>
+                </div>
+              )}
               <Button variant="outline" onClick={() => navigate('/notifications')}>
                 Open notifications
               </Button>

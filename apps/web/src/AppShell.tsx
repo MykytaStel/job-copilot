@@ -6,6 +6,7 @@ import { cn } from './lib/cn';
 import { AppShellDesktopSidebar } from './app-shell/AppShellDesktopSidebar';
 import { AppShellMobileNav } from './app-shell/AppShellMobileNav';
 import { AppShellTopHeader } from './app-shell/AppShellTopHeader';
+import { MlDegradedBanner } from './app-shell/MlDegradedBanner';
 import { RouteSkeleton } from './app-shell/RouteSkeleton';
 import { useAppShell } from './app-shell/useAppShell';
 
@@ -43,6 +44,9 @@ export default function AppShell() {
         )}
       >
         <div className="p-4 lg:p-8 xl:p-10">
+          {state.mlDegraded && (
+            <MlDegradedBanner onDismiss={state.dismissMlBanner} />
+          )}
           <Suspense fallback={<RouteSkeleton />}>
             <Outlet />
           </Suspense>

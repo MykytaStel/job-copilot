@@ -75,6 +75,7 @@ export const queryKeys = {
   },
   ml: {
     all: () => ['ml'] as const,
+    ready: () => ['ml', 'ready'] as const,
     rerankPrefix: (profileId: string) => ['ml', 'rerank', profileId] as const,
     rerank: (profileId: string, jobsKey: string) => ['ml', 'rerank', profileId, jobsKey] as const,
     fitPrefix: (profileId: string) => ['ml', 'fit', profileId] as const,

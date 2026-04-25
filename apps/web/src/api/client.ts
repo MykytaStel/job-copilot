@@ -5,6 +5,7 @@ import {
   withProfileIdQuery as appendProfileIdQuery,
   writeProfileId,
 } from '../lib/profileSession';
+import { buildAuthHeaders } from '../lib/authSession';
 
 const API_URL = import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
 const ML_URL = import.meta.env.VITE_ML_URL?.trim() || 'http://localhost:8000';
@@ -24,7 +25,10 @@ export async function mlRequest<T>(path: string, init?: RequestInit): Promise<T>
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, init);
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: { ...buildAuthHeaders(), ...(init?.headers as Record<string, string>) },
+  });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as EngineApiError;
     throw new Error(body.message ?? body.code ?? `HTTP ${res.status}`);
@@ -34,7 +38,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function requestOptional<T>(path: string, init?: RequestInit): Promise<T | undefined> {
-  const res = await fetch(`${API_URL}${path}`, init);
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: { ...buildAuthHeaders(), ...(init?.headers as Record<string, string>) },
+  });
   if (res.status === 404) {
     return undefined;
   }

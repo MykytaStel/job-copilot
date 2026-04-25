@@ -1,4 +1,5 @@
-import { json, readStoredProfileId, request } from './client';
+import { json, request } from './client';
+import { hasToken } from '../lib/authSession';
 import type {
   EngineNotification,
   EngineNotificationsResponse,
@@ -31,19 +32,11 @@ function mapNotification(notification: EngineNotification): AppNotification {
   };
 }
 
-export async function getNotifications(
-  profileId?: string,
-  limit: number = 20,
-): Promise<AppNotification[]> {
-  const resolvedId = profileId ?? readStoredProfileId() ?? undefined;
-  if (!resolvedId) {
-    return [];
-  }
+export async function getNotifications(limit: number = 20): Promise<AppNotification[]> {
+  if (!hasToken()) return [];
 
   const response = await request<EngineNotificationsResponse>(
-    `/api/v1/notifications?profile_id=${encodeURIComponent(
-      resolvedId,
-    )}&limit=${encodeURIComponent(String(limit))}`,
+    `/api/v1/notifications?limit=${encodeURIComponent(String(limit))}`,
   );
 
   return response.notifications.map(mapNotification);
@@ -58,14 +51,11 @@ export async function markNotificationRead(id: string): Promise<AppNotification>
   return mapNotification(notification);
 }
 
-export async function getUnreadCount(profileId?: string): Promise<number> {
-  const resolvedId = profileId ?? readStoredProfileId() ?? undefined;
-  if (!resolvedId) {
-    return 0;
-  }
+export async function getUnreadCount(): Promise<number> {
+  if (!hasToken()) return 0;
 
   const response = await request<EngineUnreadNotificationsCountResponse>(
-    `/api/v1/notifications/unread-count?profile_id=${encodeURIComponent(resolvedId)}`,
+    `/api/v1/notifications/unread-count`,
   );
 
   return response.unread_count;

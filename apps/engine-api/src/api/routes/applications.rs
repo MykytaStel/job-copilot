@@ -1,3 +1,4 @@
+use axum::Extension;
 use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 use serde_json::json;
@@ -9,6 +10,7 @@ use crate::api::dto::applications::{
     RecentApplicationsResponse, UpdateApplicationRequest, UpsertOfferRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
+use crate::api::middleware::auth::AuthUser;
 use crate::api::routes::events::{load_job_event_metadata, log_user_event_softly};
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
@@ -40,6 +42,7 @@ pub async fn get_application_by_id(
 
 pub async fn get_recent_applications(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Query(query): Query<RecentApplicationsQuery>,
 ) -> Result<axum::Json<RecentApplicationsResponse>, ApiError> {
     let limit = query.limit.unwrap_or(20);
@@ -48,9 +51,10 @@ pub async fn get_recent_applications(
         return Err(ApiError::invalid_limit(limit));
     }
 
+    let profile_id = auth.as_ref().map(|a| a.profile_id.as_str());
     let applications = state
         .applications_service
-        .list_recent(limit)
+        .list_recent(limit, profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "applications_query_failed"))?;
 

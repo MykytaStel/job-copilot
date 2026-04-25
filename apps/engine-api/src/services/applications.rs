@@ -72,13 +72,17 @@ impl ApplicationsService {
         }
     }
 
-    pub async fn list_recent(&self, limit: i64) -> Result<Vec<Application>, RepositoryError> {
+    pub async fn list_recent(
+        &self,
+        limit: i64,
+        profile_id: Option<&str>,
+    ) -> Result<Vec<Application>, RepositoryError> {
         match &self.backend {
             ApplicationsServiceBackend::Repository(repository) => {
-                repository.list_recent(limit).await
+                repository.list_recent(limit, profile_id).await
             }
             #[cfg(test)]
-            ApplicationsServiceBackend::Stub(stub) => stub.list_recent(limit),
+            ApplicationsServiceBackend::Stub(stub) => stub.list_recent(limit, profile_id),
         }
     }
 

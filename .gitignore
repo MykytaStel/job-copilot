@@ -27,9 +27,10 @@ venv/
 apps/ml/reranker-dataset.json
 apps/ml/models/
 apps/ml/reports/
+apps/ml/.runtime/
 
 .DS_Store
 __MACOSX/
 
 .claude/settings.local.json
-design-reference/
+design-reference/apps/web/tsconfig.app.tsbuildinfo

@@ -1,30 +1,25 @@
-use axum::extract::{Path, Query, State};
+use axum::extract::{Extension, Path, Query, State};
 use serde::Deserialize;
-use serde_json::json;
 
 use crate::api::dto::notifications::{
     NotificationResponse, NotificationsResponse, UnreadNotificationsCountResponse,
 };
 use crate::api::error::ApiError;
+use crate::api::middleware::auth::AuthUser;
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::state::AppState;
 
 #[derive(Debug, Default, Deserialize)]
 pub struct NotificationsQuery {
-    pub profile_id: Option<String>,
     pub limit: Option<i64>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub struct NotificationUnreadCountQuery {
-    pub profile_id: Option<String>,
 }
 
 pub async fn list_notifications(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Query(query): Query<NotificationsQuery>,
 ) -> Result<axum::Json<NotificationsResponse>, ApiError> {
-    let profile_id = validate_profile_id(query.profile_id)?;
+    let profile_id = require_profile_id(auth.as_deref())?;
     ensure_profile_exists(&state, None, &profile_id).await?;
 
     let limit = query.limit.unwrap_or(20);
@@ -67,9 +62,9 @@ pub async fn mark_notification_read(
 
 pub async fn get_unread_count(
     State(state): State<AppState>,
-    Query(query): Query<NotificationUnreadCountQuery>,
+    auth: Option<Extension<AuthUser>>,
 ) -> Result<axum::Json<UnreadNotificationsCountResponse>, ApiError> {
-    let profile_id = validate_profile_id(query.profile_id)?;
+    let profile_id = require_profile_id(auth.as_deref())?;
     ensure_profile_exists(&state, None, &profile_id).await?;
 
     let unread_count = state
@@ -84,33 +79,20 @@ pub async fn get_unread_count(
     }))
 }
 
-fn validate_profile_id(value: Option<String>) -> Result<String, ApiError> {
-    let profile_id = value
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            ApiError::bad_request_with_details(
-                "invalid_profile_id",
-                "Query parameter 'profile_id' is required",
-                json!({ "field": "profile_id" }),
-            )
-        })?;
-
-    Ok(profile_id.to_string())
+fn require_profile_id(auth: Option<&AuthUser>) -> Result<String, ApiError> {
+    auth.map(|u| u.profile_id.clone())
+        .ok_or_else(|| ApiError::unauthorized("auth_required", "Authentication is required"))
 }
 
 #[cfg(test)]
 mod tests {
     use axum::body;
-    use axum::extract::{Path, Query, State};
+    use axum::extract::{Extension, Path, Query, State};
     use axum::response::IntoResponse;
     use serde_json::{Value, json};
 
-    use super::{
-        NotificationUnreadCountQuery, NotificationsQuery, get_unread_count, list_notifications,
-        mark_notification_read,
-    };
+    use super::{NotificationsQuery, get_unread_count, list_notifications, mark_notification_read};
+    use crate::api::middleware::auth::AuthUser;
     use crate::domain::notification::model::{Notification, NotificationType};
     use crate::domain::profile::model::Profile;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
@@ -193,10 +175,10 @@ mod tests {
         let payload = parse_json_response(
             list_notifications(
                 State(state),
-                Query(NotificationsQuery {
-                    profile_id: Some("profile-1".to_string()),
-                    limit: Some(20),
-                }),
+                Some(Extension(AuthUser {
+                    profile_id: "profile-1".to_string(),
+                })),
+                Query(NotificationsQuery { limit: Some(20) }),
             )
             .await
             .expect("notifications list should succeed"),
@@ -244,9 +226,9 @@ mod tests {
         let payload = parse_json_response(
             get_unread_count(
                 State(state),
-                Query(NotificationUnreadCountQuery {
-                    profile_id: Some("profile-1".to_string()),
-                }),
+                Some(Extension(AuthUser {
+                    profile_id: "profile-1".to_string(),
+                })),
             )
             .await
             .expect("unread count should succeed"),

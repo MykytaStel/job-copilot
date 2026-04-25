@@ -1,25 +1,65 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
+import { getMlReady, isMlDegraded } from '../api/ml-health';
 import { getUnreadCount } from '../api/notifications';
 import { getProfile } from '../api/profiles';
+import { hasToken } from '../lib/authSession';
 import { queryKeys } from '../queryKeys';
 import { navigation } from './navigation';
+
+const ONBOARDING_KEY = (profileId: string) => `jc_onboarding_seen_${profileId}`;
+
+function hasSeenOnboarding(profileId: string) {
+  return !!window.localStorage.getItem(ONBOARDING_KEY(profileId));
+}
+
+export function markOnboardingSeen(profileId: string) {
+  window.localStorage.setItem(ONBOARDING_KEY(profileId), '1');
+}
 
 export function useAppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [mlBannerDismissed, setMlBannerDismissed] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: queryKeys.profile.root(),
     queryFn: getProfile,
   });
 
+  useEffect(() => {
+    if (!profileLoading && !profile && !hasToken()) {
+      navigate('/auth', { replace: true });
+      return;
+    }
+    if (
+      profile &&
+      !profile.summary &&
+      profile.skills.length === 0 &&
+      !hasSeenOnboarding(profile.id) &&
+      location.pathname !== '/setup'
+    ) {
+      navigate('/setup', { replace: true });
+    }
+  }, [profile, profileLoading, navigate, location.pathname]);
+
+  const { data: mlReady } = useQuery({
+    queryKey: queryKeys.ml.ready(),
+    queryFn: getMlReady,
+    refetchInterval: 60_000,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const mlDegraded = mlReady ? isMlDegraded(mlReady) : false;
+
   const { data: unreadCount = 0 } = useQuery({
     queryKey: queryKeys.notifications.unreadCount(profile?.id ?? 'none'),
-    queryFn: () => getUnreadCount(profile?.id),
+    queryFn: () => getUnreadCount(),
     enabled: !!profile?.id,
     staleTime: 30_000,
   });
@@ -46,6 +86,8 @@ export function useAppShell() {
     profileLoading,
     unreadCount,
     activeNavItem,
+    mlDegraded: mlDegraded && !mlBannerDismissed,
+    dismissMlBanner: () => setMlBannerDismissed(true),
   };
 }
 

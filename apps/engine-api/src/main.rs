@@ -37,7 +37,8 @@ async fn main() {
     );
     let routers = api::build_routers(state);
 
-    let internal_listener = TcpListener::bind("127.0.0.1:9090")
+    let internal_address = format!("0.0.0.0:{}", config.metrics_port);
+    let internal_listener = TcpListener::bind(&internal_address)
         .await
         .expect("Failed to bind internal listener");
     tokio::spawn(async move {

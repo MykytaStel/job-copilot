@@ -99,7 +99,11 @@ impl ApplicationsServiceStub {
             .cloned())
     }
 
-    pub(crate) fn list_recent(&self, limit: i64) -> Result<Vec<Application>, RepositoryError> {
+    pub(crate) fn list_recent(
+        &self,
+        limit: i64,
+        _profile_id: Option<&str>,
+    ) -> Result<Vec<Application>, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }

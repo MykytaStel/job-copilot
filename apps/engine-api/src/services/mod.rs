@@ -24,5 +24,6 @@ pub mod salary;
 pub mod search_profile;
 pub mod search_profile_builder;
 pub mod search_ranking;
+pub mod tokens;
 pub mod trained_reranker;
 pub mod user_events;

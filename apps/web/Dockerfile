@@ -13,10 +13,13 @@ COPY apps/web/ ./apps/web/
 
 RUN pnpm install --frozen-lockfile
 
-# VITE_ENGINE_API_URL is baked into the static bundle at build time.
-# It must be the URL the user's browser can reach — not the internal Docker hostname.
+# VITE_* vars are baked into the static bundle at build time.
+# They must be URLs the browser can reach — not internal Docker hostnames.
+# When behind the nginx gateway both resolve to relative paths on the same origin.
 ARG VITE_ENGINE_API_URL=http://localhost:8080
+ARG VITE_ML_URL=http://localhost:8000
 ENV VITE_ENGINE_API_URL=$VITE_ENGINE_API_URL
+ENV VITE_ML_URL=$VITE_ML_URL
 
 RUN pnpm --filter @job-copilot/web build
 
