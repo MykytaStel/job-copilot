@@ -155,8 +155,8 @@ fn matching_role_and_terms_score_higher_than_unrelated_job() {
         "djinni",
     );
 
-    let matching_fit = service.score_job(&profile, &matching_job);
-    let unrelated_fit = service.score_job(&profile, &unrelated_job);
+    let matching_fit = service.score_job_deterministic(&profile, &matching_job);
+    let unrelated_fit = service.score_job_deterministic(&profile, &unrelated_job);
 
     assert!(matching_fit.score > unrelated_fit.score);
     assert!(
@@ -248,8 +248,8 @@ fn search_terms_contribute_to_score() {
         "djinni",
     );
 
-    let matching_terms_fit = service.score_job(&profile, &matching_terms_job);
-    let missing_terms_fit = service.score_job(&profile, &missing_terms_job);
+    let matching_terms_fit = service.score_job_deterministic(&profile, &matching_terms_job);
+    let missing_terms_fit = service.score_job_deterministic(&profile, &missing_terms_job);
 
     assert!(matching_terms_fit.score > missing_terms_fit.score);
     assert!(
@@ -277,8 +277,8 @@ fn seniority_mismatch_lowers_score() {
         ..matching_job.clone()
     };
 
-    let matching_fit = service.score_job(&profile, &matching_job);
-    let junior_fit = service.score_job(&profile, &junior_job);
+    let matching_fit = service.score_job_deterministic(&profile, &matching_job);
+    let junior_fit = service.score_job_deterministic(&profile, &junior_job);
 
     assert!(matching_fit.score > junior_fit.score);
     assert!(
@@ -315,9 +315,9 @@ fn role_family_overlap_gives_partial_credit() {
         "djinni",
     );
 
-    let exact_fit = service.score_job(&profile, &exact_job);
-    let partial_fit = service.score_job(&profile, &partial_job);
-    let unrelated_fit = service.score_job(&profile, &unrelated_job);
+    let exact_fit = service.score_job_deterministic(&profile, &exact_job);
+    let partial_fit = service.score_job_deterministic(&profile, &partial_job);
+    let unrelated_fit = service.score_job_deterministic(&profile, &unrelated_job);
 
     assert!(exact_fit.score > partial_fit.score);
     assert!(partial_fit.score > unrelated_fit.score);
@@ -348,8 +348,8 @@ fn exclude_terms_lower_score() {
         "djinni",
     );
 
-    let clean_fit = service.score_job(&profile, &clean_job);
-    let excluded_fit = service.score_job(&profile, &excluded_job);
+    let clean_fit = service.score_job_deterministic(&profile, &clean_job);
+    let excluded_fit = service.score_job_deterministic(&profile, &excluded_job);
 
     assert!(clean_fit.score > excluded_fit.score);
     assert!(
@@ -385,7 +385,7 @@ fn explanations_include_positive_and_negative_reasons() {
         )
     };
 
-    let fit = service.score_job(&profile, &job);
+    let fit = service.score_job_deterministic(&profile, &job);
 
     assert!(
         fit.reasons
@@ -455,7 +455,7 @@ fn canonical_frontend_terms_survive_matching_and_explanations() {
         "djinni",
     );
 
-    let fit = service.score_job(&profile, &job);
+    let fit = service.score_job_deterministic(&profile, &job);
 
     assert!(fit.score >= 70);
     assert!(fit.matched_roles.contains(&RoleId::FrontendEngineer));
@@ -496,7 +496,7 @@ fn react_native_matching_keeps_phrase_safe_internal_tokens_internal() {
         ..base
     };
 
-    let fit = service.score_job(&profile, &job);
+    let fit = service.score_job_deterministic(&profile, &job);
 
     assert!(fit.score >= 70);
     assert!(fit.matched_roles.contains(&RoleId::MobileEngineer));
@@ -528,8 +528,8 @@ fn frontend_react_overlap_beats_generic_engineering_overlap() {
         "djinni",
     );
 
-    let strong_fit = service.score_job(&profile, &strong_match);
-    let weak_fit = service.score_job(&profile, &weak_match);
+    let strong_fit = service.score_job_deterministic(&profile, &strong_match);
+    let weak_fit = service.score_job_deterministic(&profile, &weak_match);
 
     assert!(strong_fit.score > weak_fit.score);
     assert!(
@@ -568,7 +568,7 @@ fn non_contiguous_frontend_search_phrase_matches_canonical_frontend_term() {
         "djinni",
     );
 
-    let fit = service.score_job(&profile, &job);
+    let fit = service.score_job_deterministic(&profile, &job);
 
     assert!(fit.score >= 70);
     assert!(
@@ -597,8 +597,8 @@ fn backend_platform_overlap_prefers_engineering_stack_signals() {
         "djinni",
     );
 
-    let platform_fit = service.score_job(&profile, &platform_job);
-    let generic_fit = service.score_job(&profile, &generic_job);
+    let platform_fit = service.score_job_deterministic(&profile, &platform_job);
+    let generic_fit = service.score_job_deterministic(&profile, &generic_job);
 
     assert!(platform_fit.score > generic_fit.score);
     assert!(platform_fit.matched_skills.contains(&"rust".to_string()));
@@ -647,8 +647,8 @@ fn stale_job_scores_lower_than_fresh_identical_job() {
         ..base.clone()
     };
 
-    let fresh_fit = service.score_job(&profile, &fresh_job);
-    let stale_fit = service.score_job(&profile, &stale_job);
+    let fresh_fit = service.score_job_deterministic(&profile, &fresh_job);
+    let stale_fit = service.score_job_deterministic(&profile, &stale_job);
 
     assert!(
         fresh_fit.score > stale_fit.score,
@@ -677,7 +677,7 @@ fn missing_signals_stay_specific_and_drop_generic_noise() {
         "djinni",
     );
 
-    let fit = service.score_job(&profile, &weak_job);
+    let fit = service.score_job_deterministic(&profile, &weak_job);
 
     assert!(fit.missing_signals.contains(&"react".to_string()));
     assert!(fit.missing_signals.contains(&"typescript".to_string()));

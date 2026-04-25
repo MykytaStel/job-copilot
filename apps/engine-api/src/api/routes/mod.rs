@@ -21,14 +21,21 @@ use axum::{Router, routing::get, routing::patch, routing::post, routing::put};
 
 use crate::state::AppState;
 
-pub fn router() -> Router<AppState> {
+pub fn public_router() -> Router<AppState> {
     Router::new()
         .route("/health", get(health::health))
         .route("/api/v1/ping", get(health::ping))
-        .route(
-            "/api/v1/debug/reranker-status",
-            get(debug::get_reranker_status),
-        )
+}
+
+pub fn internal_router() -> Router<AppState> {
+    Router::new().route(
+        "/api/v1/debug/reranker-status",
+        get(debug::get_reranker_status),
+    )
+}
+
+pub fn protected_router() -> Router<AppState> {
+    Router::new()
         .route(
             "/api/v1/applications/recent",
             get(applications::get_recent_applications),

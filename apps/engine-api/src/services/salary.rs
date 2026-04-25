@@ -156,4 +156,76 @@ mod tests {
             Some("Salary range is below the profile target")
         );
     }
+
+    #[test]
+    fn returns_zero_when_no_expectation_set() {
+        let score = score_search_salary(None, &job());
+        assert_eq!(score.score_delta, 0);
+        assert!(score.reason.is_none());
+    }
+
+    #[test]
+    fn returns_zero_when_job_has_no_salary_data() {
+        let mut no_salary_job = job();
+        no_salary_job.salary_min = None;
+        no_salary_job.salary_max = None;
+
+        let score = score_search_salary(
+            Some(&SearchSalaryExpectation {
+                min: Some(4000),
+                max: Some(6000),
+                currency: "USD".to_string(),
+            }),
+            &no_salary_job,
+        );
+
+        assert_eq!(score.score_delta, 0);
+        assert!(score.reason.is_none());
+    }
+
+    #[test]
+    fn partial_overlap_scales_score_proportionally() {
+        // job range 2000-5000 USD, candidate wants 4000-6000 USD
+        // overlap = 5000-4000 = 1000, job_range = 3000
+        // ratio ≈ 0.333 → round(0.333 * 8) = 3
+        let mut partial_job = job();
+        partial_job.salary_min = Some(2000);
+        partial_job.salary_max = Some(5000);
+
+        let score = score_search_salary(
+            Some(&SearchSalaryExpectation {
+                min: Some(4000),
+                max: Some(6000),
+                currency: "USD".to_string(),
+            }),
+            &partial_job,
+        );
+
+        assert_eq!(score.score_delta, 3);
+        assert_eq!(
+            score.reason.as_deref(),
+            Some("Salary range overlaps the profile target")
+        );
+    }
+
+    #[test]
+    fn uah_salary_is_normalized_before_comparison() {
+        // 200 000-280 000 UAH ÷ 41 ≈ 4878-6829 USD
+        // job_min_usd (≈4878) >= candidate_min (4000) → full boost
+        let mut uah_job = job();
+        uah_job.salary_min = Some(200_000);
+        uah_job.salary_max = Some(280_000);
+        uah_job.salary_currency = Some("UAH".to_string());
+
+        let score = score_search_salary(
+            Some(&SearchSalaryExpectation {
+                min: Some(4000),
+                max: Some(6000),
+                currency: "USD".to_string(),
+            }),
+            &uah_job,
+        );
+
+        assert_eq!(score.score_delta, 8);
+    }
 }

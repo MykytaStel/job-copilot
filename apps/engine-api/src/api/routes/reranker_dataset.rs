@@ -1,7 +1,9 @@
+use axum::Extension;
 use axum::extract::{Path, State};
 
 use crate::api::dto::reranker_dataset::OutcomeDatasetResponse;
 use crate::api::error::ApiError;
+use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 use crate::api::routes::jobs::load_feedback_state;
 use crate::services::behavior::BehaviorService;
 use crate::services::funnel::FunnelService;
@@ -12,8 +14,10 @@ use crate::state::AppState;
 
 pub async fn get_reranker_dataset(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<OutcomeDatasetResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     let Some(profile) = state
         .profile_records
         .get_by_id(&profile_id)
@@ -289,7 +293,7 @@ mod tests {
                     )),
             ));
 
-        let response = get_reranker_dataset(State(state), Path("profile-1".to_string()))
+        let response = get_reranker_dataset(State(state), None, Path("profile-1".to_string()))
             .await
             .expect("dataset export should succeed")
             .into_response();
@@ -349,7 +353,7 @@ mod tests {
     async fn reranker_dataset_requires_profile_analysis() {
         let state = base_state(sample_profile(None));
 
-        let response = get_reranker_dataset(State(state), Path("profile-1".to_string()))
+        let response = get_reranker_dataset(State(state), None, Path("profile-1".to_string()))
             .await
             .expect_err("dataset export should require analysis")
             .into_response();

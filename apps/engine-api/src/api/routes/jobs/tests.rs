@@ -210,6 +210,7 @@ async fn profile_job_match_returns_canonical_fit_diagnostics() {
 
     let Json(response) = get_profile_job_match(
         State(state),
+        None,
         Path(("profile-1".to_string(), "job-frontend-1".to_string())),
     )
     .await
@@ -258,6 +259,7 @@ async fn bulk_profile_job_match_supports_dashboard_sorting() {
 
     let Json(response) = bulk_profile_job_match(
         State(state),
+        None,
         Path("profile-1".to_string()),
         ApiJson(BulkProfileJobMatchRequest {
             job_ids: vec![
@@ -282,6 +284,7 @@ async fn bulk_profile_job_match_uses_deterministic_runtime_when_requested() {
 
     let Json(response) = bulk_profile_job_match(
         State(state),
+        None,
         Path("profile-1".to_string()),
         ApiJson(BulkProfileJobMatchRequest {
             job_ids: vec!["job-runtime-deterministic".to_string()],
@@ -308,6 +311,7 @@ async fn bulk_profile_job_match_falls_back_from_learned_to_deterministic() {
 
     let Json(response) = bulk_profile_job_match(
         State(state),
+        None,
         Path("profile-1".to_string()),
         ApiJson(BulkProfileJobMatchRequest {
             job_ids: vec!["job-runtime-learned-fallback".to_string()],
@@ -345,6 +349,7 @@ async fn bulk_profile_job_match_falls_back_from_trained_to_learned() {
 
     let Json(response) = bulk_profile_job_match(
         State(state),
+        None,
         Path("profile-1".to_string()),
         ApiJson(BulkProfileJobMatchRequest {
             job_ids: vec!["job-runtime-trained-to-learned".to_string()],
@@ -374,6 +379,7 @@ async fn bulk_profile_job_match_falls_back_from_trained_to_deterministic_without
 
     let Json(response) = bulk_profile_job_match(
         State(state),
+        None,
         Path("profile-1".to_string()),
         ApiJson(BulkProfileJobMatchRequest {
             job_ids: vec!["job-runtime-trained-to-deterministic".to_string()],

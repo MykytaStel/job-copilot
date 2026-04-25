@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use axum::Extension;
 use axum::extract::{Path, Query, State};
 use tracing::{info, warn};
 
@@ -7,6 +8,7 @@ use crate::api::dto::jobs::{JobResponse, MlJobLifecycleResponse, RecentJobsRespo
 use crate::api::dto::ranking::FitScoreResponse;
 use crate::api::dto::search::JobFitResponse;
 use crate::api::error::{ApiError, ApiJson};
+use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 use crate::services::search_ranking::summarize_match_quality;
 use crate::state::AppState;
 
@@ -129,8 +131,10 @@ pub async fn get_recent_jobs(
 
 pub async fn get_profile_job_match(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
 ) -> Result<axum::Json<JobFitResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     let ranked_jobs = load_profile_ranked_jobs(
         &state,
         &profile_id,
@@ -154,9 +158,11 @@ pub async fn get_profile_job_match(
 
 pub async fn bulk_profile_job_match(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
     ApiJson(payload): ApiJson<BulkProfileJobMatchRequest>,
 ) -> Result<axum::Json<BulkProfileJobMatchResponse>, ApiError> {
+    check_profile_ownership(auth.as_deref(), &profile_id)?;
     let input = payload.validate()?;
     let ranked = load_profile_ranked_jobs(
         &state,

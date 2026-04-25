@@ -1,5 +1,8 @@
+use axum::Extension;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+
+use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 
 use crate::api::dto::feedback::{
     CompanyFeedbackResponse, FeedbackOverviewResponse, FeedbackSummary, JobFeedbackResponse,
@@ -17,15 +20,17 @@ use crate::state::AppState;
 
 pub async fn list_feedback(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
 ) -> Result<axum::Json<FeedbackOverviewResponse>, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth.as_deref(), &profile_id).await?;
 
     let jobs = state
         .feedback_service
         .list_job_feedback(&profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "feedback_query_failed"))?;
+
     let companies = state
         .feedback_service
         .list_company_feedback(&profile_id)
@@ -33,6 +38,7 @@ pub async fn list_feedback(
         .map_err(|error| ApiError::from_repository(error, "feedback_query_failed"))?;
 
     let jobs: Vec<JobFeedbackResponse> = jobs.into_iter().map(JobFeedbackResponse::from).collect();
+
     let companies: Vec<CompanyFeedbackResponse> = companies
         .into_iter()
         .map(CompanyFeedbackResponse::from)
@@ -56,10 +62,12 @@ pub async fn list_feedback(
 
 pub async fn save_job(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
 ) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
     update_job_feedback(
         state,
+        auth.as_deref(),
         profile_id,
         job_id,
         UserEventType::JobSaved,
@@ -73,10 +81,12 @@ pub async fn save_job(
 
 pub async fn hide_job(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
 ) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
     update_job_feedback(
         state,
+        auth.as_deref(),
         profile_id,
         job_id,
         UserEventType::JobHidden,
@@ -90,10 +100,12 @@ pub async fn hide_job(
 
 pub async fn mark_job_bad_fit(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
 ) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
     update_job_feedback(
         state,
+        auth.as_deref(),
         profile_id,
         job_id,
         UserEventType::JobBadFit,
@@ -107,10 +119,12 @@ pub async fn mark_job_bad_fit(
 
 pub async fn unsave_job(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
     clear_job_feedback_flags(
         state,
+        auth.as_deref(),
         profile_id,
         job_id,
         UserEventType::JobUnsaved,
@@ -124,10 +138,12 @@ pub async fn unsave_job(
 
 pub async fn unhide_job(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
     clear_job_feedback_flags(
         state,
+        auth.as_deref(),
         profile_id,
         job_id,
         UserEventType::JobUnhidden,
@@ -141,10 +157,12 @@ pub async fn unhide_job(
 
 pub async fn unmark_job_bad_fit(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
     clear_job_feedback_flags(
         state,
+        auth.as_deref(),
         profile_id,
         job_id,
         UserEventType::JobBadFitRemoved,
@@ -158,42 +176,75 @@ pub async fn unmark_job_bad_fit(
 
 pub async fn add_company_whitelist(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
     ApiJson(payload): ApiJson<UpdateCompanyFeedbackRequest>,
 ) -> Result<axum::Json<CompanyFeedbackResponse>, ApiError> {
-    update_company_feedback(state, profile_id, payload, CompanyFeedbackStatus::Whitelist).await
+    update_company_feedback(
+        state,
+        auth.as_deref(),
+        profile_id,
+        payload,
+        CompanyFeedbackStatus::Whitelist,
+    )
+    .await
 }
 
 pub async fn remove_company_whitelist(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
     ApiJson(payload): ApiJson<UpdateCompanyFeedbackRequest>,
 ) -> Result<StatusCode, ApiError> {
-    remove_company_feedback(state, profile_id, payload, CompanyFeedbackStatus::Whitelist).await
+    remove_company_feedback(
+        state,
+        auth.as_deref(),
+        profile_id,
+        payload,
+        CompanyFeedbackStatus::Whitelist,
+    )
+    .await
 }
 
 pub async fn add_company_blacklist(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
     ApiJson(payload): ApiJson<UpdateCompanyFeedbackRequest>,
 ) -> Result<axum::Json<CompanyFeedbackResponse>, ApiError> {
-    update_company_feedback(state, profile_id, payload, CompanyFeedbackStatus::Blacklist).await
+    update_company_feedback(
+        state,
+        auth.as_deref(),
+        profile_id,
+        payload,
+        CompanyFeedbackStatus::Blacklist,
+    )
+    .await
 }
 
 pub async fn remove_company_blacklist(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(profile_id): Path<String>,
     ApiJson(payload): ApiJson<UpdateCompanyFeedbackRequest>,
 ) -> Result<StatusCode, ApiError> {
-    remove_company_feedback(state, profile_id, payload, CompanyFeedbackStatus::Blacklist).await
+    remove_company_feedback(
+        state,
+        auth.as_deref(),
+        profile_id,
+        payload,
+        CompanyFeedbackStatus::Blacklist,
+    )
+    .await
 }
 
 pub async fn set_job_salary_signal(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
     ApiJson(payload): ApiJson<SetSalaryFeedbackRequest>,
 ) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth.as_deref(), &profile_id).await?;
     let signal = payload.validate()?;
     let feedback = state
         .feedback_service
@@ -205,10 +256,11 @@ pub async fn set_job_salary_signal(
 
 pub async fn set_job_interest_rating(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
     ApiJson(payload): ApiJson<SetInterestRatingRequest>,
 ) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth.as_deref(), &profile_id).await?;
     let rating = payload.validate()?;
     let feedback = state
         .feedback_service
@@ -220,10 +272,11 @@ pub async fn set_job_interest_rating(
 
 pub async fn set_job_work_mode_signal(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
     ApiJson(payload): ApiJson<SetWorkModeFeedbackRequest>,
 ) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth.as_deref(), &profile_id).await?;
     let signal = payload.validate()?;
     let feedback = state
         .feedback_service
@@ -241,10 +294,11 @@ pub async fn set_job_work_mode_signal(
 
 pub async fn set_job_legitimacy_signal(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
     ApiJson(payload): ApiJson<SetLegitimacySignalRequest>,
 ) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth.as_deref(), &profile_id).await?;
     let signal = payload.validate()?;
     let feedback = state
         .feedback_service
@@ -263,10 +317,11 @@ pub async fn set_job_legitimacy_signal(
 
 pub async fn tag_job_feedback(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
     ApiJson(payload): ApiJson<TagJobFeedbackRequest>,
 ) -> Result<axum::http::StatusCode, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth.as_deref(), &profile_id).await?;
     let tags = payload.validate()?;
     state
         .feedback_service
@@ -278,8 +333,11 @@ pub async fn tag_job_feedback(
 
 pub(crate) async fn ensure_profile_exists(
     state: &AppState,
+    auth: Option<&AuthUser>,
     profile_id: &str,
 ) -> Result<(), ApiError> {
+    check_profile_ownership(auth, profile_id)?;
+
     let Some(_) = state
         .profile_records
         .get_by_id(profile_id)
@@ -297,12 +355,14 @@ pub(crate) async fn ensure_profile_exists(
 
 async fn clear_job_feedback_flags(
     state: AppState,
+    auth: Option<&AuthUser>,
     profile_id: String,
     job_id: String,
     event_type: UserEventType,
     flags: JobFeedbackFlags,
 ) -> Result<StatusCode, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth, &profile_id).await?;
+
     let metadata = load_job_event_metadata(&state, &job_id).await?;
 
     state
@@ -330,12 +390,14 @@ async fn clear_job_feedback_flags(
 
 async fn update_job_feedback(
     state: AppState,
+    auth: Option<&AuthUser>,
     profile_id: String,
     job_id: String,
     event_type: UserEventType,
     flags: JobFeedbackFlags,
 ) -> Result<axum::Json<JobFeedbackResponse>, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth, &profile_id).await?;
+
     let metadata = load_job_event_metadata(&state, &job_id).await?;
 
     let feedback = state
@@ -363,11 +425,12 @@ async fn update_job_feedback(
 
 async fn update_company_feedback(
     state: AppState,
+    auth: Option<&AuthUser>,
     profile_id: String,
     payload: UpdateCompanyFeedbackRequest,
     status: CompanyFeedbackStatus,
 ) -> Result<axum::Json<CompanyFeedbackResponse>, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth, &profile_id).await?;
 
     let company_name = payload.validate_company_name()?;
     let normalized_company_name = FeedbackService::normalize_company_name(&company_name);
@@ -400,11 +463,12 @@ async fn update_company_feedback(
 
 async fn remove_company_feedback(
     state: AppState,
+    auth: Option<&AuthUser>,
     profile_id: String,
     payload: UpdateCompanyFeedbackRequest,
     status: CompanyFeedbackStatus,
 ) -> Result<StatusCode, ApiError> {
-    ensure_profile_exists(&state, &profile_id).await?;
+    ensure_profile_exists(&state, auth, &profile_id).await?;
 
     let company_name = payload.validate_company_name()?;
     let normalized_company_name = FeedbackService::normalize_company_name(&company_name);
