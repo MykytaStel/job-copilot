@@ -29,8 +29,8 @@
 
 ## Missing
 
-- Profile ownership guards in `engine-api` (see next slices)
-- ML internal token production validation (see next slices)
+- Profile ownership guards in `engine-api` (see next slices) — see also [security-model.md](../02-architecture/security-model.md)
+- ML internal token production validation (see next slices) — see also [security-model.md](../02-architecture/security-model.md)
 - CV Tailoring endpoint + web entrypoint
 - Analytics freshness widget for ingestion recency
 - Dedicated notification preferences (settings expansion)
