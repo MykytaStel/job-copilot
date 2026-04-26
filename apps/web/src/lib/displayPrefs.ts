@@ -59,7 +59,9 @@ export function writePersistedLifecycle(value: string | null): void {
     } else {
       window.localStorage.removeItem(DASHBOARD_LIFECYCLE_KEY);
     }
-  } catch {}
+  } catch {
+		// Ignore write errors
+	}
 }
 
 export function readPersistedSource(): string | null {
@@ -77,5 +79,7 @@ export function writePersistedSource(value: string | null): void {
     } else {
       window.localStorage.removeItem(DASHBOARD_SOURCE_KEY);
     }
-  } catch {}
+  } catch {
+		// Ignore write errors
+	}
 }
