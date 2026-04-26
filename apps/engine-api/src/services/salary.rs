@@ -4,8 +4,11 @@ use crate::domain::job::model::Job;
 
 const UAH_TO_USD: f64 = 1.0 / 41.0;
 const EUR_TO_USD: f64 = 1.09;
-const MAX_SALARY_BOOST: i16 = 8;
-const MAX_SALARY_PENALTY: i16 = -8;
+
+const FULL_SALARY_FIT_BONUS: i16 = 10;
+const PARTIAL_SALARY_OVERLAP_BONUS: i16 = 5;
+const BELOW_TARGET_SALARY_PENALTY: i16 = -10;
+const BELOW_TARGET_TOLERANCE_RATIO: f64 = 0.20;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SearchSalaryExpectation {
@@ -18,6 +21,8 @@ pub struct SearchSalaryExpectation {
 pub struct SearchSalaryScore {
     pub score_delta: i16,
     pub reason: Option<String>,
+    pub label: Option<String>,
+    pub missing_salary: bool,
 }
 
 #[derive(Clone)]
@@ -42,45 +47,77 @@ pub fn score_search_salary(
     let Some(expectation) = expectation else {
         return SearchSalaryScore::default();
     };
+
     let (Some(candidate_min), Some(candidate_max)) = (expectation.min, expectation.max) else {
-        return SearchSalaryScore::default();
-    };
-    let (Some(job_min), Some(job_max)) = (job.salary_min, job.salary_max) else {
         return SearchSalaryScore::default();
     };
 
     let candidate_min = normalize_to_usd(candidate_min, &expectation.currency);
     let candidate_max = normalize_to_usd(candidate_max, &expectation.currency);
-    let job_min = normalize_to_usd(job_min, job.salary_currency.as_deref().unwrap_or("USD"));
-    let job_max = normalize_to_usd(job_max, job.salary_currency.as_deref().unwrap_or("USD"));
 
-    if job_max < candidate_min {
-        return SearchSalaryScore {
-            score_delta: MAX_SALARY_PENALTY,
-            reason: Some("Salary range is below the profile target".to_string()),
-        };
-    }
-
-    if job_min >= candidate_min {
-        return SearchSalaryScore {
-            score_delta: MAX_SALARY_BOOST,
-            reason: Some("Salary range meets or exceeds the profile target".to_string()),
-        };
-    }
-
-    let overlap = (candidate_max.min(job_max) - candidate_min.max(job_min)).max(0.0);
-    let job_range = (job_max - job_min).max(1.0);
-    let overlap_ratio = (overlap / job_range).clamp(0.0, 1.0);
-    let score_delta = (overlap_ratio * f64::from(MAX_SALARY_BOOST)).round() as i16;
-
-    if score_delta == 0 {
+    if candidate_min <= 0.0 || candidate_max <= 0.0 || candidate_min > candidate_max {
         return SearchSalaryScore::default();
     }
 
-    SearchSalaryScore {
-        score_delta,
-        reason: Some("Salary range overlaps the profile target".to_string()),
+    let (Some(job_min), Some(job_max)) = (job.salary_min, job.salary_max) else {
+        return SearchSalaryScore {
+            score_delta: 0,
+            reason: None,
+            label: Some("Salary not provided".to_string()),
+            missing_salary: true,
+        };
+    };
+
+    let job_currency = job.salary_currency.as_deref().unwrap_or("USD");
+    let job_min = normalize_to_usd(job_min, job_currency);
+    let job_max = normalize_to_usd(job_max, job_currency);
+
+    if job_min <= 0.0 || job_max <= 0.0 || job_min > job_max {
+        return SearchSalaryScore {
+            score_delta: 0,
+            reason: None,
+            label: Some("Salary not provided".to_string()),
+            missing_salary: true,
+        };
     }
+
+    if job_min >= candidate_min && job_max <= candidate_max {
+        return SearchSalaryScore {
+            score_delta: FULL_SALARY_FIT_BONUS,
+            reason: Some("Salary range is fully within the profile target".to_string()),
+            label: Some("Salary fits target".to_string()),
+            missing_salary: false,
+        };
+    }
+
+    if ranges_overlap(candidate_min, candidate_max, job_min, job_max) {
+        return SearchSalaryScore {
+            score_delta: PARTIAL_SALARY_OVERLAP_BONUS,
+            reason: Some("Salary range overlaps the profile target".to_string()),
+            label: Some("Salary partially overlaps target".to_string()),
+            missing_salary: false,
+        };
+    }
+
+    if job_max < candidate_min * (1.0 - BELOW_TARGET_TOLERANCE_RATIO) {
+        return SearchSalaryScore {
+            score_delta: BELOW_TARGET_SALARY_PENALTY,
+            reason: Some("Salary range is more than 20% below the profile minimum".to_string()),
+            label: Some("Salary below target".to_string()),
+            missing_salary: false,
+        };
+    }
+
+    SearchSalaryScore {
+        score_delta: 0,
+        reason: Some("Salary range is outside the profile target".to_string()),
+        label: Some("Salary outside target".to_string()),
+        missing_salary: false,
+    }
+}
+
+fn ranges_overlap(candidate_min: f64, candidate_max: f64, job_min: f64, job_max: f64) -> bool {
+    job_min <= candidate_max && job_max >= candidate_min
 }
 
 fn normalize_to_usd(amount: i32, currency: &str) -> f64 {
@@ -117,115 +154,145 @@ mod tests {
         }
     }
 
-    #[test]
-    fn boosts_when_job_salary_meets_target() {
-        let score = score_search_salary(
-            Some(&SearchSalaryExpectation {
-                min: Some(4000),
-                max: Some(6000),
-                currency: "USD".to_string(),
-            }),
-            &job(),
-        );
-
-        assert_eq!(score.score_delta, 8);
-        assert_eq!(
-            score.reason.as_deref(),
-            Some("Salary range meets or exceeds the profile target")
-        );
-    }
-
-    #[test]
-    fn penalizes_when_job_salary_is_below_target() {
-        let mut low_salary_job = job();
-        low_salary_job.salary_min = Some(2000);
-        low_salary_job.salary_max = Some(3000);
-
-        let score = score_search_salary(
-            Some(&SearchSalaryExpectation {
-                min: Some(4000),
-                max: Some(6000),
-                currency: "USD".to_string(),
-            }),
-            &low_salary_job,
-        );
-
-        assert_eq!(score.score_delta, -8);
-        assert_eq!(
-            score.reason.as_deref(),
-            Some("Salary range is below the profile target")
-        );
+    fn expectation() -> SearchSalaryExpectation {
+        SearchSalaryExpectation {
+            min: Some(4000),
+            max: Some(7000),
+            currency: "USD".to_string(),
+        }
     }
 
     #[test]
     fn returns_zero_when_no_expectation_set() {
         let score = score_search_salary(None, &job());
+
         assert_eq!(score.score_delta, 0);
         assert!(score.reason.is_none());
+        assert!(score.label.is_none());
+        assert!(!score.missing_salary);
     }
 
     #[test]
-    fn returns_zero_when_job_has_no_salary_data() {
+    fn returns_zero_when_profile_salary_range_is_incomplete() {
+        let score = score_search_salary(
+            Some(&SearchSalaryExpectation {
+                min: Some(4000),
+                max: None,
+                currency: "USD".to_string(),
+            }),
+            &job(),
+        );
+
+        assert_eq!(score.score_delta, 0);
+        assert!(score.reason.is_none());
+        assert!(!score.missing_salary);
+    }
+
+    #[test]
+    fn flags_missing_salary_without_penalty() {
         let mut no_salary_job = job();
         no_salary_job.salary_min = None;
         no_salary_job.salary_max = None;
 
-        let score = score_search_salary(
-            Some(&SearchSalaryExpectation {
-                min: Some(4000),
-                max: Some(6000),
-                currency: "USD".to_string(),
-            }),
-            &no_salary_job,
-        );
+        let score = score_search_salary(Some(&expectation()), &no_salary_job);
 
         assert_eq!(score.score_delta, 0);
         assert!(score.reason.is_none());
+        assert_eq!(score.label.as_deref(), Some("Salary not provided"));
+        assert!(score.missing_salary);
     }
 
     #[test]
-    fn partial_overlap_scales_score_proportionally() {
-        // job range 2000-5000 USD, candidate wants 4000-6000 USD
-        // overlap = 5000-4000 = 1000, job_range = 3000
-        // ratio ≈ 0.333 → round(0.333 * 8) = 3
-        let mut partial_job = job();
-        partial_job.salary_min = Some(2000);
-        partial_job.salary_max = Some(5000);
+    fn boosts_when_job_salary_is_fully_inside_candidate_range() {
+        let mut matching_job = job();
+        matching_job.salary_min = Some(4500);
+        matching_job.salary_max = Some(6500);
 
-        let score = score_search_salary(
-            Some(&SearchSalaryExpectation {
-                min: Some(4000),
-                max: Some(6000),
-                currency: "USD".to_string(),
-            }),
-            &partial_job,
+        let score = score_search_salary(Some(&expectation()), &matching_job);
+
+        assert_eq!(score.score_delta, 10);
+        assert_eq!(
+            score.reason.as_deref(),
+            Some("Salary range is fully within the profile target")
         );
+        assert_eq!(score.label.as_deref(), Some("Salary fits target"));
+        assert!(!score.missing_salary);
+    }
 
-        assert_eq!(score.score_delta, 3);
+    #[test]
+    fn boosts_when_job_salary_overlaps_candidate_range() {
+        let mut overlap_job = job();
+        overlap_job.salary_min = Some(6500);
+        overlap_job.salary_max = Some(8500);
+
+        let score = score_search_salary(Some(&expectation()), &overlap_job);
+
+        assert_eq!(score.score_delta, 5);
         assert_eq!(
             score.reason.as_deref(),
             Some("Salary range overlaps the profile target")
         );
+        assert_eq!(
+            score.label.as_deref(),
+            Some("Salary partially overlaps target")
+        );
     }
 
     #[test]
-    fn uah_salary_is_normalized_before_comparison() {
-        // 200 000-280 000 UAH ÷ 41 ≈ 4878-6829 USD
-        // job_min_usd (≈4878) >= candidate_min (4000) → full boost
+    fn penalizes_when_job_salary_is_more_than_twenty_percent_below_minimum() {
+        let mut low_salary_job = job();
+        low_salary_job.salary_min = Some(2500);
+        low_salary_job.salary_max = Some(3100);
+
+        let score = score_search_salary(Some(&expectation()), &low_salary_job);
+
+        assert_eq!(score.score_delta, -10);
+        assert_eq!(
+            score.reason.as_deref(),
+            Some("Salary range is more than 20% below the profile minimum")
+        );
+        assert_eq!(score.label.as_deref(), Some("Salary below target"));
+    }
+
+    #[test]
+    fn does_not_penalize_when_below_target_but_within_twenty_percent_tolerance() {
+        let mut near_target_job = job();
+        near_target_job.salary_min = Some(3000);
+        near_target_job.salary_max = Some(3300);
+
+        let score = score_search_salary(Some(&expectation()), &near_target_job);
+
+        assert_eq!(score.score_delta, 0);
+        assert_eq!(
+            score.reason.as_deref(),
+            Some("Salary range is outside the profile target")
+        );
+        assert_eq!(score.label.as_deref(), Some("Salary outside target"));
+    }
+
+    #[test]
+    fn normalizes_uah_salary_before_comparison() {
         let mut uah_job = job();
-        uah_job.salary_min = Some(200_000);
-        uah_job.salary_max = Some(280_000);
+        uah_job.salary_min = Some(184_500);
+        uah_job.salary_max = Some(266_500);
         uah_job.salary_currency = Some("UAH".to_string());
 
-        let score = score_search_salary(
-            Some(&SearchSalaryExpectation {
-                min: Some(4000),
-                max: Some(6000),
-                currency: "USD".to_string(),
-            }),
-            &uah_job,
-        );
+        let score = score_search_salary(Some(&expectation()), &uah_job);
 
-        assert_eq!(score.score_delta, 8);
+        assert_eq!(score.score_delta, 10);
+        assert_eq!(score.label.as_deref(), Some("Salary fits target"));
+    }
+
+    #[test]
+    fn normalizes_eur_salary_before_comparison() {
+        let mut eur_job = job();
+        eur_job.salary_min = Some(4200);
+        eur_job.salary_max = Some(5600);
+        eur_job.salary_currency = Some("EUR".to_string());
+
+        let score = score_search_salary(Some(&expectation()), &eur_job);
+
+        assert_eq!(score.score_delta, 10);
+        assert_eq!(score.label.as_deref(), Some("Salary fits target"));
     }
 }
