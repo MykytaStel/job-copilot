@@ -36,7 +36,9 @@ export default function FeedbackCenter() {
   if (state.isLoading) {
     return (
       <Page>
-        <EmptyState message="Loading feedback…" />
+        <div className="rounded-2xl border border-border bg-card/70 px-5 py-7 text-center text-sm text-muted-foreground">
+        Loading feedback…
+      </div>
       </Page>
     );
   }

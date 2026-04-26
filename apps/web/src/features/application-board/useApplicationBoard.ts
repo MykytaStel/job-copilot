@@ -9,8 +9,10 @@ import { queryKeys } from '../../queryKeys';
 
 function exportCsv(applications: Application[], jobs: Map<string, JobPosting>) {
   const header = ['Company', 'Title', 'Status', 'Applied At', 'Updated At'];
+
   const rows = applications.map((application) => {
     const job = jobs.get(application.jobId);
+
     return [
       job?.company ?? '',
       job?.title ?? '',
@@ -19,34 +21,44 @@ function exportCsv(applications: Application[], jobs: Map<string, JobPosting>) {
       application.updatedAt,
     ].map((value) => `"${String(value).replace(/"/g, '""')}"`);
   });
+
   const csv = [header, ...rows].map((row) => row.join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
+
   anchor.href = url;
   anchor.download = 'applications.csv';
   anchor.click();
+
   URL.revokeObjectURL(url);
 }
 
 export function useApplicationBoard() {
   const queryClient = useQueryClient();
 
-  const { data: applications = [], error } = useQuery<Application[]>({
+  const {
+    data: applications = [],
+    error,
+    isLoading: applicationsLoading,
+  } = useQuery({
     queryKey: queryKeys.applications.all(),
     queryFn: getApplications,
   });
 
-  const { data: jobs = [] } = useQuery<JobPosting[]>({
+  const { data: jobs = [], isLoading: jobsLoading } = useQuery({
     queryKey: queryKeys.jobs.all(),
     queryFn: getJobs,
   });
 
   const jobsById = useMemo(() => new Map(jobs.map((job) => [job.id, job])), [jobs]);
+
   const rejectedCount = applications.filter(
     (application) => application.status === 'rejected',
   ).length;
+
   const activeCount = applications.length - rejectedCount;
+
   const latestUpdatedAt = applications
     .slice()
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.updatedAt;
@@ -55,10 +67,12 @@ export function useApplicationBoard() {
     mutationFn: ({ id, status }: { id: string; status: ApplicationStatus }) =>
       patchApplication(id, status),
     onSuccess: (updated) => {
-      queryClient.setQueryData<Application[]>(
+      queryClient.setQueryData(
         queryKeys.applications.all(),
-        (prev) => prev?.map((item) => (item.id === updated.id ? updated : item)) ?? [updated],
+        (prev: Application[] | undefined) =>
+          prev?.map((item) => (item.id === updated.id ? updated : item)) ?? [updated],
       );
+
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
     },
     onError: (value: unknown) => {
@@ -72,6 +86,7 @@ export function useApplicationBoard() {
     activeCount,
     latestUpdatedAt,
     error,
+    isLoading: applicationsLoading || jobsLoading,
     moveMutation,
     exportCsv: () => exportCsv(applications, jobsById),
   };
