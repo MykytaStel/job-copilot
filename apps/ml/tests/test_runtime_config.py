@@ -116,6 +116,60 @@ def test_build_enrichment_provider_passes_timeout_to_ollama(monkeypatch):
     }
 
 
+def test_validate_startup_security_fails_in_production_without_token(monkeypatch):
+    monkeypatch.setenv("ML_ENV", "production")
+    monkeypatch.delenv("ML_INTERNAL_TOKEN", raising=False)
+
+    settings = get_runtime_settings()
+
+    with pytest.raises(ValueError, match="ML_INTERNAL_TOKEN"):
+        settings.validate_startup_security()
+
+
+def test_validate_startup_security_fails_for_prod_alias_without_token(monkeypatch):
+    monkeypatch.setenv("ML_ENV", "prod")
+    monkeypatch.delenv("ML_INTERNAL_TOKEN", raising=False)
+
+    settings = get_runtime_settings()
+
+    with pytest.raises(ValueError, match="ML_INTERNAL_TOKEN"):
+        settings.validate_startup_security()
+
+
+def test_validate_startup_security_normalizes_env_case(monkeypatch):
+    monkeypatch.setenv("ML_ENV", "Production")
+    monkeypatch.delenv("ML_INTERNAL_TOKEN", raising=False)
+
+    settings = get_runtime_settings()
+
+    with pytest.raises(ValueError, match="ML_INTERNAL_TOKEN"):
+        settings.validate_startup_security()
+
+
+def test_validate_startup_security_passes_in_production_with_token(monkeypatch):
+    monkeypatch.setenv("ML_ENV", "production")
+    monkeypatch.setenv("ML_INTERNAL_TOKEN", "a-real-secret-token")
+
+    settings = get_runtime_settings()
+    settings.validate_startup_security()
+
+
+def test_validate_startup_security_passes_in_development_without_token(monkeypatch):
+    monkeypatch.setenv("ML_ENV", "development")
+    monkeypatch.delenv("ML_INTERNAL_TOKEN", raising=False)
+
+    settings = get_runtime_settings()
+    settings.validate_startup_security()
+
+
+def test_validate_startup_security_passes_with_default_env_without_token(monkeypatch):
+    monkeypatch.delenv("ML_ENV", raising=False)
+    monkeypatch.delenv("ML_INTERNAL_TOKEN", raising=False)
+
+    settings = get_runtime_settings()
+    settings.validate_startup_security()
+
+
 def test_build_enrichment_provider_passes_timeout_to_openai(monkeypatch):
     captured: dict[str, object] = {}
 

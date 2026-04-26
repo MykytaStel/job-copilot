@@ -75,13 +75,11 @@ Engine-api communicates with the ML sidecar over HTTP using an internal token.
 - ML validates it to restrict access to internal-only routes.
 - The token value is never logged or exposed in responses.
 
-**Gap: ML production startup does not yet fail fast if `ML_INTERNAL_TOKEN` is absent.**
-The `validate_startup_security()` method is defined in `apps/ml/app/settings.py` and
-called from `apps/ml/app/api.py`, but the enforcement is not yet verified as reliable
-for production. Until this is confirmed and tested, treat production ML startup
-validation as an open gap.
-
-See the same Codex task linked above.
+ML production startup now fails fast if `ML_INTERNAL_TOKEN` is absent.
+The `validate_startup_security()` method in `apps/ml/app/settings.py` is called from
+the FastAPI lifespan in `apps/ml/app/api.py`. The `environment` field is normalized
+to lowercase before the check, so values like `"Production"` are handled correctly.
+This is covered by tests in `apps/ml/tests/test_runtime_config.py`.
 
 ---
 
@@ -103,5 +101,5 @@ to exist:
 | Gap | Status |
 |-----|--------|
 | Profile ownership guard not applied to all profile-scoped routes | Not yet implemented |
-| ML internal token production validation not fail-fast | Not yet enforced |
+| ML internal token production validation not fail-fast | Enforced — tested |
 | `JWT_SECRET` absence not rejected in production mode | Not yet enforced |
