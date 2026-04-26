@@ -40,6 +40,11 @@ class FitAnalyzeResponse(BaseModel):
 class RerankRequest(BaseModel):
     profile_id: str = Field(min_length=1)
     job_ids: list[str] = Field(min_length=1, max_length=50)
+    cache_bust: bool = False
+
+
+class RerankInvalidateRequest(BaseModel):
+    profile_id: str = Field(min_length=1)
 
 
 class RerankedJob(BaseModel):

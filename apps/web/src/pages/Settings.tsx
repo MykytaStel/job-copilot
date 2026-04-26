@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Bell,
-  Route,
   Settings as SettingsIcon,
+  ShieldCheck,
   SlidersHorizontal,
   Target,
   UserRound,
@@ -12,20 +12,27 @@ import { useNavigate } from 'react-router-dom';
 
 import { getNotifications } from '../api/notifications';
 import { getProfile, getStoredProfileRawText } from '../api/profiles';
-import { AccentIconFrame } from '../components/ui/AccentIconFrame';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Page } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { SurfaceMetric } from '../components/ui/Surface';
+import { cn } from '../lib/cn';
 import { readProfileId } from '../lib/profileSession';
 import {
   readNotificationPrefs,
   writeNotificationPrefs,
   type NotificationPrefKey,
 } from '../lib/notificationPrefs';
+import {
+  readDensity,
+  writeDensity,
+  readSortMode,
+  writeSortMode,
+  type DensityMode,
+  type SortMode,
+} from '../lib/displayPrefs';
 import { queryKeys } from '../queryKeys';
 import { buildProfileCompletionState } from '../features/profile/profileCompletion';
 
@@ -37,12 +44,39 @@ const NOTIF_LABELS: Record<NotificationPrefKey, string> = {
   application_due_soon: 'Application due soon',
 };
 
+type SectionId = 'profile' | 'search' | 'notifications' | 'display' | 'privacy';
+
+const SECTIONS: {
+  id: SectionId;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { id: 'profile', label: 'Profile & Account', icon: UserRound },
+  { id: 'search', label: 'Search Preferences', icon: Target },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'display', label: 'Display', icon: SlidersHorizontal },
+  { id: 'privacy', label: 'Data & Privacy', icon: ShieldCheck },
+];
+
 export default function Settings() {
   const navigate = useNavigate();
   const profileId = readProfileId();
+  const [activeSection, setActiveSection] = useState<SectionId>('profile');
   const [notifPrefs, setNotifPrefs] = useState(() =>
     profileId ? readNotificationPrefs(profileId) : null,
   );
+  const [density, setDensityState] = useState<DensityMode>(() => readDensity());
+  const [sortPref, setSortPrefState] = useState<SortMode>(() => readSortMode());
+
+  function setDensity(value: DensityMode) {
+    writeDensity(value);
+    setDensityState(value);
+  }
+
+  function setSortPref(value: SortMode) {
+    writeSortMode(value);
+    setSortPrefState(value);
+  }
 
   function toggleNotifPref(key: NotificationPrefKey) {
     if (!profileId || !notifPrefs) return;
@@ -50,6 +84,7 @@ export default function Settings() {
     setNotifPrefs(updated);
     writeNotificationPrefs(profileId, updated);
   }
+
   const { data: profile } = useQuery({
     queryKey: queryKeys.profile.root(),
     queryFn: getProfile,
@@ -94,7 +129,8 @@ export default function Settings() {
     languages: profile.languages,
     analysisReady: Boolean(profile.summary || profile.skills.length),
   });
-  const unreadCount = notifications.filter((notification) => !notification.readAt).length;
+
+  const unreadCount = notifications.filter((n) => !n.readAt).length;
   const persistedSearchPreferences = profile.searchPreferences;
   const persistedPreferenceCount =
     (persistedSearchPreferences?.targetRegions.length ?? 0) +
@@ -108,225 +144,254 @@ export default function Settings() {
     <Page>
       <PageHeader
         title="Settings"
-        description="A small settings surface for the active profile. Canonical profile editing and search-profile building stay in Profile & Search; Settings summarizes what is already live."
+        description="Profile-scoped preferences and operator defaults."
         breadcrumb={[{ label: 'Dashboard', href: '/' }, { label: 'Settings' }]}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <div className="space-y-6">
-          <Card className="border-border bg-card">
-            <CardHeader className="gap-3">
-              <div className="flex items-center gap-3">
-                <AccentIconFrame size="md">
-                  <UserRound className="h-4 w-4" />
-                </AccentIconFrame>
-                <div>
-                  <CardTitle>Profile defaults</CardTitle>
-                  <p className="m-0 text-sm leading-6 text-muted-foreground">
-                    The persisted profile still drives ranking, AI context, and notifications scope.
-                  </p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-2">
-                <SettingRow label="Name" value={profile.name} />
-                <SettingRow label="Email" value={profile.email} />
-                <SettingRow label="Location" value={profile.location ?? 'Not set'} />
-                <SettingRow
-                  label="Compensation"
-                  value={
-                    profile.salaryMin && profile.salaryMax
-                      ? `${profile.salaryMin}-${profile.salaryMax} ${profile.salaryCurrency}`
-                      : 'Not set'
-                  }
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {profile.languages.length > 0 ? (
-                  profile.languages.map((language) => (
-                    <Badge key={language} variant="muted" className="px-2 py-0.5">
-                      {language}
-                    </Badge>
-                  ))
-                ) : (
-                  <Badge variant="muted" className="px-2 py-0.5">
-                    No languages set
-                  </Badge>
-                )}
-              </div>
-              <Button onClick={() => navigate('/profile')}>Open profile</Button>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardHeader className="gap-3">
-              <div className="flex items-center gap-3">
-                <AccentIconFrame size="md">
-                  <Target className="h-4 w-4" />
-                </AccentIconFrame>
-                <div>
-                  <CardTitle>Search profile scope</CardTitle>
-                  <p className="m-0 text-sm leading-6 text-muted-foreground">
-                    Search filters persist on the profile record, but building and running search
-                    still happens in Profile &amp; Search.
-                  </p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-2">
-                <SettingRow
-                  label="Saved search inputs"
-                  value={
-                    persistedPreferenceCount > 0
-                      ? `${persistedPreferenceCount} active filters`
-                      : 'No saved filters yet'
-                  }
-                />
-                <SettingRow
-                  label="Persistence"
-                  value={persistedSearchPreferences ? 'Profile-scoped' : 'Local until saved'}
-                />
-                <SettingRow
-                  label="Target regions"
-                  value={String(persistedSearchPreferences?.targetRegions.length ?? 0)}
-                />
-                <SettingRow
-                  label="Preferred roles"
-                  value={String(persistedSearchPreferences?.preferredRoles.length ?? 0)}
-                />
-              </div>
-              <p className="m-0 text-sm leading-6 text-muted-foreground">
-                This page stays summary-only for now so the search workflow does not split across
-                multiple routes.
-              </p>
-              <Button variant="outline" onClick={() => navigate('/profile')}>
-                Open Profile &amp; Search
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <Card className="border-border bg-card">
-            <CardHeader className="gap-3">
-              <div className="flex items-center gap-3">
-                <AccentIconFrame size="md">
-                  <SlidersHorizontal className="h-4 w-4" />
-                </AccentIconFrame>
-                <div>
-                  <CardTitle>Profile readiness</CardTitle>
-                  <p className="m-0 text-sm leading-6 text-muted-foreground">
-                    Completion reflects whether the stored profile is rich enough for ranking and AI
-                    workflows.
-                  </p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="m-0 text-3xl font-semibold text-card-foreground">
-                {completion.percent}%
-              </p>
-              <div className="h-2 rounded-full bg-surface-soft">
-                <div
-                  className="h-2 rounded-full bg-[image:var(--gradient-button)]"
-                  style={{ width: `${completion.percent}%` }}
-                />
-              </div>
-              <p className="m-0 text-sm text-muted-foreground">
-                {completion.missingLabels.length > 0
-                  ? `Still missing: ${completion.missingLabels.join(', ')}`
-                  : 'All current checkpoints are covered.'}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardHeader className="gap-3">
-              <div className="flex items-center gap-3">
-                <AccentIconFrame size="md">
-                  <Bell className="h-4 w-4" />
-                </AccentIconFrame>
-                <div>
-                  <CardTitle>Notification scope</CardTitle>
-                  <p className="m-0 text-sm leading-6 text-muted-foreground">
-                    Notifications are currently profile-scoped and generated from ingestion-driven
-                    changes.
-                  </p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <SettingRow label="Unread inbox items" value={String(unreadCount)} />
-              {notifPrefs && (
-                <div className="space-y-2 pt-1">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                    Show in dashboard
-                  </p>
-                  {(Object.keys(NOTIF_LABELS) as NotificationPrefKey[]).map((key) => (
-                    <label
-                      key={key}
-                      className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border/40 bg-surface-muted px-3 py-2"
-                    >
-                      <span className="text-sm text-foreground">{NOTIF_LABELS[key]}</span>
-                      <button
-                        role="switch"
-                        aria-checked={notifPrefs[key]}
-                        onClick={() => toggleNotifPref(key)}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none ${
-                          notifPrefs[key] ? 'bg-primary' : 'bg-surface-soft'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                            notifPrefs[key] ? 'translate-x-4' : 'translate-x-0.5'
-                          }`}
-                        />
-                      </button>
-                    </label>
-                  ))}
-                  <p className="text-[11px] text-muted-foreground/70">
-                    Stored locally. Backend notification routing coming soon.
-                  </p>
-                </div>
+      <div className="flex flex-col gap-6 sm:flex-row sm:gap-0">
+        {/* Sidebar nav — horizontal scroll on mobile, vertical column on sm+ */}
+        <nav className="flex shrink-0 flex-row gap-1 overflow-x-auto pb-1 sm:w-52 sm:flex-col sm:overflow-x-visible sm:border-r sm:border-border sm:pb-0 sm:pr-4">
+          {SECTIONS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveSection(id)}
+              className={cn(
+                'flex items-center gap-2.5 whitespace-nowrap rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-colors',
+                activeSection === id
+                  ? 'bg-surface-muted text-foreground'
+                  : 'text-muted-foreground hover:bg-surface-muted/60 hover:text-foreground',
               )}
-              <Button variant="outline" onClick={() => navigate('/notifications')}>
-                Open notifications
-              </Button>
-            </CardContent>
-          </Card>
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {label}
+            </button>
+          ))}
+        </nav>
 
-          <Card className="border-border bg-card">
-            <CardHeader className="gap-3">
-              <div className="flex items-center gap-3">
-                <AccentIconFrame size="md">
-                  <Route className="h-4 w-4" />
-                </AccentIconFrame>
+        {/* Content panel */}
+        <div className="min-w-0 flex-1 sm:pl-8">
+          {activeSection === 'profile' && (
+            <SettingsSection title="Profile & Account">
+              <div className="space-y-6">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <SettingRow label="Name" value={profile.name} />
+                  <SettingRow label="Email" value={profile.email} />
+                  <SettingRow label="Location" value={profile.location ?? 'Not set'} />
+                  <SettingRow
+                    label="Compensation"
+                    value={
+                      profile.salaryMin && profile.salaryMax
+                        ? `${profile.salaryMin}–${profile.salaryMax} ${profile.salaryCurrency}`
+                        : 'Not set'
+                    }
+                  />
+                </div>
+
                 <div>
-                  <CardTitle>Route plan</CardTitle>
-                  <p className="m-0 text-sm leading-6 text-muted-foreground">
-                    Keep navigation minimal by using each route for a single, already-implemented
-                    responsibility.
+                  <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Languages
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.languages.length > 0 ? (
+                      profile.languages.map((lang) => (
+                        <Badge key={lang} variant="muted" className="px-2 py-0.5">
+                          {lang}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge variant="muted" className="px-2 py-0.5">
+                        No languages set
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Profile readiness
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold text-card-foreground">
+                    {completion.percent}%
+                  </p>
+                  <div className="mt-2 h-2 rounded-full bg-surface-soft">
+                    <div
+                      className="h-2 rounded-full bg-[image:var(--gradient-button)]"
+                      style={{ width: `${completion.percent}%` }}
+                    />
+                  </div>
+                  {completion.missingLabels.length > 0 && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Missing: {completion.missingLabels.join(', ')}
+                    </p>
+                  )}
+                </div>
+
+                <Button onClick={() => navigate('/profile')}>Open profile</Button>
+              </div>
+            </SettingsSection>
+          )}
+
+          {activeSection === 'search' && (
+            <SettingsSection title="Search Preferences">
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <SettingRow
+                    label="Active filters"
+                    value={
+                      persistedPreferenceCount > 0
+                        ? `${persistedPreferenceCount} active filters`
+                        : 'None set'
+                    }
+                  />
+                  <SettingRow
+                    label="Persistence"
+                    value={persistedSearchPreferences ? 'Profile-scoped' : 'Local until saved'}
+                  />
+                  <SettingRow
+                    label="Target regions"
+                    value={String(persistedSearchPreferences?.targetRegions.length ?? 0)}
+                  />
+                  <SettingRow
+                    label="Preferred roles"
+                    value={String(persistedSearchPreferences?.preferredRoles.length ?? 0)}
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Full search preference editing lives in Profile &amp; Search.
+                </p>
+                <Button variant="outline" onClick={() => navigate('/profile')}>
+                  Open Profile &amp; Search
+                </Button>
+              </div>
+            </SettingsSection>
+          )}
+
+          {activeSection === 'notifications' && (
+            <SettingsSection title="Notifications">
+              <div className="space-y-4">
+                <SettingRow label="Unread inbox items" value={String(unreadCount)} />
+                {notifPrefs && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Show in dashboard
+                    </p>
+                    {(Object.keys(NOTIF_LABELS) as NotificationPrefKey[]).map((key) => (
+                      <label
+                        key={key}
+                        className="flex cursor-pointer items-center justify-between gap-3 rounded-[var(--radius-md)] border border-border/40 bg-surface-muted px-3 py-2"
+                      >
+                        <span className="text-sm text-foreground">{NOTIF_LABELS[key]}</span>
+                        <button
+                          role="switch"
+                          aria-checked={notifPrefs[key]}
+                          onClick={() => toggleNotifPref(key)}
+                          className={cn(
+                            'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none',
+                            notifPrefs[key] ? 'bg-primary' : 'bg-surface-soft',
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform',
+                              notifPrefs[key] ? 'translate-x-4' : 'translate-x-0.5',
+                            )}
+                          />
+                        </button>
+                      </label>
+                    ))}
+                    <p className="text-[11px] text-muted-foreground/70">
+                      Stored locally. Backend notification routing coming soon.
+                    </p>
+                  </div>
+                )}
+                <Button variant="outline" onClick={() => navigate('/notifications')}>
+                  Open notifications
+                </Button>
+              </div>
+            </SettingsSection>
+          )}
+
+          {activeSection === 'display' && (
+            <SettingsSection title="Display">
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Job card density
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(['compact', 'normal', 'comfortable'] as DensityMode[]).map((value) => (
+                      <button
+                        key={value}
+                        onClick={() => setDensity(value)}
+                        className={cn(
+                          'rounded-[var(--radius-md)] border px-3 py-1.5 text-sm font-medium capitalize transition-colors',
+                          density === value
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border text-muted-foreground hover:border-border/80 hover:text-foreground',
+                        )}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/70">
+                    Controls spacing between job cards in the feed.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Default job sort
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { value: 'relevance', label: 'Relevance' },
+                      { value: 'date', label: 'Date' },
+                      { value: 'salary', label: 'Salary' },
+                    ] as { value: SortMode; label: string }[]).map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => setSortPref(value)}
+                        className={cn(
+                          'rounded-[var(--radius-md)] border px-3 py-1.5 text-sm font-medium transition-colors',
+                          sortPref === value
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border text-muted-foreground hover:border-border/80 hover:text-foreground',
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/70">
+                    Applied when you open the dashboard. Relevance requires an active profile.
                   </p>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <SettingRow
-                label="`/profile`"
-                value="Edit profile, filters, build search, run ranking"
-              />
-              <SettingRow label="`/notifications`" value="Review the profile-scoped inbox" />
-              <SettingRow
-                label="`/settings`"
-                value="Summarize active scope and future prefs surface"
-              />
-            </CardContent>
-          </Card>
+            </SettingsSection>
+          )}
+
+          {activeSection === 'privacy' && (
+            <SettingsSection title="Data & Privacy">
+              <p className="text-sm text-muted-foreground">
+                Data retention, export, and privacy controls will be available in a future release.
+              </p>
+            </SettingsSection>
+          )}
         </div>
       </div>
     </Page>
+  );
+}
+
+function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-6">
+      <div className="border-b border-border pb-4">
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+      </div>
+      {children}
+    </div>
   );
 }
 

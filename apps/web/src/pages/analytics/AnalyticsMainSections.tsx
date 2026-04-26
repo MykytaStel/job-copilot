@@ -3,9 +3,12 @@ import {
   Brain,
   Bookmark,
   Building2,
+  CheckCircle2,
   Eye,
   EyeOff,
   Layers,
+  Loader2,
+  RefreshCw,
   Sparkles,
   Target,
   ThumbsDown,
@@ -20,7 +23,9 @@ import type {
   RerankerMetrics,
 } from '../../api/analytics';
 import type { ProfileInsights, WeeklyGuidance } from '../../api/enrichment';
+import type { RetrainStatus } from '../../features/analytics/useRetrainModel';
 
+import { Button } from '../../components/ui/Button';
 import { StatCard } from '../../components/ui/StatCard';
 
 import {
@@ -37,6 +42,58 @@ import {
 } from './AnalyticsPanels';
 import { AnalyticsEnrichmentSection } from './AnalyticsEnrichmentSection';
 
+function RetrainControl({
+  status,
+  errorMsg,
+  onRetrain,
+}: {
+  status: RetrainStatus;
+  errorMsg: string | null;
+  onRetrain: () => void;
+}) {
+  return (
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-surface-muted px-4 py-3">
+      <div className="min-w-0">
+        <p className="m-0 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+          Retraining
+        </p>
+        <p className="m-0 mt-1 text-sm text-card-foreground">
+          {status === 'done'
+            ? 'Model retrained successfully.'
+            : status === 'error'
+              ? (errorMsg ?? 'Retraining failed.')
+              : status === 'running'
+                ? 'Training in progress—polling for completion every 3 seconds.'
+                : 'Trigger a new model retrain from current feedback data.'}
+        </p>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onRetrain}
+        disabled={status === 'running'}
+      >
+        {status === 'running' ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Retraining…
+          </>
+        ) : status === 'done' ? (
+          <>
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+            Retrain Model
+          </>
+        ) : (
+          <>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retrain Model
+          </>
+        )}
+      </Button>
+    </div>
+  );
+}
+
 export function AnalyticsMainSections({
   summary,
   behavior,
@@ -49,6 +106,9 @@ export function AnalyticsMainSections({
   profileInsights,
   insightsLoading,
   insightsError,
+  retrainStatus,
+  retrainError,
+  onRetrain,
 }: {
   summary: AnalyticsSummary;
   behavior: BehaviorSummary | undefined;
@@ -61,6 +121,9 @@ export function AnalyticsMainSections({
   profileInsights: ProfileInsights | undefined;
   insightsLoading: boolean;
   insightsError: unknown;
+  retrainStatus: RetrainStatus;
+  retrainError: string | null;
+  onRetrain: () => void;
 }) {
   const latestRerankerRun = rerankerMetrics?.runs[0];
   const rerankerTrend = (rerankerMetrics?.runs ?? [])
@@ -284,8 +347,19 @@ export function AnalyticsMainSections({
               </p>
             </div>
           ) : null}
+
+          <RetrainControl status={retrainStatus} errorMsg={retrainError} onRetrain={onRetrain} />
         </Section>
-      ) : null}
+      ) : (
+        <Section
+          title="Model Health"
+          description="No retrain runs yet. Trigger a retrain once enough feedback examples have been collected."
+          icon={Brain}
+          eyebrow="Trained reranker"
+        >
+          <RetrainControl status={retrainStatus} errorMsg={retrainError} onRetrain={onRetrain} />
+        </Section>
+      )}
 
       {funnel ? (
         <Section

@@ -212,7 +212,8 @@ impl JobsRepository {
                     WHERE is_active
                       AND reactivated_at IS NOT NULL
                       AND reactivated_at::text = last_seen_at::text
-                )::bigint AS reactivated_jobs
+                )::bigint AS reactivated_jobs,
+                MAX(last_seen_at)::text AS last_ingested_at
             FROM jobs
             "#,
         )
@@ -224,6 +225,7 @@ impl JobsRepository {
             active_jobs: row.active_jobs,
             inactive_jobs: row.inactive_jobs,
             reactivated_jobs: row.reactivated_jobs,
+            last_ingested_at: row.last_ingested_at,
         })
     }
 
@@ -282,13 +284,15 @@ impl JobsRepository {
         struct JobSourceCountRow {
             source: String,
             count: i64,
+            last_seen: String,
         }
 
         let rows = sqlx::query_as::<_, JobSourceCountRow>(
             r#"
             SELECT
                 COALESCE(source, 'unknown') AS source,
-                COUNT(DISTINCT job_id)::bigint AS count
+                COUNT(DISTINCT job_id)::bigint AS count,
+                MAX(last_seen_at)::text AS last_seen
             FROM job_variants
             GROUP BY source
             ORDER BY count DESC
@@ -302,6 +306,7 @@ impl JobsRepository {
             .map(|row| JobSourceCount {
                 source: row.source,
                 count: row.count,
+                last_seen: row.last_seen,
             })
             .collect())
     }

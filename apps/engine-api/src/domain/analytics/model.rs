@@ -11,4 +11,5 @@ pub struct SalaryBucket {
 pub struct JobSourceCount {
     pub source: String,
     pub count: i64,
+    pub last_seen: String,
 }

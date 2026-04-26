@@ -50,4 +50,5 @@ pub struct JobFeedSummary {
     pub active_jobs: i64,
     pub inactive_jobs: i64,
     pub reactivated_jobs: i64,
+    pub last_ingested_at: Option<String>,
 }

@@ -192,3 +192,21 @@ pub struct LlmContextResponse {
     pub top_positive_evidence: Vec<LlmContextEvidenceEntry>,
     pub top_negative_evidence: Vec<LlmContextEvidenceEntry>,
 }
+
+// ─── Ingestion Stats ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct IngestionSourceEntry {
+    pub source: String,
+    pub count: u32,
+    pub last_seen: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IngestionStatsResponse {
+    pub last_ingested_at: Option<String>,
+    pub total_jobs: u32,
+    pub active_jobs: u32,
+    pub inactive_jobs: u32,
+    pub sources: Vec<IngestionSourceEntry>,
+}

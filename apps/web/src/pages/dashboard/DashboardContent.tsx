@@ -44,14 +44,14 @@ export function DashboardContent({ state }: { state: DashboardPageState }) {
         <DashboardMatchesSection
           profileId={state.profileId}
           mode={state.mode}
-          setSortByScore={state.setSortByScore}
+          sortMode={state.sortMode}
+          setSortMode={state.setSortMode}
           search={state.search}
           setSearch={state.setSearch}
           jobs={state.jobs}
           allJobs={state.allJobs}
           rerankCoverage={state.rerankCoverage}
           jobsLoading={state.jobsLoading}
-          rankData={state.rankData}
           lifecycleOptions={state.lifecycleOptions}
           selectedLifecycle={state.selectedLifecycle}
           updateFilters={state.updateFilters}

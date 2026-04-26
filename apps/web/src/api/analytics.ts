@@ -472,3 +472,25 @@ export async function getRerankerMetrics(profileId: string): Promise<RerankerMet
 
   return mapRerankerMetrics(response);
 }
+
+type EngineIngestionStatsResponse = {
+  last_ingested_at: string | null;
+  total_jobs: number;
+  active_jobs: number;
+};
+
+export type IngestionStats = {
+  lastIngestedAt: string | null;
+  totalJobs: number;
+  activeJobs: number;
+};
+
+export async function getIngestionStats(): Promise<IngestionStats> {
+  const response = await request<EngineIngestionStatsResponse>('/api/v1/ingestion/stats');
+
+  return {
+    lastIngestedAt: response.last_ingested_at,
+    totalJobs: response.total_jobs,
+    activeJobs: response.active_jobs,
+  };
+}
