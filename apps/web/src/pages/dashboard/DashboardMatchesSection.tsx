@@ -67,6 +67,19 @@ export function DashboardMatchesSection({
   | 'unmarkBadFitMutation'
 >) {
   const [density] = useState(() => readDensity());
+
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    !selectedLifecycle.includes('all') ||
+    !selectedSource.includes('__all__');
+
+  function clearFilters() {
+    setSearch('');
+    updateFilters({
+      lifecycle: 'all',
+      source: null,
+    });
+  }
   return (
     <div>
       <SectionHeader
@@ -176,13 +189,24 @@ export function DashboardMatchesSection({
           </>
         ) : jobs.length === 0 ? (
           <EmptyState
-            message={search ? 'Нічого не знайдено' : 'Вакансій поки немає'}
+            message={hasActiveFilters ? 'No jobs found. Try adjusting your filters.' : 'No jobs available yet.'}
             description={
-              search
-                ? 'Спробуйте змінити запит.'
-                : 'Запустіть `pnpm scrape:djinni` або оновіть feed.'
+              hasActiveFilters
+                ? 'Clear the search query or choose broader lifecycle/source filters.'
+                : 'Run ingestion or refresh the feed to populate the dashboard.'
             }
             icon={<Briefcase className="h-12 w-12" />}
+            action={
+              hasActiveFilters ? (
+                <Button type="button" size="sm" variant="outline" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              ) : (
+                <Link to="/profile" className="inline-flex no-underline">
+                  <Button size="sm">Add filters</Button>
+                </Link>
+              )
+            }
           />
         ) : (
           jobs.map((job) => {

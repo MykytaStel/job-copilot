@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Download } from 'lucide-react';
+import { ClipboardList, Download } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import type { ApplicationStatus } from '@job-copilot/shared';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -11,7 +12,7 @@ import { ApplicationsTable } from './application-board/ApplicationsTable';
 import { ApplicationQuickPanel } from './application-board/ApplicationQuickPanel';
 
 export default function ApplicationBoard() {
-  const { applications, jobsById, error, moveMutation, exportCsv } = useApplicationBoard();
+  const { applications, jobsById, error, isLoading, moveMutation, exportCsv } = useApplicationBoard();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -54,16 +55,26 @@ export default function ApplicationBoard() {
         }
       />
 
-      {error && (
+      {!isLoading && error && (
         <EmptyState
           message={error instanceof Error ? error.message : 'Не вдалося завантажити заявки'}
         />
       )}
 
-      {applications.length === 0 ? (
+      {isLoading ? (
+        <div className="rounded-2xl border border-border bg-card/70 px-5 py-7 text-center text-sm text-muted-foreground">
+          Loading applications…
+        </div>
+      ) : applications.length === 0 ? (
         <EmptyState
-          message="Заявок поки немає"
-          description="Збережіть першу вакансію на дашборді або на сторінці вакансії."
+          icon={<ClipboardList className="h-10 w-10" />}
+          message="No applications yet."
+          description="Find a relevant job and save it to start tracking your pipeline."
+          action={
+            <Link to="/" className="inline-flex no-underline">
+              <Button size="sm">Find jobs</Button>
+            </Link>
+          }
         />
       ) : (
         <div className="space-y-4">
@@ -80,7 +91,11 @@ export default function ApplicationBoard() {
           >
             <div className="min-w-0">
               {filtered.length === 0 ? (
-                <EmptyState message="No applications match the current filter." />
+                <EmptyState
+                  icon={<ClipboardList className="h-10 w-10" />}
+                  message="No applications match the current filters."
+                  description="Try a different search query or status filter."
+                />
               ) : (
                 <ApplicationsTable
                   applications={filtered}
