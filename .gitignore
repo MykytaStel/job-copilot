@@ -33,4 +33,4 @@ apps/ml/.runtime/
 __MACOSX/
 
 .claude/settings.local.json
-design-reference/apps/web/tsconfig.app.tsbuildinfo
+apps/web/tsconfig.app.tsbuildinfo
