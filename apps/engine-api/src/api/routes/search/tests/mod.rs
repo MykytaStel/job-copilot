@@ -398,7 +398,15 @@ async fn run_search_includes_stable_score_breakdown_fields() {
     );
     assert_eq!(
         payload["results"][0]["fit"]["score_breakdown"]["salary_score"],
-        json!(8)
+        json!(5)
+    );
+    assert_eq!(
+        payload["results"][0]["job"]["presentation"]["salary_fit_label"],
+        json!("Salary partially overlaps target")
+    );
+    assert_eq!(
+        payload["results"][0]["job"]["presentation"]["missing_salary"],
+        json!(false)
     );
     assert!(payload["results"][0]["fit"]["score_breakdown"]["matching_score"].is_number());
     assert!(payload["results"][0]["fit"]["score_breakdown"]["freshness_score"].is_number());
