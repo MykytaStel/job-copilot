@@ -1,8 +1,9 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
 import AppShell from './AppShell';
 import { withErrorBoundary } from './components/ErrorBoundary';
+import { ToastProvider } from './context/ToastContext';
 
 const Auth = lazy(() => import('./pages/Auth'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -17,28 +18,32 @@ const Notifications = lazy(() => import('./pages/Notifications'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Setup = lazy(() => import('./pages/Setup'));
 
+function route(element: ReactNode) {
+  return withErrorBoundary(<Suspense fallback={null}>{element}</Suspense>);
+}
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <Suspense fallback={null}>
+    <ToastProvider>
+      <BrowserRouter>
         <Routes>
-          <Route path="/auth" element={withErrorBoundary(<Auth />)} />
+          <Route path="/auth" element={route(<Auth />)} />
+          <Route path="/setup" element={route(<Setup />)} />
 
-          <Route element={<AppShell />}>
-            <Route index element={withErrorBoundary(<Dashboard />)} />
-            <Route path="/jobs/:id" element={withErrorBoundary(<JobDetails />)} />
-            <Route path="/applications" element={withErrorBoundary(<ApplicationBoard />)} />
-            <Route path="/applications/:id" element={withErrorBoundary(<ApplicationDetail />)} />
-            <Route path="/profile" element={withErrorBoundary(<Profile />)} />
-            <Route path="/feedback" element={withErrorBoundary(<FeedbackCenter />)} />
-            <Route path="/analytics" element={withErrorBoundary(<Analytics />)} />
-            <Route path="/market" element={withErrorBoundary(<Market />)} />
-            <Route path="/notifications" element={withErrorBoundary(<Notifications />)} />
-            <Route path="/settings" element={withErrorBoundary(<Settings />)} />
-            <Route path="/setup" element={withErrorBoundary(<Setup />)} />
+          <Route path="/" element={<AppShell />}>
+            <Route index element={route(<Dashboard />)} />
+            <Route path="jobs/:id" element={route(<JobDetails />)} />
+            <Route path="applications" element={route(<ApplicationBoard />)} />
+            <Route path="applications/:id" element={route(<ApplicationDetail />)} />
+            <Route path="profile" element={route(<Profile />)} />
+            <Route path="feedback" element={route(<FeedbackCenter />)} />
+            <Route path="analytics" element={route(<Analytics />)} />
+            <Route path="market" element={route(<Market />)} />
+            <Route path="notifications" element={route(<Notifications />)} />
+            <Route path="settings" element={route(<Settings />)} />
           </Route>
         </Routes>
-      </Suspense>
-    </BrowserRouter>
+      </BrowserRouter>
+    </ToastProvider>
   );
 }

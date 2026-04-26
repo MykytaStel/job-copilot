@@ -1,7 +1,5 @@
 import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-
 import { cn } from './lib/cn';
 import { AppShellDesktopSidebar } from './app-shell/AppShellDesktopSidebar';
 import { AppShellMobileNav } from './app-shell/AppShellMobileNav';
@@ -52,8 +50,6 @@ export default function AppShell() {
           </Suspense>
         </div>
       </main>
-
-      <Toaster position="bottom-right" toastOptions={{ duration: 3000, style: { fontSize: 14 } }} />
     </div>
   );
 }

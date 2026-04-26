@@ -1,11 +1,15 @@
 import type { HTMLAttributes, ReactNode } from 'react';
+
 import { cn } from '../../lib/cn';
 
-export function Page({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+export function Page({
+  className,
+  ...props
+}: HTMLAttributes<HTMLElement>) {
   return (
-    <div
+    <main
       className={cn(
-        'mx-auto flex w-full max-w-[1380px] flex-col gap-8 px-2 sm:px-3 lg:gap-10',
+        'mx-auto w-full max-w-[1400px] min-w-0 overflow-x-hidden px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8',
         className,
       )}
       {...props}
@@ -23,13 +27,18 @@ export function PageGrid({
   aside?: ReactNode;
 }) {
   if (!aside) {
-    return <div className={cn('grid gap-8', className)}>{children}</div>;
+    return <div className={cn('min-w-0', className)}>{children}</div>;
   }
 
   return (
-    <div className={cn('grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]', className)}>
-      <div className="min-w-0 space-y-8">{children}</div>
-      <aside className="space-y-6">{aside}</aside>
+    <div
+      className={cn(
+        'grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]',
+        className,
+      )}
+    >
+      <div className="min-w-0">{children}</div>
+      <div className="min-w-0 lg:min-w-[280px]">{aside}</div>
     </div>
   );
 }

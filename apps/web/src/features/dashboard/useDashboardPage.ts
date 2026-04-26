@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { Bookmark, Briefcase, CalendarDays, Send, XCircle } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { useToast } from '../../context/ToastContext';
 import type {
   Application,
   ApplicationStatus,
@@ -89,7 +89,7 @@ function readSourceFilter(searchParams: URLSearchParams): string | null {
 
 export function useDashboardPage() {
   const profileId = readProfileId();
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient(); const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [sortMode, setSortModeState] = useState<SortMode>(() => readSortMode());
@@ -224,10 +224,10 @@ export function useDashboardPage() {
     onSuccess: () => {
       void invalidateFeedbackViewQueries(queryClient, profileId);
       void invalidateApplicationSummaryQueries(queryClient);
-      toast.success('Збережено в pipeline');
+      showToast({ type: 'success', message: 'Job saved' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
     },
   });
 
@@ -241,10 +241,10 @@ export function useDashboardPage() {
     },
     onSuccess: () => {
       void invalidateFeedbackViewQueries(queryClient, profileId);
-      toast.success('Вакансію приховано');
+      showToast({ type: 'success', message: 'Job hidden' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
     },
   });
 
@@ -258,10 +258,10 @@ export function useDashboardPage() {
     },
     onSuccess: () => {
       void invalidateFeedbackViewQueries(queryClient, profileId);
-      toast.success('Позначено як bad fit');
+      showToast({ type: 'success', message: 'Marked as bad fit' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
     },
   });
 
@@ -275,10 +275,10 @@ export function useDashboardPage() {
     },
     onSuccess: () => {
       void invalidateFeedbackViewQueries(queryClient, profileId);
-      toast.success('Позначку bad fit знято');
+      showToast({ type: 'success', message: 'Bad-fit mark removed' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
     },
   });
 
