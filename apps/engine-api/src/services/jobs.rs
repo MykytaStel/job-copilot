@@ -100,9 +100,7 @@ impl JobsService {
         }
     }
 
-    pub async fn market_overview(
-        &self,
-    ) -> Result<(MarketOverview, MarketSource), RepositoryError> {
+    pub async fn market_overview(&self) -> Result<(MarketOverview, MarketSource), RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => repository.market_overview().await,
             #[cfg(test)]

@@ -477,7 +477,10 @@ async fn ingestion_stats_returns_feed_totals_and_last_ingested_at() {
     assert_eq!(stats.total_jobs, 10);
     assert_eq!(stats.active_jobs, 6);
     assert_eq!(stats.inactive_jobs, 3);
-    assert_eq!(stats.last_ingested_at.as_deref(), Some("2025-01-15T10:00:00"));
+    assert_eq!(
+        stats.last_ingested_at.as_deref(),
+        Some("2025-01-15T10:00:00")
+    );
 }
 
 #[tokio::test]

@@ -2,9 +2,9 @@ use axum::Extension;
 use axum::extract::{Path, State};
 
 use crate::api::dto::analytics::{
-    AnalyticsSummaryResponse, FeedbackSummarySection, FunnelSummaryResponse,
-    IngestionSourceEntry, IngestionStatsResponse, JobsByLifecycleSection, JobsBySourceEntry,
-    LlmContextAnalyzedProfile, LlmContextResponse, SalaryIntelligenceResponse,
+    AnalyticsSummaryResponse, FeedbackSummarySection, FunnelSummaryResponse, IngestionSourceEntry,
+    IngestionStatsResponse, JobsByLifecycleSection, JobsBySourceEntry, LlmContextAnalyzedProfile,
+    LlmContextResponse, SalaryIntelligenceResponse,
 };
 use crate::api::error::ApiError;
 use crate::api::middleware::auth::AuthUser;

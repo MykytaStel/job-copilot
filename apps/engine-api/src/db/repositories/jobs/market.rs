@@ -45,9 +45,7 @@ impl JobsRepository {
         Ok(row.map(|r| r.payload))
     }
 
-    pub async fn market_overview(
-        &self,
-    ) -> Result<(MarketOverview, MarketSource), RepositoryError> {
+    pub async fn market_overview(&self) -> Result<(MarketOverview, MarketSource), RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
@@ -111,9 +109,7 @@ impl JobsRepository {
         };
 
         if let Some(payload) = Self::fetch_fresh_snapshot(pool, "market_companies").await? {
-            if let Ok(mut entries) =
-                serde_json::from_value::<Vec<MarketCompanyEntry>>(payload)
-            {
+            if let Ok(mut entries) = serde_json::from_value::<Vec<MarketCompanyEntry>>(payload) {
                 entries.truncate(limit as usize);
                 return Ok((entries, MarketSource::Snapshot));
             }
@@ -197,9 +193,7 @@ impl JobsRepository {
             }
         }
 
-        tracing::warn!(
-            "market_salary_trends: no fresh snapshot, falling back to live jobs query"
-        );
+        tracing::warn!("market_salary_trends: no fresh snapshot, falling back to live jobs query");
 
         #[derive(FromRow)]
         struct MarketSalaryTrendRow {
