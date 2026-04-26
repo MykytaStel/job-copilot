@@ -75,6 +75,18 @@
 | Analytics freshness widget відсутній | `apps/web/src/pages/Analytics.tsx` | Ingestion recency is not visible in the analytics flow |
 | Provider defaults are inconsistent | `apps/ml/app/settings.py`, `infra/docker-compose.yml` | Runtime code and Docker Compose still disagree on the default ML provider |
 
+## Known Security Gaps
+
+See [security-model.md](security-model.md) for the full model and gap list.
+
+| Gap | Status |
+|-----|--------|
+| Profile ownership guard not applied to all profile-scoped routes | Not yet implemented |
+| ML internal token production validation not fail-fast | Not yet enforced |
+| `JWT_SECRET` absence not rejected in production mode | Not yet enforced |
+
+---
+
 ## Що не потребує змін (правильно)
 - Архітектура (Rust + Python + React)
 - PostgreSQL schema (добра)
