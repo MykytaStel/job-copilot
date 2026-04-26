@@ -210,6 +210,10 @@ class RuntimeSettings(BaseSettings):
     def validate_startup_security(self) -> None:
         if self.environment in {"production", "prod"} and not self.internal_token:
             raise ValueError("ML_INTERNAL_TOKEN is required when ML_ENV=production")
+        if self.llm_provider == "openai" and not self.openai_api_key:
+            logging.getLogger(__name__).warning(
+                "ML_LLM_PROVIDER=openai but OPENAI_API_KEY is not set; OpenAI calls will fail at request time"
+            )
 
 
 @lru_cache(maxsize=1)

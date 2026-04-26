@@ -4,7 +4,7 @@ use crate::db::repositories::RepositoryError;
 use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend,
+    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend, MarketSource,
 };
 
 pub struct JobsServiceStub {
@@ -156,42 +156,51 @@ impl JobsServiceStub {
         Ok(self.source_counts.clone())
     }
 
-    pub(crate) fn market_overview(&self) -> Result<MarketOverview, RepositoryError> {
+    pub(crate) fn market_overview(
+        &self,
+    ) -> Result<(MarketOverview, MarketSource), RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }
 
-        Ok(self.market_overview.clone())
+        Ok((self.market_overview.clone(), MarketSource::Snapshot))
     }
 
     pub(crate) fn market_companies(
         &self,
         limit: i64,
-    ) -> Result<Vec<MarketCompanyEntry>, RepositoryError> {
+    ) -> Result<(Vec<MarketCompanyEntry>, MarketSource), RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }
 
-        Ok(self
-            .market_companies
-            .iter()
-            .take(limit as usize)
-            .cloned()
-            .collect())
+        Ok((
+            self.market_companies
+                .iter()
+                .take(limit as usize)
+                .cloned()
+                .collect(),
+            MarketSource::Snapshot,
+        ))
     }
 
     pub(crate) fn market_salary_trend(
         &self,
         seniority: &str,
-    ) -> Result<Option<MarketSalaryTrend>, RepositoryError> {
+    ) -> Result<(Option<MarketSalaryTrend>, MarketSource), RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }
 
-        Ok(self.market_salary_trends.get(seniority).cloned())
+        Ok((
+            self.market_salary_trends.get(seniority).cloned(),
+            MarketSource::Snapshot,
+        ))
     }
 
-    pub(crate) fn market_salary_trends(&self) -> Result<Vec<MarketSalaryTrend>, RepositoryError> {
+    pub(crate) fn market_salary_trends(
+        &self,
+    ) -> Result<(Vec<MarketSalaryTrend>, MarketSource), RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }
@@ -210,18 +219,18 @@ impl JobsServiceStub {
             _ => (5, trend.seniority.clone()),
         });
 
-        Ok(trends)
+        Ok((trends, MarketSource::Snapshot))
     }
 
     pub(crate) fn market_role_demand(
         &self,
         _period_days: i32,
-    ) -> Result<Vec<MarketRoleDemandEntry>, RepositoryError> {
+    ) -> Result<(Vec<MarketRoleDemandEntry>, MarketSource), RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }
 
-        Ok(self.market_role_demand.clone())
+        Ok((self.market_role_demand.clone(), MarketSource::Snapshot))
     }
 }
 
@@ -237,6 +246,7 @@ impl Default for JobsServiceStub {
                 active_jobs: 0,
                 inactive_jobs: 0,
                 reactivated_jobs: 0,
+                last_ingested_at: None,
             },
             source_counts: Vec::new(),
             market_overview: MarketOverview {

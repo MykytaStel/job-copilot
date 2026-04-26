@@ -1,4 +1,12 @@
-#[derive(Clone, Debug, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MarketSource {
+    Snapshot,
+    Live,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MarketOverview {
     pub new_jobs_this_week: i64,
     pub active_companies_count: i64,
@@ -6,7 +14,7 @@ pub struct MarketOverview {
     pub remote_percentage: f64,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MarketCompanyEntry {
     pub company_name: String,
     pub active_jobs: i64,
@@ -14,7 +22,7 @@ pub struct MarketCompanyEntry {
     pub prev_week: i64,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MarketSalaryTrend {
     pub seniority: String,
     pub p25: i32,
@@ -23,7 +31,8 @@ pub struct MarketSalaryTrend {
     pub sample_count: i64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum MarketTrendDirection {
     Up,
     Down,
@@ -40,7 +49,7 @@ impl MarketTrendDirection {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MarketRoleDemandEntry {
     pub role_group: String,
     pub this_period: i64,

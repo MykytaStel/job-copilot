@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { Bookmark, Briefcase, CalendarDays, Send, XCircle } from 'lucide-react';
@@ -27,6 +27,15 @@ import {
   invalidateFeedbackViewQueries,
 } from '../../lib/queryInvalidation';
 import { readProfileId } from '../../lib/profileSession';
+import {
+  readSortMode,
+  writeSortMode,
+  type SortMode,
+  readPersistedLifecycle,
+  writePersistedLifecycle,
+  readPersistedSource,
+  writePersistedSource,
+} from '../../lib/displayPrefs';
 import { queryKeys } from '../../queryKeys';
 
 export type LifecycleFilter = 'all' | 'active' | 'inactive' | 'reactivated';
@@ -64,12 +73,18 @@ function readLifecycleFilter(searchParams: URLSearchParams): LifecycleFilter {
     return lifecycle;
   }
 
+  const persisted = readPersistedLifecycle();
+  if (persisted === 'active' || persisted === 'inactive' || persisted === 'reactivated') {
+    return persisted;
+  }
+
   return DEFAULT_LIFECYCLE_FILTER;
 }
 
 function readSourceFilter(searchParams: URLSearchParams): string | null {
   const source = searchParams.get('source')?.trim();
-  return source ? source : null;
+  if (source) return source;
+  return readPersistedSource();
 }
 
 export function useDashboardPage() {
@@ -77,7 +92,11 @@ export function useDashboardPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [sortByScore, setSortByScore] = useState(false);
+  const [sortMode, setSortModeState] = useState<SortMode>(() => readSortMode());
+  const setSortMode = useCallback((next: SortMode) => {
+    writeSortMode(next);
+    setSortModeState(next);
+  }, []);
   const lifecycleFilter = readLifecycleFilter(searchParams);
   const sourceFilter = readSourceFilter(searchParams);
 
@@ -93,16 +112,20 @@ export function useDashboardPage() {
     if (lifecycle !== undefined) {
       if (lifecycle === DEFAULT_LIFECYCLE_FILTER) {
         nextSearchParams.delete('lifecycle');
+        writePersistedLifecycle(null);
       } else {
         nextSearchParams.set('lifecycle', lifecycle);
+        writePersistedLifecycle(lifecycle);
       }
     }
 
     if (source !== undefined) {
       if (source) {
         nextSearchParams.set('source', source);
+        writePersistedSource(source);
       } else {
         nextSearchParams.delete('source');
+        writePersistedSource(null);
       }
     }
 
@@ -144,7 +167,7 @@ export function useDashboardPage() {
   const { data: rankData } = useQuery<RankedJob[]>({
     queryKey: queryKeys.ml.rerank(profileId ?? '', rerankJobsKey),
     queryFn: () => rerankJobs(profileId!, rerankJobIds),
-    enabled: !!profileId && sortByScore && rerankJobIds.length > 0,
+    enabled: !!profileId && sortMode === 'relevance' && rerankJobIds.length > 0,
     retry: false,
   });
 
@@ -165,14 +188,16 @@ export function useDashboardPage() {
         )
       : [...allJobs];
 
-    if (sortByScore && scoreById.size > 0) {
+    if (sortMode === 'relevance' && scoreById.size > 0) {
       filtered.sort(
         (left, right) => (scoreById.get(right.id) ?? 0) - (scoreById.get(left.id) ?? 0),
       );
+    } else if (sortMode === 'salary') {
+      filtered.sort((left, right) => (right.salaryMin ?? 0) - (left.salaryMin ?? 0));
     }
 
     return filtered;
-  }, [allJobs, scoreById, search, sortByScore]);
+  }, [allJobs, scoreById, search, sortMode]);
 
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: queryKeys.applications.all(),
@@ -284,7 +309,7 @@ export function useDashboardPage() {
   const topSource =
     sources.find((source) => source.id === sourceFilter)?.displayName ?? 'All sources';
   const interviewedCount = (stats?.byStatus.interview ?? 0) + (stats?.byStatus.offer ?? 0);
-  const mode = sortByScore && profileId ? 'ranked' : 'recent';
+  const mode = sortMode === 'relevance' && profileId ? 'ranked' : 'recent';
   const rerankCoverage = {
     rankedJobs: rerankJobIds.length,
     totalJobs: allJobs.length,
@@ -325,8 +350,8 @@ export function useDashboardPage() {
     profileId,
     search,
     setSearch,
-    sortByScore,
-    setSortByScore,
+    sortMode,
+    setSortMode,
     lifecycleFilter,
     sourceFilter,
     updateFilters,

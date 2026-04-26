@@ -5,6 +5,7 @@ import {
   getAnalyticsSummary,
   getBehaviorSummary,
   getFunnelSummary,
+  getIngestionStats,
   getLlmContext,
   getRerankerMetrics,
 } from '../../api/analytics';
@@ -43,6 +44,12 @@ export function useAnalyticsPage() {
   const { data: rerankerMetrics, isLoading: rerankerMetricsLoading } = useQuery({
     queryKey: queryKeys.analytics.rerankerMetrics(profileId ?? ''),
     queryFn: () => getRerankerMetrics(profileId!),
+    enabled: !!profileId,
+  });
+
+  const { data: ingestionStats } = useQuery({
+    queryKey: queryKeys.analytics.ingestionStats(),
+    queryFn: () => getIngestionStats(),
     enabled: !!profileId,
   });
 
@@ -99,6 +106,7 @@ export function useAnalyticsPage() {
     funnel,
     llmCtx,
     rerankerMetrics,
+    ingestionStats,
     profileInsights,
     weeklyGuidance,
     aiInsights,

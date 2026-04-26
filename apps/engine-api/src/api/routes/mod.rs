@@ -150,6 +150,10 @@ pub fn protected_router() -> Router<AppState> {
         .route("/api/v1/jobs/{id}/match", get(jobs::get_job_match))
         .route("/api/v1/jobs/{id}/match", post(jobs::score_job_match))
         .route(
+            "/api/v1/ingestion/stats",
+            get(analytics::get_ingestion_stats),
+        )
+        .route(
             "/api/v1/analytics/salary",
             get(analytics::get_salary_intelligence),
         )

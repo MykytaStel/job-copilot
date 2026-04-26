@@ -1,6 +1,6 @@
 use crate::db::repositories::RepositoryError;
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend,
+    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend, MarketSource,
     MarketTrendDirection,
 };
 use sqlx::FromRow;
@@ -19,10 +19,44 @@ use market_role_heuristics::{
 };
 
 impl JobsRepository {
-    pub async fn market_overview(&self) -> Result<MarketOverview, RepositoryError> {
+    async fn fetch_fresh_snapshot(
+        pool: &sqlx::PgPool,
+        snapshot_type: &str,
+    ) -> Result<Option<serde_json::Value>, RepositoryError> {
+        #[derive(FromRow)]
+        struct SnapshotRow {
+            payload: serde_json::Value,
+        }
+
+        let row = sqlx::query_as::<_, SnapshotRow>(
+            r#"
+            SELECT payload
+            FROM market_snapshots
+            WHERE snapshot_type = $1
+              AND created_at >= NOW() - INTERVAL '24 hours'
+            ORDER BY created_at DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(snapshot_type)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(row.map(|r| r.payload))
+    }
+
+    pub async fn market_overview(&self) -> Result<(MarketOverview, MarketSource), RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
+
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "market_overview").await? {
+            if let Ok(overview) = serde_json::from_value::<MarketOverview>(payload) {
+                return Ok((overview, MarketSource::Snapshot));
+            }
+        }
+
+        tracing::warn!("market_overview: no fresh snapshot, falling back to live jobs query");
 
         #[derive(FromRow)]
         struct MarketOverviewRow {
@@ -55,21 +89,33 @@ impl JobsRepository {
             0.0
         };
 
-        Ok(MarketOverview {
-            new_jobs_this_week: row.new_jobs_this_week,
-            active_companies_count: row.active_companies_count,
-            active_jobs_count: row.active_jobs_count,
-            remote_percentage,
-        })
+        Ok((
+            MarketOverview {
+                new_jobs_this_week: row.new_jobs_this_week,
+                active_companies_count: row.active_companies_count,
+                active_jobs_count: row.active_jobs_count,
+                remote_percentage,
+            },
+            MarketSource::Live,
+        ))
     }
 
     pub async fn market_companies(
         &self,
         limit: i64,
-    ) -> Result<Vec<MarketCompanyEntry>, RepositoryError> {
+    ) -> Result<(Vec<MarketCompanyEntry>, MarketSource), RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
+
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "market_companies").await? {
+            if let Ok(mut entries) = serde_json::from_value::<Vec<MarketCompanyEntry>>(payload) {
+                entries.truncate(limit as usize);
+                return Ok((entries, MarketSource::Snapshot));
+            }
+        }
+
+        tracing::warn!("market_companies: no fresh snapshot, falling back to live jobs query");
 
         #[derive(FromRow)]
         struct MarketCompanyRow {
@@ -103,37 +149,51 @@ impl JobsRepository {
         .fetch_all(pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| MarketCompanyEntry {
-                company_name: row.company_name,
-                active_jobs: row.active_jobs,
-                this_week: row.this_week,
-                prev_week: row.prev_week,
-            })
-            .collect())
+        Ok((
+            rows.into_iter()
+                .map(|row| MarketCompanyEntry {
+                    company_name: row.company_name,
+                    active_jobs: row.active_jobs,
+                    this_week: row.this_week,
+                    prev_week: row.prev_week,
+                })
+                .collect(),
+            MarketSource::Live,
+        ))
     }
 
     pub async fn market_salary_trend(
         &self,
         seniority: &str,
-    ) -> Result<Option<MarketSalaryTrend>, RepositoryError> {
-        let trends = self.fetch_market_salary_trends(Some(seniority)).await?;
-
-        Ok(trends.into_iter().next())
+    ) -> Result<(Option<MarketSalaryTrend>, MarketSource), RepositoryError> {
+        let (trends, source) = self.fetch_market_salary_trends(Some(seniority)).await?;
+        Ok((trends.into_iter().next(), source))
     }
 
-    pub async fn market_salary_trends(&self) -> Result<Vec<MarketSalaryTrend>, RepositoryError> {
+    pub async fn market_salary_trends(
+        &self,
+    ) -> Result<(Vec<MarketSalaryTrend>, MarketSource), RepositoryError> {
         self.fetch_market_salary_trends(None).await
     }
 
     async fn fetch_market_salary_trends(
         &self,
         seniority: Option<&str>,
-    ) -> Result<Vec<MarketSalaryTrend>, RepositoryError> {
+    ) -> Result<(Vec<MarketSalaryTrend>, MarketSource), RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
+
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "market_salary_trends").await? {
+            if let Ok(mut trends) = serde_json::from_value::<Vec<MarketSalaryTrend>>(payload) {
+                if let Some(filter) = seniority {
+                    trends.retain(|t| t.seniority == filter);
+                }
+                return Ok((trends, MarketSource::Snapshot));
+            }
+        }
+
+        tracing::warn!("market_salary_trends: no fresh snapshot, falling back to live jobs query");
 
         #[derive(FromRow)]
         struct MarketSalaryTrendRow {
@@ -202,25 +262,35 @@ impl JobsRepository {
         .fetch_all(pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| MarketSalaryTrend {
-                seniority: row.seniority,
-                p25: row.p25,
-                median: row.median,
-                p75: row.p75,
-                sample_count: row.sample_count,
-            })
-            .collect())
+        Ok((
+            rows.into_iter()
+                .map(|row| MarketSalaryTrend {
+                    seniority: row.seniority,
+                    p25: row.p25,
+                    median: row.median,
+                    p75: row.p75,
+                    sample_count: row.sample_count,
+                })
+                .collect(),
+            MarketSource::Live,
+        ))
     }
 
     pub async fn market_role_demand(
         &self,
         period_days: i32,
-    ) -> Result<Vec<MarketRoleDemandEntry>, RepositoryError> {
+    ) -> Result<(Vec<MarketRoleDemandEntry>, MarketSource), RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
         };
+
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "market_role_demand").await? {
+            if let Ok(entries) = serde_json::from_value::<Vec<MarketRoleDemandEntry>>(payload) {
+                return Ok((entries, MarketSource::Snapshot));
+            }
+        }
+
+        tracing::warn!("market_role_demand: no fresh snapshot, falling back to live jobs query");
 
         #[derive(FromRow)]
         struct MarketRoleDemandRow {
@@ -229,8 +299,7 @@ impl JobsRepository {
             prev_period: i64,
         }
 
-        // This remains a title-heuristic classifier until market snapshots are
-        // populated from canonical role-aware aggregates.
+        // Title-heuristic classifier until market snapshots are populated from role-aware aggregates.
         let query = format!(
             r#"
             WITH role_groups(role_group) AS (
@@ -278,15 +347,17 @@ impl JobsRepository {
             .fetch_all(pool)
             .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| MarketRoleDemandEntry {
-                trend: compare_market_counts(row.this_period, row.prev_period),
-                role_group: row.role_group,
-                this_period: row.this_period,
-                prev_period: row.prev_period,
-            })
-            .collect())
+        Ok((
+            rows.into_iter()
+                .map(|row| MarketRoleDemandEntry {
+                    trend: compare_market_counts(row.this_period, row.prev_period),
+                    role_group: row.role_group,
+                    this_period: row.this_period,
+                    prev_period: row.prev_period,
+                })
+                .collect(),
+            MarketSource::Live,
+        ))
     }
 }
 

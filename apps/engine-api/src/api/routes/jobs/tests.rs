@@ -421,6 +421,7 @@ async fn returns_job_feed_summary_and_lifecycle_fields() {
                     active_jobs: 2,
                     inactive_jobs: 1,
                     reactivated_jobs: 1,
+                    last_ingested_at: None,
                 }),
         ),
         ApplicationsService::for_tests(ApplicationsServiceStub::default()),
@@ -490,6 +491,7 @@ async fn recent_jobs_payload_for(job_view: JobView) -> Value {
                     } else {
                         0
                     },
+                    last_ingested_at: None,
                 }),
         ),
         ApplicationsService::for_tests(ApplicationsServiceStub::default()),

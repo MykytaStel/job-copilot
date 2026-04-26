@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
 import AppShell from './AppShell';
+import { withErrorBoundary } from './components/ErrorBoundary';
 
 const Auth = lazy(() => import('./pages/Auth'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -19,29 +20,25 @@ const Setup = lazy(() => import('./pages/Setup'));
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route
-          path="auth"
-          element={
-            <Suspense>
-              <Auth />
-            </Suspense>
-          }
-        />
-        <Route element={<AppShell />}>
-          <Route index element={<Dashboard />} />
-          <Route path="setup" element={<Setup />} />
-          <Route path="jobs/:id" element={<JobDetails />} />
-          <Route path="applications" element={<ApplicationBoard />} />
-          <Route path="applications/:id" element={<ApplicationDetail />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="feedback" element={<FeedbackCenter />} />
-          <Route path="analytics" element={<Analytics />} />
-          <Route path="market" element={<Market />} />
-          <Route path="notifications" element={<Notifications />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={null}>
+        <Routes>
+          <Route path="/auth" element={withErrorBoundary(<Auth />)} />
+
+          <Route element={<AppShell />}>
+            <Route index element={withErrorBoundary(<Dashboard />)} />
+            <Route path="/jobs/:id" element={withErrorBoundary(<JobDetails />)} />
+            <Route path="/applications" element={withErrorBoundary(<ApplicationBoard />)} />
+            <Route path="/applications/:id" element={withErrorBoundary(<ApplicationDetail />)} />
+            <Route path="/profile" element={withErrorBoundary(<Profile />)} />
+            <Route path="/feedback" element={withErrorBoundary(<FeedbackCenter />)} />
+            <Route path="/analytics" element={withErrorBoundary(<Analytics />)} />
+            <Route path="/market" element={withErrorBoundary(<Market />)} />
+            <Route path="/notifications" element={withErrorBoundary(<Notifications />)} />
+            <Route path="/settings" element={withErrorBoundary(<Settings />)} />
+            <Route path="/setup" element={withErrorBoundary(<Setup />)} />
+          </Route>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

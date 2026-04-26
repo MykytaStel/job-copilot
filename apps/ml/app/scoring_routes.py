@@ -10,6 +10,7 @@ from app.api_models import (
     BootstrapTaskStatus,
     FitAnalyzeRequest,
     FitAnalyzeResponse,
+    RerankInvalidateRequest,
     RerankRequest,
     RerankResponse,
 )
@@ -84,6 +85,14 @@ async def rerank_jobs(
         ) from exc
     except (EngineApiResponseError, EngineApiUnavailableError) as exc:
         raise http_error_from_engine_api_client_error(exc) from exc
+
+
+@router.post("/api/v1/rerank/invalidate", status_code=204)
+async def invalidate_rerank_cache(
+    payload: RerankInvalidateRequest,
+    service=Depends(get_rerank_service),
+) -> None:
+    service.invalidate(payload.profile_id)
 
 
 @router.post("/api/v1/reranker/bootstrap", response_model=BootstrapTaskAccepted, status_code=202)

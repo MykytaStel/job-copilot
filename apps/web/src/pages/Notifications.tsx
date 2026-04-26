@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, BriefcaseBusiness, Clock3, RefreshCcw } from 'lucide-react';
+import { Bell, BriefcaseBusiness, CheckCheck, Clock3, RefreshCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { getNotifications, markNotificationRead } from '../api/notifications';
@@ -158,6 +158,19 @@ export default function Notifications() {
     },
   });
 
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      const unreadIds = notifications.filter((n) => !n.readAt).map((n) => n.id);
+      await Promise.all(unreadIds.map(markNotificationRead));
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() });
+    },
+    onError: (value: unknown) => {
+      toast.error(value instanceof Error ? value.message : 'Failed to mark all as read');
+    },
+  });
+
   const unreadCount = countUnreadNotifications(notifications);
   const viewState = resolveNotificationsViewState({
     profileId,
@@ -172,17 +185,28 @@ export default function Notifications() {
         title="Notifications"
         description="A lightweight in-app inbox for fresh matches and lifecycle changes relevant to your active profile."
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() });
-            }}
-            disabled={!profileId || isLoading}
-          >
-            <RefreshCcw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => markAllReadMutation.mutate()}
+              disabled={!profileId || unreadCount === 0 || markAllReadMutation.isPending}
+            >
+              <CheckCheck className="h-4 w-4" />
+              Mark all read
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() });
+              }}
+              disabled={!profileId || isLoading}
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </>
         }
       />
 

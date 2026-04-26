@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from time import perf_counter
+from dataclasses import dataclass
+from time import monotonic, perf_counter
 
 from app.api_models import RerankRequest, RerankResponse, RerankedJob
 from app.engine_api_client import EngineApiClient
@@ -8,6 +9,14 @@ from app.scoring import score_job, unique_preserving_order
 
 
 logger = logging.getLogger(__name__)
+
+_CACHE_TTL = 300.0  # 5 minutes
+
+
+@dataclass
+class _CacheEntry:
+    response: RerankResponse
+    expires_at: float
 
 
 class InvalidRerankRequestError(Exception):
@@ -17,6 +26,11 @@ class InvalidRerankRequestError(Exception):
 class RerankService:
     def __init__(self, client_factory):
         self._client_factory = client_factory
+        # {profile_id: {sorted_job_ids_tuple: _CacheEntry}}
+        self._cache: dict[str, dict[tuple[str, ...], _CacheEntry]] = {}
+
+    def invalidate(self, profile_id: str) -> None:
+        self._cache.pop(profile_id, None)
 
     async def rerank(self, payload: RerankRequest) -> RerankResponse:
         started_at = perf_counter()
@@ -26,6 +40,15 @@ class RerankService:
 
         if not unique_job_ids:
             raise InvalidRerankRequestError("job_ids must contain at least one non-empty id")
+
+        cache_key = tuple(sorted(unique_job_ids))
+
+        if payload.cache_bust:
+            self.invalidate(payload.profile_id)
+        else:
+            entry = self._cache.get(payload.profile_id, {}).get(cache_key)
+            if entry is not None and monotonic() < entry.expires_at:
+                return entry.response
 
         async with self._client_factory() as client_or_engine_api:
             engine_api = self._coerce_engine_api_client(client_or_engine_api)
@@ -65,6 +88,12 @@ class RerankService:
 
         ranked_jobs.sort(key=lambda item: (-item.score, item.title.lower(), item.job_id))
 
+        response = RerankResponse(profile_id=payload.profile_id, jobs=ranked_jobs)
+        self._cache.setdefault(payload.profile_id, {})[cache_key] = _CacheEntry(
+            response=response,
+            expires_at=monotonic() + _CACHE_TTL,
+        )
+
         logger.info(
             "rerank completed",
             extra={
@@ -76,7 +105,7 @@ class RerankService:
             },
         )
 
-        return RerankResponse(profile_id=payload.profile_id, jobs=ranked_jobs)
+        return response
 
     @staticmethod
     def _coerce_engine_api_client(client_or_engine_api) -> EngineApiClient:

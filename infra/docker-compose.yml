@@ -137,7 +137,8 @@ services:
     environment:
       ENGINE_API_BASE_URL: http://engine-api:8080
       PORT: "8000"
-      ML_LLM_PROVIDER: "${ML_LLM_PROVIDER:-ollama}"
+      # change to 'ollama' if Ollama is running locally
+      ML_LLM_PROVIDER: "${ML_LLM_PROVIDER:-template}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o-mini}"
       OPENAI_BASE_URL: "${OPENAI_BASE_URL:-}"

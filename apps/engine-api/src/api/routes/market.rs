@@ -1,5 +1,7 @@
 use axum::Json;
 use axum::extract::{Query, State};
+use axum::http::HeaderMap;
+use axum::response::IntoResponse;
 use serde::Deserialize;
 
 use crate::api::dto::market::{
@@ -7,6 +9,7 @@ use crate::api::dto::market::{
     MarketRoleDemandEntryResponse, MarketSalaryTrendResponse,
 };
 use crate::api::error::ApiError;
+use crate::domain::market::model::MarketSource;
 use crate::state::AppState;
 
 #[derive(Debug, Default, Deserialize)]
@@ -24,46 +27,67 @@ pub struct MarketRolesQuery {
     pub period: Option<i64>,
 }
 
+fn live_fallback_headers() -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert("x-market-data-source", "live-fallback".parse().unwrap());
+    headers
+}
+
 pub async fn get_market_overview(
     State(state): State<AppState>,
-) -> Result<Json<MarketOverviewResponse>, ApiError> {
-    let overview = state
+) -> Result<impl IntoResponse, ApiError> {
+    let (overview, source) = state
         .jobs_service
         .market_overview()
         .await
         .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
 
-    Ok(Json(overview.into()))
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((headers, Json(MarketOverviewResponse::from(overview))))
 }
 
 pub async fn get_market_companies(
     State(state): State<AppState>,
     Query(query): Query<MarketCompaniesQuery>,
-) -> Result<Json<MarketCompaniesResponse>, ApiError> {
+) -> Result<impl IntoResponse, ApiError> {
     let limit = query.limit.unwrap_or(20);
 
     if !(1..=100).contains(&limit) {
         return Err(ApiError::invalid_limit(limit));
     }
 
-    let companies = state
+    let (companies, source) = state
         .jobs_service
         .market_companies(limit)
         .await
         .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
 
-    Ok(Json(MarketCompaniesResponse {
-        companies: companies
-            .into_iter()
-            .map(MarketCompanyEntryResponse::from)
-            .collect(),
-    }))
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((
+        headers,
+        Json(MarketCompaniesResponse {
+            companies: companies
+                .into_iter()
+                .map(MarketCompanyEntryResponse::from)
+                .collect(),
+        }),
+    ))
 }
 
 pub async fn get_market_salary_trend(
     State(state): State<AppState>,
     Query(query): Query<MarketSalaryQuery>,
-) -> Result<Json<MarketSalaryTrendResponse>, ApiError> {
+) -> Result<impl IntoResponse, ApiError> {
     let seniority = query
         .seniority
         .as_deref()
@@ -78,59 +102,84 @@ pub async fn get_market_salary_trend(
         })?
         .to_lowercase();
 
-    let trend = state
+    let (trend, source) = state
         .jobs_service
         .market_salary_trend(&seniority)
         .await
-        .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?
-        .ok_or_else(|| {
-            ApiError::not_found(
-                "market_salary_not_found",
-                format!("No salary data found for seniority '{seniority}'"),
-            )
-        })?;
+        .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
 
-    Ok(Json(trend.into()))
+    let trend = trend.ok_or_else(|| {
+        ApiError::not_found(
+            "market_salary_not_found",
+            format!("No salary data found for seniority '{seniority}'"),
+        )
+    })?;
+
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((headers, Json(MarketSalaryTrendResponse::from(trend))))
 }
 
 pub async fn get_market_salary_trends(
     State(state): State<AppState>,
-) -> Result<Json<Vec<MarketSalaryTrendResponse>>, ApiError> {
-    let trends = state
+) -> Result<impl IntoResponse, ApiError> {
+    let (trends, source) = state
         .jobs_service
         .market_salary_trends()
         .await
         .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
 
-    Ok(Json(
-        trends
-            .into_iter()
-            .map(MarketSalaryTrendResponse::from)
-            .collect(),
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((
+        headers,
+        Json(
+            trends
+                .into_iter()
+                .map(MarketSalaryTrendResponse::from)
+                .collect::<Vec<_>>(),
+        ),
     ))
 }
 
 pub async fn get_market_role_demand(
     State(state): State<AppState>,
     Query(query): Query<MarketRolesQuery>,
-) -> Result<Json<Vec<MarketRoleDemandEntryResponse>>, ApiError> {
+) -> Result<impl IntoResponse, ApiError> {
     let period = query.period.unwrap_or(30);
 
     if !(1..=365).contains(&period) {
         return Err(ApiError::invalid_period(period));
     }
 
-    let roles = state
+    let (roles, source) = state
         .jobs_service
         .market_role_demand(period as i32)
         .await
         .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
 
-    Ok(Json(
-        roles
-            .into_iter()
-            .map(MarketRoleDemandEntryResponse::from)
-            .collect(),
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((
+        headers,
+        Json(
+            roles
+                .into_iter()
+                .map(MarketRoleDemandEntryResponse::from)
+                .collect::<Vec<_>>(),
+        ),
     ))
 }
 
@@ -257,10 +306,15 @@ mod tests {
     async fn market_companies_validates_limit() {
         let state = test_state(JobsService::for_tests(JobsServiceStub::default()));
 
-        let error =
-            get_market_companies(State(state), Query(MarketCompaniesQuery { limit: Some(0) }))
-                .await
-                .expect_err("limit=0 should be rejected");
+        let error = match get_market_companies(
+            State(state),
+            Query(MarketCompaniesQuery { limit: Some(0) }),
+        )
+        .await
+        {
+            Err(e) => e,
+            Ok(_) => panic!("limit=0 should be rejected"),
+        };
 
         let payload = parse_json_response(error).await;
 
@@ -309,14 +363,17 @@ mod tests {
     async fn market_salary_trend_requires_seniority() {
         let state = test_state(JobsService::for_tests(JobsServiceStub::default()));
 
-        let error = get_market_salary_trend(
+        let error = match get_market_salary_trend(
             State(state),
             Query(MarketSalaryQuery {
-                seniority: Some("   ".to_string()),
+                seniority: Some(" ".to_string()),
             }),
         )
         .await
-        .expect_err("blank seniority should be rejected");
+        {
+            Err(error) => error,
+            Ok(_) => panic!("blank seniority should be rejected"),
+        };
 
         let payload = parse_json_response(error).await;
 
@@ -434,9 +491,12 @@ mod tests {
         let state = test_state(JobsService::for_tests(JobsServiceStub::default()));
 
         let error =
-            get_market_role_demand(State(state), Query(MarketRolesQuery { period: Some(0) }))
+            match get_market_role_demand(State(state), Query(MarketRolesQuery { period: Some(0) }))
                 .await
-                .expect_err("period=0 should be rejected");
+            {
+                Err(error) => error,
+                Ok(_) => panic!("period=0 should be rejected"),
+            };
 
         let payload = parse_json_response(error).await;
 

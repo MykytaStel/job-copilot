@@ -2,9 +2,9 @@ use axum::Extension;
 use axum::extract::{Path, State};
 
 use crate::api::dto::analytics::{
-    AnalyticsSummaryResponse, FeedbackSummarySection, FunnelSummaryResponse,
-    JobsByLifecycleSection, JobsBySourceEntry, LlmContextAnalyzedProfile, LlmContextResponse,
-    SalaryIntelligenceResponse,
+    AnalyticsSummaryResponse, FeedbackSummarySection, FunnelSummaryResponse, IngestionSourceEntry,
+    IngestionStatsResponse, JobsByLifecycleSection, JobsBySourceEntry, LlmContextAnalyzedProfile,
+    LlmContextResponse, SalaryIntelligenceResponse,
 };
 use crate::api::error::ApiError;
 use crate::api::middleware::auth::AuthUser;
@@ -261,5 +261,36 @@ pub async fn get_llm_context(
         feedback_summary,
         top_positive_evidence,
         top_negative_evidence,
+    }))
+}
+
+pub async fn get_ingestion_stats(
+    State(state): State<AppState>,
+) -> Result<axum::Json<IngestionStatsResponse>, ApiError> {
+    let feed_summary = state
+        .jobs_service
+        .feed_summary()
+        .await
+        .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
+
+    let source_counts = state
+        .jobs_service
+        .jobs_by_source()
+        .await
+        .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
+
+    Ok(axum::Json(IngestionStatsResponse {
+        last_ingested_at: feed_summary.last_ingested_at,
+        total_jobs: feed_summary.total_jobs as u32,
+        active_jobs: feed_summary.active_jobs as u32,
+        inactive_jobs: feed_summary.inactive_jobs as u32,
+        sources: source_counts
+            .into_iter()
+            .map(|s| IngestionSourceEntry {
+                source: s.source,
+                count: s.count as u32,
+                last_seen: s.last_seen,
+            })
+            .collect(),
     }))
 }
