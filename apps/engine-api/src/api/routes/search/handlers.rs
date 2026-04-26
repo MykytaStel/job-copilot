@@ -13,6 +13,7 @@ use crate::api::routes::jobs::load_feedback_state;
 use crate::domain::feedback::model::CompanyFeedbackStatus;
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::outcome_dataset::event_signals_by_job_id;
+use crate::services::salary::score_search_salary;
 use crate::services::search_ranking::runtime::{RerankerRuntimeMode, resolve_reranker_runtime};
 use crate::services::search_ranking::summarize_match_quality;
 use crate::state::AppState;
@@ -208,9 +209,17 @@ pub async fn run_search(
                 .unwrap_or_default();
 
             crate::api::dto::search::RankedJobResponse {
-                job: crate::api::dto::jobs::JobResponse::from_view_with_feedback(
-                    ranked.job, feedback,
-                ),
+                job: {
+                    let salary_signal =
+                        score_search_salary(salary_expectation.as_ref(), &ranked.job.job);
+                    let mut job_response =
+                        crate::api::dto::jobs::JobResponse::from_view_with_feedback(
+                            ranked.job, feedback,
+                        );
+                    job_response.presentation.salary_fit_label = salary_signal.label;
+                    job_response.presentation.missing_salary = salary_signal.missing_salary;
+                    job_response
+                },
                 fit: crate::api::dto::search::JobFitResponse::from(ranked.fit),
             }
         })
