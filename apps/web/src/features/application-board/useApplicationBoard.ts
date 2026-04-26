@@ -51,7 +51,10 @@ export function useApplicationBoard() {
     queryFn: getJobs,
   });
 
-  const jobsById = useMemo(() => new Map(jobs.map((job) => [job.id, job])), [jobs]);
+  const jobsById = useMemo(
+    () => new Map(jobs.map((job) => [job.id, job])),
+    [jobs],
+  );
 
   const rejectedCount = applications.filter(
     (application) => application.status === 'rejected',
