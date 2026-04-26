@@ -295,7 +295,7 @@ async fn creates_note_for_existing_application() {
         ResumesService::for_tests(ResumesServiceStub::default()),
     );
 
-    let (status, Json(note)) = create_note(
+    let (status, Json(_)) = create_note(
         State(state),
         Path("application-1".to_string()),
         ApiJson(crate::api::dto::applications::CreateNoteRequest {

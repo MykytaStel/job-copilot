@@ -363,14 +363,17 @@ mod tests {
     async fn market_salary_trend_requires_seniority() {
         let state = test_state(JobsService::for_tests(JobsServiceStub::default()));
 
-        let error = get_market_salary_trend(
+        let error = match get_market_salary_trend(
             State(state),
             Query(MarketSalaryQuery {
-                seniority: Some("   ".to_string()),
+                seniority: Some(" ".to_string()),
             }),
         )
         .await
-        .expect_err("blank seniority should be rejected");
+        {
+            Err(error) => error,
+            Ok(_) => panic!("blank seniority should be rejected"),
+        };
 
         let payload = parse_json_response(error).await;
 
@@ -488,9 +491,12 @@ mod tests {
         let state = test_state(JobsService::for_tests(JobsServiceStub::default()));
 
         let error =
-            get_market_role_demand(State(state), Query(MarketRolesQuery { period: Some(0) }))
+            match get_market_role_demand(State(state), Query(MarketRolesQuery { period: Some(0) }))
                 .await
-                .expect_err("period=0 should be rejected");
+            {
+                Err(error) => error,
+                Ok(_) => panic!("period=0 should be rejected"),
+            };
 
         let payload = parse_json_response(error).await;
 
