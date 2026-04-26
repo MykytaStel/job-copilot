@@ -35,7 +35,7 @@ export function ApplicationsHeader({
               key={s}
               type="button"
               onClick={() => onFilter(filterStatus === s ? 'all' : s)}
-              className="flex items-center gap-1.5 rounded-full border border-border bg-surface-muted px-3 py-1 text-xs transition-colors hover:bg-surface-elevated focus:outline-none"
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface-muted px-3 py-1 text-xs transition-colors hover:bg-surface-elevated focus:outline-none"
               aria-pressed={filterStatus === s}
             >
               <StatusBadge status={s} />
@@ -52,7 +52,7 @@ export function ApplicationsHeader({
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           placeholder="Search role or company…"
-          className="w-full rounded-xl border border-border bg-surface-muted py-2 pl-9 pr-3 text-sm text-card-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+          className="w-full min-w-0 rounded-xl border border-border bg-surface-muted py-2 pl-9 pr-3 text-sm text-card-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
         />
       </div>
     </div>
