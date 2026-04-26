@@ -1,6 +1,6 @@
-# Current Focus — 2026-04-22
+# Current Focus — 2026-04-26
 
-## ✅ Already Done
+## Done
 
 - **Active web shell** — runtime goes through `apps/web/src/App.tsx` -> `apps/web/src/AppShell.tsx`; `AppShellNew.tsx` is only a re-export alias
 - **Sidebar profile** — real name/email is wired from profile query in the active app shell
@@ -13,18 +13,27 @@
 - **Profile compensation + languages** — schema, API, persistence, and web UI are live
 - **Market base page** — overview, company activity, salary trends, and role demand are live
 - **Search profile persistence** — `search_preferences` now persist on profiles; the structured search profile still rebuilds on demand
-- **Lifecycle presentation semantics** — jobs now expose explicit lifecycle labels for posted/seen, last confirmed active, inactive since, and reactivated states
-- **Dashboard rerank throttling** — ranked mode now reranks on demand and only over a bounded first window instead of eager-ranking the full feed
+- **Lifecycle presentation semantics** — jobs expose explicit lifecycle labels for posted/seen,
+  last confirmed active, inactive since, and reactivated states
+- **Dashboard rerank throttling** — ranked mode reranks on demand over a bounded first window
+  instead of eager-ranking the full feed
+- **AI-agent workflow docs (PR #30)** — stabilized and merged: `CLAUDE.md`, `AGENTS.md`,
+  `codex/CODEX.md`, Codex templates, security task prompt, Claude skill,
+  and `docs/06-agents/ai-agent-operating-guide.md`
 
-## ⚠️ Partially Done
+## Partially Done
 
-- **Market Intelligence overall** — snapshot writer now refreshes `market_snapshots` after successful ingestion upserts, but current UI/API still read directly from `jobs`
+- **Market Intelligence overall** — snapshot writer refreshes `market_snapshots` after successful
+  ingestion upserts, but current UI/API still read directly from `jobs`
 - **ML provider defaulting** — runtime code defaults to `template`; Docker Compose defaults `ML_LLM_PROVIDER` to `ollama`
 
-## ❌ Missing
+## Missing
 
+- Profile ownership guards in `engine-api` (see next slices)
+- ML internal token production validation (see next slices)
 - CV Tailoring endpoint + web entrypoint
 - Analytics freshness widget for ingestion recency
+- Dedicated notification preferences (settings expansion)
 - Additional market sections from the broader spec:
   - freeze signals
   - tech skills demand
@@ -45,16 +54,35 @@
 
 ## Recommended Next Slices
 
-| # | Задача | Складність | Пріоритет |
-|---|--------|------------|-----------|
-| A | **CV Tailoring** — ML endpoint + web modal (відмінно від cover letter — фокус на адаптації CV під JD) | M | Висока |
-| B | **Settings expansion** — dedicated notification prefs + profile preference controls beyond the current read-only route | M | Висока |
-| C | **Analytics freshness widget** — ingestion recency and feed freshness in analytics | XS | Низьке |
-| D | **Market snapshot readers** — якщо потрібно, поступово переводити market sections з live `jobs` queries на snapshots | M | Низьке |
+1. **Security: profile ownership guards**
+   - Profile-scoped engine routes must reject mismatched owner with `403`; missing profile stays `404`.
+   - Complexity: S, Priority: High.
+   - See `codex/tasks/security/profile-ownership-and-ml-token-slice.md`.
+
+2. **Security: ML internal token production validation**
+   - Production ML startup must fail fast without internal token; no token logging.
+   - Complexity: XS, Priority: High.
+   - See same task prompt.
+
+3. **CV Tailoring**
+   - ML endpoint + web modal (distinct from cover letter — focus on adapting CV to JD).
+   - Complexity: M, Priority: High.
+
+4. **Settings expansion**
+   - Dedicated notification prefs + profile preference controls beyond the current minimal route.
+   - Complexity: M, Priority: Medium.
+
+5. **Analytics freshness widget**
+   - Ingestion recency and feed freshness in analytics.
+   - Complexity: XS, Priority: Low.
+
+6. **Market snapshot readers**
+   - Gradually migrate market sections from live `jobs` queries to snapshots where beneficial.
+   - Complexity: M, Priority: Low.
 
 ## Not Now
 
-- Semantic embeddings / sentence-transformers (Phase 4.4) — потрібні дані спочатку
-- Auth / multi-user (Phase 5) — потрібна монетизація спочатку
-- Stripe (Phase 5) — після auth
-- Email delivery — після notifications прогресу
+- Semantic embeddings / sentence-transformers — labeled data needed first
+- Auth / multi-user (Phase 5) — product flow must stabilize first
+- Stripe (Phase 5) — after auth
+- Email delivery — after notifications progress
