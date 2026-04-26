@@ -1,7 +1,7 @@
 @import './tokens.css';
 @import './base.css';
 @import './components.css';
-@import './pages.css';
+@import './pages.css'; @import './mobile-responsive.css';
 
 /* Phase 0: additive Tailwind v4 — no preflight, but keep the default theme
  * so breakpoint variants like sm:/md:/lg: are generated in production.
