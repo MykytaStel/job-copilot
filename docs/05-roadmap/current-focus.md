@@ -13,13 +13,18 @@
 - **Profile compensation + languages** — schema, API, persistence, and web UI are live
 - **Market base page** — overview, company activity, salary trends, and role demand are live
 - **Search profile persistence** — `search_preferences` now persist on profiles; the structured search profile still rebuilds on demand
-- **Lifecycle presentation semantics** — jobs now expose explicit lifecycle labels for posted/seen, last confirmed active, inactive since, and reactivated states
-- **Dashboard rerank throttling** — ranked mode now reranks on demand and only over a bounded first window instead of eager-ranking the full feed
-- **AI-agent workflow docs (PR #30)** — stabilized and merged: `CLAUDE.md`, `AGENTS.md`, `codex/CODEX.md`, Codex templates (`_template-implementation-slice.md`, `_template-review-diff.md`), security task prompt (`codex/tasks/security/profile-ownership-and-ml-token-slice.md`), Claude skill (`/.claude/skills/job-copilot-quality/SKILL.md`), and `docs/06-agents/ai-agent-operating-guide.md`
+- **Lifecycle presentation semantics** — jobs expose explicit lifecycle labels for posted/seen,
+  last confirmed active, inactive since, and reactivated states
+- **Dashboard rerank throttling** — ranked mode reranks on demand over a bounded first window
+  instead of eager-ranking the full feed
+- **AI-agent workflow docs (PR #30)** — stabilized and merged: `CLAUDE.md`, `AGENTS.md`,
+  `codex/CODEX.md`, Codex templates, security task prompt, Claude skill,
+  and `docs/06-agents/ai-agent-operating-guide.md`
 
 ## Partially Done
 
-- **Market Intelligence overall** — snapshot writer now refreshes `market_snapshots` after successful ingestion upserts, but current UI/API still read directly from `jobs`
+- **Market Intelligence overall** — snapshot writer refreshes `market_snapshots` after successful
+  ingestion upserts, but current UI/API still read directly from `jobs`
 - **ML provider defaulting** — runtime code defaults to `template`; Docker Compose defaults `ML_LLM_PROVIDER` to `ollama`
 
 ## Missing
@@ -49,14 +54,31 @@
 
 ## Recommended Next Slices
 
-| # | Task | Complexity | Priority |
-|---|------|-----------|----------|
-| 1 | **Security: profile ownership guards** — profile-scoped engine routes must reject mismatched owner with `403`; missing profile stays `404`; see `codex/tasks/security/profile-ownership-and-ml-token-slice.md` | S | High |
-| 2 | **Security: ML internal token production validation** — production ML startup must fail fast without internal token; no token logging; see same task prompt | XS | High |
-| 3 | **CV Tailoring** — ML endpoint + web modal (distinct from cover letter — focus on adapting CV to JD) | M | High |
-| 4 | **Settings expansion** — dedicated notification prefs + profile preference controls beyond the current minimal route | M | Medium |
-| 5 | **Analytics freshness widget** — ingestion recency and feed freshness in analytics | XS | Low |
-| 6 | **Market snapshot readers** — gradually migrate market sections from live `jobs` queries to snapshots where beneficial | M | Low |
+1. **Security: profile ownership guards**
+   - Profile-scoped engine routes must reject mismatched owner with `403`; missing profile stays `404`.
+   - Complexity: S, Priority: High.
+   - See `codex/tasks/security/profile-ownership-and-ml-token-slice.md`.
+
+2. **Security: ML internal token production validation**
+   - Production ML startup must fail fast without internal token; no token logging.
+   - Complexity: XS, Priority: High.
+   - See same task prompt.
+
+3. **CV Tailoring**
+   - ML endpoint + web modal (distinct from cover letter — focus on adapting CV to JD).
+   - Complexity: M, Priority: High.
+
+4. **Settings expansion**
+   - Dedicated notification prefs + profile preference controls beyond the current minimal route.
+   - Complexity: M, Priority: Medium.
+
+5. **Analytics freshness widget**
+   - Ingestion recency and feed freshness in analytics.
+   - Complexity: XS, Priority: Low.
+
+6. **Market snapshot readers**
+   - Gradually migrate market sections from live `jobs` queries to snapshots where beneficial.
+   - Complexity: M, Priority: Low.
 
 ## Not Now
 
