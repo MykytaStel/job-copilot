@@ -2,6 +2,7 @@ use serde::Serialize;
 
 use crate::api::dto::feedback::JobFeedbackStateResponse;
 use crate::domain::feedback::model::JobFeedbackState;
+use crate::domain::job::age::{is_stale_from_dates, is_stale_job_view};
 use crate::domain::job::model::{
     Job, JobFeedSummary, JobLifecycleStage, JobSourceVariant, JobView,
 };
@@ -36,6 +37,7 @@ pub struct JobPresentationResponse {
     pub lifecycle_primary_label: Option<String>,
     pub lifecycle_secondary_label: Option<String>,
     pub badges: Vec<String>,
+    pub stale: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -67,6 +69,7 @@ pub struct JobResponse {
     pub lifecycle_stage: JobLifecycleStageResponse,
     pub primary_variant: Option<JobSourceVariantResponse>,
     pub presentation: JobPresentationResponse,
+    pub stale: bool,
     pub feedback: JobFeedbackStateResponse,
 }
 
@@ -91,6 +94,7 @@ pub struct MlJobLifecycleResponse {
     pub lifecycle_stage: JobLifecycleStageResponse,
     pub primary_variant: Option<JobSourceVariantResponse>,
     pub presentation: JobPresentationResponse,
+    pub stale: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -121,7 +125,14 @@ impl From<JobView> for JobResponse {
 
 impl JobResponse {
     pub fn from_job_with_feedback(job: Job, feedback: JobFeedbackState) -> Self {
-        let presentation = JobPresentationResponse::from(build_job_presentation(&job));
+        let first_seen_at = job
+            .posted_at
+            .clone()
+            .unwrap_or_else(|| job.last_seen_at.clone());
+        let stale = is_stale_from_dates(Some(&job.last_seen_at), &first_seen_at);
+
+        let mut presentation = JobPresentationResponse::from(build_job_presentation(&job));
+        presentation.stale = stale;
 
         Self {
             id: job.id,
@@ -134,8 +145,8 @@ impl JobResponse {
             salary_min: job.salary_min,
             salary_max: job.salary_max,
             salary_currency: job.salary_currency,
-            posted_at: job.posted_at.clone(),
-            first_seen_at: job.posted_at.unwrap_or_else(|| job.last_seen_at.clone()),
+            posted_at: job.posted_at,
+            first_seen_at,
             last_seen_at: job.last_seen_at,
             is_active: job.is_active,
             inactivated_at: None,
@@ -147,12 +158,16 @@ impl JobResponse {
             },
             primary_variant: None,
             presentation,
+            stale,
             feedback: JobFeedbackStateResponse::from(feedback),
         }
     }
 
     pub fn from_view_with_feedback(view: JobView, feedback: JobFeedbackState) -> Self {
-        let presentation = JobPresentationResponse::from(build_job_view_presentation(&view));
+        let stale = is_stale_job_view(&view);
+
+        let mut presentation = JobPresentationResponse::from(build_job_view_presentation(&view));
+        presentation.stale = stale;
 
         Self {
             id: view.job.id,
@@ -174,6 +189,7 @@ impl JobResponse {
             lifecycle_stage: view.lifecycle_stage.into(),
             primary_variant: view.primary_variant.map(JobSourceVariantResponse::from),
             presentation,
+            stale,
             feedback: JobFeedbackStateResponse::from(feedback),
         }
     }
@@ -181,7 +197,10 @@ impl JobResponse {
 
 impl From<JobView> for MlJobLifecycleResponse {
     fn from(view: JobView) -> Self {
-        let presentation = JobPresentationResponse::from(build_job_view_presentation(&view));
+        let stale = is_stale_job_view(&view);
+
+        let mut presentation = JobPresentationResponse::from(build_job_view_presentation(&view));
+        presentation.stale = stale;
 
         Self {
             id: view.job.id,
@@ -203,6 +222,7 @@ impl From<JobView> for MlJobLifecycleResponse {
             lifecycle_stage: view.lifecycle_stage.into(),
             primary_variant: view.primary_variant.map(JobSourceVariantResponse::from),
             presentation,
+            stale,
         }
     }
 }
@@ -250,6 +270,7 @@ impl From<JobPresentation> for JobPresentationResponse {
             lifecycle_primary_label: value.lifecycle_primary_label,
             lifecycle_secondary_label: value.lifecycle_secondary_label,
             badges: value.badges,
+            stale: false,
         }
     }
 }
