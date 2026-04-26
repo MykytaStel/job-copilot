@@ -1,10 +1,13 @@
+use axum::Extension;
 use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{Json, body};
 use serde_json::{Value, json};
 
 use crate::api::dto::feedback::UpdateCompanyFeedbackRequest;
 use crate::api::error::ApiJson;
+use crate::api::middleware::auth::AuthUser;
 use crate::domain::feedback::model::{
     CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackRecord,
 };
@@ -514,4 +517,39 @@ async fn save_job_still_succeeds_when_event_logging_fails_softly() {
         result.is_ok(),
         "feedback write should not fail when event logging is unavailable"
     );
+}
+
+#[tokio::test]
+async fn non_owner_gets_forbidden_on_feedback_list() {
+    let state = test_state();
+
+    let response = list_feedback(
+        State(state),
+        Some(Extension(AuthUser {
+            profile_id: "other-profile".to_string(),
+        })),
+        Path("profile-1".to_string()),
+    )
+    .await
+    .expect_err("non-owner should be rejected")
+    .into_response();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn missing_profile_returns_not_found_on_feedback_list() {
+    let state = AppState::for_services(
+        ProfilesService::for_tests(ProfilesServiceStub::default()),
+        JobsService::for_tests(JobsServiceStub::default()),
+        ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+        ResumesService::for_tests(ResumesServiceStub::default()),
+    );
+
+    let response = list_feedback(State(state), None, Path("nonexistent-profile".to_string()))
+        .await
+        .expect_err("missing profile should return 404")
+        .into_response();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
