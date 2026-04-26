@@ -143,6 +143,7 @@ fn profile_not_found(profile_id: &str) -> ApiError {
 
 #[cfg(test)]
 mod tests {
+    use axum::Extension;
     use axum::body;
     use axum::extract::{Path, State};
     use axum::http::StatusCode;
@@ -152,6 +153,7 @@ mod tests {
     use crate::api::dto::profile::CreateProfileRequest;
     use crate::api::dto::search_profile::BuildStoredSearchProfileRequest;
     use crate::api::error::ApiJson;
+    use crate::api::middleware::auth::AuthUser;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
@@ -302,6 +304,71 @@ mod tests {
                 .expect("target_roles should be an array")
                 .contains(&json!("frontend_engineer"))
         );
+    }
+
+    #[tokio::test]
+    async fn owner_can_get_profile() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(ProfilesServiceStub::default()),
+            JobsService::for_tests(JobsServiceStub::default()),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        );
+
+        let _ = create_profile(
+            State(state.clone()),
+            ApiJson(CreateProfileRequest {
+                name: "Jane Doe".to_string(),
+                email: "jane@example.com".to_string(),
+                location: None,
+                raw_text: "Senior backend engineer".to_string(),
+                years_of_experience: None,
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                languages: None,
+                search_preferences: None,
+            }),
+        )
+        .await
+        .expect("setup should create profile");
+
+        let result = get_profile_by_id(
+            State(state),
+            Some(Extension(AuthUser {
+                profile_id: "profile_test_001".to_string(),
+            })),
+            Path("profile_test_001".to_string()),
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "owner should be able to access their profile"
+        );
+    }
+
+    #[tokio::test]
+    async fn non_owner_cannot_get_profile() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(ProfilesServiceStub::default()),
+            JobsService::for_tests(JobsServiceStub::default()),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        );
+
+        let response = get_profile_by_id(
+            State(state),
+            Some(Extension(AuthUser {
+                profile_id: "other-profile".to_string(),
+            })),
+            Path("profile_test_001".to_string()),
+        )
+        .await
+        .expect_err("non-owner should be rejected")
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
