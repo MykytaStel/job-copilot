@@ -1,15 +1,18 @@
 import type { ReactNode } from 'react';
+
 import { cn } from '../../lib/cn';
 
 export function EmptyState({
   message,
   description,
   icon,
+  action,
   className,
 }: {
   message: string;
   description?: string;
   icon?: ReactNode;
+  action?: ReactNode;
   className?: string;
 }) {
   return (
@@ -24,6 +27,7 @@ export function EmptyState({
       {description && (
         <p className="m-0 mt-2 text-xs leading-6 text-muted-foreground">{description}</p>
       )}
+      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
   );
 }

@@ -4,7 +4,9 @@ import type { CompanyFeedbackRecord } from '@job-copilot/shared/feedback';
 import type { JobPosting } from '@job-copilot/shared';
 import type { LucideIcon } from 'lucide-react';
 import { Bookmark, EyeOff, ThumbsDown } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
+import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import {
   CompanyPanel,
@@ -52,7 +54,19 @@ function JobFeedbackSection({
   return (
     <Section title={title} icon={<Icon size={16} />} description={description} count={jobs.length}>
       {jobs.length === 0 ? (
-        <EmptyState message={emptyMessage} className="px-4 py-5 text-left" />
+        <EmptyState
+          icon={<Icon className="h-10 w-10" />}
+          message={emptyMessage}
+          description="Use the job feed to save, hide, or mark roles as bad fit."
+          action={
+            <Link to="/" className="inline-flex no-underline">
+              <Button size="sm" variant="outline">
+                Find jobs
+              </Button>
+            </Link>
+          }
+          className="px-4 py-5"
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {jobs.map((job) => (
