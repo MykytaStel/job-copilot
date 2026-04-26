@@ -182,12 +182,12 @@ export function DashboardMatchesSection({
 
       <div className={DENSITY_GAP[density]}>
         {jobsLoading ? (
-          <>
-            <JobCardSkeleton />
-            <JobCardSkeleton />
-            <JobCardSkeleton />
-          </>
-        ) : jobs.length === 0 ? (
+  <div className={density === 'compact' ? 'space-y-2' : 'space-y-3'}>
+    {Array.from({ length: 5 }, (_, index) => (
+      <JobCardSkeleton key={index} compact={density === 'compact'} />
+    ))}
+  </div>
+) : jobs.length === 0 ? (
           <EmptyState
             message={hasActiveFilters ? 'No jobs found. Try adjusting your filters.' : 'No jobs available yet.'}
             description={

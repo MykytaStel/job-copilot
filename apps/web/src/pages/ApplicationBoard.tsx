@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ClipboardList, Download } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Download } from 'lucide-react';
 import type { ApplicationStatus } from '@job-copilot/shared';
+
+import { ApplicationBoardSkeleton } from '../components/ApplicationBoardSkeleton';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Page } from '../components/ui/Page';
@@ -12,7 +13,8 @@ import { ApplicationsTable } from './application-board/ApplicationsTable';
 import { ApplicationQuickPanel } from './application-board/ApplicationQuickPanel';
 
 export default function ApplicationBoard() {
-  const { applications, jobsById, error, isLoading, moveMutation, exportCsv } = useApplicationBoard();
+  const { applications, jobsById, error, isLoading, moveMutation, exportCsv } =
+    useApplicationBoard();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -20,20 +22,30 @@ export default function ApplicationBoard() {
 
   const filtered = useMemo(() => {
     let result = applications;
-    if (filterStatus !== 'all') result = result.filter((a) => a.status === filterStatus);
+
+    if (filterStatus !== 'all') {
+      result = result.filter((application) => application.status === filterStatus);
+    }
+
     if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter((a) => {
-        const job = jobsById.get(a.jobId);
+      const query = search.toLowerCase();
+
+      result = result.filter((application) => {
+        const job = jobsById.get(application.jobId);
+
         return (
-          job?.title?.toLowerCase().includes(q) || job?.company?.toLowerCase().includes(q)
+          job?.title?.toLowerCase().includes(query) ||
+          job?.company?.toLowerCase().includes(query)
         );
       });
     }
+
     return result;
   }, [applications, jobsById, filterStatus, search]);
 
-  const selectedApplication = selectedId ? applications.find((a) => a.id === selectedId) : null;
+  const selectedApplication = selectedId
+    ? applications.find((application) => application.id === selectedId)
+    : null;
 
   function handleSelect(id: string) {
     setSelectedId((prev) => (prev === id ? null : id));
@@ -43,58 +55,49 @@ export default function ApplicationBoard() {
     <Page>
       <PageHeader
         title="Applications"
-        description="Track saved roles, submitted applications, interview loops, offers, and outcomes."
-        breadcrumb={[{ label: 'Dashboard', href: '/' }, { label: 'Applications' }]}
+        description="Track saved jobs and move them through your application pipeline."
         actions={
           applications.length > 0 ? (
-            <Button onClick={exportCsv}>
-              <Download size={14} />
+            <Button type="button" variant="outline" onClick={exportCsv}>
+              <Download className="h-4 w-4" />
               Export CSV
             </Button>
           ) : undefined
         }
       />
 
-      {!isLoading && error && (
-        <EmptyState
-          message={error instanceof Error ? error.message : 'Не вдалося завантажити заявки'}
-        />
-      )}
-
       {isLoading ? (
-        <div className="rounded-2xl border border-border bg-card/70 px-5 py-7 text-center text-sm text-muted-foreground">
-          Loading applications…
-        </div>
-      ) : applications.length === 0 ? (
-        <EmptyState
-          icon={<ClipboardList className="h-10 w-10" />}
-          message="No applications yet."
-          description="Find a relevant job and save it to start tracking your pipeline."
-          action={
-            <Link to="/" className="inline-flex no-underline">
-              <Button size="sm">Find jobs</Button>
-            </Link>
-          }
-        />
+        <ApplicationBoardSkeleton />
       ) : (
-        <div className="space-y-4">
-          <ApplicationsHeader
-            applications={applications}
-            search={search}
-            filterStatus={filterStatus}
-            onSearch={setSearch}
-            onFilter={setFilterStatus}
-          />
+        <>
+          {error && (
+            <EmptyState
+              message="Не вдалося завантажити заявки"
+              description={
+                error instanceof Error ? error.message : 'Спробуйте оновити сторінку.'
+              }
+            />
+          )}
 
-          <div
-            className={`grid gap-4 transition-all ${selectedApplication ? 'xl:grid-cols-[1fr_384px]' : ''}`}
-          >
-            <div className="min-w-0">
+          {applications.length === 0 ? (
+            <EmptyState
+              message="No applications yet."
+              description="Save your first job from the dashboard to start tracking it here."
+            />
+          ) : (
+            <div className="space-y-5">
+              <ApplicationsHeader
+                applications={applications}
+                search={search}
+                filterStatus={filterStatus}
+                onSearch={setSearch}
+                onFilter={setFilterStatus}
+              />
+
               {filtered.length === 0 ? (
                 <EmptyState
-                  icon={<ClipboardList className="h-10 w-10" />}
                   message="No applications match the current filters."
-                  description="Try a different search query or status filter."
+                  description="Try another status or search query."
                 />
               ) : (
                 <ApplicationsTable
@@ -106,19 +109,17 @@ export default function ApplicationBoard() {
                   onMove={(id, status) => moveMutation.mutate({ id, status })}
                 />
               )}
-            </div>
 
-            {selectedApplication && (
-              <div className="xl:sticky xl:top-4 xl:h-[calc(100vh-8rem)]">
+              {selectedApplication && (
                 <ApplicationQuickPanel
                   application={selectedApplication}
                   job={jobsById.get(selectedApplication.jobId)}
                   onClose={() => setSelectedId(null)}
                 />
-              </div>
-            )}
-          </div>
-        </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </Page>
   );
