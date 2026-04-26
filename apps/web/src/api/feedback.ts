@@ -7,13 +7,19 @@ import type {
   SalaryFeedbackSignal,
   WorkModeFeedbackSignal,
 } from '@job-copilot/shared/feedback';
-import { json, request } from './client';
+import { json, mlRequest, request } from './client';
 import type {
   EngineCompanyFeedbackRecord,
   EngineFeedbackOverviewResponse,
   EngineJobFeedbackRecord,
 } from './engine-types';
 import { mapCompanyFeedbackRecord, mapJobFeedbackRecord } from './mappers';
+
+async function bustRerankCache(profileId: string): Promise<void> {
+  await mlRequest<void>('/api/v1/rerank/invalidate', json('POST', { profile_id: profileId })).catch(
+    () => undefined,
+  );
+}
 
 export async function getFeedback(profileId: string): Promise<FeedbackOverview> {
   const response = await request<EngineFeedbackOverviewResponse>(
@@ -39,7 +45,7 @@ export async function markJobSaved(profileId: string, jobId: string): Promise<Jo
     `/api/v1/profiles/${profileId}/jobs/${jobId}/saved`,
     json('PUT', {}),
   );
-
+  await bustRerankCache(profileId);
   return mapJobFeedbackRecord(record);
 }
 
@@ -51,7 +57,7 @@ export async function hideJobForProfile(
     `/api/v1/profiles/${profileId}/jobs/${jobId}/hidden`,
     json('PUT', {}),
   );
-
+  await bustRerankCache(profileId);
   return mapJobFeedbackRecord(record);
 }
 
@@ -60,7 +66,7 @@ export async function markJobBadFit(profileId: string, jobId: string): Promise<J
     `/api/v1/profiles/${profileId}/jobs/${jobId}/bad-fit`,
     json('PUT', {}),
   );
-
+  await bustRerankCache(profileId);
   return mapJobFeedbackRecord(record);
 }
 

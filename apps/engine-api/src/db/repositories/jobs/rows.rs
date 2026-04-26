@@ -52,6 +52,7 @@ pub(super) struct JobFeedSummaryRow {
     pub(super) active_jobs: i64,
     pub(super) inactive_jobs: i64,
     pub(super) reactivated_jobs: i64,
+    pub(super) last_ingested_at: Option<String>,
 }
 
 impl From<JobRow> for Job {

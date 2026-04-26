@@ -65,15 +65,18 @@ fn test_state() -> AppState {
                     active_jobs: 6,
                     inactive_jobs: 3,
                     reactivated_jobs: 1,
+                    last_ingested_at: Some("2025-01-15T10:00:00".to_string()),
                 })
                 .with_jobs_by_source(vec![
                     JobSourceCount {
                         source: "djinni".to_string(),
                         count: 7,
+                        last_seen: "2025-01-15T10:00:00".to_string(),
                     },
                     JobSourceCount {
                         source: "work_ua".to_string(),
                         count: 3,
+                        last_seen: "2025-01-14T08:00:00".to_string(),
                     },
                 ]),
         ),
@@ -459,4 +462,61 @@ async fn llm_context_analyzed_profile_fields_match_profile_analysis() {
     assert_eq!(analysis.primary_role, "backend_engineer");
     assert_eq!(analysis.seniority, "senior");
     assert!(analysis.skills.contains(&"rust".to_string()));
+}
+
+#[tokio::test]
+async fn ingestion_stats_returns_feed_totals_and_last_ingested_at() {
+    use super::get_ingestion_stats;
+
+    let state = test_state();
+
+    let axum::Json(stats) = get_ingestion_stats(State(state))
+        .await
+        .expect("ingestion stats should succeed");
+
+    assert_eq!(stats.total_jobs, 10);
+    assert_eq!(stats.active_jobs, 6);
+    assert_eq!(stats.inactive_jobs, 3);
+    assert_eq!(stats.last_ingested_at.as_deref(), Some("2025-01-15T10:00:00"));
+}
+
+#[tokio::test]
+async fn ingestion_stats_sources_include_count_and_last_seen() {
+    use super::get_ingestion_stats;
+
+    let state = test_state();
+
+    let axum::Json(stats) = get_ingestion_stats(State(state))
+        .await
+        .expect("ingestion stats should succeed");
+
+    assert_eq!(stats.sources.len(), 2);
+    assert_eq!(stats.sources[0].source, "djinni");
+    assert_eq!(stats.sources[0].count, 7);
+    assert_eq!(stats.sources[0].last_seen, "2025-01-15T10:00:00");
+    assert_eq!(stats.sources[1].source, "work_ua");
+    assert_eq!(stats.sources[1].count, 3);
+    assert_eq!(stats.sources[1].last_seen, "2025-01-14T08:00:00");
+}
+
+#[tokio::test]
+async fn ingestion_stats_returns_none_when_no_jobs_ingested() {
+    use super::get_ingestion_stats;
+
+    let state = AppState::for_services(
+        ProfilesService::for_tests(ProfilesServiceStub::default()),
+        JobsService::for_tests(JobsServiceStub::default()),
+        ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+        ResumesService::for_tests(ResumesServiceStub::default()),
+    );
+
+    let axum::Json(stats) = get_ingestion_stats(State(state))
+        .await
+        .expect("ingestion stats should succeed");
+
+    assert_eq!(stats.total_jobs, 0);
+    assert_eq!(stats.active_jobs, 0);
+    assert_eq!(stats.inactive_jobs, 0);
+    assert!(stats.last_ingested_at.is_none());
+    assert!(stats.sources.is_empty());
 }

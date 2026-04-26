@@ -101,5 +101,6 @@ export const queryKeys = {
       ['analytics', 'profileInsights', profileId, contextVersion] as const,
     weeklyGuidance: (profileId: string, contextVersion: string) =>
       ['analytics', 'weeklyGuidance', profileId, contextVersion] as const,
+    ingestionStats: () => ['analytics', 'ingestionStats'] as const,
   },
 };

@@ -1,7 +1,9 @@
-import { Briefcase, CalendarDays, Search, SortAsc, TrendingUp } from 'lucide-react';
+import { useState } from 'react';
+import { Briefcase, CalendarDays, DollarSign, Search, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { DashboardPageState } from '../../features/dashboard/useDashboardPage';
 import type { LifecycleFilter } from '../../features/dashboard/useDashboardPage';
+import { readDensity, DENSITY_GAP, type SortMode } from '../../lib/displayPrefs';
 
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent } from '../../components/ui/Card';
@@ -10,17 +12,23 @@ import { FilterChips } from '../../components/ui/FilterChips';
 import { JobCard, JobCardSkeleton } from '../../components/ui/JobCard';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 
+const SORT_TABS: { id: SortMode; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: 'relevance', label: 'Relevance', icon: TrendingUp },
+  { id: 'date', label: 'Date', icon: CalendarDays },
+  { id: 'salary', label: 'Salary', icon: DollarSign },
+];
+
 export function DashboardMatchesSection({
   profileId,
   mode,
-  setSortByScore,
+  sortMode,
+  setSortMode,
   search,
   setSearch,
   jobs,
   allJobs,
   rerankCoverage,
   jobsLoading,
-  rankData,
   lifecycleOptions,
   selectedLifecycle,
   updateFilters,
@@ -37,14 +45,14 @@ export function DashboardMatchesSection({
   DashboardPageState,
   | 'profileId'
   | 'mode'
-  | 'setSortByScore'
+  | 'sortMode'
+  | 'setSortMode'
   | 'search'
   | 'setSearch'
   | 'jobs'
   | 'allJobs'
   | 'rerankCoverage'
   | 'jobsLoading'
-  | 'rankData'
   | 'lifecycleOptions'
   | 'selectedLifecycle'
   | 'updateFilters'
@@ -58,6 +66,7 @@ export function DashboardMatchesSection({
   | 'badFitMutation'
   | 'unmarkBadFitMutation'
 >) {
+  const [density] = useState(() => readDensity());
   return (
     <div>
       <SectionHeader
@@ -72,21 +81,18 @@ export function DashboardMatchesSection({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
               <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Ranking mode
+                Sort
               </p>
               <div className="flex flex-wrap gap-2">
-                {[
-                  { id: 'ranked', label: 'Ranked', icon: TrendingUp },
-                  { id: 'recent', label: 'Recent', icon: CalendarDays },
-                ].map((tab) => (
+                {SORT_TABS.map((tab) => (
                   <Button
                     key={tab.id}
                     type="button"
                     variant="outline"
-                    active={mode === tab.id}
+                    active={sortMode === tab.id}
                     size="sm"
-                    onClick={() => setSortByScore(tab.id === 'ranked')}
-                    disabled={tab.id === 'ranked' && !profileId}
+                    onClick={() => setSortMode(tab.id)}
+                    disabled={tab.id === 'relevance' && !profileId}
                     className="rounded-full px-3.5"
                   >
                     <tab.icon className="h-3.5 w-3.5" />
@@ -116,35 +122,22 @@ export function DashboardMatchesSection({
             />
           </div>
 
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="relative flex-1">
-              <Search
-                size={14}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-content-muted"
-              />
-              <input
-                type="search"
-                placeholder="Фільтр за назвою, компанією…"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="h-11 rounded-xl border border-border bg-background/70"
-                style={{ paddingLeft: 32 }}
-              />
-            </div>
-            {rankData && rankData.length > 0 && (
-              <Button
-                variant={mode === 'ranked' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSortByScore((value) => !value)}
-                title="Сортувати за ML-релевантністю"
-              >
-                <SortAsc size={14} />
-                Score
-              </Button>
-            )}
+          <div className="relative">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-content-muted"
+            />
+            <input
+              type="search"
+              placeholder="Фільтр за назвою, компанією…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-11 w-full rounded-xl border border-border bg-background/70"
+              style={{ paddingLeft: 32 }}
+            />
           </div>
 
-          {mode === 'ranked' && rerankCoverage.isTruncated ? (
+          {sortMode === 'relevance' && rerankCoverage.isTruncated ? (
             <p className="m-0 text-xs leading-6 text-muted-foreground">
               Score sorting reranks the first {rerankCoverage.rankedJobs} feed items out of{' '}
               {rerankCoverage.totalJobs} to keep the dashboard responsive.
@@ -174,7 +167,7 @@ export function DashboardMatchesSection({
         </CardContent>
       </Card>
 
-      <div className="space-y-3">
+      <div className={DENSITY_GAP[density]}>
         {jobsLoading ? (
           <>
             <JobCardSkeleton />

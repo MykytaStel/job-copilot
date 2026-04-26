@@ -12,7 +12,7 @@ use crate::db::repositories::{JobsRepository, RepositoryError};
 use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend,
+    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend, MarketSource,
 };
 
 #[cfg(test)]
@@ -100,7 +100,9 @@ impl JobsService {
         }
     }
 
-    pub async fn market_overview(&self) -> Result<MarketOverview, RepositoryError> {
+    pub async fn market_overview(
+        &self,
+    ) -> Result<(MarketOverview, MarketSource), RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => repository.market_overview().await,
             #[cfg(test)]
@@ -111,7 +113,7 @@ impl JobsService {
     pub async fn market_companies(
         &self,
         limit: i64,
-    ) -> Result<Vec<MarketCompanyEntry>, RepositoryError> {
+    ) -> Result<(Vec<MarketCompanyEntry>, MarketSource), RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => repository.market_companies(limit).await,
             #[cfg(test)]
@@ -122,7 +124,7 @@ impl JobsService {
     pub async fn market_salary_trend(
         &self,
         seniority: &str,
-    ) -> Result<Option<MarketSalaryTrend>, RepositoryError> {
+    ) -> Result<(Option<MarketSalaryTrend>, MarketSource), RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => {
                 repository.market_salary_trend(seniority).await
@@ -132,7 +134,9 @@ impl JobsService {
         }
     }
 
-    pub async fn market_salary_trends(&self) -> Result<Vec<MarketSalaryTrend>, RepositoryError> {
+    pub async fn market_salary_trends(
+        &self,
+    ) -> Result<(Vec<MarketSalaryTrend>, MarketSource), RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => repository.market_salary_trends().await,
             #[cfg(test)]
@@ -143,7 +147,7 @@ impl JobsService {
     pub async fn market_role_demand(
         &self,
         period_days: i32,
-    ) -> Result<Vec<MarketRoleDemandEntry>, RepositoryError> {
+    ) -> Result<(Vec<MarketRoleDemandEntry>, MarketSource), RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => {
                 repository.market_role_demand(period_days).await
