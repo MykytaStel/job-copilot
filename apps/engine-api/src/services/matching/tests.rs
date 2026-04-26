@@ -618,7 +618,7 @@ fn backend_platform_overlap_prefers_engineering_stack_signals() {
 fn stale_job_scores_lower_than_fresh_identical_job() {
     let service = SearchMatchingService::new();
     let profile = search_profile();
-    // Pin fresh job to a far-future date so it always lands in the grace period
+    // Pin fresh job to a far-future date so it never receives an age penalty
     // regardless of when the test runs.
     let base = job_view(
         "job-fresh",
@@ -660,8 +660,8 @@ fn stale_job_scores_lower_than_fresh_identical_job() {
         stale_fit
             .reasons
             .iter()
-            .any(|r| r.contains("Freshness decay applied")),
-        "stale job reasons should contain freshness decay explanation"
+            .any(|r| r.contains("Job age penalty applied")),
+        "stale job reasons should contain job age penalty explanation"
     );
 }
 

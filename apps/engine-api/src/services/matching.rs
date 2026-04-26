@@ -16,6 +16,7 @@ mod scoring;
 #[path = "matching/text.rs"]
 mod text;
 
+use crate::domain::job::age::assess_job_age;
 use crate::domain::job::model::{Job, JobView};
 use crate::domain::job::presentation::assess_description_quality;
 use crate::domain::matching::{JobFit, JobScoreBreakdown, JobScorePenalty};
@@ -36,9 +37,8 @@ use roles::{
     analyze_role_alignment, collect_role_terms, collect_target_roles, infer_role_family_for_job,
 };
 use scoring::{
-    FreshnessDecayConfig, build_reasons, compute_freshness_decay, confidence_factor,
-    days_since_posting, is_low_signal_term, penalty_entry, push_ignored_term, push_unique_region,
-    push_unique_role, push_unique_string, weighted_overlap_ratio,
+    build_reasons, confidence_factor, is_low_signal_term, penalty_entry, push_ignored_term,
+    push_unique_region, push_unique_role, push_unique_string, weighted_overlap_ratio,
 };
 use text::{
     build_searchable_text, build_searchable_text_parts, collect_missing_signals, evaluate_terms,
@@ -337,18 +337,11 @@ impl SearchMatchingService {
             - role_alignment.mismatch_penalty
             - work_mode_penalty
             - seniority_penalty;
-
-        let (days_old, freshness_date_source) = days_since_posting(job);
-        let freshness_decay = compute_freshness_decay(days_old, &FreshnessDecayConfig::default());
-        let score = (base_score * freshness_decay).clamp(0.0, 100.0).round() as u8;
-        let pre_freshness_total = (matching_score.round() as i16
-            + penalties
-                .iter()
-                .map(|penalty| penalty.score_delta)
-                .sum::<i16>())
-        .clamp(0, 100);
-        let freshness_score = i16::from(score) - pre_freshness_total;
-
+        let age_signal = assess_job_age(job);
+        let score = (base_score + f32::from(age_signal.score_delta))
+            .clamp(0.0, 100.0)
+            .round() as u8;
+        let freshness_score = age_signal.score_delta;
         let mut reasons = build_reasons(
             search_profile,
             job,
@@ -362,13 +355,12 @@ impl SearchMatchingService {
             &seniority_alignment,
         );
 
-        if days_old > FreshnessDecayConfig::default().grace_days {
+        if age_signal.score_delta < 0 {
             reasons.push(format!(
-                "Freshness decay applied: job is {} days old via {} (factor {:.2})",
-                days_old, freshness_date_source, freshness_decay
+                "Job age penalty applied: job is {} days old via {} ({} points)",
+                age_signal.days_old, age_signal.source, age_signal.score_delta
             ));
         }
-
         JobFit {
             job_id: job.job.id.clone(),
             score,
