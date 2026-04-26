@@ -335,32 +335,29 @@ Avoid for now unless explicitly requested:
 
 Prefer this order unless the user chooses otherwise:
 
-1. **PR #30 cleanup and merge**
-   - Normalize AI-agent docs formatting.
-   - Remove hidden/bidirectional Unicode characters.
-   - Keep `CLAUDE.md`, `AGENTS.md`, `codex/`, `.claude/skills`, and `docs/06-agents` consistent.
-
-2. **Security: profile ownership guards**
+1. **Security: profile ownership guards**
    - Profile-scoped engine routes must verify that `AuthUser.profile_id` matches path `{id}`.
    - Mismatched owner gets `403`.
    - Missing profile remains a missing-resource response.
+   - Task prompt: `codex/tasks/security/profile-ownership-and-ml-token-slice.md`
 
-3. **Security: ML internal token production validation**
+2. **Security: ML internal token production validation**
    - Production ML startup must fail fast if the internal token is absent.
    - Do not log token values.
+   - Task prompt: `codex/tasks/security/profile-ownership-and-ml-token-slice.md`
 
-4. **CV Tailoring v1**
+3. **CV Tailoring v1**
    - ML endpoint + engine/web entrypoint.
    - Keep suggestions explainable and non-canonical unless persisted through validated engine contracts.
 
-5. **Settings expansion**
+4. **Settings expansion**
    - Dedicated notification preferences.
    - More profile preference controls beyond the minimal settings route.
 
-6. **Analytics freshness widget**
+5. **Analytics freshness widget**
    - Show ingestion recency/feed freshness in analytics.
 
-7. **Market snapshot readers**
+6. **Market snapshot readers**
    - Gradually move market read-side from live `jobs` queries to snapshots when it gives a clear benefit.
 
 ---
