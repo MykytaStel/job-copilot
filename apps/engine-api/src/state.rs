@@ -7,6 +7,7 @@ use crate::db::repositories::{
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
+use crate::services::cv_tailoring::CvTailoringService;
 use crate::services::feedback::FeedbackService;
 use crate::services::fit_scoring::FitScoringService;
 use crate::services::followup::FollowUpService;
@@ -58,6 +59,7 @@ pub struct AppState {
     pub trained_reranker_availability: TrainedRerankerAvailability,
     pub trained_reranker_model: Option<TrainedRerankerModel>,
     pub reranker_bootstrap: RerankerBootstrapService,
+    pub cv_tailoring: CvTailoringService,
     pub jwt_secret: Option<String>,
     pub cors_allowed_origins: Vec<String>,
 }
@@ -77,6 +79,12 @@ impl AppState {
             config.ml_sidecar_timeout_seconds,
         )
         .expect("valid ML sidecar client configuration");
+        let cv_tailoring = CvTailoringService::new(
+            config.ml_sidecar_base_url.clone(),
+            config.ml_sidecar_timeout_seconds,
+            config.ml_sidecar_internal_token.clone(),
+        )
+        .expect("valid ML sidecar client configuration");
 
         let mut state = Self::new_with_rerankers(
             database,
@@ -86,6 +94,7 @@ impl AppState {
             trained_reranker_availability,
             trained_reranker_model,
             reranker_bootstrap,
+            cv_tailoring,
         );
         state.jwt_secret = config.jwt_secret.clone();
         state.cors_allowed_origins = config.cors_allowed_origins.clone();
@@ -100,6 +109,7 @@ impl AppState {
         trained_reranker_availability: TrainedRerankerAvailability,
         trained_reranker_model: Option<TrainedRerankerModel>,
         reranker_bootstrap: RerankerBootstrapService,
+        cv_tailoring: CvTailoringService,
     ) -> Self {
         let profiles_repository = ProfilesRepository::new(database.clone());
         let profile_ml_state_repository = ProfileMlStateRepository::new(database.clone());
@@ -146,6 +156,7 @@ impl AppState {
             trained_reranker_availability,
             trained_reranker_model,
             reranker_bootstrap,
+            cv_tailoring,
             jwt_secret: None,
             cors_allowed_origins: Vec::new(),
         }

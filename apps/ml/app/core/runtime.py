@@ -12,6 +12,8 @@ from app.application_coach_service import ApplicationCoachService
 from app.bootstrap.task_store import BootstrapTaskStore
 from app.cover_letter_draft import CoverLetterDraftProviderError
 from app.cover_letter_draft_service import CoverLetterDraftService
+from app.cv_tailoring import CvTailoringProviderError
+from app.cv_tailoring_service import CvTailoringService
 from app.engine_api_client import build_shared_http_client, configure_shared_client
 from app.fit_analysis_service import FitAnalysisService
 from app.interview_prep import InterviewPrepProviderError
@@ -41,6 +43,7 @@ class AppServices:
     job_fit_explanation_service: JobFitExplanationService | None
     application_coach_service: ApplicationCoachService | None
     cover_letter_draft_service: CoverLetterDraftService | None
+    cv_tailoring_service: CvTailoringService | None
     interview_prep_service: InterviewPrepService | None
     weekly_guidance_service: WeeklyGuidanceService | None
     enrichment_provider_error: str | None
@@ -77,6 +80,7 @@ async def build_app_services(settings: RuntimeSettings) -> AppServices:
     job_fit_explanation_service = None
     application_coach_service = None
     cover_letter_draft_service = None
+    cv_tailoring_service = None
     interview_prep_service = None
     weekly_guidance_service = None
 
@@ -86,11 +90,13 @@ async def build_app_services(settings: RuntimeSettings) -> AppServices:
         job_fit_explanation_service = JobFitExplanationService(enrichment_provider)
         application_coach_service = ApplicationCoachService(enrichment_provider)
         cover_letter_draft_service = CoverLetterDraftService(enrichment_provider)
+        cv_tailoring_service = CvTailoringService(enrichment_provider)
         interview_prep_service = InterviewPrepService(enrichment_provider)
         weekly_guidance_service = WeeklyGuidanceService(enrichment_provider)
     except (
         ApplicationCoachProviderError,
         CoverLetterDraftProviderError,
+        CvTailoringProviderError,
         InterviewPrepProviderError,
         JobFitExplanationProviderError,
         ProfileInsightsProviderError,
@@ -109,6 +115,7 @@ async def build_app_services(settings: RuntimeSettings) -> AppServices:
         job_fit_explanation_service=job_fit_explanation_service,
         application_coach_service=application_coach_service,
         cover_letter_draft_service=cover_letter_draft_service,
+        cv_tailoring_service=cv_tailoring_service,
         interview_prep_service=interview_prep_service,
         weekly_guidance_service=weekly_guidance_service,
         enrichment_provider_error=enrichment_provider_error,

@@ -5,6 +5,7 @@ from tenacity import AsyncRetrying, Retrying, retry_if_exception_type, stop_afte
 
 from app.enrichment.application_coach.contract import ApplicationCoachPrompt
 from app.enrichment.cover_letter_draft.contract import CoverLetterDraftPrompt
+from app.enrichment.cv_tailoring.contract import CvTailoringPrompt
 from app.enrichment.interview_prep.contract import InterviewPrepPrompt
 from app.enrichment.job_fit_explanation.contract import JobFitExplanationPrompt
 from app.enrichment.profile_insights.contract import ProfileInsightsPrompt
@@ -17,6 +18,7 @@ PromptPayload: TypeAlias = (
     | JobFitExplanationPrompt
     | ApplicationCoachPrompt
     | CoverLetterDraftPrompt
+    | CvTailoringPrompt
     | InterviewPrepPrompt
     | WeeklyGuidancePrompt
 )

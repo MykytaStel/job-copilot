@@ -2,6 +2,7 @@ pub mod analytics;
 pub mod applications;
 pub mod auth;
 pub mod behavior;
+pub mod cv_tailoring;
 pub mod debug;
 pub mod events;
 pub mod feedback;
@@ -47,6 +48,7 @@ pub fn protected_router() -> Router<AppState> {
             "/api/v1/applications",
             post(applications::create_application),
         )
+        .route("/api/v1/cv/tailor", post(cv_tailoring::tailor_cv))
         .route(
             "/api/v1/applications/{id}",
             get(applications::get_application_by_id).patch(applications::patch_application),

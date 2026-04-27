@@ -10,6 +10,10 @@ from app.cover_letter_draft import (
     CoverLetterDraftProviderError,
     http_error_from_cover_letter_draft_error,
 )
+from app.cv_tailoring import (
+    CvTailoringProviderError,
+    http_error_from_cv_tailoring_error,
+)
 from app.core.runtime import AppServices
 from app.interview_prep import InterviewPrepProviderError, http_error_from_interview_prep_error
 from app.job_fit_explanation import JobFitExplanationProviderError, http_error_from_job_fit_explanation_error
@@ -86,6 +90,15 @@ def get_cover_letter_draft_service(request: Request):
         return services.cover_letter_draft_service
     raise http_error_from_cover_letter_draft_error(
         CoverLetterDraftProviderError(services.enrichment_provider_error or "provider unavailable")
+    )
+
+
+def get_cv_tailoring_service(request: Request):
+    services = get_app_services(request)
+    if services.cv_tailoring_service is not None:
+        return services.cv_tailoring_service
+    raise http_error_from_cv_tailoring_error(
+        CvTailoringProviderError(services.enrichment_provider_error or "provider unavailable")
     )
 
 

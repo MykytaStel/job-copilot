@@ -10,6 +10,11 @@ from app.enrichment.cover_letter_draft.contract import (
     CoverLetterDraftProviderError,
     CoverLetterDraftRequest,
 )
+from app.enrichment.cv_tailoring.contract import (
+    CvTailoringPrompt,
+    CvTailoringProviderError,
+    CvTailoringRequest,
+)
 from app.enrichment.interview_prep.contract import (
     InterviewPrepPrompt,
     InterviewPrepProviderError,
@@ -168,4 +173,14 @@ class OllamaEnrichmentProvider:
             context_payload=prompt.context_payload,
             output_schema_expectations=prompt.output_schema_expectations,
             error_type=WeeklyGuidanceProviderError,
+        )
+
+    async def generate_cv_tailoring(
+        self, context: CvTailoringRequest, prompt: CvTailoringPrompt
+    ) -> str:
+        return await self._generate(
+            system_instructions=prompt.system_instructions,
+            context_payload=prompt.context_payload,
+            output_schema_expectations=prompt.output_schema_expectations,
+            error_type=CvTailoringProviderError,
         )

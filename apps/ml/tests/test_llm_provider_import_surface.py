@@ -113,11 +113,14 @@ print(json.dumps(loaded))
 
 
 def test_prompt_payload_uses_enrichment_prompt_exports():
+    from app.enrichment.cv_tailoring.contract import CvTailoringPrompt
+
     assert get_args(PromptPayload) == (
         ProfileInsightsPrompt,
         JobFitExplanationPrompt,
         ApplicationCoachPrompt,
         CoverLetterDraftPrompt,
+        CvTailoringPrompt,
         InterviewPrepPrompt,
         WeeklyGuidancePrompt,
     )

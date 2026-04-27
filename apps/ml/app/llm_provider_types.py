@@ -17,6 +17,7 @@ from app.enrichment.profile_insights.contract import (
     LlmContextRequest,
     ProfileInsightsPrompt,
 )
+from app.enrichment.cv_tailoring.contract import CvTailoringPrompt, CvTailoringRequest
 from app.enrichment.weekly_guidance.contract import WeeklyGuidanceRequest
 from app.enrichment.weekly_guidance.prompt import WeeklyGuidancePrompt
 
@@ -54,4 +55,10 @@ class InterviewPrepProvider(Protocol):
 class WeeklyGuidanceProvider(Protocol):
     async def generate_weekly_guidance(
         self, context: WeeklyGuidanceRequest, prompt: WeeklyGuidancePrompt
+    ) -> Any: ...
+
+
+class CvTailoringProvider(Protocol):
+    async def generate_cv_tailoring(
+        self, context: CvTailoringRequest, prompt: CvTailoringPrompt
     ) -> Any: ...

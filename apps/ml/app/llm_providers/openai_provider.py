@@ -10,6 +10,11 @@ from app.enrichment.cover_letter_draft.contract import (
     CoverLetterDraftProviderError,
     CoverLetterDraftRequest,
 )
+from app.enrichment.cv_tailoring.contract import (
+    CvTailoringPrompt,
+    CvTailoringProviderError,
+    CvTailoringRequest,
+)
 from app.enrichment.interview_prep.contract import (
     InterviewPrepPrompt,
     InterviewPrepProviderError,
@@ -171,5 +176,15 @@ class OpenAIEnrichmentProvider(_OpenAIJsonSchemaProvider):
             prompt_name="weekly_guidance",
             failure_label="weekly guidance",
             error_type=WeeklyGuidanceProviderError,
+            prompt=prompt,
+        )
+
+    async def generate_cv_tailoring(
+        self, context: CvTailoringRequest, prompt: CvTailoringPrompt
+    ) -> str:
+        return await self._generate(
+            prompt_name="cv_tailoring",
+            failure_label="cv tailoring",
+            error_type=CvTailoringProviderError,
             prompt=prompt,
         )
