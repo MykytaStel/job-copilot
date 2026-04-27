@@ -17,14 +17,20 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
         search_aliases: &[
             "frontend engineer",
             "frontend developer",
+            "front-end engineer",
+            "front-end developer",
             "react developer",
             "vue developer",
             "angular developer",
             "javascript developer",
+            "typescript developer",
+            "svelte developer",
+            "nuxt developer",
             "ui engineer",
             "web engineer",
             "nextjs developer",
             "front end developer",
+            "web developer",
         ],
         family: Some("engineering"),
         is_fallback: false,
@@ -36,12 +42,23 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
         search_aliases: &[
             "backend engineer",
             "backend developer",
+            "back-end engineer",
+            "back-end developer",
+            "back end developer",
             "server-side developer",
+            "server developer",
             "api developer",
             "platform engineer",
             "software engineer",
             "rust engineer",
             "go developer",
+            "python developer",
+            "java developer",
+            "node.js developer",
+            "nodejs developer",
+            "node developer",
+            "php developer",
+            "ruby developer",
         ],
         family: Some("engineering"),
         is_fallback: false,
@@ -53,8 +70,11 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
         search_aliases: &[
             "fullstack engineer",
             "fullstack developer",
+            "full-stack engineer",
             "full-stack developer",
             "full stack engineer",
+            "full stack developer",
+            "full stack web developer",
         ],
         family: Some("engineering"),
         is_fallback: false,
@@ -81,11 +101,16 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
         display_name: "DevOps Engineer",
         search_aliases: &[
             "devops engineer",
+            "devops developer",
             "platform engineer",
             "cloud engineer",
             "site reliability engineer",
             "sre",
+            "reliability engineer",
             "infrastructure engineer",
+            "systems engineer",
+            "kubernetes engineer",
+            "ci/cd engineer",
         ],
         family: Some("engineering"),
         is_fallback: false,
@@ -100,6 +125,10 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "etl developer",
             "data analyst",
             "analytics engineer",
+            "data pipeline engineer",
+            "bi developer",
+            "business intelligence developer",
+            "database developer",
         ],
         family: Some("data"),
         is_fallback: false,
@@ -112,8 +141,13 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "ml engineer",
             "machine learning engineer",
             "ai engineer",
+            "ai developer",
+            "artificial intelligence engineer",
             "data scientist",
             "deep learning engineer",
+            "computer vision engineer",
+            "nlp engineer",
+            "research engineer",
         ],
         family: Some("data"),
         is_fallback: false,
@@ -127,6 +161,13 @@ pub const ROLE_CATALOG: &[RoleMetadata] = &[
             "test engineer",
             "automation qa engineer",
             "quality assurance engineer",
+            "quality engineer",
+            "tester",
+            "software tester",
+            "manual tester",
+            "manual qa",
+            "sdet",
+            "automation tester",
         ],
         family: Some("engineering"),
         is_fallback: false,
@@ -301,6 +342,134 @@ mod tests {
                 entry.family.is_some(),
                 "non-fallback role '{}' has no family",
                 entry.canonical_key
+            );
+        }
+    }
+
+    fn aliases_for(role_id: RoleId) -> &'static [&'static str] {
+        find_role(role_id).search_aliases
+    }
+
+    #[test]
+    fn new_frontend_aliases_present() {
+        let aliases = aliases_for(RoleId::FrontendEngineer);
+        for expected in [
+            "front-end engineer",
+            "front-end developer",
+            "typescript developer",
+            "svelte developer",
+            "nuxt developer",
+            "web developer",
+        ] {
+            assert!(
+                aliases.contains(&expected),
+                "FrontendEngineer missing alias: {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn new_backend_aliases_present() {
+        let aliases = aliases_for(RoleId::BackendEngineer);
+        for expected in [
+            "back-end engineer",
+            "back-end developer",
+            "back end developer",
+            "node.js developer",
+            "nodejs developer",
+            "node developer",
+            "python developer",
+            "java developer",
+            "php developer",
+            "ruby developer",
+        ] {
+            assert!(
+                aliases.contains(&expected),
+                "BackendEngineer missing alias: {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn new_fullstack_aliases_present() {
+        let aliases = aliases_for(RoleId::FullstackEngineer);
+        for expected in [
+            "full-stack engineer",
+            "full stack developer",
+            "full stack web developer",
+        ] {
+            assert!(
+                aliases.contains(&expected),
+                "FullstackEngineer missing alias: {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn new_devops_aliases_present() {
+        let aliases = aliases_for(RoleId::DevopsEngineer);
+        for expected in [
+            "devops developer",
+            "reliability engineer",
+            "systems engineer",
+            "kubernetes engineer",
+            "ci/cd engineer",
+        ] {
+            assert!(
+                aliases.contains(&expected),
+                "DevopsEngineer missing alias: {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn new_ml_aliases_present() {
+        let aliases = aliases_for(RoleId::MlEngineer);
+        for expected in [
+            "ai developer",
+            "artificial intelligence engineer",
+            "computer vision engineer",
+            "nlp engineer",
+            "research engineer",
+        ] {
+            assert!(
+                aliases.contains(&expected),
+                "MlEngineer missing alias: {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn new_qa_aliases_present() {
+        let aliases = aliases_for(RoleId::QaEngineer);
+        for expected in [
+            "quality engineer",
+            "tester",
+            "software tester",
+            "manual tester",
+            "manual qa",
+            "sdet",
+            "automation tester",
+        ] {
+            assert!(
+                aliases.contains(&expected),
+                "QaEngineer missing alias: {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn new_data_aliases_present() {
+        let aliases = aliases_for(RoleId::DataEngineer);
+        for expected in [
+            "data pipeline engineer",
+            "bi developer",
+            "business intelligence developer",
+            "database developer",
+        ] {
+            assert!(
+                aliases.contains(&expected),
+                "DataEngineer missing alias: {expected}"
             );
         }
     }

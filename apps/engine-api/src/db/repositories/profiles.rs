@@ -31,6 +31,7 @@ struct ProfileRow {
     salary_currency: Option<String>,
     languages_json: String,
     preferred_work_mode: Option<String>,
+    preferred_language: Option<String>,
     search_preferences: Option<Json<SearchPreferences>>,
     created_at: String,
     updated_at: String,
@@ -82,6 +83,7 @@ impl ProfilesRepository {
                 salary_currency,
                 languages::text AS languages_json,
                 preferred_work_mode,
+                preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -134,6 +136,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
+                preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -173,6 +176,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
+                preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -214,6 +218,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
+                preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -266,8 +271,12 @@ impl ProfilesRepository {
                     WHEN $14 THEN $15
                     ELSE languages
                 END,
-                search_preferences = CASE
+                preferred_language = CASE
                     WHEN $16 THEN $17
+                    ELSE preferred_language
+                END,
+                search_preferences = CASE
+                    WHEN $18 THEN $19
                     ELSE search_preferences
                 END,
                 summary = CASE
@@ -313,6 +322,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
+                preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -334,6 +344,13 @@ impl ProfilesRepository {
         .bind(&input.salary_currency)
         .bind(input.languages.is_some())
         .bind(input.languages.as_ref().map(|value| Json(value.clone())))
+        .bind(input.preferred_language.is_some())
+        .bind(
+            input
+                .preferred_language
+                .as_ref()
+                .and_then(|v| v.as_deref().map(|s| s.to_string())),
+        )
         .bind(input.search_preferences.is_some())
         .bind(
             input
@@ -385,6 +402,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 preferred_work_mode,
+                preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
@@ -436,6 +454,7 @@ impl TryFrom<ProfileRow> for Profile {
             salary_currency: row.salary_currency.unwrap_or_else(|| "USD".to_string()),
             languages: serde_json::from_str(&row.languages_json)?,
             preferred_work_mode: row.preferred_work_mode,
+            preferred_language: row.preferred_language,
             search_preferences: row.search_preferences.map(|value| value.0),
             created_at: row.created_at,
             updated_at: row.updated_at,

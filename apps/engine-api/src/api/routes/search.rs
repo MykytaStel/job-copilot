@@ -12,8 +12,8 @@ use comparison::{build_reranker_comparison, mark_reranker_fallback};
 pub use handlers::SearchQuery;
 pub use handlers::{run_search, search};
 pub(crate) use reranking::{
-    SearchLearningAggregates, apply_behavior_scoring, apply_feedback_scoring,
-    apply_learned_reranking, apply_salary_scoring, apply_trained_reranking,
+    SearchLearningAggregates, apply_application_outcome_scoring, apply_behavior_scoring,
+    apply_feedback_scoring, apply_learned_reranking, apply_salary_scoring, apply_trained_reranking,
     load_learning_aggregates, load_search_salary_expectation, score_by_job_id,
 };
 

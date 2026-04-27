@@ -148,6 +148,7 @@ mod tests {
             salary_min: Some(5000),
             salary_max: Some(7000),
             salary_currency: Some("USD".to_string()),
+            language: None,
             posted_at: None,
             last_seen_at: "2026-04-14T00:00:00Z".to_string(),
             is_active: true,
