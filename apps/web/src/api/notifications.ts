@@ -4,7 +4,10 @@ import type {
   EngineNotification,
   EngineNotificationsResponse,
   EngineUnreadNotificationsCountResponse,
+	EngineNotificationPreferences,
+  EngineUpdateNotificationPreferencesRequest,
 } from './engine-types';
+
 
 export type AppNotificationType = 'new_jobs_found' | 'job_reactivated' | 'application_due_soon';
 
@@ -19,6 +22,23 @@ export type AppNotification = {
   createdAt: string;
 };
 
+export type NotificationPreferences = {
+  profileId: string;
+  newJobsMatchingProfile: boolean;
+  applicationStatusReminders: boolean;
+  weeklyDigest: boolean;
+  marketIntelligenceUpdates: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type UpdateNotificationPreferencesInput = Partial<{
+  newJobsMatchingProfile: boolean;
+  applicationStatusReminders: boolean;
+  weeklyDigest: boolean;
+  marketIntelligenceUpdates: boolean;
+}>;
+
 function mapNotification(notification: EngineNotification): AppNotification {
   return {
     id: notification.id,
@@ -29,6 +49,31 @@ function mapNotification(notification: EngineNotification): AppNotification {
     payload: notification.payload ?? undefined,
     readAt: notification.read_at ?? undefined,
     createdAt: notification.created_at,
+  };
+}
+
+function mapNotificationPreferences(
+  preferences: EngineNotificationPreferences,
+): NotificationPreferences {
+  return {
+    profileId: preferences.profile_id,
+    newJobsMatchingProfile: preferences.new_jobs_matching_profile,
+    applicationStatusReminders: preferences.application_status_reminders,
+    weeklyDigest: preferences.weekly_digest,
+    marketIntelligenceUpdates: preferences.market_intelligence_updates,
+    createdAt: preferences.created_at,
+    updatedAt: preferences.updated_at,
+  };
+}
+
+function toEngineNotificationPreferencesPatch(
+  input: UpdateNotificationPreferencesInput,
+): EngineUpdateNotificationPreferencesRequest {
+  return {
+    new_jobs_matching_profile: input.newJobsMatchingProfile,
+    application_status_reminders: input.applicationStatusReminders,
+    weekly_digest: input.weeklyDigest,
+    market_intelligence_updates: input.marketIntelligenceUpdates,
   };
 }
 
@@ -59,4 +104,23 @@ export async function getUnreadCount(): Promise<number> {
   );
 
   return response.unread_count;
+}
+
+export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+  const response = await request<EngineNotificationPreferences>(
+    '/api/v1/notifications/preferences',
+  );
+
+  return mapNotificationPreferences(response);
+}
+
+export async function patchNotificationPreferences(
+  input: UpdateNotificationPreferencesInput,
+): Promise<NotificationPreferences> {
+  const response = await request<EngineNotificationPreferences>(
+    '/api/v1/notifications/preferences',
+    json('PATCH', toEngineNotificationPreferencesPatch(input)),
+  );
+
+  return mapNotificationPreferences(response);
 }

@@ -5,6 +5,8 @@ export type {
   EngineNotification,
   EngineNotificationsResponse,
   EngineUnreadNotificationsCountResponse,
+	EngineNotificationPreferences,
+	EngineUpdateNotificationPreferencesRequest,
 } from './engine-types/notifications';
 
 export type {
