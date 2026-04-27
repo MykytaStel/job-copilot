@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::db::repositories::{NotificationsRepository, RepositoryError};
 use crate::domain::notification::model::Notification;
+use crate::domain::notification::model::NotificationPreferences;
 
 #[derive(Clone)]
 enum NotificationsServiceBackend {
@@ -56,6 +57,49 @@ impl NotificationsService {
             NotificationsServiceBackend::Stub(stub) => stub.unread_count(profile_id),
         }
     }
+    pub async fn get_preferences(
+        &self,
+        profile_id: &str,
+    ) -> Result<NotificationPreferences, RepositoryError> {
+        match &self.backend {
+            NotificationsServiceBackend::Repository(repository) => {
+                repository.get_preferences(profile_id).await
+            }
+            #[cfg(test)]
+            NotificationsServiceBackend::Stub(stub) => stub.get_preferences(profile_id),
+        }
+    }
+
+    pub async fn update_preferences(
+        &self,
+        profile_id: &str,
+        new_jobs_matching_profile: Option<bool>,
+        application_status_reminders: Option<bool>,
+        weekly_digest: Option<bool>,
+        market_intelligence_updates: Option<bool>,
+    ) -> Result<NotificationPreferences, RepositoryError> {
+        match &self.backend {
+            NotificationsServiceBackend::Repository(repository) => {
+                repository
+                    .update_preferences(
+                        profile_id,
+                        new_jobs_matching_profile,
+                        application_status_reminders,
+                        weekly_digest,
+                        market_intelligence_updates,
+                    )
+                    .await
+            }
+            #[cfg(test)]
+            NotificationsServiceBackend::Stub(stub) => stub.update_preferences(
+                profile_id,
+                new_jobs_matching_profile,
+                application_status_reminders,
+                weekly_digest,
+                market_intelligence_updates,
+            ),
+        }
+    }
 
     #[cfg(test)]
     pub fn for_tests(stub: NotificationsServiceStub) -> Self {
@@ -70,6 +114,7 @@ impl NotificationsService {
 pub struct NotificationsServiceStub {
     notifications_by_id: Mutex<HashMap<String, Notification>>,
     database_disabled: bool,
+    preferences_by_profile_id: Mutex<HashMap<String, NotificationPreferences>>,
 }
 
 #[cfg(test)]
@@ -140,5 +185,78 @@ impl NotificationsServiceStub {
                 notification.profile_id == profile_id && notification.read_at.is_none()
             })
             .count() as i64)
+    }
+    fn default_preferences(profile_id: &str) -> NotificationPreferences {
+        NotificationPreferences {
+            profile_id: profile_id.to_string(),
+            new_jobs_matching_profile: true,
+            application_status_reminders: true,
+            weekly_digest: true,
+            market_intelligence_updates: true,
+            created_at: "2026-04-27T00:00:00Z".to_string(),
+            updated_at: "2026-04-27T00:00:00Z".to_string(),
+        }
+    }
+
+    fn get_preferences(
+        &self,
+        profile_id: &str,
+    ) -> Result<NotificationPreferences, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let mut preferences = self
+            .preferences_by_profile_id
+            .lock()
+            .expect("notification preferences stub mutex should not be poisoned");
+
+        let entry = preferences
+            .entry(profile_id.to_string())
+            .or_insert_with(|| Self::default_preferences(profile_id));
+
+        Ok(entry.clone())
+    }
+
+    fn update_preferences(
+        &self,
+        profile_id: &str,
+        new_jobs_matching_profile: Option<bool>,
+        application_status_reminders: Option<bool>,
+        weekly_digest: Option<bool>,
+        market_intelligence_updates: Option<bool>,
+    ) -> Result<NotificationPreferences, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let mut preferences = self
+            .preferences_by_profile_id
+            .lock()
+            .expect("notification preferences stub mutex should not be poisoned");
+
+        let entry = preferences
+            .entry(profile_id.to_string())
+            .or_insert_with(|| Self::default_preferences(profile_id));
+
+        if let Some(value) = new_jobs_matching_profile {
+            entry.new_jobs_matching_profile = value;
+        }
+
+        if let Some(value) = application_status_reminders {
+            entry.application_status_reminders = value;
+        }
+
+        if let Some(value) = weekly_digest {
+            entry.weekly_digest = value;
+        }
+
+        if let Some(value) = market_intelligence_updates {
+            entry.market_intelligence_updates = value;
+        }
+
+        entry.updated_at = "2026-04-27T01:00:00Z".to_string();
+
+        Ok(entry.clone())
     }
 }

@@ -2,9 +2,10 @@ use axum::extract::{Extension, Path, Query, State};
 use serde::Deserialize;
 
 use crate::api::dto::notifications::{
-    NotificationResponse, NotificationsResponse, UnreadNotificationsCountResponse,
+    NotificationPreferencesResponse, NotificationResponse, NotificationsResponse,
+    UnreadNotificationsCountResponse, UpdateNotificationPreferencesRequest,
 };
-use crate::api::error::ApiError;
+use crate::api::error::{ApiError, ApiJson};
 use crate::api::middleware::auth::AuthUser;
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::state::AppState;
@@ -78,6 +79,54 @@ pub async fn get_unread_count(
         unread_count,
     }))
 }
+pub async fn get_notification_preferences(
+    State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
+) -> Result<axum::Json<NotificationPreferencesResponse>, ApiError> {
+    let profile_id = require_profile_id(auth.as_deref())?;
+
+    ensure_profile_exists(&state, None, &profile_id).await?;
+
+    let preferences = state
+        .notifications_service
+        .get_preferences(&profile_id)
+        .await
+        .map_err(|error| {
+            ApiError::from_repository(error, "notification_preferences_query_failed")
+        })?;
+
+    Ok(axum::Json(NotificationPreferencesResponse::from(
+        preferences,
+    )))
+}
+
+pub async fn patch_notification_preferences(
+    State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
+    ApiJson(payload): ApiJson<UpdateNotificationPreferencesRequest>,
+) -> Result<axum::Json<NotificationPreferencesResponse>, ApiError> {
+    let profile_id = require_profile_id(auth.as_deref())?;
+
+    ensure_profile_exists(&state, None, &profile_id).await?;
+
+    let preferences = state
+        .notifications_service
+        .update_preferences(
+            &profile_id,
+            payload.new_jobs_matching_profile,
+            payload.application_status_reminders,
+            payload.weekly_digest,
+            payload.market_intelligence_updates,
+        )
+        .await
+        .map_err(|error| {
+            ApiError::from_repository(error, "notification_preferences_write_failed")
+        })?;
+
+    Ok(axum::Json(NotificationPreferencesResponse::from(
+        preferences,
+    )))
+}
 
 fn require_profile_id(auth: Option<&AuthUser>) -> Result<String, ApiError> {
     auth.map(|u| u.profile_id.clone())
@@ -91,7 +140,10 @@ mod tests {
     use axum::response::IntoResponse;
     use serde_json::{Value, json};
 
-    use super::{NotificationsQuery, get_unread_count, list_notifications, mark_notification_read};
+    use super::{
+        NotificationsQuery, get_notification_preferences, get_unread_count, list_notifications,
+        mark_notification_read, patch_notification_preferences,
+    };
     use crate::api::middleware::auth::AuthUser;
     use crate::domain::notification::model::{Notification, NotificationType};
     use crate::domain::profile::model::Profile;
@@ -102,6 +154,8 @@ mod tests {
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
     use crate::state::AppState;
 
+    use crate::api::dto::notifications::UpdateNotificationPreferencesRequest;
+    use crate::api::error::ApiJson;
     fn sample_profile() -> Profile {
         Profile {
             id: "profile-1".to_string(),
@@ -240,5 +294,66 @@ mod tests {
             payload,
             json!({ "profile_id": "profile-1", "unread_count": 1 })
         );
+    }
+    #[tokio::test]
+    async fn get_notification_preferences_returns_default_on_values() {
+        let state = test_state(NotificationsService::for_tests(
+            NotificationsServiceStub::default(),
+        ));
+
+        let payload = parse_json_response(
+            get_notification_preferences(
+                State(state),
+                Some(Extension(AuthUser {
+                    profile_id: "profile-1".to_string(),
+                })),
+            )
+            .await
+            .expect("preferences query should succeed"),
+        )
+        .await;
+
+        assert_eq!(
+            payload,
+            json!({
+                "profile_id": "profile-1",
+                "new_jobs_matching_profile": true,
+                "application_status_reminders": true,
+                "weekly_digest": true,
+                "market_intelligence_updates": true,
+                "created_at": "2026-04-27T00:00:00Z",
+                "updated_at": "2026-04-27T00:00:00Z"
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn patch_notification_preferences_updates_only_sent_fields() {
+        let state = test_state(NotificationsService::for_tests(
+            NotificationsServiceStub::default(),
+        ));
+
+        let payload = parse_json_response(
+            patch_notification_preferences(
+                State(state),
+                Some(Extension(AuthUser {
+                    profile_id: "profile-1".to_string(),
+                })),
+                ApiJson(UpdateNotificationPreferencesRequest {
+                    new_jobs_matching_profile: Some(false),
+                    application_status_reminders: None,
+                    weekly_digest: Some(false),
+                    market_intelligence_updates: None,
+                }),
+            )
+            .await
+            .expect("preferences update should succeed"),
+        )
+        .await;
+
+        assert_eq!(payload["new_jobs_matching_profile"], json!(false));
+        assert_eq!(payload["application_status_reminders"], json!(true));
+        assert_eq!(payload["weekly_digest"], json!(false));
+        assert_eq!(payload["market_intelligence_updates"], json!(true));
     }
 }

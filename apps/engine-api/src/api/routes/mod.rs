@@ -173,6 +173,11 @@ pub fn protected_router() -> Router<AppState> {
             get(notifications::get_unread_count),
         )
         .route(
+            "/api/v1/notifications/preferences",
+            get(notifications::get_notification_preferences)
+                .patch(notifications::patch_notification_preferences),
+        )
+        .route(
             "/api/v1/notifications/{id}/read",
             post(notifications::mark_notification_read),
         )
