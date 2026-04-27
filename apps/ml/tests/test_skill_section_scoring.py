@@ -18,7 +18,9 @@ def test_required_skill_weight_is_higher_than_preferred_weight() -> None:
 
 def test_fallback_heuristic_boosts_early_or_repeated_terms() -> None:
     sections = parse_skill_sections(
-        "Rust backend role. We use Rust daily. GraphQL appears only near the end."
+        "Rust backend role. We use Rust daily. "
+        + ("general backend product engineering text " * 12)
+        + "GraphQL appears only near the end."
     )
 
     assert section_weight_for_term("rust", sections) > section_weight_for_term("graphql", sections)
