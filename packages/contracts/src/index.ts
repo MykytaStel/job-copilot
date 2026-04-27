@@ -5,3 +5,4 @@ export * from './health';
 export * from './jobs';
 export * from './profiles';
 export * from './search';
+export * from './cv-tailoring';

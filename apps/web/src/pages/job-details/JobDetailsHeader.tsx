@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Bookmark,
@@ -18,6 +19,7 @@ import { PageHeader } from '../../components/ui/SectionHeader';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { getJobLifecycleLabels } from '../../lib/jobPresentation';
 import { HeroMetric } from './components';
+import { CvTailoringModal } from '../../components/job-detail/CvTailoringModal';
 
 export function JobDetailsHeader({
   state,
@@ -34,8 +36,20 @@ export function JobDetailsHeader({
   topBadges: string[];
   lifecycleStatus: string;
 }) {
-  const { job, existing, isSaved, copied, handleCopy, saveMutation, unsaveMutation, fit, isBadFit, companyStatus } =
-    state;
+  const [isCvTailoringOpen, setIsCvTailoringOpen] = useState(false);
+
+  const {
+    job,
+    existing,
+    isSaved,
+    copied,
+    handleCopy,
+    saveMutation,
+    unsaveMutation,
+    fit,
+    isBadFit,
+    companyStatus,
+  } = state;
 
   if (!job) {
     return null;
@@ -79,6 +93,14 @@ export function JobDetailsHeader({
               {copied ? <Check className="h-4 w-4 text-fit-excellent" /> : <Copy className="h-4 w-4" />}
               {copied ? 'Copied' : 'Share'}
             </Button>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => setIsCvTailoringOpen(true)}
+						>
+							<Sparkles className="h-4 w-4" />
+							Tailor CV
+						</Button>
           </>
         }
       />
@@ -156,6 +178,11 @@ export function JobDetailsHeader({
           </div>
         </div>
       </div>
+			<CvTailoringModal
+				jobId={job.id}
+				open={isCvTailoringOpen}
+				onClose={() => setIsCvTailoringOpen(false)}
+			/>
     </>
   );
 }
