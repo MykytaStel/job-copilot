@@ -39,6 +39,7 @@ export const queryKeys = {
     list: (profileId: string, limit: number) =>
       ['notifications', 'list', profileId, limit] as const,
     unreadCount: (profileId: string) => ['notifications', 'unreadCount', profileId] as const,
+		preferences: (profileId: string) => ['notifications', 'preferences', profileId] as const,
   },
   alerts: {
     all: () => ['alerts'] as const,

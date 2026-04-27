@@ -49,3 +49,14 @@ pub struct Notification {
     pub read_at: Option<String>,
     pub created_at: String,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NotificationPreferences {
+    pub profile_id: String,
+    pub new_jobs_matching_profile: bool,
+    pub application_status_reminders: bool,
+    pub weekly_digest: bool,
+    pub market_intelligence_updates: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
