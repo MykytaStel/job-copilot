@@ -7,6 +7,8 @@ import { DEFAULT_SCORING_WEIGHTS } from './types';
 export async function buildSearchProfile(
   payload: SearchProfileBuildRequest,
 ): Promise<SearchProfileBuildResult> {
+	const scoringWeights =
+  	payload.preferences?.scoringWeights ?? DEFAULT_SCORING_WEIGHTS;
   const response = await request<EngineBuildSearchProfileResponse>(
     '/api/v1/search-profile/build',
     json('POST', {
@@ -19,18 +21,10 @@ export async function buildSearchProfile(
 			include_keywords: payload.preferences?.includeKeywords ?? [],
 			exclude_keywords: payload.preferences?.excludeKeywords ?? [],
 			scoring_weights: {
-				skill_match_importance:
-					payload.preferences?.scoringWeights.skillMatchImportance ??
-					DEFAULT_SCORING_WEIGHTS.skillMatchImportance,
-				salary_fit_importance:
-					payload.preferences?.scoringWeights.salaryFitImportance ??
-					DEFAULT_SCORING_WEIGHTS.salaryFitImportance,
-				job_freshness_importance:
-					payload.preferences?.scoringWeights.jobFreshnessImportance ??
-					DEFAULT_SCORING_WEIGHTS.jobFreshnessImportance,
-				remote_work_importance:
-					payload.preferences?.scoringWeights.remoteWorkImportance ??
-					DEFAULT_SCORING_WEIGHTS.remoteWorkImportance,
+					skill_match_importance: scoringWeights.skillMatchImportance,
+					salary_fit_importance: scoringWeights.salaryFitImportance,
+					job_freshness_importance: scoringWeights.jobFreshnessImportance,
+					remote_work_importance: scoringWeights.remoteWorkImportance,
 				},
 			},
     }),

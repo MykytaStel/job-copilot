@@ -24,16 +24,22 @@ export function buildSearchProfileDraftFromPreferences(
 
 export function buildPersistedSearchPreferences(
   draft: SearchProfileDraft,
+  existingPreferences?: PersistedSearchPreferences | null,
 ): PersistedSearchPreferences {
-  return {
+  const preferences: PersistedSearchPreferences = {
     targetRegions: draft.targetRegions,
     workModes: draft.workModes,
     preferredRoles: draft.preferredRoles,
     allowedSources: draft.allowedSources,
     includeKeywords: parseKeywordInput(draft.includeKeywordsInput),
     excludeKeywords: parseKeywordInput(draft.excludeKeywordsInput),
-    scoringWeights: DEFAULT_SCORING_WEIGHTS,
   };
+
+  if (existingPreferences?.scoringWeights) {
+    preferences.scoringWeights = existingPreferences.scoringWeights;
+  }
+
+  return preferences;
 }
 
 export function resolveSearchProfileDraft(

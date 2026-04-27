@@ -28,7 +28,7 @@ describe('search profile preference helpers', () => {
   });
 
   it('normalizes builder draft inputs before persistence', () => {
-    expect(
+		expect(
 			buildPersistedSearchPreferences({
 				targetRegions: ['ua'],
 				workModes: ['remote'],
@@ -44,12 +44,6 @@ describe('search profile preference helpers', () => {
 			allowedSources: ['djinni', 'work_ua'],
 			includeKeywords: ['react', 'typescript'],
 			excludeKeywords: ['gambling', 'outsourcing'],
-			scoringWeights: {
-				skillMatchImportance: 8,
-				salaryFitImportance: 6,
-				jobFreshnessImportance: 5,
-				remoteWorkImportance: 5,
-			},
 		});
   });
 

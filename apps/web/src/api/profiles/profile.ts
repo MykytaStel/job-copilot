@@ -66,8 +66,8 @@ function toEngineSearchPreferences(searchPreferences: PersistedSearchPreferences
     include_keywords: searchPreferences.includeKeywords,
     exclude_keywords: searchPreferences.excludeKeywords,
     scoring_weights: toEngineScoringWeights(
-  			searchPreferences.scoringWeights ?? DEFAULT_SCORING_WEIGHTS,
-		),
+      searchPreferences.scoringWeights ?? DEFAULT_SCORING_WEIGHTS,
+    ),
   };
 }
 
