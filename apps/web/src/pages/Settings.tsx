@@ -34,6 +34,12 @@ import {
   type DensityMode,
   type SortMode,
 } from '../lib/displayPrefs';
+import {
+  INGESTION_FREQUENCY_OPTIONS,
+  readIngestionFrequency,
+  writeIngestionFrequency,
+  type IngestionFrequencyMinutes,
+} from '../lib/ingestionFrequencyPrefs';
 import { queryKeys } from '../queryKeys';
 import { buildProfileCompletionState } from '../features/profile/profileCompletion';
 
@@ -99,6 +105,9 @@ export default function Settings() {
   const [activeSection, setActiveSection] = useState<SectionId>('profile');
   const [density, setDensityState] = useState<DensityMode>(() => readDensity());
   const [sortPref, setSortPrefState] = useState<SortMode>(() => readSortMode());
+	const [ingestionFrequency, setIngestionFrequencyState] = useState(() =>
+  	readIngestionFrequency(),
+	);
 	const {
 		data: notificationPreferences,
 		isLoading: notificationPreferencesLoading,
@@ -148,6 +157,11 @@ export default function Settings() {
     writeDensity(value);
     setDensityState(value);
   }
+
+	function setIngestionFrequency(value: IngestionFrequencyMinutes) {
+		writeIngestionFrequency(value);
+		setIngestionFrequencyState(value);
+	}
 
   function setSortPref(value: SortMode) {
     writeSortMode(value);
@@ -333,6 +347,48 @@ export default function Settings() {
                     label="Preferred roles"
                     value={String(persistedSearchPreferences?.preferredRoles.length ?? 0)}
                   />
+									<div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
+									<div className="mb-4">
+											<p className="text-sm font-semibold text-foreground">
+											Ingestion frequency
+										</p>
+										<p className="mt-1 text-sm text-muted-foreground">
+											Choose how often you want new jobs to appear refreshed in the UI.
+										</p>
+									</div>
+
+									<div className="grid gap-3 sm:grid-cols-3">
+										{INGESTION_FREQUENCY_OPTIONS.map((value) => {
+											const selected = ingestionFrequency === value;
+
+											return (
+												<button
+													key={value}
+													type="button"
+													onClick={() => setIngestionFrequency(value)}
+													className={cn(
+														'rounded-[var(--radius-md)] border px-4 py-3 text-left transition-colors',
+														selected
+															? 'border-primary bg-primary/10 text-primary'
+															: 'border-border bg-surface text-muted-foreground hover:border-border/80 hover:text-foreground',
+													)}
+												>
+													<span className="block text-sm font-semibold">
+															Every {value} min
+														</span>
+														<span className="mt-1 block text-xs text-muted-foreground">
+															Display preference
+														</span>
+													</button>
+												);
+											})}
+										</div>
+
+										<p className="mt-4 text-xs text-muted-foreground">
+											Saved locally. Scraping currently runs every 60 min by system default unless
+											the ingestion daemon is started with a different interval.
+										</p>
+									</div>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Full search preference editing lives in Profile &amp; Search.
