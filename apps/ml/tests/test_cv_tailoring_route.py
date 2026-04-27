@@ -94,7 +94,7 @@ def test_cv_tailoring_endpoint_alias_path_also_works() -> None:
     assert response.status_code == 200
 
 
-def test_cv_tailoring_endpoint_returns_502_on_malformed_provider_output() -> None:
+def test_cv_tailoring_endpoint_falls_back_to_template_on_malformed_provider_output() -> None:
     app.dependency_overrides[get_cv_tailoring_service] = lambda: CvTailoringService(
         StubCvTailoringProvider("not valid json {{{")
     )
@@ -107,8 +107,9 @@ def test_cv_tailoring_endpoint_returns_502_on_malformed_provider_output() -> Non
 
     app.dependency_overrides.clear()
 
-    assert response.status_code == 502
-    assert response.json()["detail"] == "CV tailoring provider returned malformed output."
+    assert response.status_code == 200
+    assert response.json()["provider"] == "unknown_fallback_template"
+    assert response.json()["suggestions"]["summary_rewrite"]
 
 
 def test_cv_tailoring_endpoint_returns_422_on_invalid_body() -> None:
