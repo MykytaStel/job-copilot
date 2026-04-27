@@ -13,5 +13,6 @@ pub struct FitScoreComponents {
     pub seniority_alignment: f32,
     pub salary_overlap: f32,
     pub work_mode_match: f32,
+    pub language_match: f32,
     pub recency_bonus: f32,
 }

@@ -37,6 +37,7 @@ impl ProfilesServiceStub {
             salary_currency: input.salary_currency,
             languages: input.languages,
             preferred_work_mode: None,
+            preferred_language: None,
             search_preferences: input.search_preferences,
             created_at: "2026-04-11T00:00:00+00:00".to_string(),
             updated_at: "2026-04-11T00:00:00+00:00".to_string(),

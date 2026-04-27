@@ -103,3 +103,11 @@ class BootstrapTaskStatus(BaseModel):
     finished_at: str | None = None
     promotion_decision: str | None = None
     metrics_version: str | None = None
+
+
+class RerankerStatusResponse(BaseModel):
+    model_version: str
+    trained_at: str | None = None
+    example_count: int
+    accuracy: float | None = None
+    is_functional: bool

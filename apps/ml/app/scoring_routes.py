@@ -12,10 +12,11 @@ from app.api_models import (
     FitAnalyzeResponse,
     RerankInvalidateRequest,
     RerankRequest,
-    RerankResponse,
+    RerankResponse, RerankerStatusResponse,
 )
 from app.engine_api_client import EngineApiResponseError, EngineApiUnavailableError
 from app.rerank_service import InvalidRerankRequestError
+from app.reranker_status import reranker_status
 from app.reranker_bootstrap_service import (
     RerankerBootstrapConflictError,
     RerankerBootstrapServiceError,
@@ -139,6 +140,12 @@ async def bootstrap_reranker(
     background_tasks.add_task(_run_bootstrap)
     return BootstrapTaskAccepted(task_id=task_id)
 
+
+
+
+@router.get("/api/v1/reranker/status", response_model=RerankerStatusResponse)
+async def get_reranker_status() -> RerankerStatusResponse:
+    return RerankerStatusResponse(**reranker_status())
 
 @router.get("/api/v1/reranker/bootstrap/{task_id}", response_model=BootstrapTaskStatus)
 async def get_bootstrap_status(task_id: str, request: Request) -> BootstrapTaskStatus:

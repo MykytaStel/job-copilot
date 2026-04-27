@@ -18,6 +18,7 @@ const JOB_VIEW_BASE_SELECT: &str = r#"
             jobs.salary_min,
             jobs.salary_max,
             jobs.salary_currency,
+            jobs.language,
             jobs.posted_at::text AS posted_at,
             jobs.first_seen_at::text AS first_seen_at,
             jobs.last_seen_at::text AS last_seen_at,
@@ -63,6 +64,7 @@ pub(super) fn job_view_query(where_clause: Option<&str>, limit_clause: Option<&s
             jobs.salary_min,
             jobs.salary_max,
             jobs.salary_currency,
+            jobs.language,
             jobs.posted_at::text AS posted_at,
             jobs.first_seen_at::text AS first_seen_at,
             jobs.last_seen_at::text AS last_seen_at,
@@ -121,6 +123,7 @@ impl JobsRepository {
                 salary_min,
                 salary_max,
                 salary_currency,
+                language,
                 posted_at::text AS posted_at,
                 last_seen_at::text AS last_seen_at,
                 is_active
@@ -333,6 +336,7 @@ impl JobsRepository {
                 salary_min,
                 salary_max,
                 salary_currency,
+                language,
                 posted_at::text AS posted_at,
                 last_seen_at::text AS last_seen_at,
                 is_active

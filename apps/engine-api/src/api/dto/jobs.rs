@@ -1,3 +1,4 @@
+use crate::domain::matching::JobFit;
 use serde::Serialize;
 
 use crate::api::dto::feedback::JobFeedbackStateResponse;
@@ -20,6 +21,12 @@ pub struct JobSourceVariantResponse {
     pub inactivated_at: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct JobScoreSignalResponse {
+    pub label: String,
+    pub delta: i32,
+}
+
 #[derive(Debug, Serialize)]
 pub struct JobPresentationResponse {
     pub title: String,
@@ -40,6 +47,7 @@ pub struct JobPresentationResponse {
     pub lifecycle_secondary_label: Option<String>,
     pub badges: Vec<String>,
     pub stale: bool,
+    pub score_signals: Vec<JobScoreSignalResponse>,
 }
 
 #[derive(Debug, Serialize)]
@@ -275,6 +283,7 @@ impl From<JobPresentation> for JobPresentationResponse {
             lifecycle_secondary_label: value.lifecycle_secondary_label,
             badges: value.badges,
             stale: false,
+            score_signals: Vec::new(),
         }
     }
 }
@@ -287,5 +296,73 @@ impl From<JobFeedSummary> for JobFeedSummaryResponse {
             inactive_jobs: value.inactive_jobs,
             reactivated_jobs: value.reactivated_jobs,
         }
+    }
+}
+
+pub fn score_signals_from_fit(fit: &JobFit) -> Vec<JobScoreSignalResponse> {
+    let breakdown = &fit.score_breakdown;
+    let mut signals: Vec<JobScoreSignalResponse> = Vec::new();
+
+    if breakdown.matching_score > 0 {
+        signals.push(JobScoreSignalResponse {
+            label: "Strong profile match".to_string(),
+            delta: i32::from(breakdown.matching_score),
+        });
+    }
+
+    if breakdown.salary_score != 0 {
+        signals.push(JobScoreSignalResponse {
+            label: if breakdown.salary_score > 0 {
+                "Salary matches expectations".to_string()
+            } else {
+                "Salary below expectations".to_string()
+            },
+            delta: i32::from(breakdown.salary_score),
+        });
+    }
+
+    if breakdown.freshness_score != 0 {
+        signals.push(JobScoreSignalResponse {
+            label: if breakdown.freshness_score > 0 {
+                "Fresh job signal".to_string()
+            } else {
+                "Job age penalty".to_string()
+            },
+            delta: i32::from(breakdown.freshness_score),
+        });
+    }
+
+    if breakdown.reranker_score != 0 {
+        signals.push(JobScoreSignalResponse {
+            label: "Personalized reranker signal".to_string(),
+            delta: i32::from(breakdown.reranker_score),
+        });
+    }
+
+    for penalty in &breakdown.penalties {
+        signals.push(JobScoreSignalResponse {
+            label: human_score_signal_label(&penalty.kind, &penalty.reason),
+            delta: i32::from(penalty.score_delta),
+        });
+    }
+
+    signals.sort_by(|left, right| {
+        right
+            .delta
+            .abs()
+            .cmp(&left.delta.abs())
+            .then_with(|| left.label.cmp(&right.label))
+    });
+
+    signals.truncate(3);
+    signals
+}
+
+fn human_score_signal_label(kind: &str, reason: &str) -> String {
+    match kind {
+        "company_blacklist" => "Company on blacklist".to_string(),
+        "bad_fit_feedback" => "Marked as bad fit".to_string(),
+        _ if !reason.trim().is_empty() => reason.to_string(),
+        _ => "Score penalty".to_string(),
     }
 }

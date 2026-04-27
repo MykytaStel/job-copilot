@@ -18,9 +18,10 @@ use crate::services::search_ranking::summarize_match_quality;
 use crate::state::AppState;
 
 use super::{
-    apply_behavior_scoring, apply_feedback_scoring, apply_learned_reranking, apply_salary_scoring,
-    apply_trained_reranking, build_reranker_comparison, load_learning_aggregates,
-    load_search_salary_expectation, mark_reranker_fallback, score_by_job_id,
+    apply_application_outcome_scoring, apply_behavior_scoring, apply_feedback_scoring,
+    apply_learned_reranking, apply_salary_scoring, apply_trained_reranking,
+    build_reranker_comparison, load_learning_aggregates, load_search_salary_expectation,
+    mark_reranker_fallback, score_by_job_id,
 };
 
 #[derive(Deserialize)]
@@ -119,6 +120,11 @@ pub async fn run_search(
     adjusted_jobs = apply_feedback_scoring(adjusted_jobs, &feedback_by_job_id);
     if let Some(aggregates) = learning_aggregates.as_ref() {
         adjusted_jobs = apply_behavior_scoring(&state, adjusted_jobs, &aggregates.behavior);
+        adjusted_jobs = apply_application_outcome_scoring(
+            &state,
+            adjusted_jobs,
+            &aggregates.outcome_role_boosts,
+        );
     }
     let behavior_score_by_job_id = score_by_job_id(&adjusted_jobs);
     let deterministic_ranked_jobs = adjusted_jobs.clone();

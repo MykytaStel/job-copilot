@@ -10,6 +10,7 @@ pub struct Job {
     pub salary_min: Option<i32>,
     pub salary_max: Option<i32>,
     pub salary_currency: Option<String>,
+    pub language: Option<String>,
     pub posted_at: Option<String>,
     pub last_seen_at: String,
     pub is_active: bool,

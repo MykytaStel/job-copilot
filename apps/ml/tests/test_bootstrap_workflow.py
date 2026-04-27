@@ -314,7 +314,7 @@ def test_successful_training_returns_retrained_result_with_model_path(tmp_path: 
     assert result.example_count == len(dataset.examples)
     assert result.model_path is not None
     assert result.promotion_decision is not None
-    assert "promoted" in result.promotion_decision
+    assert result.promotion_decision == "kept_existing_model_low_validation"
     assert artifact.exists()
 
 

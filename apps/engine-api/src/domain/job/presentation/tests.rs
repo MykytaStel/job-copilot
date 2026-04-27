@@ -23,6 +23,7 @@ fn sample_view(
             salary_min: Some(5000),
             salary_max: Some(6500),
             salary_currency: Some("USD".to_string()),
+            language: None,
             posted_at: Some("2026-04-12T08:00:00Z".to_string()),
             last_seen_at: "2026-04-14T10:00:00Z".to_string(),
             is_active: true,

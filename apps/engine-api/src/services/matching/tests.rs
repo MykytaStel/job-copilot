@@ -114,6 +114,7 @@ fn job_view(
             salary_min: None,
             salary_max: None,
             salary_currency: None,
+            language: None,
             posted_at: Some("2026-04-10T09:00:00Z".to_string()),
             last_seen_at: "2026-04-14T09:00:00Z".to_string(),
             is_active: true,
@@ -662,6 +663,62 @@ fn stale_job_scores_lower_than_fresh_identical_job() {
             .iter()
             .any(|r| r.contains("Job age penalty applied")),
         "stale job reasons should contain job age penalty explanation"
+    );
+}
+
+#[test]
+fn required_skill_gap_penalizes_more_than_preferred_skill_gap() {
+    let service = SearchMatchingService::new();
+
+    let profile = SearchProfile {
+        primary_role: RoleId::BackendEngineer,
+        primary_role_confidence: Some(90),
+        target_roles: vec![RoleId::BackendEngineer],
+        role_candidates: vec![SearchRoleCandidate {
+            role: RoleId::BackendEngineer,
+            confidence: 90,
+        }],
+        seniority: "senior".to_string(),
+        target_regions: vec![TargetRegion::EuRemote],
+        work_modes: vec![WorkMode::Remote],
+        allowed_sources: vec![SourceId::Djinni],
+        profile_skills: vec!["rust".to_string(), "graphql".to_string()],
+        profile_keywords: vec![],
+        search_terms: vec![],
+        exclude_terms: vec![],
+    };
+
+    let required_skill_match = job_view(
+        "job-required-match",
+        "Senior Backend Engineer",
+        "Requirements:\n- Rust\nPreferred:\n- GraphQL",
+        Some("remote"),
+        "djinni",
+    );
+
+    let preferred_skill_only_match = job_view(
+        "job-preferred-only",
+        "Senior Backend Engineer",
+        "Requirements:\n- Kubernetes\nPreferred:\n- GraphQL",
+        Some("remote"),
+        "djinni",
+    );
+
+    let required_fit = service.score_job_deterministic(&profile, &required_skill_match);
+    let preferred_only_fit = service.score_job_deterministic(&profile, &preferred_skill_only_match);
+
+    assert!(
+        required_fit.score > preferred_only_fit.score,
+        "matching a must-have skill should score higher than only matching a nice-to-have skill: required={}, preferred_only={}",
+        required_fit.score,
+        preferred_only_fit.score,
+    );
+
+    assert!(required_fit.matched_skills.contains(&"rust".to_string()));
+    assert!(
+        preferred_only_fit
+            .matched_skills
+            .contains(&"graphql".to_string())
     );
 }
 

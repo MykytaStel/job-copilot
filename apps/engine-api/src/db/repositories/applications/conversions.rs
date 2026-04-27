@@ -169,6 +169,7 @@ impl TryFrom<(ApplicationDetailRow, Option<Offer>)> for ApplicationDetail {
                 salary_min: row.job_salary_min,
                 salary_max: row.job_salary_max,
                 salary_currency: row.job_salary_currency,
+                language: None,
                 posted_at: row.job_posted_at,
                 last_seen_at: row.job_last_seen_at,
                 is_active: row.job_is_active,

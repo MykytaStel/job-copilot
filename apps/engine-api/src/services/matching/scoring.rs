@@ -151,11 +151,11 @@ pub(super) fn confidence_factor(confidence: Option<u8>) -> f32 {
     }
 }
 
-pub(super) fn weighted_overlap_ratio(matched_strength: f32, total: usize) -> f32 {
-    if total == 0 {
+pub(super) fn weighted_overlap_ratio(matched_strength: f32, total: f32) -> f32 {
+    if total == 0.0 {
         0.0
     } else {
-        (matched_strength / total as f32).min(1.0)
+        (matched_strength / total).min(1.0)
     }
 }
 

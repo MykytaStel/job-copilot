@@ -31,6 +31,7 @@ pub(crate) struct SearchLearningAggregates {
     pub(crate) funnel: ProfileFunnelAggregates,
     pub(crate) events: Vec<crate::domain::user_event::model::UserEventRecord>,
     pub(crate) applications_by_job_id: HashMap<String, Application>,
+    pub(crate) outcome_role_boosts: HashMap<String, i16>,
 }
 
 /// Adjust fit scores based on explicit job feedback, then re-sort by adjusted score.
@@ -94,6 +95,7 @@ pub(crate) async fn load_learning_aggregates(
         behavior: BehaviorService::new().build_aggregates(events.iter()),
         funnel: FunnelService::new().build_aggregates(events.iter()),
         applications_by_job_id: load_profile_applications_by_job_id(state, &events).await,
+        outcome_role_boosts: load_application_outcome_role_boosts(state, profile_id).await,
         events,
     })
 }
@@ -162,6 +164,65 @@ pub(crate) fn apply_behavior_scoring(
 
     sort_ranked_jobs(&mut ranked_jobs);
     ranked_jobs
+}
+
+pub(crate) fn apply_application_outcome_scoring(
+    state: &AppState,
+    mut ranked_jobs: Vec<RankedJob>,
+    outcome_role_boosts: &HashMap<String, i16>,
+) -> Vec<RankedJob> {
+    if outcome_role_boosts.is_empty() {
+        return ranked_jobs;
+    }
+
+    for ranked in &mut ranked_jobs {
+        let Some(role_family) = state.search_ranking.infer_role_family(&ranked.job) else {
+            continue;
+        };
+
+        let Some(score_delta) = outcome_role_boosts.get(role_family.as_str()).copied() else {
+            continue;
+        };
+
+        if score_delta <= 0 {
+            continue;
+        }
+
+        ranked.fit.apply_matching_adjustment(
+            score_delta,
+            Some(format!(
+                "Application outcome signal applied: previous positive outcome for role {} (+{})",
+                role_family, score_delta
+            )),
+        );
+    }
+
+    sort_ranked_jobs(&mut ranked_jobs);
+    ranked_jobs
+}
+
+pub(crate) fn application_outcome_boost(application: &Application) -> i16 {
+    let status = application.status.trim().to_lowercase();
+    let outcome = application
+        .outcome
+        .map(|outcome| outcome.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_lowercase();
+
+    if status == "offer" || outcome == "offer_received" {
+        return 3;
+    }
+
+    if status == "interview"
+        || outcome == "phone_screen"
+        || outcome == "technical_interview"
+        || outcome == "final_interview"
+    {
+        return 1;
+    }
+
+    0
 }
 
 pub(crate) fn apply_learned_reranking(
@@ -329,6 +390,65 @@ async fn load_profile_applications_by_job_id(
     applications_by_job_id
 }
 
+async fn load_application_outcome_role_boosts(
+    state: &AppState,
+    profile_id: &str,
+) -> HashMap<String, i16> {
+    let applications = match state
+        .applications_service
+        .list_recent(100, Some(profile_id))
+        .await
+    {
+        Ok(applications) => applications,
+        Err(error) => {
+            warn!(
+                error = %error,
+                profile_id,
+                "failed to load application outcome role boosts; continuing without them"
+            );
+            return HashMap::new();
+        }
+    };
+
+    let mut boosts = HashMap::new();
+
+    for application in applications {
+        let boost = application_outcome_boost(&application);
+
+        if boost <= 0 {
+            continue;
+        }
+
+        let job = match state.jobs_service.get_by_id(&application.job_id).await {
+            Ok(Some(job)) => job,
+            Ok(None) => continue,
+            Err(error) => {
+                warn!(
+                    error = %error,
+                    job_id = application.job_id.as_str(),
+                    "failed to load application job for outcome role boost; continuing"
+                );
+                continue;
+            }
+        };
+
+        let Some(role_family) = state.search_ranking.infer_role_family_for_job(&job) else {
+            continue;
+        };
+
+        boosts
+            .entry(role_family)
+            .and_modify(|current| {
+                if boost > *current {
+                    *current = boost;
+                }
+            })
+            .or_insert(boost);
+    }
+
+    boosts
+}
+
 pub(crate) fn score_by_job_id(ranked_jobs: &[RankedJob]) -> HashMap<String, u8> {
     ranked_jobs
         .iter()
@@ -362,6 +482,7 @@ mod company_reputation_tests {
                     salary_min: None,
                     salary_max: None,
                     salary_currency: None,
+                    language: None,
                     posted_at: None,
                     last_seen_at: "2026-04-27T00:00:00Z".to_string(),
                     is_active: true,
@@ -446,6 +567,57 @@ mod company_reputation_tests {
                 .reasons
                 .iter()
                 .any(|reason| reason.contains("Company is blacklisted"))
+        );
+    }
+
+    #[test]
+    fn application_outcome_boost_uses_only_positive_outcomes() {
+        assert_eq!(
+            super::application_outcome_boost(&crate::domain::application::model::Application {
+                id: "app-offer".to_string(),
+                job_id: "job-1".to_string(),
+                resume_id: None,
+                status: "offer".to_string(),
+                applied_at: None,
+                due_date: None,
+                outcome: None,
+                outcome_date: None,
+                rejection_stage: None,
+                updated_at: "2026-04-27T00:00:00Z".to_string(),
+            }),
+            3
+        );
+
+        assert_eq!(
+            super::application_outcome_boost(&crate::domain::application::model::Application {
+                id: "app-interview".to_string(),
+                job_id: "job-1".to_string(),
+                resume_id: None,
+                status: "interview".to_string(),
+                applied_at: None,
+                due_date: None,
+                outcome: None,
+                outcome_date: None,
+                rejection_stage: None,
+                updated_at: "2026-04-27T00:00:00Z".to_string(),
+            }),
+            1
+        );
+
+        assert_eq!(
+            super::application_outcome_boost(&crate::domain::application::model::Application {
+                id: "app-rejected".to_string(),
+                job_id: "job-1".to_string(),
+                resume_id: None,
+                status: "rejected".to_string(),
+                applied_at: None,
+                due_date: None,
+                outcome: None,
+                outcome_date: None,
+                rejection_stage: None,
+                updated_at: "2026-04-27T00:00:00Z".to_string(),
+            }),
+            0
         );
     }
 

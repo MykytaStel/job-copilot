@@ -239,3 +239,8 @@ def configure_logging() -> None:
     else:
         handlers["format"] = "%(asctime)s %(levelname)s %(name)s %(message)s"
     logging.basicConfig(**handlers)
+
+
+# Reranker promotion thresholds.
+RERANKER_PROMOTION_MIN_EXAMPLES = 30
+RERANKER_PROMOTION_MIN_ACCURACY = 0.65

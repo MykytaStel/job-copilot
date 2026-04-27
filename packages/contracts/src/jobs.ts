@@ -19,6 +19,8 @@ export interface JobSourceVariant {
   inactivatedAt?: string;
 }
 
+export interface JobScoreSignal { label: string; delta: number; }
+
 export interface JobPresentation {
   title: string;
   company: string;
@@ -34,7 +36,7 @@ export interface JobPresentation {
   freshnessLabel?: string;
   lifecyclePrimaryLabel?: string;
   lifecycleSecondaryLabel?: string;
-  badges: string[];
+  badges: string[]; scoreSignals?: JobScoreSignal[];
 }
 
 export interface JobPosting {
