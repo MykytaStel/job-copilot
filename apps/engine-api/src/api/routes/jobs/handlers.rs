@@ -4,7 +4,9 @@ use axum::Extension;
 use axum::extract::{Path, Query, State};
 use tracing::{info, warn};
 
-use crate::api::dto::jobs::{JobResponse, MlJobLifecycleResponse, RecentJobsResponse};
+use crate::api::dto::jobs::{
+    JobResponse, MlJobLifecycleResponse, RecentJobsResponse, score_signals_from_fit,
+};
 use crate::api::dto::ranking::FitScoreResponse;
 use crate::api::dto::search::JobFitResponse;
 use crate::api::error::{ApiError, ApiJson};
@@ -44,9 +46,38 @@ pub async fn get_job_by_id(
     .next()
     .unwrap_or_default();
 
-    Ok(axum::Json(JobResponse::from_view_with_feedback(
-        job, feedback,
-    )))
+    let mut response = JobResponse::from_view_with_feedback(job, feedback);
+
+    if let Some(profile_id) = query.profile_id.as_deref() {
+        match load_profile_ranked_jobs(
+            &state,
+            profile_id,
+            std::slice::from_ref(&job_id),
+            "get_job_by_id_score_signals",
+        )
+        .await
+        {
+            Ok(ranked) => {
+                if let Some(ranked_job) = ranked
+                    .ranked_jobs
+                    .iter()
+                    .find(|ranked_job| ranked_job.job.job.id == job_id)
+                {
+                    response.presentation.score_signals = score_signals_from_fit(&ranked_job.fit);
+                }
+            }
+            Err(error) => {
+                warn!(
+                    error = ?error,
+                    profile_id,
+                    job_id,
+                    "failed to load score signals for job detail; continuing without them"
+                );
+            }
+        }
+    }
+
+    Ok(axum::Json(response))
 }
 
 pub async fn get_ml_job_lifecycle(
@@ -274,7 +305,7 @@ pub async fn get_job_fit(
         warn!(
             job_id = %job_id,
             resume_id = %resume.id,
-            error = %error,
+            error = ?error,
             "failed to persist fit score"
         );
     }
@@ -320,7 +351,7 @@ pub async fn score_job_match(
         warn!(
             job_id = %job_id,
             resume_id = %resume.id,
-            error = %error,
+            error = ?error,
             "failed to persist fit score"
         );
     }
