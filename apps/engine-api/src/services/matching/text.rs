@@ -60,7 +60,9 @@ impl SkillSections {
     pub(super) fn skill_weight(&self, normalized: &str, significant_tokens: &[String]) -> f32 {
         let matches_in = |prepared: &PreparedText| -> bool {
             prepared.matches_signal(normalized)
-                || significant_tokens.iter().any(|t| prepared.matches_signal(t))
+                || significant_tokens
+                    .iter()
+                    .any(|t| prepared.matches_signal(t))
         };
 
         if self.required_text.as_ref().is_some_and(|t| matches_in(t)) {

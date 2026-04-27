@@ -35,8 +35,8 @@ impl TryFrom<FitScoreRow> for FitScore {
                 seniority_alignment: row.seniority_alignment,
                 salary_overlap: row.salary_overlap,
                 work_mode_match: row.work_mode_match,
-                recency_bonus: 0.5,    // not persisted; default to neutral
-                language_match: 0.0,   // not persisted; default to neutral
+                recency_bonus: 0.5,  // not persisted; default to neutral
+                language_match: 0.0, // not persisted; default to neutral
             },
             matched_skills: serde_json::from_str(&row.matched_skills_json)?,
             missing_skills: serde_json::from_str(&row.missing_skills_json)?,

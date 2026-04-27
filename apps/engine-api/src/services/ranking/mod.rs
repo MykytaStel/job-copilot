@@ -99,10 +99,7 @@ impl RankingService {
             job.posted_at.as_deref(),
         );
 
-        let base = (skill_overlap * 0.40
-            + salary_overlap * 0.15
-            + recency_bonus * 0.10)
-            * 100.0;
+        let base = (skill_overlap * 0.40 + salary_overlap * 0.15 + recency_bonus * 0.10) * 100.0;
 
         let total = (base
             + f32::from(work_mode_signal)
@@ -742,14 +739,8 @@ mod tests {
 
     #[test]
     fn seniority_no_job_seniority_gives_zero() {
-        assert_eq!(
-            super::compute_seniority_fit_signal("senior", None),
-            0
-        );
-        assert_eq!(
-            super::compute_seniority_fit_signal("junior", None),
-            0
-        );
+        assert_eq!(super::compute_seniority_fit_signal("senior", None), 0);
+        assert_eq!(super::compute_seniority_fit_signal("junior", None), 0);
     }
 
     #[test]
@@ -758,18 +749,29 @@ mod tests {
             super::compute_seniority_fit_signal("unknown", Some("senior")),
             0
         );
-        assert_eq!(
-            super::compute_seniority_fit_signal("", Some("junior")),
-            0
-        );
+        assert_eq!(super::compute_seniority_fit_signal("", Some("junior")), 0);
     }
 
     #[test]
     fn work_mode_signal_affects_total_score() {
         let service = RankingService::new();
         let candidate = make_candidate(&["rust"], "senior");
-        let remote_job = make_job("rust engineer", Some("senior"), None, None, None, Some("remote"));
-        let onsite_job = make_job("rust engineer", Some("senior"), None, None, None, Some("onsite"));
+        let remote_job = make_job(
+            "rust engineer",
+            Some("senior"),
+            None,
+            None,
+            None,
+            Some("remote"),
+        );
+        let onsite_job = make_job(
+            "rust engineer",
+            Some("senior"),
+            None,
+            None,
+            None,
+            Some("onsite"),
+        );
 
         let profile_remote = Profile {
             id: "p1".to_string(),

@@ -194,8 +194,12 @@ impl SearchMatchingService {
         let role_alignment = analyze_role_alignment(search_profile, &prepared_text, &target_roles);
         let role_terms = collect_role_terms(&target_roles);
         let skill_sections = parse_skill_sections(&job.job.description_text);
-        let matched_profile_skills =
-            evaluate_terms_section_aware(&prepared_text, &search_profile.profile_skills, &[], &skill_sections);
+        let matched_profile_skills = evaluate_terms_section_aware(
+            &prepared_text,
+            &search_profile.profile_skills,
+            &[],
+            &skill_sections,
+        );
         let matched_profile_keywords = evaluate_terms(
             &prepared_text,
             &search_profile.profile_keywords,

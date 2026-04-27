@@ -185,7 +185,7 @@ mod tests {
                 salary_min: None,
                 salary_max: None,
                 salary_currency: None,
-            language: None,
+                language: None,
                 posted_at: Some("2026-04-14T00:00:00Z".to_string()),
                 last_seen_at: "2026-04-15T00:00:00Z".to_string(),
                 is_active: true,

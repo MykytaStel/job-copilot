@@ -669,9 +669,7 @@ fn stale_job_scores_lower_than_fresh_identical_job() {
 #[test]
 fn required_skill_gap_penalizes_more_than_preferred_skill_gap() {
     let service = SearchMatchingService::new();
-    // Profile has two skills: one that the job lists as required, one as preferred.
-    // We test two jobs that are missing one skill each and verify the
-    // job missing the required skill scores lower.
+
     let profile = SearchProfile {
         primary_role: RoleId::BackendEngineer,
         primary_role_confidence: Some(90),
@@ -690,42 +688,38 @@ fn required_skill_gap_penalizes_more_than_preferred_skill_gap() {
         exclude_terms: vec![],
     };
 
-    // Job A: lists Rust as required, GraphQL as preferred — both present.
-    let job_both = job_view(
-        "job-both",
+    let required_skill_match = job_view(
+        "job-required-match",
         "Senior Backend Engineer",
         "Requirements:\n- Rust\nPreferred:\n- GraphQL",
         Some("remote"),
         "djinni",
     );
-    // Job B: has GraphQL (preferred) but is missing Rust (required).
-    let job_missing_required = job_view(
-        "job-missing-required",
+
+    let preferred_skill_only_match = job_view(
+        "job-preferred-only",
         "Senior Backend Engineer",
-        "Requirements:\n- Rust\nPreferred:\n- GraphQL\nWe work with GraphQL daily.",
-        Some("remote"),
-        "djinni",
-    );
-    // Job C: has Rust (required) but is missing GraphQL (preferred).
-    let job_missing_preferred = job_view(
-        "job-missing-preferred",
-        "Senior Backend Engineer",
-        "Requirements:\n- Rust\nWe build Rust services. GraphQL is not used here.",
+        "Requirements:\n- Kubernetes\nPreferred:\n- GraphQL",
         Some("remote"),
         "djinni",
     );
 
-    let fit_missing_required = service.score_job_deterministic(&profile, &job_missing_required);
-    let fit_missing_preferred = service.score_job_deterministic(&profile, &job_missing_preferred);
+    let required_fit = service.score_job_deterministic(&profile, &required_skill_match);
+    let preferred_only_fit = service.score_job_deterministic(&profile, &preferred_skill_only_match);
 
-    // Missing a required skill should hurt the score more than missing a preferred skill.
     assert!(
-        fit_missing_preferred.score > fit_missing_required.score,
-        "missing a required skill (score {}) should score lower than missing a preferred skill (score {})",
-        fit_missing_required.score,
-        fit_missing_preferred.score,
+        required_fit.score > preferred_only_fit.score,
+        "matching a must-have skill should score higher than only matching a nice-to-have skill: required={}, preferred_only={}",
+        required_fit.score,
+        preferred_only_fit.score,
     );
-    let _ = job_both; // constructed above to verify section parsing doesn't panic
+
+    assert!(required_fit.matched_skills.contains(&"rust".to_string()));
+    assert!(
+        preferred_only_fit
+            .matched_skills
+            .contains(&"graphql".to_string())
+    );
 }
 
 #[test]

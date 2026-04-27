@@ -345,7 +345,12 @@ impl ProfilesRepository {
         .bind(input.languages.is_some())
         .bind(input.languages.as_ref().map(|value| Json(value.clone())))
         .bind(input.preferred_language.is_some())
-        .bind(input.preferred_language.as_ref().and_then(|v| v.as_deref().map(|s| s.to_string())))
+        .bind(
+            input
+                .preferred_language
+                .as_ref()
+                .and_then(|v| v.as_deref().map(|s| s.to_string())),
+        )
         .bind(input.search_preferences.is_some())
         .bind(
             input

@@ -439,7 +439,7 @@ fn validate_preferred_language(value: Option<String>) -> Result<Option<String>, 
                     "allowed_values": ["Ukrainian", "English", "bilingual", "any"],
                     "received": raw,
                 }),
-            ))
+            ));
         }
     };
     Ok(Some(canonical.to_string()))
