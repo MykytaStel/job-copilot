@@ -7,6 +7,7 @@ use crate::db::repositories::{
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
+use crate::services::cv_tailoring::CvTailoringService;
 use crate::services::feedback::FeedbackService;
 use crate::services::fit_scoring::FitScoringService;
 use crate::services::followup::FollowUpService;
@@ -16,7 +17,6 @@ use crate::services::profile_analysis::ProfileAnalysisService;
 use crate::services::profile_ml_metrics::ProfileMlMetricsService;
 use crate::services::profile_ml_state::ProfileMlStateService;
 use crate::services::profile_records::ProfileRecordsService;
-use crate::services::cv_tailoring::CvTailoringService;
 use crate::services::reranker_bootstrap::RerankerBootstrapService;
 use crate::services::resumes::ResumesService;
 use crate::services::salary::SalaryService;
@@ -82,6 +82,7 @@ impl AppState {
         let cv_tailoring = CvTailoringService::new(
             config.ml_sidecar_base_url.clone(),
             config.ml_sidecar_timeout_seconds,
+            config.ml_sidecar_internal_token.clone(),
         )
         .expect("valid ML sidecar client configuration");
 

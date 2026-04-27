@@ -14,6 +14,7 @@ impl CvTailoringServiceStub {
             .lock()
             .expect("cv tailoring stub mutex should not be poisoned")
             .push_back(response);
+
         self
     }
 
@@ -25,6 +26,10 @@ impl CvTailoringServiceStub {
             .lock()
             .expect("cv tailoring stub mutex should not be poisoned")
             .pop_front()
-            .unwrap_or_else(|| Err(CvTailoringError::Http("no stub response configured".to_string())))
+            .unwrap_or_else(|| {
+                Err(CvTailoringError::Http(
+                    "no stub response configured".to_string(),
+                ))
+            })
     }
 }

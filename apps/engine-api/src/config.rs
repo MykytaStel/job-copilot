@@ -15,6 +15,7 @@ pub struct Config {
     pub trained_reranker_model_path: Option<String>,
     pub ml_sidecar_base_url: String,
     pub ml_sidecar_timeout_seconds: u64,
+    pub ml_sidecar_internal_token: Option<String>,
     pub ml_retrain_threshold: usize,
     pub ml_retrain_poll_interval_seconds: u64,
     pub jwt_secret: Option<String>,
@@ -85,6 +86,10 @@ impl Config {
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(15);
+        let ml_sidecar_internal_token = std::env::var("ML_INTERNAL_TOKEN")
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
         let ml_retrain_threshold = std::env::var("ML_RETRAIN_THRESHOLD")
             .ok()
             .and_then(|value| value.parse::<usize>().ok())
@@ -143,6 +148,7 @@ impl Config {
             trained_reranker_model_path,
             ml_sidecar_base_url,
             ml_sidecar_timeout_seconds,
+            ml_sidecar_internal_token,
             ml_retrain_threshold,
             ml_retrain_poll_interval_seconds,
             jwt_secret,

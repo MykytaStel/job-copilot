@@ -1,12 +1,14 @@
 use axum::Extension;
 use axum::extract::State;
+use serde::Deserialize;
 use tracing::warn;
 
 use crate::api::error::{ApiError, ApiJson};
 use crate::api::middleware::auth::AuthUser;
-use crate::services::cv_tailoring::{CvTailoringError, CvTailoringMlRequest, CvTailoringMlResponse};
+use crate::services::cv_tailoring::{
+    CvTailoringError, CvTailoringMlRequest, CvTailoringMlResponse,
+};
 use crate::state::AppState;
-use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct TailorCvRequest {
@@ -25,12 +27,19 @@ pub async fn tailor_cv(
         ));
     };
 
-    let profile_id = &auth.profile_id;
-    let job_id = &payload.job_id;
+    let profile_id = auth.profile_id;
+    let job_id = payload.job_id.trim().to_string();
+
+    if job_id.is_empty() {
+        return Err(ApiError::bad_request(
+            "invalid_job_id",
+            "job_id is required",
+        ));
+    }
 
     let Some(job_view) = state
         .jobs_service
-        .get_view_by_id(job_id)
+        .get_view_by_id(&job_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?
     else {
@@ -42,7 +51,7 @@ pub async fn tailor_cv(
 
     let Some(profile) = state
         .profile_records
-        .get_by_id(profile_id)
+        .get_by_id(&profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
     else {
@@ -53,15 +62,20 @@ pub async fn tailor_cv(
     };
 
     let analysis = profile.analysis.as_ref();
+
     let ml_request = CvTailoringMlRequest {
         profile_id: profile_id.clone(),
         job_id: job_id.clone(),
-        profile_summary: analysis.map(|a| a.summary.clone()).unwrap_or_default(),
-        candidate_skills: analysis.map(|a| a.skills.clone()).unwrap_or_default(),
+        profile_summary: analysis
+            .map(|value| value.summary.clone())
+            .unwrap_or_default(),
+        candidate_skills: analysis
+            .map(|value| value.skills.clone())
+            .unwrap_or_default(),
         job_title: job_view.job.title.clone(),
         job_description: job_view.job.description_text.clone(),
-        job_required_skills: vec![],
-        job_nice_to_have_skills: vec![],
+        job_required_skills: Vec::new(),
+        job_nice_to_have_skills: Vec::new(),
         candidate_cv_text: Some(profile.raw_text.clone()),
     };
 
@@ -76,6 +90,7 @@ pub async fn tailor_cv(
                 error = %error,
                 "cv tailoring ml call failed"
             );
+
             match error {
                 CvTailoringError::Http(_) => ApiError::bad_gateway(
                     "ml_sidecar_unavailable",
@@ -102,24 +117,42 @@ mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
+    use super::{TailorCvRequest, tailor_cv};
     use crate::api::error::ApiJson;
     use crate::api::middleware::auth::AuthUser;
+    use crate::domain::job::model::{Job, JobLifecycleStage, JobView};
+    use crate::domain::profile::model::{Profile, ProfileAnalysis};
+    use crate::domain::role::RoleId;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::cv_tailoring::{
-        CvTailoringGapItem, CvTailoringMlResponse, CvTailoringService, CvTailoringServiceStub,
-        CvTailoringSuggestions,
+        CvTailoringError, CvTailoringGapItem, CvTailoringMlResponse, CvTailoringService,
+        CvTailoringServiceStub, CvTailoringSuggestions,
     };
     use crate::services::jobs::{JobsService, JobsServiceStub};
     use crate::services::profiles::{ProfilesService, ProfilesServiceStub};
     use crate::services::resumes::{ResumesService, ResumesServiceStub};
     use crate::state::AppState;
 
-    use super::{TailorCvRequest, tailor_cv};
-
     fn state_with_cv_stub(stub: CvTailoringServiceStub) -> AppState {
         AppState::for_services(
-            ProfilesService::for_tests(ProfilesServiceStub::default()),
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(profile("profile_test_001")),
+            ),
             JobsService::for_tests(JobsServiceStub::default()),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        )
+        .with_cv_tailoring_service(CvTailoringService::for_tests(stub))
+    }
+
+    fn state_with_job_and_cv_stub(job_id: &str, stub: CvTailoringServiceStub) -> AppState {
+        let job_view = job_view(job_id);
+
+        AppState::for_services(
+            ProfilesService::for_tests(
+                ProfilesServiceStub::default().with_profile(profile("profile_test_001")),
+            ),
+            JobsService::for_tests(JobsServiceStub::default().with_job_view(job_view)),
             ApplicationsService::for_tests(ApplicationsServiceStub::default()),
             ResumesService::for_tests(ResumesServiceStub::default()),
         )
@@ -132,17 +165,84 @@ mod tests {
         }))
     }
 
+    fn job_view(job_id: &str) -> JobView {
+        JobView {
+            job: Job {
+                id: job_id.to_string(),
+                title: "Senior Rust Engineer".to_string(),
+                company_name: "Acme".to_string(),
+                location: None,
+                remote_type: Some("remote".to_string()),
+                seniority: Some("senior".to_string()),
+                description_text: "Build backend systems in Rust and Postgres.".to_string(),
+                salary_min: None,
+                salary_max: None,
+                salary_currency: None,
+                language: None,
+                posted_at: None,
+                last_seen_at: "2026-01-01".to_string(),
+                is_active: true,
+            },
+            first_seen_at: "2026-01-01".to_string(),
+            inactivated_at: None,
+            reactivated_at: None,
+            lifecycle_stage: JobLifecycleStage::Active,
+            primary_variant: None,
+        }
+    }
+
+    fn profile(profile_id: &str) -> Profile {
+        Profile {
+        id: profile_id.to_string(),
+        name: "Test Candidate".to_string(),
+        email: format!("{profile_id}@example.com"),
+        location: Some("Kyiv, Ukraine".to_string()),
+        raw_text: "Senior developer with Rust, TypeScript, React, Node.js and PostgreSQL experience."
+            .to_string(),
+        analysis: Some(ProfileAnalysis {
+            summary: "Senior full-stack developer focused on backend systems and product engineering."
+                .to_string(),
+            primary_role: RoleId::FullstackEngineer,
+            seniority: "senior".to_string(),
+            skills: vec![
+                "Rust".to_string(),
+                "TypeScript".to_string(),
+                "React".to_string(),
+                "PostgreSQL".to_string(),
+            ],
+            keywords: vec![
+                "backend".to_string(),
+                "distributed systems".to_string(),
+                "product engineering".to_string(),
+            ],
+        }),
+        years_of_experience: Some(8),
+        salary_min: None,
+        salary_max: None,
+        salary_currency: "USD".to_string(),
+        languages: vec!["en".to_string(), "uk".to_string()],
+        preferred_work_mode: Some("remote".to_string()),
+        preferred_language: Some("en".to_string()),
+        search_preferences: None,
+        created_at: "2026-01-01T00:00:00Z".to_string(),
+        updated_at: "2026-01-01T00:00:00Z".to_string(),
+        skills_updated_at: Some("2026-01-01T00:00:00Z".to_string()),
+    }
+    }
+
     fn ok_response() -> CvTailoringMlResponse {
         CvTailoringMlResponse {
             suggestions: CvTailoringSuggestions {
                 skills_to_highlight: vec!["Rust".to_string()],
-                skills_to_mention: vec![],
+                skills_to_mention: vec!["Postgres".to_string()],
                 gaps_to_address: vec![CvTailoringGapItem {
-                    skill: "Go".to_string(),
-                    suggestion: "Mention Go side projects".to_string(),
+                    skill: "AWS".to_string(),
+                    suggestion: "Mention any cloud deployment or infrastructure experience."
+                        .to_string(),
                 }],
-                summary_rewrite: "Senior backend engineer with Rust and systems experience."
-                    .to_string(),
+                summary_rewrite:
+                    "Senior backend engineer with Rust and distributed systems experience."
+                        .to_string(),
                 key_phrases: vec!["distributed systems".to_string()],
             },
             provider: "template".to_string(),
@@ -153,6 +253,7 @@ mod tests {
     #[tokio::test]
     async fn returns_401_when_no_auth() {
         let state = state_with_cv_stub(CvTailoringServiceStub::default());
+
         let response = tailor_cv(
             State(state),
             None,
@@ -163,12 +264,32 @@ mod tests {
         .await
         .expect_err("should reject unauthenticated request")
         .into_response();
+
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn returns_400_for_empty_job_id() {
+        let state = state_with_cv_stub(CvTailoringServiceStub::default());
+
+        let response = tailor_cv(
+            State(state),
+            auth("profile_test_001"),
+            ApiJson(TailorCvRequest {
+                job_id: "   ".to_string(),
+            }),
+        )
+        .await
+        .expect_err("should reject empty job_id")
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
     async fn returns_404_for_unknown_job() {
         let state = state_with_cv_stub(CvTailoringServiceStub::default());
+
         let response = tailor_cv(
             State(state),
             auth("profile_test_001"),
@@ -179,51 +300,37 @@ mod tests {
         .await
         .expect_err("should return 404 for unknown job")
         .into_response();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn returns_404_for_unknown_profile() {
+        let state = state_with_job_and_cv_stub("job-1", CvTailoringServiceStub::default());
+
+        let response = tailor_cv(
+            State(state),
+            auth("missing-profile"),
+            ApiJson(TailorCvRequest {
+                job_id: "job-1".to_string(),
+            }),
+        )
+        .await
+        .expect_err("should return 404 for unknown profile")
+        .into_response();
+
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn returns_502_when_ml_unavailable() {
-        use crate::services::cv_tailoring::CvTailoringError;
-        use crate::domain::job::model::{Job, JobLifecycleStage, JobView};
+        let state = state_with_job_and_cv_stub(
+            "job-1",
+            CvTailoringServiceStub::default().with_response(Err(CvTailoringError::Http(
+                "connection refused".to_string(),
+            ))),
+        );
 
-        let job = Job {
-            id: "job-1".to_string(),
-            title: "Backend Engineer".to_string(),
-            company_name: "Acme".to_string(),
-            location: None,
-            remote_type: None,
-            seniority: None,
-            description_text: "Build distributed systems in Rust.".to_string(),
-            salary_min: None,
-            salary_max: None,
-            salary_currency: None,
-            language: None,
-            posted_at: None,
-            last_seen_at: "2026-01-01".to_string(),
-            is_active: true,
-        };
-        let job_view = JobView {
-            job,
-            first_seen_at: "2026-01-01".to_string(),
-            inactivated_at: None,
-            reactivated_at: None,
-            lifecycle_stage: JobLifecycleStage::Active,
-            primary_variant: None,
-        };
-
-        let state = AppState::for_services(
-            ProfilesService::for_tests(ProfilesServiceStub::default()),
-            JobsService::for_tests(JobsServiceStub::default().with_job_view(job_view)),
-            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
-            ResumesService::for_tests(ResumesServiceStub::default()),
-        )
-        .with_cv_tailoring_service(CvTailoringService::for_tests(
-            CvTailoringServiceStub::default()
-                .with_response(Err(CvTailoringError::Http("connection refused".to_string()))),
-        ));
-
-        // profile_test_001 is created by default in ProfilesServiceStub
         let response = tailor_cv(
             State(state),
             auth("profile_test_001"),
@@ -234,47 +341,16 @@ mod tests {
         .await
         .expect_err("should return 502 when ML is unreachable")
         .into_response();
+
         assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
     }
 
     #[tokio::test]
     async fn returns_suggestions_on_success() {
-        use crate::domain::job::model::{Job, JobLifecycleStage, JobView};
-
-        let job = Job {
-            id: "job-2".to_string(),
-            title: "Senior Rust Engineer".to_string(),
-            company_name: "Acme".to_string(),
-            location: None,
-            remote_type: None,
-            seniority: None,
-            description_text: "We build systems in Rust.".to_string(),
-            salary_min: None,
-            salary_max: None,
-            salary_currency: None,
-            language: None,
-            posted_at: None,
-            last_seen_at: "2026-01-01".to_string(),
-            is_active: true,
-        };
-        let job_view = JobView {
-            job,
-            first_seen_at: "2026-01-01".to_string(),
-            inactivated_at: None,
-            reactivated_at: None,
-            lifecycle_stage: JobLifecycleStage::Active,
-            primary_variant: None,
-        };
-
-        let state = AppState::for_services(
-            ProfilesService::for_tests(ProfilesServiceStub::default()),
-            JobsService::for_tests(JobsServiceStub::default().with_job_view(job_view)),
-            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
-            ResumesService::for_tests(ResumesServiceStub::default()),
-        )
-        .with_cv_tailoring_service(CvTailoringService::for_tests(
+        let state = state_with_job_and_cv_stub(
+            "job-2",
             CvTailoringServiceStub::default().with_response(Ok(ok_response())),
-        ));
+        );
 
         let result = tailor_cv(
             State(state),
