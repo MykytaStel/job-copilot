@@ -61,6 +61,7 @@ mod tests {
             salary_currency: "USD".to_string(),
             languages: vec![],
             preferred_work_mode: None,
+            preferred_language: None,
             search_preferences: None,
             created_at: "2026-04-14T00:00:00Z".to_string(),
             updated_at: "2026-04-14T00:00:00Z".to_string(),

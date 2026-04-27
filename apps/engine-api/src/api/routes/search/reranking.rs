@@ -362,6 +362,7 @@ mod company_reputation_tests {
                     salary_min: None,
                     salary_max: None,
                     salary_currency: None,
+            language: None,
                     posted_at: None,
                     last_seen_at: "2026-04-27T00:00:00Z".to_string(),
                     is_active: true,

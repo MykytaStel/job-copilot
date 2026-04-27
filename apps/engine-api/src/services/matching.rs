@@ -42,7 +42,7 @@ use scoring::{
 };
 use text::{
     build_searchable_text, build_searchable_text_parts, collect_missing_signals, evaluate_terms,
-    extract_significant_tokens, merge_terms,
+    evaluate_terms_section_aware, extract_significant_tokens, merge_terms, parse_skill_sections,
 };
 
 const PRIMARY_ROLE_WEIGHT: f32 = 22.0;
@@ -139,6 +139,7 @@ struct EvaluatedTerms {
     missing_terms: Vec<String>,
     matched_strength: f32,
     eligible_terms: usize,
+    total_weight: f32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -192,8 +193,9 @@ impl SearchMatchingService {
         let target_roles = collect_target_roles(search_profile);
         let role_alignment = analyze_role_alignment(search_profile, &prepared_text, &target_roles);
         let role_terms = collect_role_terms(&target_roles);
+        let skill_sections = parse_skill_sections(&job.job.description_text);
         let matched_profile_skills =
-            evaluate_terms(&prepared_text, &search_profile.profile_skills, &[]);
+            evaluate_terms_section_aware(&prepared_text, &search_profile.profile_skills, &[], &skill_sections);
         let matched_profile_keywords = evaluate_terms(
             &prepared_text,
             &search_profile.profile_keywords,
@@ -229,15 +231,15 @@ impl SearchMatchingService {
         let role_candidate_score = role_alignment.candidate_overlap * ROLE_CANDIDATE_WEIGHT;
         let profile_skill_score = weighted_overlap_ratio(
             matched_profile_skills.matched_strength,
-            matched_profile_skills.eligible_terms,
+            matched_profile_skills.total_weight,
         ) * PROFILE_SKILL_WEIGHT;
         let profile_keyword_score = weighted_overlap_ratio(
             matched_profile_keywords.matched_strength,
-            matched_profile_keywords.eligible_terms,
+            matched_profile_keywords.total_weight,
         ) * PROFILE_KEYWORD_WEIGHT;
         let search_term_score = weighted_overlap_ratio(
             matched_search_terms.matched_strength,
-            matched_search_terms.eligible_terms,
+            matched_search_terms.total_weight,
         ) * SEARCH_TERM_WEIGHT;
         let source_score = if source_match && !search_profile.allowed_sources.is_empty() {
             SOURCE_WEIGHT
@@ -255,7 +257,7 @@ impl SearchMatchingService {
         let seniority_score = seniority_alignment.score;
         let exclude_penalty = weighted_overlap_ratio(
             matched_exclude_terms.matched_strength,
-            matched_exclude_terms.eligible_terms,
+            matched_exclude_terms.total_weight,
         ) * EXCLUDE_PENALTY_WEIGHT;
         let work_mode_penalty = matches!(work_mode_match, Some(false))
             .then_some(WORK_MODE_MISMATCH_PENALTY_WEIGHT)

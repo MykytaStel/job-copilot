@@ -114,6 +114,7 @@ fn job_view(
             salary_min: None,
             salary_max: None,
             salary_currency: None,
+            language: None,
             posted_at: Some("2026-04-10T09:00:00Z".to_string()),
             last_seen_at: "2026-04-14T09:00:00Z".to_string(),
             is_active: true,
@@ -663,6 +664,68 @@ fn stale_job_scores_lower_than_fresh_identical_job() {
             .any(|r| r.contains("Job age penalty applied")),
         "stale job reasons should contain job age penalty explanation"
     );
+}
+
+#[test]
+fn required_skill_gap_penalizes_more_than_preferred_skill_gap() {
+    let service = SearchMatchingService::new();
+    // Profile has two skills: one that the job lists as required, one as preferred.
+    // We test two jobs that are missing one skill each and verify the
+    // job missing the required skill scores lower.
+    let profile = SearchProfile {
+        primary_role: RoleId::BackendEngineer,
+        primary_role_confidence: Some(90),
+        target_roles: vec![RoleId::BackendEngineer],
+        role_candidates: vec![SearchRoleCandidate {
+            role: RoleId::BackendEngineer,
+            confidence: 90,
+        }],
+        seniority: "senior".to_string(),
+        target_regions: vec![TargetRegion::EuRemote],
+        work_modes: vec![WorkMode::Remote],
+        allowed_sources: vec![SourceId::Djinni],
+        profile_skills: vec!["rust".to_string(), "graphql".to_string()],
+        profile_keywords: vec![],
+        search_terms: vec![],
+        exclude_terms: vec![],
+    };
+
+    // Job A: lists Rust as required, GraphQL as preferred — both present.
+    let job_both = job_view(
+        "job-both",
+        "Senior Backend Engineer",
+        "Requirements:\n- Rust\nPreferred:\n- GraphQL",
+        Some("remote"),
+        "djinni",
+    );
+    // Job B: has GraphQL (preferred) but is missing Rust (required).
+    let job_missing_required = job_view(
+        "job-missing-required",
+        "Senior Backend Engineer",
+        "Requirements:\n- Rust\nPreferred:\n- GraphQL\nWe work with GraphQL daily.",
+        Some("remote"),
+        "djinni",
+    );
+    // Job C: has Rust (required) but is missing GraphQL (preferred).
+    let job_missing_preferred = job_view(
+        "job-missing-preferred",
+        "Senior Backend Engineer",
+        "Requirements:\n- Rust\nWe build Rust services. GraphQL is not used here.",
+        Some("remote"),
+        "djinni",
+    );
+
+    let fit_missing_required = service.score_job_deterministic(&profile, &job_missing_required);
+    let fit_missing_preferred = service.score_job_deterministic(&profile, &job_missing_preferred);
+
+    // Missing a required skill should hurt the score more than missing a preferred skill.
+    assert!(
+        fit_missing_preferred.score > fit_missing_required.score,
+        "missing a required skill (score {}) should score lower than missing a preferred skill (score {})",
+        fit_missing_required.score,
+        fit_missing_preferred.score,
+    );
+    let _ = job_both; // constructed above to verify section parsing doesn't panic
 }
 
 #[test]

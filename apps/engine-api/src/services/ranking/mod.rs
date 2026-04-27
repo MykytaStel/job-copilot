@@ -56,9 +56,11 @@ impl RankingService {
             (matched_skills.len() as f32 / candidate.skills.len() as f32).min(1.0)
         };
 
-        // --- Component 2: seniority alignment (weight 25%) ---
-        let seniority_alignment =
-            compute_seniority_alignment(&candidate.seniority, job.seniority.as_deref());
+        // --- Signal 2: seniority fit ---
+        // Discrete score delta: +10 exact match, -3 for 1-level gap, -10 for ≥2-level gap.
+        // 0 when job has no seniority or candidate seniority is unset.
+        let seniority_fit_signal =
+            compute_seniority_fit_signal(&candidate.seniority, job.seniority.as_deref());
 
         // --- Component 3: salary overlap (weight 15%) ---
         let (salary_min, salary_max, salary_currency) = profile
@@ -73,12 +75,22 @@ impl RankingService {
             job.salary_currency.as_deref(),
         );
 
-        // --- Component 4: work mode match (weight 10%) ---
-        let preferred_work_mode = profile.and_then(|p| p.preferred_work_mode.as_deref());
-        let work_mode_match =
-            compute_work_mode_match(preferred_work_mode, job.remote_type.as_deref());
+        // --- Signal 4: work mode preference ---
+        // Applies a signed score delta based on the candidate's stated preference
+        // vs the job's remote_type. 0 when no preference is set or pref is "any".
+        let work_mode_signal = compute_work_mode_preference_signal(
+            profile.and_then(|p| p.preferred_work_mode.as_deref()),
+            job.remote_type.as_deref(),
+        );
 
-        // --- Component 5: recency bonus (weight 10%) ---
+        // --- Signal 5: language preference ---
+        // +5 match, -5 mismatch, 0 for bilingual job / no preference / unknown.
+        let language_signal = compute_language_preference_signal(
+            profile.and_then(|p| p.preferred_language.as_deref()),
+            job.language.as_deref(),
+        );
+
+        // --- Component 6: recency bonus (weight 10%) ---
         // How fresh is the profile relative to when the job was posted?
         // A profile updated after (or close to) the posting date scores 1.0;
         // older profiles decay linearly to 0.0 at 180 days of lag.
@@ -87,21 +99,27 @@ impl RankingService {
             job.posted_at.as_deref(),
         );
 
-        let total = (skill_overlap * 0.40
-            + seniority_alignment * 0.25
+        let base = (skill_overlap * 0.40
             + salary_overlap * 0.15
-            + work_mode_match * 0.10
             + recency_bonus * 0.10)
             * 100.0;
 
+        let total = (base
+            + f32::from(work_mode_signal)
+            + f32::from(seniority_fit_signal)
+            + f32::from(language_signal))
+        .clamp(0.0, 100.0)
+        .round() as u8;
+
         FitScore {
             job_id: job.id.clone(),
-            total: total.round().clamp(0.0, 100.0) as u8,
+            total,
             components: FitScoreComponents {
                 skill_overlap,
-                seniority_alignment,
+                seniority_alignment: f32::from(seniority_fit_signal),
                 salary_overlap,
-                work_mode_match,
+                work_mode_match: f32::from(work_mode_signal),
+                language_match: f32::from(language_signal),
                 recency_bonus,
             },
             matched_skills,
@@ -131,7 +149,6 @@ fn partition_skills(
     (matched, missing)
 }
 
-/// Maps seniority strings to an ordinal level for gap calculation.
 fn seniority_ordinal(s: &str) -> Option<i32> {
     match s.to_lowercase().trim() {
         "intern" => Some(0),
@@ -145,16 +162,25 @@ fn seniority_ordinal(s: &str) -> Option<i32> {
     }
 }
 
-fn compute_seniority_alignment(candidate: &str, job: Option<&str>) -> f32 {
-    let Some(job_level) = job else { return 0.5 };
+/// Returns a discrete score delta for candidate-vs-job seniority fit.
+///
+/// | gap    | delta |
+/// |--------|-------|
+/// | 0      |  +10  |
+/// | 1      |   -3  |
+/// | ≥ 2    |  -10  |
+/// | no job |    0  |
+fn compute_seniority_fit_signal(candidate: &str, job: Option<&str>) -> i16 {
+    let Some(job_str) = job else { return 0 };
 
-    match (seniority_ordinal(candidate), seniority_ordinal(job_level)) {
-        (Some(c), Some(j)) => {
-            let gap = (c - j).unsigned_abs() as f32;
-            // Perfect match = 1.0; each level of gap costs 0.33; gap ≥ 3 = 0.0.
-            (1.0 - gap / 3.0).max(0.0)
-        }
-        _ => 0.5, // unknown seniority on either side → neutral
+    let (Some(c), Some(j)) = (seniority_ordinal(candidate), seniority_ordinal(job_str)) else {
+        return 0;
+    };
+
+    match (c - j).unsigned_abs() {
+        0 => 10,
+        1 => -3,
+        _ => -10,
     }
 }
 
@@ -197,30 +223,114 @@ fn compute_salary_overlap(
     (overlap / job_range).min(1.0) as f32
 }
 
-fn compute_work_mode_match(candidate_pref: Option<&str>, job_mode: Option<&str>) -> f32 {
-    let (Some(pref), Some(mode)) = (candidate_pref, job_mode) else {
-        return 0.5; // either side unspecified → neutral
+/// Returns a signed score delta based on the candidate's work mode preference
+/// and the job's remote_type.
+///
+/// | preference  | job mode | delta |
+/// |-------------|----------|-------|
+/// | remote_only | remote   |  +8   |
+/// | remote_only | onsite   | -10   |
+/// | hybrid      | remote   |  +3   |
+/// | hybrid      | onsite   |  -3   |
+/// | any         | *        |   0   |
+/// | None        | *        |   0   |
+fn compute_work_mode_preference_signal(pref: Option<&str>, job_mode: Option<&str>) -> i16 {
+    let Some(pref_str) = pref else {
+        return 0;
     };
 
-    let pref_norm = normalize_work_mode(pref);
-    let mode_norm = normalize_work_mode(mode);
+    let pref_norm = normalize_candidate_work_mode(pref_str);
 
-    match (pref_norm.as_deref(), mode_norm.as_deref()) {
-        (Some(p), Some(m)) if p == m => 1.0,
-        (Some("remote"), Some("hybrid")) | (Some("hybrid"), Some("remote")) => 0.5,
-        (Some("hybrid"), Some("onsite")) | (Some("onsite"), Some("hybrid")) => 0.5,
-        (Some("remote"), Some("onsite")) | (Some("onsite"), Some("remote")) => 0.0,
-        _ => 0.5,
+    if matches!(pref_norm.as_deref(), Some("any") | None) {
+        return 0;
+    }
+
+    let Some(job_norm) = job_mode.and_then(normalize_job_work_mode_for_fit) else {
+        return 0;
+    };
+
+    match (pref_norm.as_deref(), job_norm.as_str()) {
+        (Some("remote"), "remote") => 8,
+        (Some("remote"), "onsite") => -10,
+        (Some("hybrid"), "remote") => 3,
+        (Some("hybrid"), "onsite") => -3,
+        _ => 0,
     }
 }
 
-fn normalize_work_mode(s: &str) -> Option<String> {
+fn normalize_candidate_work_mode(s: &str) -> Option<String> {
+    match s.to_lowercase().trim() {
+        "remote" | "remote_only" | "full_remote" | "fully_remote" | "fully remote"
+        | "full remote" => Some("remote".to_string()),
+        "hybrid" => Some("hybrid".to_string()),
+        "onsite" | "on-site" | "office" | "in-office" => Some("onsite".to_string()),
+        "any" => Some("any".to_string()),
+        _ => None,
+    }
+}
+
+fn normalize_job_work_mode_for_fit(s: &str) -> Option<String> {
     match s.to_lowercase().trim() {
         "remote" | "full_remote" | "fully_remote" | "fully remote" | "full remote" => {
             Some("remote".to_string())
         }
         "hybrid" => Some("hybrid".to_string()),
         "onsite" | "on-site" | "office" | "in-office" => Some("onsite".to_string()),
+        _ => None,
+    }
+}
+
+/// Returns a signed score delta based on the candidate's preferred job language
+/// and the language field on the job posting.
+///
+/// | profile pref  | job language | delta |
+/// |---------------|--------------|-------|
+/// | Ukrainian     | Ukrainian    |  +5   |
+/// | English       | English      |  +5   |
+/// | Ukrainian     | English      |  -5   |
+/// | English       | Ukrainian    |  -5   |
+/// | bilingual     | *            |   0   |
+/// | any           | *            |   0   |
+/// | None          | *            |   0   |
+/// | *             | bilingual    |   0   |
+/// | *             | None/unknown |   0   |
+fn compute_language_preference_signal(pref: Option<&str>, job_language: Option<&str>) -> i16 {
+    let Some(pref_str) = pref else { return 0 };
+
+    let pref_norm = normalize_language_pref(pref_str);
+    if matches!(pref_norm.as_deref(), Some("bilingual") | Some("any") | None) {
+        return 0;
+    }
+
+    let Some(job_lang) = job_language.and_then(normalize_job_language) else {
+        return 0;
+    };
+    if job_lang == "bilingual" {
+        return 0;
+    }
+
+    if pref_norm.as_deref() == Some(job_lang.as_str()) {
+        5
+    } else {
+        -5
+    }
+}
+
+fn normalize_language_pref(s: &str) -> Option<String> {
+    match s.to_lowercase().trim() {
+        "ukrainian" | "uk" => Some("ukrainian".to_string()),
+        "english" | "en" => Some("english".to_string()),
+        "bilingual" => Some("bilingual".to_string()),
+        "any" => Some("any".to_string()),
+        _ => None,
+    }
+}
+
+fn normalize_job_language(s: &str) -> Option<String> {
+    match s.to_lowercase().trim() {
+        "ukrainian" | "uk" => Some("ukrainian".to_string()),
+        "english" | "en" => Some("english".to_string()),
+        "bilingual" => Some("bilingual".to_string()),
         _ => None,
     }
 }
@@ -291,6 +401,7 @@ mod tests {
             salary_min,
             salary_max,
             salary_currency: currency.map(str::to_string),
+            language: None,
             posted_at: None,
             last_seen_at: "2026-04-12".to_string(),
             is_active: true,
@@ -330,8 +441,8 @@ mod tests {
         let score = service.compute(&candidate, &job, None);
 
         assert!(
-            score.total >= 70,
-            "perfect skill + seniority match should score >= 70, got {}",
+            score.total >= 60,
+            "perfect skill + seniority match should score >= 60, got {}",
             score.total
         );
         assert_eq!(score.matched_skills, vec!["react", "typescript"]);
@@ -410,14 +521,13 @@ mod tests {
     }
 
     #[test]
-    fn unknown_seniority_gives_neutral_component() {
+    fn unknown_seniority_gives_zero_signal() {
         let service = RankingService::new();
         let candidate = make_candidate(&[], "unknown");
         let job = make_job("some job description", None, None, None, None, None);
 
         let score = service.compute(&candidate, &job, None);
-        let expected_seniority = 0.5_f32;
-        assert!((score.components.seniority_alignment - expected_seniority).abs() < 0.01);
+        assert_eq!(score.components.seniority_alignment, 0.0);
     }
 
     #[test]
@@ -486,6 +596,7 @@ mod tests {
             salary_currency: "USD".to_string(),
             languages: vec![],
             preferred_work_mode: Some("remote".to_string()),
+            preferred_language: None,
             search_preferences: None,
             created_at: "2026-01-01".to_string(),
             updated_at: "2026-04-01".to_string(),
@@ -498,6 +609,327 @@ mod tests {
             score.components.recency_bonus < 0.6,
             "recency should follow stale skills timestamp, got {}",
             score.components.recency_bonus
+        );
+    }
+
+    // --- work mode preference signal tests ---
+
+    #[test]
+    fn work_mode_remote_only_plus_remote_job_gives_plus_8() {
+        assert_eq!(
+            super::compute_work_mode_preference_signal(Some("remote_only"), Some("remote")),
+            8
+        );
+        assert_eq!(
+            super::compute_work_mode_preference_signal(Some("remote"), Some("remote")),
+            8
+        );
+    }
+
+    #[test]
+    fn work_mode_remote_only_plus_onsite_job_gives_minus_10() {
+        assert_eq!(
+            super::compute_work_mode_preference_signal(Some("remote_only"), Some("onsite")),
+            -10
+        );
+        assert_eq!(
+            super::compute_work_mode_preference_signal(Some("remote"), Some("onsite")),
+            -10
+        );
+    }
+
+    #[test]
+    fn work_mode_hybrid_plus_remote_job_gives_plus_3() {
+        assert_eq!(
+            super::compute_work_mode_preference_signal(Some("hybrid"), Some("remote")),
+            3
+        );
+    }
+
+    #[test]
+    fn work_mode_hybrid_plus_onsite_job_gives_minus_3() {
+        assert_eq!(
+            super::compute_work_mode_preference_signal(Some("hybrid"), Some("onsite")),
+            -3
+        );
+    }
+
+    #[test]
+    fn work_mode_any_preference_gives_zero() {
+        assert_eq!(
+            super::compute_work_mode_preference_signal(Some("any"), Some("remote")),
+            0
+        );
+        assert_eq!(
+            super::compute_work_mode_preference_signal(Some("any"), Some("onsite")),
+            0
+        );
+    }
+
+    #[test]
+    fn work_mode_no_preference_gives_zero() {
+        assert_eq!(
+            super::compute_work_mode_preference_signal(None, Some("remote")),
+            0
+        );
+        assert_eq!(
+            super::compute_work_mode_preference_signal(None, Some("onsite")),
+            0
+        );
+    }
+
+    #[test]
+    fn work_mode_unknown_job_mode_gives_zero() {
+        assert_eq!(
+            super::compute_work_mode_preference_signal(Some("remote"), Some("unknown_mode")),
+            0
+        );
+        assert_eq!(
+            super::compute_work_mode_preference_signal(Some("hybrid"), None),
+            0
+        );
+    }
+
+    // --- seniority fit signal tests ---
+
+    #[test]
+    fn seniority_exact_match_gives_plus_10() {
+        assert_eq!(
+            super::compute_seniority_fit_signal("senior", Some("senior")),
+            10
+        );
+        assert_eq!(
+            super::compute_seniority_fit_signal("junior", Some("junior")),
+            10
+        );
+        assert_eq!(
+            super::compute_seniority_fit_signal("lead", Some("lead")),
+            10
+        );
+    }
+
+    #[test]
+    fn seniority_one_level_gap_gives_minus_3() {
+        assert_eq!(
+            super::compute_seniority_fit_signal("senior", Some("lead")),
+            -3
+        );
+        assert_eq!(
+            super::compute_seniority_fit_signal("senior", Some("middle")),
+            -3
+        );
+        assert_eq!(
+            super::compute_seniority_fit_signal("junior", Some("middle")),
+            -3
+        );
+    }
+
+    #[test]
+    fn seniority_two_level_gap_gives_minus_10() {
+        assert_eq!(
+            super::compute_seniority_fit_signal("junior", Some("senior")),
+            -10
+        );
+        assert_eq!(
+            super::compute_seniority_fit_signal("senior", Some("junior")),
+            -10
+        );
+        assert_eq!(
+            super::compute_seniority_fit_signal("junior", Some("lead")),
+            -10
+        );
+    }
+
+    #[test]
+    fn seniority_no_job_seniority_gives_zero() {
+        assert_eq!(
+            super::compute_seniority_fit_signal("senior", None),
+            0
+        );
+        assert_eq!(
+            super::compute_seniority_fit_signal("junior", None),
+            0
+        );
+    }
+
+    #[test]
+    fn seniority_unknown_profile_seniority_gives_zero() {
+        assert_eq!(
+            super::compute_seniority_fit_signal("unknown", Some("senior")),
+            0
+        );
+        assert_eq!(
+            super::compute_seniority_fit_signal("", Some("junior")),
+            0
+        );
+    }
+
+    #[test]
+    fn work_mode_signal_affects_total_score() {
+        let service = RankingService::new();
+        let candidate = make_candidate(&["rust"], "senior");
+        let remote_job = make_job("rust engineer", Some("senior"), None, None, None, Some("remote"));
+        let onsite_job = make_job("rust engineer", Some("senior"), None, None, None, Some("onsite"));
+
+        let profile_remote = Profile {
+            id: "p1".to_string(),
+            name: "Dev".to_string(),
+            email: "dev@example.com".to_string(),
+            location: None,
+            raw_text: String::new(),
+            analysis: None,
+            years_of_experience: None,
+            salary_min: None,
+            salary_max: None,
+            salary_currency: "USD".to_string(),
+            languages: vec![],
+            preferred_work_mode: Some("remote_only".to_string()),
+            preferred_language: None,
+            search_preferences: None,
+            created_at: "2026-01-01".to_string(),
+            updated_at: "2026-01-01".to_string(),
+            skills_updated_at: None,
+        };
+
+        let score_remote = service.compute(&candidate, &remote_job, Some(&profile_remote));
+        let score_onsite = service.compute(&candidate, &onsite_job, Some(&profile_remote));
+
+        assert!(
+            score_remote.total > score_onsite.total,
+            "remote_only pref + remote job ({}) should score higher than remote_only pref + onsite job ({})",
+            score_remote.total,
+            score_onsite.total,
+        );
+        assert_eq!(score_remote.components.work_mode_match, 8.0);
+        assert_eq!(score_onsite.components.work_mode_match, -10.0);
+    }
+
+    // --- language preference signal tests ---
+
+    #[test]
+    fn language_match_gives_plus_5() {
+        assert_eq!(
+            super::compute_language_preference_signal(Some("Ukrainian"), Some("Ukrainian")),
+            5
+        );
+        assert_eq!(
+            super::compute_language_preference_signal(Some("English"), Some("English")),
+            5
+        );
+    }
+
+    #[test]
+    fn language_mismatch_gives_minus_5() {
+        assert_eq!(
+            super::compute_language_preference_signal(Some("Ukrainian"), Some("English")),
+            -5
+        );
+        assert_eq!(
+            super::compute_language_preference_signal(Some("English"), Some("Ukrainian")),
+            -5
+        );
+    }
+
+    #[test]
+    fn bilingual_job_gives_zero_signal() {
+        assert_eq!(
+            super::compute_language_preference_signal(Some("Ukrainian"), Some("bilingual")),
+            0
+        );
+        assert_eq!(
+            super::compute_language_preference_signal(Some("English"), Some("bilingual")),
+            0
+        );
+    }
+
+    #[test]
+    fn bilingual_preference_gives_zero_signal() {
+        assert_eq!(
+            super::compute_language_preference_signal(Some("bilingual"), Some("Ukrainian")),
+            0
+        );
+        assert_eq!(
+            super::compute_language_preference_signal(Some("bilingual"), Some("English")),
+            0
+        );
+    }
+
+    #[test]
+    fn any_preference_gives_zero_signal() {
+        assert_eq!(
+            super::compute_language_preference_signal(Some("any"), Some("Ukrainian")),
+            0
+        );
+        assert_eq!(
+            super::compute_language_preference_signal(Some("any"), Some("English")),
+            0
+        );
+    }
+
+    #[test]
+    fn no_preference_gives_zero_signal() {
+        assert_eq!(
+            super::compute_language_preference_signal(None, Some("Ukrainian")),
+            0
+        );
+        assert_eq!(
+            super::compute_language_preference_signal(None, Some("English")),
+            0
+        );
+    }
+
+    #[test]
+    fn no_job_language_gives_zero_signal() {
+        assert_eq!(
+            super::compute_language_preference_signal(Some("Ukrainian"), None),
+            0
+        );
+        assert_eq!(
+            super::compute_language_preference_signal(Some("English"), None),
+            0
+        );
+    }
+
+    #[test]
+    fn language_signal_affects_total_score() {
+        let service = RankingService::new();
+        let candidate = make_candidate(&["rust"], "senior");
+
+        let mut ukrainian_job = make_job("rust engineer", Some("senior"), None, None, None, None);
+        ukrainian_job.language = Some("Ukrainian".to_string());
+        let mut english_job = make_job("rust engineer", Some("senior"), None, None, None, None);
+        english_job.language = Some("English".to_string());
+
+        let profile_ua = Profile {
+            id: "p-ua".to_string(),
+            name: "Dev".to_string(),
+            email: "dev@example.com".to_string(),
+            location: None,
+            raw_text: String::new(),
+            analysis: None,
+            years_of_experience: None,
+            salary_min: None,
+            salary_max: None,
+            salary_currency: "USD".to_string(),
+            languages: vec![],
+            preferred_work_mode: None,
+            preferred_language: Some("Ukrainian".to_string()),
+            search_preferences: None,
+            created_at: "2026-01-01".to_string(),
+            updated_at: "2026-01-01".to_string(),
+            skills_updated_at: None,
+        };
+
+        let score_ua_match = service.compute(&candidate, &ukrainian_job, Some(&profile_ua));
+        let score_ua_mismatch = service.compute(&candidate, &english_job, Some(&profile_ua));
+
+        assert_eq!(score_ua_match.components.language_match, 5.0);
+        assert_eq!(score_ua_mismatch.components.language_match, -5.0);
+        assert!(
+            score_ua_match.total > score_ua_mismatch.total,
+            "Ukrainian pref + Ukrainian job ({}) should score higher than Ukrainian pref + English job ({})",
+            score_ua_match.total,
+            score_ua_mismatch.total,
         );
     }
 }

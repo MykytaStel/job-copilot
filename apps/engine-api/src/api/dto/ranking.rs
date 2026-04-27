@@ -17,6 +17,7 @@ pub struct FitScoreComponentsResponse {
     pub seniority_alignment: f32,
     pub salary_overlap: f32,
     pub work_mode_match: f32,
+    pub language_match: f32,
     pub recency_bonus: f32,
 }
 
@@ -39,6 +40,7 @@ impl From<FitScoreComponents> for FitScoreComponentsResponse {
             seniority_alignment: c.seniority_alignment,
             salary_overlap: c.salary_overlap,
             work_mode_match: c.work_mode_match,
+            language_match: c.language_match,
             recency_bonus: c.recency_bonus,
         }
     }

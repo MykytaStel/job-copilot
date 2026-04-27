@@ -33,6 +33,7 @@ pub struct UpdateProfileRequest {
     pub salary_max: Option<Option<i32>>,
     pub salary_currency: Option<String>,
     pub languages: Option<Vec<String>>,
+    pub preferred_language: Option<Option<String>>,
     pub search_preferences: Option<Option<SearchPreferencesRequest>>,
 }
 
@@ -76,6 +77,7 @@ pub struct ProfileResponse {
     pub salary_max: Option<i32>,
     pub salary_currency: String,
     pub languages: Vec<String>,
+    pub preferred_language: Option<String>,
     pub search_preferences: Option<SearchPreferencesResponse>,
     pub analysis: Option<PersistedProfileAnalysisResponse>,
     pub created_at: String,
@@ -123,6 +125,7 @@ impl UpdateProfileRequest {
             && self.salary_max.is_none()
             && self.salary_currency.is_none()
             && self.languages.is_none()
+            && self.preferred_language.is_none()
             && self.search_preferences.is_none()
         {
             return Err(ApiError::bad_request_with_details(
@@ -139,6 +142,7 @@ impl UpdateProfileRequest {
                         "salary_max",
                         "salary_currency",
                         "languages",
+                        "preferred_language",
                         "search_preferences"
                     ]
                 }),
@@ -164,6 +168,10 @@ impl UpdateProfileRequest {
         let languages = self
             .languages
             .map(|value| validate_languages(Some(value)))
+            .transpose()?;
+        let preferred_language = self
+            .preferred_language
+            .map(|value| validate_preferred_language(value))
             .transpose()?;
 
         validate_salary_bounds(
@@ -192,6 +200,7 @@ impl UpdateProfileRequest {
             salary_max,
             salary_currency,
             languages,
+            preferred_language,
             search_preferences: self
                 .search_preferences
                 .map(|value| value.map(|prefs| prefs.validate()).transpose())
@@ -263,6 +272,7 @@ impl From<Profile> for ProfileResponse {
             salary_max: profile.salary_max,
             salary_currency: profile.salary_currency,
             languages: profile.languages,
+            preferred_language: profile.preferred_language,
             search_preferences: profile
                 .search_preferences
                 .map(SearchPreferencesResponse::from),
@@ -410,6 +420,29 @@ fn validate_languages(value: Option<Vec<String>>) -> Result<Vec<String>, ApiErro
     }
 
     Ok(result)
+}
+
+fn validate_preferred_language(value: Option<String>) -> Result<Option<String>, ApiError> {
+    let Some(raw) = value else { return Ok(None) };
+    let normalized = raw.trim().to_lowercase();
+    let canonical = match normalized.as_str() {
+        "ukrainian" => "Ukrainian",
+        "english" => "English",
+        "bilingual" => "bilingual",
+        "any" => "any",
+        _ => {
+            return Err(ApiError::bad_request_with_details(
+                "invalid_profile_input",
+                "Field 'preferred_language' must be one of Ukrainian, English, bilingual, any",
+                json!({
+                    "field": "preferred_language",
+                    "allowed_values": ["Ukrainian", "English", "bilingual", "any"],
+                    "received": raw,
+                }),
+            ))
+        }
+    };
+    Ok(Some(canonical.to_string()))
 }
 
 fn validate_salary_bounds(
