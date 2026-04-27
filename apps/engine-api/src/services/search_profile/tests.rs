@@ -18,6 +18,7 @@ fn builds_search_profile_from_profile_and_preferences() {
         allowed_sources: vec![SourceId::Djinni, SourceId::WorkUa],
         include_keywords: vec!["product company".to_string()],
         exclude_keywords: vec!["gambling".to_string()],
+        scoring_weights: Default::default(),
     };
 
     let search_profile = service.build(&analyzed_profile, &preferences);
@@ -63,6 +64,10 @@ fn builds_search_profile_from_profile_and_preferences() {
         ]
     );
     assert_eq!(search_profile.exclude_terms, vec!["gambling"]);
+    assert_eq!(search_profile.scoring_weights.skill_match_importance, 8);
+    assert_eq!(search_profile.scoring_weights.salary_fit_importance, 6);
+    assert_eq!(search_profile.scoring_weights.job_freshness_importance, 5);
+    assert_eq!(search_profile.scoring_weights.remote_work_importance, 5);
 }
 
 #[test]

@@ -116,7 +116,11 @@ pub async fn run_search(
         .collect::<HashMap<_, _>>();
 
     let reranking_started_at = Instant::now();
-    let mut adjusted_jobs = apply_salary_scoring(result.ranked_jobs, salary_expectation.as_ref());
+    let mut adjusted_jobs = apply_salary_scoring(
+        result.ranked_jobs,
+        salary_expectation.as_ref(),
+        input.search_profile.scoring_weights.salary_fit_importance,
+    );
     adjusted_jobs = apply_feedback_scoring(adjusted_jobs, &feedback_by_job_id);
     if let Some(aggregates) = learning_aggregates.as_ref() {
         adjusted_jobs = apply_behavior_scoring(&state, adjusted_jobs, &aggregates.behavior);

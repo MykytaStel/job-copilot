@@ -72,6 +72,7 @@ impl SearchProfileService {
             profile_keywords: analyzed_profile.keywords.clone(),
             search_terms,
             exclude_terms,
+            scoring_weights: preferences.scoring_weights.clone().normalized(),
         }
     }
 }

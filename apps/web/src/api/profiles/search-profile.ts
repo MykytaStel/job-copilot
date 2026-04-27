@@ -2,6 +2,7 @@ import { json, request } from '../client';
 import type { EngineBuildSearchProfileResponse } from '../engine-types';
 import { normalizeMissingString } from '../mappers';
 import type { SearchProfileBuildRequest, SearchProfileBuildResult } from './types';
+import { DEFAULT_SCORING_WEIGHTS } from './types';
 
 export async function buildSearchProfile(
   payload: SearchProfileBuildRequest,
@@ -11,13 +12,27 @@ export async function buildSearchProfile(
     json('POST', {
       raw_text: payload.rawText,
       preferences: {
-        target_regions: payload.preferences?.targetRegions ?? [],
-        work_modes: payload.preferences?.workModes ?? [],
-        preferred_roles: payload.preferences?.preferredRoles ?? [],
-        allowed_sources: payload.preferences?.allowedSources ?? [],
-        include_keywords: payload.preferences?.includeKeywords ?? [],
-        exclude_keywords: payload.preferences?.excludeKeywords ?? [],
-      },
+			target_regions: payload.preferences?.targetRegions ?? [],
+			work_modes: payload.preferences?.workModes ?? [],
+			preferred_roles: payload.preferences?.preferredRoles ?? [],
+			allowed_sources: payload.preferences?.allowedSources ?? [],
+			include_keywords: payload.preferences?.includeKeywords ?? [],
+			exclude_keywords: payload.preferences?.excludeKeywords ?? [],
+			scoring_weights: {
+				skill_match_importance:
+					payload.preferences?.scoringWeights.skillMatchImportance ??
+					DEFAULT_SCORING_WEIGHTS.skillMatchImportance,
+				salary_fit_importance:
+					payload.preferences?.scoringWeights.salaryFitImportance ??
+					DEFAULT_SCORING_WEIGHTS.salaryFitImportance,
+				job_freshness_importance:
+					payload.preferences?.scoringWeights.jobFreshnessImportance ??
+					DEFAULT_SCORING_WEIGHTS.jobFreshnessImportance,
+				remote_work_importance:
+					payload.preferences?.scoringWeights.remoteWorkImportance ??
+					DEFAULT_SCORING_WEIGHTS.remoteWorkImportance,
+				},
+			},
     }),
   );
 
@@ -44,6 +59,20 @@ export async function buildSearchProfile(
       profileKeywords: response.search_profile.profile_keywords ?? [],
       searchTerms: response.search_profile.search_terms,
       excludeTerms: response.search_profile.exclude_terms,
+			scoringWeights: {
+				skillMatchImportance:
+					response.search_profile.scoring_weights?.skill_match_importance ??
+					DEFAULT_SCORING_WEIGHTS.skillMatchImportance,
+				salaryFitImportance:
+					response.search_profile.scoring_weights?.salary_fit_importance ??
+					DEFAULT_SCORING_WEIGHTS.salaryFitImportance,
+				jobFreshnessImportance:
+					response.search_profile.scoring_weights?.job_freshness_importance ??
+					DEFAULT_SCORING_WEIGHTS.jobFreshnessImportance,
+				remoteWorkImportance:
+					response.search_profile.scoring_weights?.remote_work_importance ??
+					DEFAULT_SCORING_WEIGHTS.remoteWorkImportance,
+			},
     },
   };
 }

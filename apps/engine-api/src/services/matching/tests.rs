@@ -32,6 +32,7 @@ fn search_profile() -> SearchProfile {
             "distributed systems".to_string(),
         ],
         exclude_terms: vec!["gambling".to_string()],
+        scoring_weights: Default::default(),
     }
 }
 
@@ -62,6 +63,7 @@ fn mobile_profile() -> SearchProfile {
             "mobile product".to_string(),
         ],
         exclude_terms: vec!["gambling".to_string()],
+        scoring_weights: Default::default(),
     }
 }
 
@@ -92,6 +94,7 @@ fn frontend_profile() -> SearchProfile {
             "typescript".to_string(),
         ],
         exclude_terms: vec!["gambling".to_string()],
+        scoring_weights: Default::default(),
     }
 }
 
@@ -560,6 +563,7 @@ fn non_contiguous_frontend_search_phrase_matches_canonical_frontend_term() {
         profile_keywords: vec!["design system".to_string()],
         search_terms: vec!["frontend specialist".to_string()],
         exclude_terms: vec![],
+        scoring_weights: Default::default(),
     };
     let job = job_view(
         "job-frontend-search-term",
@@ -686,6 +690,7 @@ fn required_skill_gap_penalizes_more_than_preferred_skill_gap() {
         profile_keywords: vec![],
         search_terms: vec![],
         exclude_terms: vec![],
+        scoring_weights: Default::default(),
     };
 
     let required_skill_match = job_view(

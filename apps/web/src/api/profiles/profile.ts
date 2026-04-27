@@ -2,25 +2,91 @@ import type { CandidateProfile, CandidateProfileInput } from '@job-copilot/share
 import { json, readStoredProfileId, request, writeStoredProfileId } from '../client';
 import type { EngineAnalyzeProfile, EngineProfile, EngineResume } from '../engine-types';
 import { mapProfile } from '../mappers';
-import type { PersistedSearchPreferences } from './types';
+import {
+  DEFAULT_SCORING_WEIGHTS,
+  type PersistedSearchPreferences,
+  type ScoringWeights,
+} from './types';
 
 export type PersistedCandidateProfile = CandidateProfile & {
   searchPreferences?: PersistedSearchPreferences;
 };
 
+function clampScoringWeight(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
+
+  return Math.min(10, Math.max(1, Math.round(value)));
+}
+
+export function mapScoringWeights(
+  weights?: {
+    skill_match_importance?: number;
+    salary_fit_importance?: number;
+    job_freshness_importance?: number;
+    remote_work_importance?: number;
+  } | null,
+): ScoringWeights {
+  return {
+    skillMatchImportance: clampScoringWeight(
+      weights?.skill_match_importance,
+      DEFAULT_SCORING_WEIGHTS.skillMatchImportance,
+    ),
+    salaryFitImportance: clampScoringWeight(
+      weights?.salary_fit_importance,
+      DEFAULT_SCORING_WEIGHTS.salaryFitImportance,
+    ),
+    jobFreshnessImportance: clampScoringWeight(
+      weights?.job_freshness_importance,
+      DEFAULT_SCORING_WEIGHTS.jobFreshnessImportance,
+    ),
+    remoteWorkImportance: clampScoringWeight(
+      weights?.remote_work_importance,
+      DEFAULT_SCORING_WEIGHTS.remoteWorkImportance,
+    ),
+  };
+}
+
+function toEngineScoringWeights(weights: ScoringWeights) {
+  return {
+    skill_match_importance: weights.skillMatchImportance,
+    salary_fit_importance: weights.salaryFitImportance,
+    job_freshness_importance: weights.jobFreshnessImportance,
+    remote_work_importance: weights.remoteWorkImportance,
+  };
+}
+
+function toEngineSearchPreferences(searchPreferences: PersistedSearchPreferences) {
+  return {
+    target_regions: searchPreferences.targetRegions,
+    work_modes: searchPreferences.workModes,
+    preferred_roles: searchPreferences.preferredRoles,
+    allowed_sources: searchPreferences.allowedSources,
+    include_keywords: searchPreferences.includeKeywords,
+    exclude_keywords: searchPreferences.excludeKeywords,
+    scoring_weights: toEngineScoringWeights(searchPreferences.scoringWeights),
+  };
+}
+
+function mapSearchPreferences(
+  preferences: EngineProfile['search_preferences'],
+): PersistedSearchPreferences | undefined {
+  if (!preferences) return undefined;
+
+  return {
+    targetRegions: preferences.target_regions,
+    workModes: preferences.work_modes,
+    preferredRoles: preferences.preferred_roles,
+    allowedSources: preferences.allowed_sources,
+    includeKeywords: preferences.include_keywords,
+    excludeKeywords: preferences.exclude_keywords,
+    scoringWeights: mapScoringWeights(preferences.scoring_weights),
+  };
+}
+
 function mapPersistedProfile(profile: EngineProfile): PersistedCandidateProfile {
   return {
     ...mapProfile(profile),
-    searchPreferences: profile.search_preferences
-      ? {
-          targetRegions: profile.search_preferences.target_regions,
-          workModes: profile.search_preferences.work_modes,
-          preferredRoles: profile.search_preferences.preferred_roles,
-          allowedSources: profile.search_preferences.allowed_sources,
-          includeKeywords: profile.search_preferences.include_keywords,
-          excludeKeywords: profile.search_preferences.exclude_keywords,
-        }
-      : undefined,
+    searchPreferences: mapSearchPreferences(profile.search_preferences),
   };
 }
 
@@ -61,16 +127,9 @@ export async function saveProfile(
     salary_max: payload.salaryMax ?? null,
     salary_currency: payload.salaryCurrency ?? null,
     languages: payload.languages,
-    search_preferences: payload.searchPreferences
-      ? {
-          target_regions: payload.searchPreferences.targetRegions,
-          work_modes: payload.searchPreferences.workModes,
-          preferred_roles: payload.searchPreferences.preferredRoles,
-          allowed_sources: payload.searchPreferences.allowedSources,
-          include_keywords: payload.searchPreferences.includeKeywords,
-          exclude_keywords: payload.searchPreferences.excludeKeywords,
-        }
-      : null,
+   	search_preferences: payload.searchPreferences
+			? toEngineSearchPreferences(payload.searchPreferences)
+			: null,
   };
 
   const profile = profileId
@@ -109,16 +168,44 @@ export async function saveProfileSearchPreferences(
   const profile = await request<EngineProfile>(
     `/api/v1/profiles/${profileId}`,
     json('PATCH', {
-      search_preferences: {
-        target_regions: searchPreferences.targetRegions,
-        work_modes: searchPreferences.workModes,
-        preferred_roles: searchPreferences.preferredRoles,
-        allowed_sources: searchPreferences.allowedSources,
-        include_keywords: searchPreferences.includeKeywords,
-        exclude_keywords: searchPreferences.excludeKeywords,
-      },
-    }),
+  		search_preferences: toEngineSearchPreferences(searchPreferences),
+		}),
   );
 
   return mapPersistedProfile(profile);
+}
+
+
+export async function updateScoringWeights(
+  weights: ScoringWeights,
+): Promise<PersistedCandidateProfile> {
+  const profileId = readStoredProfileId();
+
+  if (!profileId) {
+    throw new Error('Create a profile first');
+  }
+
+  const current = await request<EngineProfile>(`/api/v1/profiles/${profileId}`);
+  const currentPreferences =
+    mapSearchPreferences(current.search_preferences) ?? {
+      targetRegions: [],
+      workModes: [],
+      preferredRoles: [],
+      allowedSources: [],
+      includeKeywords: [],
+      excludeKeywords: [],
+      scoringWeights: DEFAULT_SCORING_WEIGHTS,
+    };
+
+  const updated = await request<EngineProfile>(
+    `/api/v1/profiles/${profileId}`,
+    json('PATCH', {
+      search_preferences: toEngineSearchPreferences({
+        ...currentPreferences,
+        scoringWeights: weights,
+      }),
+    }),
+  );
+
+  return mapPersistedProfile(updated);
 }

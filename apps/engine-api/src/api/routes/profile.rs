@@ -457,7 +457,13 @@ mod tests {
                 "preferred_roles": ["frontend_engineer"],
                 "allowed_sources": ["djinni", "work_ua"],
                 "include_keywords": ["product company"],
-                "exclude_keywords": ["gambling"]
+                "exclude_keywords": ["gambling"],
+                "scoring_weights": {
+                    "skill_match_importance": 8,
+                    "salary_fit_importance": 6,
+                    "job_freshness_importance": 5,
+                    "remote_work_importance": 5
+                }
             })
         );
 
