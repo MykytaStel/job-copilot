@@ -29,22 +29,28 @@ describe('search profile preference helpers', () => {
 
   it('normalizes builder draft inputs before persistence', () => {
     expect(
-      buildPersistedSearchPreferences({
-        targetRegions: ['ua'],
-        workModes: ['remote'],
-        preferredRoles: ['frontend_engineer'],
-        allowedSources: ['djinni'],
-        includeKeywordsInput: 'product company,\nreact, react',
-        excludeKeywordsInput: 'gambling\n outsourcing ',
-      }),
-    ).toEqual({
-      targetRegions: ['ua'],
-      workModes: ['remote'],
-      preferredRoles: ['frontend_engineer'],
-      allowedSources: ['djinni'],
-      includeKeywords: ['product company', 'react'],
-      excludeKeywords: ['gambling', 'outsourcing'],
-    });
+			buildPersistedSearchPreferences({
+				targetRegions: ['ua'],
+				workModes: ['remote'],
+				preferredRoles: ['frontend_engineer'],
+				allowedSources: ['djinni', 'work_ua'],
+				includeKeywordsInput: 'react, typescript',
+				excludeKeywordsInput: 'gambling\n outsourcing ',
+			}),
+		).toEqual({
+			targetRegions: ['ua'],
+			workModes: ['remote'],
+			preferredRoles: ['frontend_engineer'],
+			allowedSources: ['djinni', 'work_ua'],
+			includeKeywords: ['react', 'typescript'],
+			excludeKeywords: ['gambling', 'outsourcing'],
+			scoringWeights: {
+				skillMatchImportance: 8,
+				salaryFitImportance: 6,
+				jobFreshnessImportance: 5,
+				remoteWorkImportance: 5,
+			},
+		});
   });
 
   it('prefers persisted preferences over local draft fallback', () => {

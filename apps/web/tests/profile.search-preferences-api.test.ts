@@ -52,6 +52,12 @@ describe('saveProfileSearchPreferences', () => {
       allowedSources: ['djinni', 'work_ua'],
       includeKeywords: ['product company'],
       excludeKeywords: ['gambling'],
+			scoringWeights: {
+				skillMatchImportance: 8,
+				salaryFitImportance: 6,
+				jobFreshnessImportance: 5,
+				remoteWorkImportance: 5,
+			},
     });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBeDefined();

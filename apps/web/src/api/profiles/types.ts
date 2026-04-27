@@ -44,7 +44,7 @@ export type PersistedSearchPreferences = {
   allowedSources: string[];
   includeKeywords: string[];
   excludeKeywords: string[];
-  scoringWeights: ScoringWeights;
+  scoringWeights?: ScoringWeights;
 };
 
 export type SearchProfileBuildRequest = {

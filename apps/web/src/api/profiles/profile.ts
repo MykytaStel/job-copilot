@@ -46,7 +46,9 @@ export function mapScoringWeights(
   };
 }
 
-function toEngineScoringWeights(weights: ScoringWeights) {
+function toEngineScoringWeights(
+  weights: ScoringWeights = DEFAULT_SCORING_WEIGHTS,
+) {
   return {
     skill_match_importance: weights.skillMatchImportance,
     salary_fit_importance: weights.salaryFitImportance,
@@ -63,7 +65,9 @@ function toEngineSearchPreferences(searchPreferences: PersistedSearchPreferences
     allowed_sources: searchPreferences.allowedSources,
     include_keywords: searchPreferences.includeKeywords,
     exclude_keywords: searchPreferences.excludeKeywords,
-    scoring_weights: toEngineScoringWeights(searchPreferences.scoringWeights),
+    scoring_weights: toEngineScoringWeights(
+  			searchPreferences.scoringWeights ?? DEFAULT_SCORING_WEIGHTS,
+		),
   };
 }
 
