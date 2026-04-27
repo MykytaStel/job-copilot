@@ -1,6 +1,7 @@
 pub mod activities;
 pub mod applications;
 pub mod behavior;
+pub mod cv_tailoring;
 pub mod feedback;
 pub mod fit_scoring;
 pub mod followup;
