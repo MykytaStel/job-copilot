@@ -85,7 +85,7 @@ impl Config {
         let ml_sidecar_timeout_seconds = std::env::var("ML_SIDECAR_TIMEOUT_SECONDS")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
-            .unwrap_or(15);
+            .unwrap_or(90);
         let ml_sidecar_internal_token = std::env::var("ML_INTERNAL_TOKEN")
             .ok()
             .map(|value| value.trim().to_string())
