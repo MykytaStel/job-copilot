@@ -62,7 +62,7 @@ def _title_case_skill(value: str) -> str:
         "javascript": "JavaScript",
         "node.js": "Node.js",
         "next.js": "Next.js",
-        "postgresql": "PostgreSQL",
+        "postgresql": "Postgres",
         "mongodb": "MongoDB",
         "aws": "AWS",
         "gcp": "GCP",
@@ -205,33 +205,60 @@ def _gap_suggestion(skill: str) -> str:
 
 def build_cv_tailoring(context: CvTailoringRequest) -> dict[str, Any]:
     candidate_skills = _split_candidate_skills(context)
-    job_skills = _infer_job_skills(context)
+
+    required_skills = _dedupe(context.job_required_skills, limit=10)
+    nice_to_have_skills = _dedupe(context.job_nice_to_have_skills, limit=8)
+
+    if not required_skills and not nice_to_have_skills:
+        required_skills = _infer_job_skills(context)
+
+    job_skills = _dedupe(
+        [
+            *required_skills,
+            *nice_to_have_skills,
+        ],
+        limit=14,
+    )
 
     candidate_normalized = {_normalize_skill(skill) for skill in candidate_skills}
-    job_normalized = [_normalize_skill(skill) for skill in job_skills]
 
     skills_to_highlight = [
         skill
-        for skill in job_skills
+        for skill in required_skills
         if _normalize_skill(skill) in candidate_normalized
     ]
 
+    highlighted_normalized = {
+        _normalize_skill(skill)
+        for skill in skills_to_highlight
+    }
+
     skills_to_mention = [
         skill
-        for skill in candidate_skills
-        if _normalize_skill(skill) not in {_normalize_skill(value) for value in skills_to_highlight}
-        and (
-            _contains_skill(context.job_description or "", skill)
-            or _contains_skill(context.job_title or "", skill)
-        )
+        for skill in nice_to_have_skills
+        if _normalize_skill(skill) in candidate_normalized
+        and _normalize_skill(skill) not in highlighted_normalized
     ]
 
     if not skills_to_mention:
+        job_text = " ".join(
+            [
+                context.job_title or "",
+                context.job_description or "",
+            ]
+        )
+
         skills_to_mention = [
             skill
             for skill in candidate_skills
-            if _normalize_skill(skill) not in {_normalize_skill(value) for value in skills_to_highlight}
+            if _normalize_skill(skill) not in highlighted_normalized
+            and (
+                _contains_skill(job_text, skill)
+                or _contains_skill(context.profile_summary or "", skill)
+            )
         ][:5]
+
+    job_normalized = [_normalize_skill(skill) for skill in job_skills]
 
     missing_skills = [
         _title_case_skill(skill)
@@ -258,9 +285,8 @@ def build_cv_tailoring(context: CvTailoringRequest) -> dict[str, Any]:
 
     key_phrases = _dedupe(
         [
-            *job_skills,
-            *skills_to_highlight,
-            *skills_to_mention,
+            *required_skills,
+            *nice_to_have_skills,
         ],
         limit=12,
     )
