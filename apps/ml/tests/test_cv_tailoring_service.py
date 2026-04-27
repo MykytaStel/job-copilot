@@ -2,8 +2,7 @@ import asyncio
 from typing import Any
 
 from app.cv_tailoring import (
-    CvTailoringRequest,
-    MalformedCvTailoringOutputError,
+    CvTailoringRequest
 )
 from app.cv_tailoring_service import CvTailoringService
 from app.llm_provider_template import TemplateEnrichmentProvider
@@ -78,12 +77,11 @@ def test_service_enriches_with_mock_provider() -> None:
     assert response.suggestions.summary_rewrite.startswith("Senior Rust")
 
 
-def test_service_raises_safe_error_for_malformed_provider_output() -> None:
+def test_service_falls_back_to_template_for_malformed_provider_output() -> None:
     service = CvTailoringService(StubCvTailoringProvider("not json {{{"))
 
-    try:
-        asyncio.run(service.enrich(sample_request()))
-    except MalformedCvTailoringOutputError:
-        pass
-    else:  # pragma: no cover
-        raise AssertionError("expected MalformedCvTailoringOutputError")
+    response = asyncio.run(service.enrich(sample_request()))
+
+    assert response.provider == "unknown_fallback_template"
+    assert "Rust" in response.suggestions.skills_to_highlight
+    assert response.suggestions.summary_rewrite
