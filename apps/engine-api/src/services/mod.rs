@@ -18,6 +18,7 @@ pub mod profile_records;
 pub mod profiles;
 pub mod ranking;
 pub mod reranker_automation;
+pub mod cv_tailoring;
 pub mod reranker_bootstrap;
 pub mod resumes;
 pub mod salary;

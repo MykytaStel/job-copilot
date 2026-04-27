@@ -108,6 +108,17 @@ impl ApiError {
         }
     }
 
+    pub fn bad_gateway(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::BAD_GATEWAY,
+            body: ApiErrorResponse {
+                code,
+                message: message.into(),
+                details: None,
+            },
+        }
+    }
+
     pub fn conflict(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::CONFLICT,

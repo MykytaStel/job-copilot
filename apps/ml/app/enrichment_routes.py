@@ -12,6 +12,12 @@ from app.cover_letter_draft import (
     CoverLetterDraftResponse,
     http_error_from_cover_letter_draft_error,
 )
+from app.cv_tailoring import (
+    CvTailoringProviderError,
+    CvTailoringRequest,
+    CvTailoringResponse,
+    http_error_from_cv_tailoring_error,
+)
 from app.interview_prep import (
     InterviewPrepProviderError,
     InterviewPrepRequest,
@@ -33,6 +39,7 @@ from app.profile_insights import (
 from app.service_dependencies import (
     get_application_coach_service,
     get_cover_letter_draft_service,
+    get_cv_tailoring_service,
     get_interview_prep_service,
     get_job_fit_explanation_service,
     get_profile_insights_service,
@@ -136,6 +143,18 @@ async def enrich_weekly_guidance(
         return await service.enrich(payload)
     except WeeklyGuidanceProviderError as exc:
         raise http_error_from_weekly_guidance_error(exc) from exc
+
+
+@router.post("/v1/cv-tailoring", response_model=CvTailoringResponse)
+@router.post("/api/v1/cv-tailoring", response_model=CvTailoringResponse)
+async def cv_tailoring(
+    payload: CvTailoringRequest,
+    service=Depends(get_cv_tailoring_service),
+) -> CvTailoringResponse:
+    try:
+        return await service.enrich(payload)
+    except CvTailoringProviderError as exc:
+        raise http_error_from_cv_tailoring_error(exc) from exc
 
 
 def register_enrichment_routes(application: FastAPI) -> None:

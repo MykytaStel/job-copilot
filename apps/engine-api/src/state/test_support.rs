@@ -13,6 +13,7 @@ use crate::services::profile_analysis::ProfileAnalysisService;
 use crate::services::profile_ml_metrics::ProfileMlMetricsService;
 use crate::services::profile_ml_state::ProfileMlStateService;
 use crate::services::profile_records::ProfileRecordsService;
+use crate::services::cv_tailoring::CvTailoringService;
 use crate::services::reranker_bootstrap::RerankerBootstrapService;
 use crate::services::resumes::ResumesService;
 use crate::services::salary::SalaryService;
@@ -80,6 +81,8 @@ impl AppState {
                 15,
             )
             .expect("test ML sidecar client should build"),
+            cv_tailoring: CvTailoringService::new("http://localhost:8000".to_string(), 15)
+                .expect("test cv tailoring client should build"),
             jwt_secret: None,
             cors_allowed_origins: Vec::new(),
         }
@@ -163,6 +166,11 @@ impl AppState {
         reranker_bootstrap: RerankerBootstrapService,
     ) -> Self {
         self.reranker_bootstrap = reranker_bootstrap;
+        self
+    }
+
+    pub fn with_cv_tailoring_service(mut self, cv_tailoring: CvTailoringService) -> Self {
+        self.cv_tailoring = cv_tailoring;
         self
     }
 }
