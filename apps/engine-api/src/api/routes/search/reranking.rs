@@ -20,9 +20,10 @@ use crate::state::AppState;
 use super::sort_ranked_jobs;
 
 /// Bonus applied to score when the job's company is whitelisted for the profile.
-const WHITELIST_SCORE_BONUS: u8 = 10;
+const WHITELIST_SCORE_BONUS: i16 = 5;
 
 /// Penalty subtracted from score when the exact job is marked as bad fit.
+const BLACKLIST_SCORE_PENALTY: i16 = 20;
 const BAD_FIT_SCORE_PENALTY: u8 = 30;
 
 pub(crate) struct SearchLearningAggregates {
@@ -42,11 +43,21 @@ pub(crate) fn apply_feedback_scoring(
             continue;
         };
 
-        if feedback.company_status == Some(CompanyFeedbackStatus::Whitelist) {
-            ranked.fit.apply_matching_adjustment(
-                i16::from(WHITELIST_SCORE_BONUS),
-                Some("Company is whitelisted for this profile".to_string()),
-            );
+        match feedback.company_status {
+            Some(CompanyFeedbackStatus::Whitelist) => {
+                ranked.fit.apply_matching_adjustment(
+                    WHITELIST_SCORE_BONUS,
+                    Some("Company is whitelisted for this profile".to_string()),
+                );
+            }
+            Some(CompanyFeedbackStatus::Blacklist) => {
+                ranked.fit.add_penalty(
+                    "company_blacklist",
+                    -BLACKLIST_SCORE_PENALTY,
+                    "Company is blacklisted for this profile".to_string(),
+                );
+            }
+            None => {}
         }
 
         if feedback.bad_fit {
@@ -323,4 +334,129 @@ pub(crate) fn score_by_job_id(ranked_jobs: &[RankedJob]) -> HashMap<String, u8> 
         .iter()
         .map(|ranked| (ranked.job.job.id.clone(), ranked.fit.score))
         .collect()
+}
+
+#[cfg(test)]
+mod company_reputation_tests {
+    use std::collections::HashMap;
+
+    use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackState};
+    use crate::domain::job::model::JobLifecycleStage;
+    use crate::domain::job::model::{Job, JobView};
+    use crate::domain::matching::{JobFit, JobScoreBreakdown};
+    use crate::services::search_ranking::RankedJob;
+
+    use super::apply_feedback_scoring;
+
+    fn ranked_job(id: &str, company_name: &str, score: u8) -> RankedJob {
+        RankedJob {
+            job: JobView {
+                job: Job {
+                    id: id.to_string(),
+                    title: "Frontend Engineer".to_string(),
+                    company_name: company_name.to_string(),
+                    location: None,
+                    remote_type: Some("remote".to_string()),
+                    seniority: Some("senior".to_string()),
+                    description_text: "React TypeScript product engineering".to_string(),
+                    salary_min: None,
+                    salary_max: None,
+                    salary_currency: None,
+                    posted_at: None,
+                    last_seen_at: "2026-04-27T00:00:00Z".to_string(),
+                    is_active: true,
+                },
+                first_seen_at: "2026-04-27T00:00:00Z".to_string(),
+                inactivated_at: None,
+                reactivated_at: None,
+                lifecycle_stage: JobLifecycleStage::Active,
+                primary_variant: None,
+            },
+            fit: JobFit {
+                job_id: id.to_string(),
+                score,
+                score_breakdown: JobScoreBreakdown::new(i16::from(score), 0, 0, Vec::new()),
+                matched_roles: Vec::new(),
+                matched_skills: Vec::new(),
+                matched_keywords: Vec::new(),
+                source_match: true,
+                work_mode_match: Some(true),
+                region_match: Some(true),
+                missing_signals: Vec::new(),
+                description_quality: crate::domain::job::presentation::JobTextQuality::Strong,
+                reasons: Vec::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn whitelisted_company_adds_five_points() {
+        let ranked = ranked_job("job-1", "Acme", 40);
+        let mut feedback_by_job_id = HashMap::new();
+
+        feedback_by_job_id.insert(
+            "job-1".to_string(),
+            JobFeedbackState {
+                company_status: Some(CompanyFeedbackStatus::Whitelist),
+                ..JobFeedbackState::default()
+            },
+        );
+
+        let result = apply_feedback_scoring(vec![ranked], &feedback_by_job_id);
+
+        assert_eq!(result[0].fit.score, 45);
+        assert_eq!(result[0].fit.score_breakdown.matching_score, 45);
+        assert!(
+            result[0]
+                .fit
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("Company is whitelisted"))
+        );
+    }
+
+    #[test]
+    fn blacklisted_company_subtracts_twenty_points_without_filtering() {
+        let ranked = ranked_job("job-1", "Acme", 40);
+        let mut feedback_by_job_id = HashMap::new();
+
+        feedback_by_job_id.insert(
+            "job-1".to_string(),
+            JobFeedbackState {
+                company_status: Some(CompanyFeedbackStatus::Blacklist),
+                ..JobFeedbackState::default()
+            },
+        );
+
+        let result = apply_feedback_scoring(vec![ranked], &feedback_by_job_id);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].fit.score, 20);
+        assert!(
+            result[0]
+                .fit
+                .score_breakdown
+                .penalties
+                .iter()
+                .any(|penalty| penalty.kind == "company_blacklist" && penalty.score_delta == -20)
+        );
+        assert!(
+            result[0]
+                .fit
+                .reasons
+                .iter()
+                .any(|reason| reason.contains("Company is blacklisted"))
+        );
+    }
+
+    #[test]
+    fn company_name_normalization_is_case_insensitive() {
+        let normalized_a =
+            crate::services::feedback::FeedbackService::normalize_company_name("  ACME Corp ");
+        let normalized_b =
+            crate::services::feedback::FeedbackService::normalize_company_name("acme   corp");
+
+        assert_eq!(normalized_a, normalized_b);
+        assert_eq!(normalized_a, "acme corp");
+    }
 }

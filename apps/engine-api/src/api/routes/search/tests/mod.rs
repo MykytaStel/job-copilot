@@ -490,7 +490,7 @@ async fn hidden_jobs_are_excluded_from_ranked_results() {
 }
 
 #[tokio::test]
-async fn blacklisted_companies_are_excluded_from_ranked_results() {
+async fn blacklisted_companies_are_demoted_not_filtered_from_ranked_results() {
     let state = AppState::for_services(
         ProfilesService::for_tests(ProfilesServiceStub::default().with_profile(sample_profile())),
         JobsService::for_tests(
@@ -553,10 +553,44 @@ async fn blacklisted_companies_are_excluded_from_ranked_results() {
     let body = body::to_bytes(response.into_body(), usize::MAX)
         .await
         .expect("response body should be readable");
+
     let payload: Value = serde_json::from_slice(&body).expect("response body should be valid JSON");
 
-    assert_eq!(payload["meta"]["filtered_out_company_blacklist"], json!(2));
-    assert_eq!(payload["results"].as_array().map(Vec::len), Some(0));
+    assert_eq!(payload["meta"]["filtered_out_company_blacklist"], json!(0));
+    assert_eq!(payload["results"].as_array().map(Vec::len), Some(2));
+
+    let results = payload["results"]
+        .as_array()
+        .expect("results should be an array");
+
+    assert!(
+        results.iter().all(|result| {
+            result["fit"]["reasons"]
+                .as_array()
+                .expect("reasons should be an array")
+                .iter()
+                .any(|reason| {
+                    reason
+                        .as_str()
+                        .is_some_and(|value| value.contains("Company is blacklisted"))
+                })
+        }),
+        "blacklisted company reason should appear for returned results"
+    );
+
+    assert!(
+        results.iter().all(|result| {
+            result["fit"]["score_breakdown"]["penalties"]
+                .as_array()
+                .expect("penalties should be an array")
+                .iter()
+                .any(|penalty| {
+                    penalty["kind"] == json!("company_blacklist")
+                        && penalty["score_delta"] == json!(-20)
+                })
+        }),
+        "blacklisted company penalty should be present in score breakdown"
+    );
 }
 
 #[tokio::test]

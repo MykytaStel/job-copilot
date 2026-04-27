@@ -10,7 +10,6 @@ use crate::api::dto::search::{RunSearchRequest, RunSearchResponse, SearchRespons
 use crate::api::error::{ApiError, ApiJson};
 use crate::api::routes::events::log_user_event_softly;
 use crate::api::routes::jobs::load_feedback_state;
-use crate::domain::feedback::model::CompanyFeedbackStatus;
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::outcome_dataset::event_signals_by_job_id;
 use crate::services::salary::score_search_salary;
@@ -80,18 +79,13 @@ pub async fn run_search(
         load_feedback_state(&state, input.profile_id.as_deref(), &candidate_jobs).await?;
     let feedback_load_duration_ms = feedback_load_started_at.elapsed().as_millis();
     let mut filtered_out_hidden = 0usize;
-    let mut filtered_out_company_blacklist = 0usize;
+    let filtered_out_company_blacklist = 0usize;
     let jobs_with_feedback = candidate_jobs
         .into_iter()
         .zip(feedback_states.into_iter())
         .filter_map(|(job, feedback)| {
             if feedback.hidden {
                 filtered_out_hidden += 1;
-                return None;
-            }
-
-            if feedback.company_status == Some(CompanyFeedbackStatus::Blacklist) {
-                filtered_out_company_blacklist += 1;
                 return None;
             }
 
