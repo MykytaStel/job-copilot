@@ -28,3 +28,7 @@ export async function activateResume(id: string): Promise<ResumeVersion> {
   const resume = await request<EngineResume>(`/api/v1/resumes/${id}/activate`, json('POST', {}));
   return mapResume(resume);
 }
+
+export async function deleteResume(id: string): Promise<void> {
+  await request<void>(`/api/v1/resumes/${id}`, { method: 'DELETE' });
+}

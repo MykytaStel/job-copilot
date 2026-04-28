@@ -9,9 +9,7 @@ export type {
   ScoringWeights,
 } from './types';
 
-export {
-  DEFAULT_SCORING_WEIGHTS,
-} from './types';
+export { DEFAULT_SCORING_WEIGHTS } from './types';
 
 export {
   analyzeStoredProfile,
@@ -22,6 +20,6 @@ export {
   updateScoringWeights,
 } from './profile';
 
-export { activateResume, getActiveResume, getResumes, uploadResume } from './resumes';
+export { activateResume, deleteResume, getActiveResume, getResumes, uploadResume } from './resumes';
 export { getRoles, getSources } from './catalog';
 export { buildSearchProfile } from './search-profile';
