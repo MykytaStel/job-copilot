@@ -6,6 +6,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Target,
+  Trash2,
   UserRound,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -48,6 +49,8 @@ import {
 } from '../lib/ingestionFrequencyPrefs';
 import { queryKeys } from '../queryKeys';
 import { buildProfileCompletionState } from '../features/profile/profileCompletion';
+import { clearAllHiddenJobs, getFeedback } from '../api/feedback';
+import { invalidateFeedbackViewQueries } from '../lib/queryInvalidation';
 
 const NOTIFICATION_PREVIEW_LIMIT = 20;
 
@@ -133,76 +136,91 @@ const SECTIONS: {
 
 export default function Settings() {
   const navigate = useNavigate();
-	const queryClient = useQueryClient();
+  const queryClient = useQueryClient();
   const profileId = readProfileId();
   const [activeSection, setActiveSection] = useState<SectionId>('profile');
   const [density, setDensityState] = useState<DensityMode>(() => readDensity());
   const [sortPref, setSortPrefState] = useState<SortMode>(() => readSortMode());
-	const [ingestionFrequency, setIngestionFrequencyState] = useState(() =>
-  	readIngestionFrequency(),
-	);
-	const {
-		data: notificationPreferences,
-		isLoading: notificationPreferencesLoading,
-	} = useQuery({
-		queryKey: queryKeys.notifications.preferences(profileId ?? 'none'),
-		queryFn: getNotificationPreferences,
-		enabled: !!profileId,
-	});
-	const notificationPreferencesMutation = useMutation({
-		mutationFn: patchNotificationPreferences,
-		onMutate: async (patch) => {
-			if (!profileId) return;
+  const [ingestionFrequency, setIngestionFrequencyState] = useState(() => readIngestionFrequency());
 
-			const queryKey = queryKeys.notifications.preferences(profileId);
-			await queryClient.cancelQueries({ queryKey });
+  const { data: notificationPreferences, isLoading: notificationPreferencesLoading } = useQuery({
+    queryKey: queryKeys.notifications.preferences(profileId ?? 'none'),
+    queryFn: getNotificationPreferences,
+    enabled: !!profileId,
+  });
+  const { data: feedbackOverview } = useQuery({
+    queryKey: queryKeys.feedback.profile(profileId ?? 'none'),
+    queryFn: () => getFeedback(profileId!),
+    enabled: !!profileId,
+  });
 
-			const previous =
-				queryClient.getQueryData<NotificationPreferences>(queryKey);
+  const hiddenJobsCount = feedbackOverview?.summary.hiddenJobsCount ?? 0;
+  const notificationPreferencesMutation = useMutation({
+    mutationFn: patchNotificationPreferences,
+    onMutate: async (patch) => {
+      if (!profileId) return;
 
-			if (previous) {
-				queryClient.setQueryData<NotificationPreferences>(queryKey, {
-					...previous,
-					...patch,
-				});
-			}
+      const queryKey = queryKeys.notifications.preferences(profileId);
+      await queryClient.cancelQueries({ queryKey });
 
-			return { previous };
-		},
-		onError: (_error, _patch, context) => {
-			if (!profileId || !context?.previous) return;
+      const previous = queryClient.getQueryData<NotificationPreferences>(queryKey);
 
-			queryClient.setQueryData(
-				queryKeys.notifications.preferences(profileId),
-				context.previous,
-			);
-		},
-		onSettled: () => {
-			if (!profileId) return;
+      if (previous) {
+        queryClient.setQueryData<NotificationPreferences>(queryKey, {
+          ...previous,
+          ...patch,
+        });
+      }
 
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.notifications.preferences(profileId),
-			});
-		},
-	});
-	const scoringWeightsMutation = useMutation({
-		mutationFn: updateScoringWeights,
-		onSuccess: (updatedProfile) => {
-			queryClient.setQueryData(queryKeys.profile.root(), updatedProfile);
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.profile.root(),
-			});
-		},
-	});
+      return { previous };
+    },
+    onError: (_error, _patch, context) => {
+      if (!profileId || !context?.previous) return;
+
+      queryClient.setQueryData(queryKeys.notifications.preferences(profileId), context.previous);
+    },
+    onSettled: () => {
+      if (!profileId) return;
+
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.notifications.preferences(profileId),
+      });
+    },
+  });
+
+  const clearHiddenJobsMutation = useMutation({
+    mutationFn: () => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      return clearAllHiddenJobs(profileId);
+    },
+    onSuccess: () => {
+      if (!profileId) return;
+
+      void invalidateFeedbackViewQueries(queryClient, profileId);
+    },
+  });
+
+  const scoringWeightsMutation = useMutation({
+    mutationFn: updateScoringWeights,
+    onSuccess: (updatedProfile) => {
+      queryClient.setQueryData(queryKeys.profile.root(), updatedProfile);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.profile.root(),
+      });
+    },
+  });
   function setDensity(value: DensityMode) {
     writeDensity(value);
     setDensityState(value);
   }
 
-	function setIngestionFrequency(value: IngestionFrequencyMinutes) {
-		writeIngestionFrequency(value);
-		setIngestionFrequencyState(value);
-	}
+  function setIngestionFrequency(value: IngestionFrequencyMinutes) {
+    writeIngestionFrequency(value);
+    setIngestionFrequencyState(value);
+  }
 
   function setSortPref(value: SortMode) {
     writeSortMode(value);
@@ -210,13 +228,13 @@ export default function Settings() {
   }
 
   function toggleNotificationPreference(
-		key: NotificationPreferenceKey,
-		preferences: NotificationPreferences,
-	) {
-		notificationPreferencesMutation.mutate({
-			[key]: !preferences[key],
-		});
-	}
+    key: NotificationPreferenceKey,
+    preferences: NotificationPreferences,
+  ) {
+    notificationPreferencesMutation.mutate({
+      [key]: !preferences[key],
+    });
+  }
 
   const { data: profile } = useQuery({
     queryKey: queryKeys.profile.root(),
@@ -265,15 +283,24 @@ export default function Settings() {
 
   const unreadCount = notifications.filter((n) => !n.readAt).length;
   const persistedSearchPreferences = profile.searchPreferences;
-	const scoringWeights =
-  persistedSearchPreferences?.scoringWeights ?? DEFAULT_SCORING_WEIGHTS;
+  const scoringWeights = persistedSearchPreferences?.scoringWeights ?? DEFAULT_SCORING_WEIGHTS;
 
-	function updateScoringWeight(key: keyof ScoringWeights, value: number) {
-		scoringWeightsMutation.mutate({
-			...scoringWeights,
-			[key]: value,
-		});
-	}
+  function updateScoringWeight(key: keyof ScoringWeights, value: number) {
+    scoringWeightsMutation.mutate({
+      ...scoringWeights,
+      [key]: value,
+    });
+  }
+
+  function confirmClearHiddenJobs() {
+    const confirmed = window.confirm(
+      `This will delete ${hiddenJobsCount} hidden feedback entries. Continue?`,
+    );
+
+    if (confirmed) {
+      clearHiddenJobsMutation.mutate();
+    }
+  }
 
   const persistedPreferenceCount =
     (persistedSearchPreferences?.targetRegions.length ?? 0) +
@@ -398,98 +425,89 @@ export default function Settings() {
                     label="Preferred roles"
                     value={String(persistedSearchPreferences?.preferredRoles.length ?? 0)}
                   />
-									<div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
-									<div className="mb-4">
-											<p className="text-sm font-semibold text-foreground">
-											Ingestion frequency
-										</p>
-										<p className="mt-1 text-sm text-muted-foreground">
-											Choose how often you want new jobs to appear refreshed in the UI.
-										</p>
-									</div>
+                  <div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
+                    <div className="mb-4">
+                      <p className="text-sm font-semibold text-foreground">Ingestion frequency</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Choose how often you want new jobs to appear refreshed in the UI.
+                      </p>
+                    </div>
 
-									<div className="grid gap-3 sm:grid-cols-3">
-										{INGESTION_FREQUENCY_OPTIONS.map((value) => {
-											const selected = ingestionFrequency === value;
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {INGESTION_FREQUENCY_OPTIONS.map((value) => {
+                        const selected = ingestionFrequency === value;
 
-											return (
-												<button
-													key={value}
-													type="button"
-													onClick={() => setIngestionFrequency(value)}
-													className={cn(
-														'rounded-[var(--radius-md)] border px-4 py-3 text-left transition-colors',
-														selected
-															? 'border-primary bg-primary/10 text-primary'
-															: 'border-border bg-surface text-muted-foreground hover:border-border/80 hover:text-foreground',
-													)}
-												>
-													<span className="block text-sm font-semibold">
-															Every {value} min
-														</span>
-														<span className="mt-1 block text-xs text-muted-foreground">
-															Display preference
-														</span>
-													</button>
-												);
-											})}
-										</div>
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setIngestionFrequency(value)}
+                            className={cn(
+                              'rounded-[var(--radius-md)] border px-4 py-3 text-left transition-colors',
+                              selected
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-border bg-surface text-muted-foreground hover:border-border/80 hover:text-foreground',
+                            )}
+                          >
+                            <span className="block text-sm font-semibold">Every {value} min</span>
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              Display preference
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
 
-										<p className="mt-4 text-xs text-muted-foreground">
-											Saved locally. Scraping currently runs every 60 min by system default unless
-											the ingestion daemon is started with a different interval.
-										</p>
-									</div>
-									<div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
-										<div className="mb-4">
-											<p className="text-sm font-semibold text-foreground">
-												Scoring weights
-											</p>
-											<p className="mt-1 text-sm text-muted-foreground">
-												Tune how Job Copilot ranks jobs for this profile. Changes are saved to engine-api and affect the next search run.
-											</p>
-										</div>
+                    <p className="mt-4 text-xs text-muted-foreground">
+                      Saved locally. Scraping currently runs every 60 min by system default unless
+                      the ingestion daemon is started with a different interval.
+                    </p>
+                  </div>
+                  <div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
+                    <div className="mb-4">
+                      <p className="text-sm font-semibold text-foreground">Scoring weights</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Tune how Job Copilot ranks jobs for this profile. Changes are saved to
+                        engine-api and affect the next search run.
+                      </p>
+                    </div>
 
-										<div className="space-y-5">
-											{SCORING_WEIGHT_CONTROLS.map(({ key, title, description }) => (
-												<div key={key} className="space-y-2">
-													<div className="flex items-start justify-between gap-4">
-														<div>
-															<p className="text-sm font-medium text-foreground">
-																{title}
-															</p>
-															<p className="mt-1 text-xs text-muted-foreground">
-																{description}
-															</p>
-														</div>
+                    <div className="space-y-5">
+                      {SCORING_WEIGHT_CONTROLS.map(({ key, title, description }) => (
+                        <div key={key} className="space-y-2">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{title}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+                            </div>
 
-														<span className="rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-semibold text-foreground">
-															{scoringWeights[key]}/10
-														</span>
-													</div>
+                            <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-semibold text-foreground">
+                              {scoringWeights[key]}/10
+                            </span>
+                          </div>
 
-													<input
-														type="range"
-														min={1}
-														max={10}
-														step={1}
-														value={scoringWeights[key]}
-														disabled={scoringWeightsMutation.isPending}
-														onChange={(event) =>
-															updateScoringWeight(key, Number(event.currentTarget.value))
-														}
-														className="w-full accent-primary"
-													/>
-												</div>
-											))}
-										</div>
+                          <input
+                            type="range"
+                            min={1}
+                            max={10}
+                            step={1}
+                            value={scoringWeights[key]}
+                            disabled={scoringWeightsMutation.isPending}
+                            onChange={(event) =>
+                              updateScoringWeight(key, Number(event.currentTarget.value))
+                            }
+                            className="w-full accent-primary"
+                          />
+                        </div>
+                      ))}
+                    </div>
 
-										{scoringWeightsMutation.isError && (
-											<p className="mt-3 text-sm text-danger">
-												Could not save scoring weights. Please try again.
-											</p>
-										)}
-									</div>
+                    {scoringWeightsMutation.isError && (
+                      <p className="mt-3 text-sm text-danger">
+                        Could not save scoring weights. Please try again.
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Full search preference editing lives in Profile &amp; Search.
@@ -502,90 +520,84 @@ export default function Settings() {
           )}
 
           {activeSection === 'notifications' && (
-						<SettingsSection title="Notifications">
-							<div className="space-y-4">
-								<SurfaceMetric>
-										<p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-											Unread
-										</p>
-										<p className="mt-2 text-2xl font-semibold text-foreground">
-											{unreadCount}
-										</p>
-								</SurfaceMetric>
+            <SettingsSection title="Notifications">
+              <div className="space-y-4">
+                <SurfaceMetric>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Unread
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-foreground">{unreadCount}</p>
+                </SurfaceMetric>
 
-								<div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
-									<div className="mb-4">
-										<p className="text-sm font-semibold text-foreground">
-											Notification preferences
-										</p>
-										<p className="mt-1 text-sm text-muted-foreground">
-											These preferences are saved in engine-api and scoped to the active profile.
-										</p>
-									</div>
+                <div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
+                  <div className="mb-4">
+                    <p className="text-sm font-semibold text-foreground">
+                      Notification preferences
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      These preferences are saved in engine-api and scoped to the active profile.
+                    </p>
+                  </div>
 
-									{notificationPreferencesLoading && (
-										<p className="text-sm text-muted-foreground">
-											Loading notification preferences…
-										</p>
-									)}
+                  {notificationPreferencesLoading && (
+                    <p className="text-sm text-muted-foreground">
+                      Loading notification preferences…
+                    </p>
+                  )}
 
-									{!notificationPreferencesLoading && notificationPreferences && (
-										<div className="space-y-3">
-											{NOTIFICATION_PREF_LABELS.map(({ key, title, description }) => {
-												const enabled = notificationPreferences[key];
+                  {!notificationPreferencesLoading && notificationPreferences && (
+                    <div className="space-y-3">
+                      {NOTIFICATION_PREF_LABELS.map(({ key, title, description }) => {
+                        const enabled = notificationPreferences[key];
 
-												return (
-													<div
-														key={key}
-														className="flex items-start justify-between gap-4 rounded-[var(--radius-md)] border border-border bg-surface p-3"
-													>
-														<div>
-															<p className="text-sm font-medium text-foreground">
-																{title}
-															</p>
-															<p className="mt-1 text-xs text-muted-foreground">
-																{description}
-															</p>
-														</div>
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-start justify-between gap-4 rounded-[var(--radius-md)] border border-border bg-surface p-3"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{title}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+                            </div>
 
-														<button
-															type="button"
-															aria-pressed={enabled}
-															onClick={() =>
-																toggleNotificationPreference(key, notificationPreferences)
-															}
-															disabled={notificationPreferencesMutation.isPending}
-															className={cn(
-																'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-60',
-																enabled ? 'bg-primary' : 'bg-surface-soft',
-															)}
-														>
-															<span
-																className={cn(
-																	'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
-																	enabled ? 'translate-x-4' : 'translate-x-0',
-																)}
-															/>
-														</button>
-													</div>
-												);
-											})}
-										</div>
-									)}
+                            <button
+                              type="button"
+                              aria-pressed={enabled}
+                              onClick={() =>
+                                toggleNotificationPreference(key, notificationPreferences)
+                              }
+                              disabled={notificationPreferencesMutation.isPending}
+                              className={cn(
+                                'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-60',
+                                enabled ? 'bg-primary' : 'bg-surface-soft',
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+                                  enabled ? 'translate-x-4' : 'translate-x-0',
+                                )}
+                              />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
-									{notificationPreferencesMutation.isError && (
-										<p className="mt-3 text-sm text-danger">
-											Could not save notification preferences. Please try again.
-										</p>
-									)}
-								</div>
+                  {notificationPreferencesMutation.isError && (
+                    <p className="mt-3 text-sm text-danger">
+                      Could not save notification preferences. Please try again.
+                    </p>
+                  )}
+                </div>
 
-								<Button variant="outline" onClick={() => navigate('/notifications')}>
-									Open notifications
-								</Button>
-							</div>
-						</SettingsSection>
-					)}
+                <Button variant="outline" onClick={() => navigate('/notifications')}>
+                  Open notifications
+                </Button>
+              </div>
+            </SettingsSection>
+          )}
 
           {activeSection === 'display' && (
             <SettingsSection title="Display">
@@ -620,11 +632,13 @@ export default function Settings() {
                     Default job sort
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {([
-                      { value: 'relevance', label: 'Relevance' },
-                      { value: 'date', label: 'Date' },
-                      { value: 'salary', label: 'Salary' },
-                    ] as { value: SortMode; label: string }[]).map(({ value, label }) => (
+                    {(
+                      [
+                        { value: 'relevance', label: 'Relevance' },
+                        { value: 'date', label: 'Date' },
+                        { value: 'salary', label: 'Salary' },
+                      ] as { value: SortMode; label: string }[]
+                    ).map(({ value, label }) => (
                       <button
                         key={value}
                         onClick={() => setSortPref(value)}
@@ -649,9 +663,43 @@ export default function Settings() {
 
           {activeSection === 'privacy' && (
             <SettingsSection title="Data & Privacy">
-              <p className="text-sm text-muted-foreground">
-                Data retention, export, and privacy controls will be available in a future release.
-              </p>
+              <div className="space-y-4">
+                <div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Hidden jobs</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Clear hidden feedback entries for this profile so those jobs can appear
+                        again.
+                      </p>
+                      <p className="mt-3 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                        {hiddenJobsCount} hidden feedback entries
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={confirmClearHiddenJobs}
+                      disabled={
+                        hiddenJobsCount === 0 || clearHiddenJobsMutation.isPending || !profileId
+                      }
+                      className="shrink-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {clearHiddenJobsMutation.isPending
+                        ? 'Clearing hidden jobs'
+                        : 'Clear all hidden jobs'}
+                    </Button>
+                  </div>
+
+                  {clearHiddenJobsMutation.isError && (
+                    <p className="mt-3 text-sm text-danger">
+                      Could not clear hidden jobs. Please try again.
+                    </p>
+                  )}
+                </div>
+              </div>
             </SettingsSection>
           )}
         </div>

@@ -19,7 +19,10 @@ pub mod search;
 pub mod search_profile;
 pub mod sources;
 
-use axum::{Router, routing::get, routing::patch, routing::post, routing::put};
+use axum::{
+    Router,
+    routing::{delete, get, patch, post, put},
+};
 
 use crate::state::AppState;
 
@@ -80,6 +83,10 @@ pub fn protected_router() -> Router<AppState> {
         .route(
             "/api/v1/profiles/{id}/feedback",
             get(feedback::list_feedback),
+        )
+        .route(
+            "/api/v1/profiles/{id}/feedback/hidden/all",
+            delete(feedback::clear_all_hidden_jobs),
         )
         .route(
             "/api/v1/profiles/{id}/reranker-dataset",
