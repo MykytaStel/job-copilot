@@ -282,6 +282,39 @@ impl ApplicationsRepository {
         Ok(rows.into_iter().map(Application::from).collect())
     }
 
+    pub async fn list_by_profile(
+        &self,
+        profile_id: &str,
+    ) -> Result<Vec<Application>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let rows = sqlx::query_as::<_, ApplicationRow>(
+            r#"
+            SELECT
+                id,
+                job_id,
+                resume_id,
+                status,
+                applied_at::text AS applied_at,
+                due_date::text AS due_date,
+                outcome,
+                outcome_date::text AS outcome_date,
+                rejection_stage,
+                updated_at::text AS updated_at
+            FROM applications
+            WHERE profile_id = $1
+            ORDER BY updated_at DESC
+            "#,
+        )
+        .bind(profile_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows.into_iter().map(Application::from).collect())
+    }
+
     pub async fn search_by_job_title(
         &self,
         query: &str,

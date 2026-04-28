@@ -116,6 +116,23 @@ impl ApplicationsServiceStub {
             .collect())
     }
 
+    pub(crate) fn list_by_profile(
+        &self,
+        _profile_id: &str,
+    ) -> Result<Vec<Application>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self
+            .applications_by_id
+            .lock()
+            .expect("applications stub mutex should not be poisoned")
+            .values()
+            .cloned()
+            .collect())
+    }
+
     pub(crate) fn search_by_job_title(
         &self,
         _query: &str,
