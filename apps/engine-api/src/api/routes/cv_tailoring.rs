@@ -121,7 +121,9 @@ mod tests {
     use crate::api::error::ApiJson;
     use crate::api::middleware::auth::AuthUser;
     use crate::domain::job::model::{Job, JobLifecycleStage, JobView};
-    use crate::domain::profile::model::{Profile, ProfileAnalysis};
+    use crate::domain::profile::model::{
+        LanguageLevel, LanguageProficiency, Profile, ProfileAnalysis,
+    };
     use crate::domain::role::RoleId;
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::cv_tailoring::{
@@ -220,8 +222,18 @@ mod tests {
         salary_min: None,
         salary_max: None,
         salary_currency: "USD".to_string(),
-        languages: vec!["en".to_string(), "uk".to_string()],
-        preferred_work_mode: Some("remote".to_string()),
+        languages: vec![
+            LanguageProficiency {
+                language: "English".to_string(),
+                level: LanguageLevel::C1,
+            },
+            LanguageProficiency {
+                language: "Ukrainian".to_string(),
+                level: LanguageLevel::Native,
+            },
+        ],
+        preferred_locations: vec![],
+        work_mode_preference: "remote_only".to_string(),
         preferred_language: Some("en".to_string()),
         search_preferences: None,
         created_at: "2026-01-01T00:00:00Z".to_string(),

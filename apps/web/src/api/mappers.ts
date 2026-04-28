@@ -180,6 +180,8 @@ export function mapProfile(profile: EngineProfile): CandidateProfile {
     salaryMax: profile.salary_max ?? undefined,
     salaryCurrency: profile.salary_currency ?? 'USD',
     languages: profile.languages ?? [],
+    preferredLocations: profile.preferred_locations ?? [],
+    workModePreference: profile.work_mode_preference ?? 'any',
     summary: profile.analysis?.summary,
     skills: profile.analysis?.skills ?? [],
     updatedAt: profile.updated_at,
@@ -270,4 +272,3 @@ export function mapApplicationDetail(detail: EngineApplicationDetail): Applicati
     })),
   };
 }
-

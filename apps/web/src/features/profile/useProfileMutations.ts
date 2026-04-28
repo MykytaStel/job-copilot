@@ -1,6 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { LanguageProficiency, WorkModePreference } from '@job-copilot/shared/profiles';
 import toast from 'react-hot-toast';
-import { analyzeStoredProfile, getProfile, saveProfile } from '../../api/profiles';
+import {
+  analyzeStoredProfile,
+  getProfile,
+  saveProfile,
+  updateProfileSkills,
+} from '../../api/profiles';
 import type { PersistedSearchPreferences } from '../../api/profiles';
 import { invalidateProfileAnalysisQueries } from '../../lib/queryInvalidation';
 import { queryKeys } from '../../queryKeys';
@@ -18,7 +24,9 @@ export function useProfileMutations(clearDraft: () => void) {
       salaryMin?: number;
       salaryMax?: number;
       salaryCurrency: string;
-      languages: string[];
+      languages: LanguageProficiency[];
+      preferredLocations: string[];
+      workModePreference: WorkModePreference;
       searchPreferences?: PersistedSearchPreferences;
     }) =>
       saveProfile({
@@ -31,6 +39,8 @@ export function useProfileMutations(clearDraft: () => void) {
         salaryMax: vars.salaryMax,
         salaryCurrency: vars.salaryCurrency,
         languages: vars.languages,
+        preferredLocations: vars.preferredLocations,
+        workModePreference: vars.workModePreference,
         searchPreferences: vars.searchPreferences,
         summary: undefined,
         skills: [],
@@ -51,7 +61,7 @@ export function useProfileMutations(clearDraft: () => void) {
       queryClient.setQueryData(
         queryKeys.profile.root(),
         (current: Awaited<ReturnType<typeof getProfile>>) =>
-          current ? { ...current, summary: analysis.summary, skills: analysis.skills } : current,
+          current ? { ...current, summary: analysis.summary } : current,
       );
       const profileId = (
         queryClient.getQueryData(queryKeys.profile.root()) as { id?: string } | undefined
@@ -64,5 +74,16 @@ export function useProfileMutations(clearDraft: () => void) {
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
   });
 
-  return { saveMutation, analyzeMutation };
+  const updateSkillsMutation = useMutation({
+    mutationFn: (vars: { profileId: string; skills: string[] }) =>
+      updateProfileSkills(vars.profileId, vars.skills),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.profile.root(), updated);
+      void invalidateProfileAnalysisQueries(queryClient, updated.id);
+      toast.success('Skills updated');
+    },
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
+  });
+
+  return { saveMutation, analyzeMutation, updateSkillsMutation };
 }

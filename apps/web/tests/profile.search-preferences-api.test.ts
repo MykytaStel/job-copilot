@@ -21,7 +21,7 @@ describe('saveProfileSearchPreferences', () => {
         salary_min: 4000,
         salary_max: 5500,
         salary_currency: 'USD',
-        languages: ['English'],
+        languages: [{ language: 'English', level: 'C1' }],
         search_preferences: {
           target_regions: ['ua', 'eu_remote'],
           work_modes: ['remote'],
@@ -52,12 +52,12 @@ describe('saveProfileSearchPreferences', () => {
       allowedSources: ['djinni', 'work_ua'],
       includeKeywords: ['product company'],
       excludeKeywords: ['gambling'],
-			scoringWeights: {
-				skillMatchImportance: 8,
-				salaryFitImportance: 6,
-				jobFreshnessImportance: 5,
-				remoteWorkImportance: 5,
-			},
+      scoringWeights: {
+        skillMatchImportance: 8,
+        salaryFitImportance: 6,
+        jobFreshnessImportance: 5,
+        remoteWorkImportance: 5,
+      },
     });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBeDefined();
@@ -67,36 +67,36 @@ describe('saveProfileSearchPreferences', () => {
         method: 'PATCH',
       }),
     );
-		expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)).toEqual({
-			search_preferences: {
-				target_regions: ['ua', 'eu_remote'],
-				work_modes: ['remote'],
-				preferred_roles: ['frontend_engineer'],
-				allowed_sources: ['djinni', 'work_ua'],
-				include_keywords: ['product company'],
-				exclude_keywords: ['gambling'],
-				scoring_weights: {
-					skill_match_importance: 8,
-					salary_fit_importance: 6,
-					job_freshness_importance: 5,
-					remote_work_importance: 5,
-				},
-			},
-		});
+    expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)).toEqual({
+      search_preferences: {
+        target_regions: ['ua', 'eu_remote'],
+        work_modes: ['remote'],
+        preferred_roles: ['frontend_engineer'],
+        allowed_sources: ['djinni', 'work_ua'],
+        include_keywords: ['product company'],
+        exclude_keywords: ['gambling'],
+        scoring_weights: {
+          skill_match_importance: 8,
+          salary_fit_importance: 6,
+          job_freshness_importance: 5,
+          remote_work_importance: 5,
+        },
+      },
+    });
     expect(profile.searchPreferences).toEqual({
-			targetRegions: ['ua', 'eu_remote'],
-			workModes: ['remote'],
-			preferredRoles: ['frontend_engineer'],
-			allowedSources: ['djinni', 'work_ua'],
-			includeKeywords: ['product company'],
-			excludeKeywords: ['gambling'],
-			scoringWeights: {
-				skillMatchImportance: 8,
-				salaryFitImportance: 6,
-				jobFreshnessImportance: 5,
-				remoteWorkImportance: 5,
-			},
-		});
+      targetRegions: ['ua', 'eu_remote'],
+      workModes: ['remote'],
+      preferredRoles: ['frontend_engineer'],
+      allowedSources: ['djinni', 'work_ua'],
+      includeKeywords: ['product company'],
+      excludeKeywords: ['gambling'],
+      scoringWeights: {
+        skillMatchImportance: 8,
+        salaryFitImportance: 6,
+        jobFreshnessImportance: 5,
+        remoteWorkImportance: 5,
+      },
+    });
     expect(profile.summary).toBe('Experienced frontend engineer');
     expect(profile.skills).toEqual(['React', 'TypeScript']);
   });
