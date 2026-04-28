@@ -126,6 +126,17 @@ export async function removeCompanyBlacklist(
   );
 }
 
+export async function removeCompanyBlacklistBySlug(
+  profileId: string,
+  companySlug: string,
+): Promise<void> {
+  const path = `/api/v1/feedback/companies/${encodeURIComponent(
+    companySlug,
+  )}/blacklist?profile_id=${encodeURIComponent(profileId)}`;
+
+  await request<void>(path, { method: 'DELETE' });
+}
+
 export async function setJobSalarySignal(
   profileId: string,
   jobId: string,
