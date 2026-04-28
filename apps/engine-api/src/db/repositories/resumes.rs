@@ -149,6 +149,19 @@ impl ResumesRepository {
 
         Ok(row.map(ResumeVersion::from))
     }
+
+    pub async fn delete(&self, id: &str) -> Result<bool, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let result = sqlx::query("DELETE FROM resumes WHERE id = $1")
+            .bind(id)
+            .execute(pool)
+            .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
 }
 
 impl From<ResumeRow> for ResumeVersion {

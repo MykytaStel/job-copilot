@@ -4,12 +4,15 @@ import {
   Ban,
   Bell,
   Building2,
+  CheckCircle2,
   Download,
+  FileText,
   Settings as SettingsIcon,
   ShieldCheck,
   SlidersHorizontal,
   Target,
   Trash2,
+  Upload,
   UserRound,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -23,7 +26,10 @@ import {
 } from '../api/notifications';
 import {
   DEFAULT_SCORING_WEIGHTS,
+  activateResume,
+  deleteResume,
   getProfile,
+  getResumes,
   getStoredProfileRawText,
   updateScoringWeights,
   type ScoringWeights,
@@ -55,6 +61,7 @@ import { buildProfileCompletionState } from '../features/profile/profileCompleti
 import { clearAllHiddenJobs, getFeedback, removeCompanyBlacklistBySlug } from '../api/feedback';
 import { exportUserData } from '../api/export';
 import { invalidateFeedbackViewQueries } from '../lib/queryInvalidation';
+import { formatOptionalDate } from '../lib/format';
 
 const NOTIFICATION_PREVIEW_LIMIT = 20;
 
@@ -284,6 +291,11 @@ export default function Settings() {
     queryKey: queryKeys.profile.root(),
     queryFn: getProfile,
   });
+  const { data: resumes = [], isLoading: resumesLoading } = useQuery({
+    queryKey: queryKeys.resumes.all(),
+    queryFn: getResumes,
+    enabled: !!profile,
+  });
   const { data: rawText = '' } = useQuery({
     queryKey: queryKeys.profile.rawText(),
     queryFn: getStoredProfileRawText,
@@ -293,6 +305,22 @@ export default function Settings() {
     queryKey: queryKeys.notifications.list(profileId ?? 'none', NOTIFICATION_PREVIEW_LIMIT),
     queryFn: () => getNotifications(NOTIFICATION_PREVIEW_LIMIT),
     enabled: !!profileId,
+  });
+
+  const activateResumeMutation = useMutation({
+    mutationFn: activateResume,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.active() });
+    },
+  });
+
+  const deleteResumeMutation = useMutation({
+    mutationFn: deleteResume,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.active() });
+    },
   });
 
   if (!profile) {
@@ -356,6 +384,14 @@ export default function Settings() {
 
     if (confirmed) {
       removeBlockedCompanyMutation.mutate(company);
+    }
+  }
+
+  function confirmDeleteResume(resume: { id: string; filename: string }) {
+    const confirmed = window.confirm(`Delete CV "${resume.filename}"? This cannot be undone.`);
+
+    if (confirmed) {
+      deleteResumeMutation.mutate(resume.id);
     }
   }
 
@@ -449,6 +485,125 @@ export default function Settings() {
                   {completion.missingLabels.length > 0 && (
                     <p className="mt-1 text-sm text-muted-foreground">
                       Missing: {completion.missingLabels.join(', ')}
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">CV Management</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Review uploaded CV versions and choose which one powers matching flows.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate('/profile')}
+                      className="shrink-0"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload new CV
+                    </Button>
+                  </div>
+
+                  {resumesLoading && (
+                    <p className="text-sm text-muted-foreground">Loading uploaded CVs…</p>
+                  )}
+
+                  {!resumesLoading && resumes.length === 0 && (
+                    <EmptyState
+                      icon={<FileText className="h-5 w-5" />}
+                      message="No CVs uploaded"
+                      description="Use Profile to upload a CV and create the first resume version."
+                      className="bg-surface"
+                    />
+                  )}
+
+                  {!resumesLoading && resumes.length > 0 && (
+                    <div className="space-y-3">
+                      {resumes.map((resume) => {
+                        const isActivating =
+                          activateResumeMutation.isPending &&
+                          activateResumeMutation.variables === resume.id;
+                        const isDeleting =
+                          deleteResumeMutation.isPending &&
+                          deleteResumeMutation.variables === resume.id;
+
+                        return (
+                          <div
+                            key={resume.id}
+                            className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-border bg-surface p-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-primary/25 bg-primary/10 text-primary">
+                                <FileText className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="truncate text-sm font-medium text-foreground">
+                                    {resume.filename}
+                                  </p>
+                                  {resume.isActive && (
+                                    <Badge
+                                      variant="default"
+                                      className="border-0 bg-primary/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-primary"
+                                    >
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      Active
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Uploaded {formatOptionalDate(resume.uploadedAt) ?? 'n/a'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 sm:justify-end">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => activateResumeMutation.mutate(resume.id)}
+                                disabled={
+                                  resume.isActive ||
+                                  isActivating ||
+                                  activateResumeMutation.isPending ||
+                                  deleteResumeMutation.isPending
+                                }
+                              >
+                                {isActivating ? 'Activating' : 'Activate'}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => confirmDeleteResume(resume)}
+                                disabled={isDeleting || activateResumeMutation.isPending}
+                                className="text-danger hover:text-danger"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                {isDeleting ? 'Deleting' : 'Delete'}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {activateResumeMutation.isError && (
+                    <p className="mt-3 text-sm text-danger">
+                      Could not activate this CV. Please try again.
+                    </p>
+                  )}
+                  {deleteResumeMutation.isError && (
+                    <p className="mt-3 text-sm text-danger">
+                      Could not delete this CV. Please try again.
                     </p>
                   )}
                 </div>

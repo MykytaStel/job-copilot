@@ -73,3 +73,23 @@ pub async fn activate_resume(
 
     Ok(axum::Json(ResumeVersionResponse::from(resume)))
 }
+
+pub async fn delete_resume(
+    State(state): State<AppState>,
+    Path(resume_id): Path<String>,
+) -> Result<axum::http::StatusCode, ApiError> {
+    let deleted = state
+        .resumes_service
+        .delete(&resume_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "resumes_query_failed"))?;
+
+    if !deleted {
+        return Err(ApiError::not_found(
+            "resume_not_found",
+            format!("Resume '{resume_id}' was not found"),
+        ));
+    }
+
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}

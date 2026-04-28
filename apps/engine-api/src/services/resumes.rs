@@ -55,6 +55,14 @@ impl ResumesService {
         }
     }
 
+    pub async fn delete(&self, id: &str) -> Result<bool, RepositoryError> {
+        match &self.backend {
+            ResumesServiceBackend::Repository(repository) => repository.delete(id).await,
+            #[cfg(test)]
+            ResumesServiceBackend::Stub(stub) => stub.delete(id),
+        }
+    }
+
     #[cfg(test)]
     pub fn for_tests(stub: ResumesServiceStub) -> Self {
         Self {
@@ -143,5 +151,20 @@ impl ResumesServiceStub {
         }
 
         Ok(resumes.iter().find(|resume| resume.id == id).cloned())
+    }
+
+    fn delete(&self, id: &str) -> Result<bool, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let mut resumes = self
+            .resumes
+            .lock()
+            .expect("resumes stub mutex should not be poisoned");
+        let original_len = resumes.len();
+        resumes.retain(|resume| resume.id != id);
+
+        Ok(resumes.len() != original_len)
     }
 }
