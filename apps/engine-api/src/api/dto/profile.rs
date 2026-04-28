@@ -5,8 +5,8 @@ use crate::api::dto::search_profile::{SearchPreferencesRequest, SearchPreference
 use crate::api::error::ApiError;
 use crate::domain::candidate::profile::{CandidateProfile, RoleScore};
 use crate::domain::profile::model::{
-    CreateProfile, LanguageProficiency, Profile, ProfileAnalysis as PersistedProfileAnalysis,
-    UpdateProfile,
+    CreateProfile, ExperienceEntry, LanguageProficiency, Profile,
+    ProfileAnalysis as PersistedProfileAnalysis, UpdateProfile,
 };
 
 #[derive(Deserialize)]
@@ -21,6 +21,7 @@ pub struct CreateProfileRequest {
     pub salary_currency: Option<String>,
     pub languages: Option<Vec<LanguageProficiency>>,
     pub preferred_locations: Option<Vec<String>>,
+    pub experience: Option<Vec<ExperienceEntry>>,
     pub work_mode_preference: Option<String>,
     pub search_preferences: Option<SearchPreferencesRequest>,
     pub portfolio_url: Option<String>,
@@ -40,6 +41,7 @@ pub struct UpdateProfileRequest {
     pub salary_currency: Option<String>,
     pub languages: Option<Vec<LanguageProficiency>>,
     pub preferred_locations: Option<Vec<String>>,
+    pub experience: Option<Vec<ExperienceEntry>>,
     pub skills: Option<Vec<String>>,
     pub work_mode_preference: Option<String>,
     pub preferred_language: Option<Option<String>>,
@@ -90,6 +92,7 @@ pub struct ProfileResponse {
     pub salary_currency: String,
     pub languages: Vec<LanguageProficiency>,
     pub preferred_locations: Vec<String>,
+    pub experience: Vec<ExperienceEntry>,
     pub work_mode_preference: String,
     pub preferred_language: Option<String>,
     pub search_preferences: Option<SearchPreferencesResponse>,
@@ -111,6 +114,7 @@ impl CreateProfileRequest {
         let salary_currency = validate_salary_currency(self.salary_currency)?;
         let languages = validate_languages(self.languages)?;
         let preferred_locations = validate_preferred_locations(self.preferred_locations)?;
+        let experience = validate_experience(self.experience)?;
         let work_mode_preference = validate_work_mode_preference(self.work_mode_preference)?;
         let portfolio_url = validate_optional_url("portfolio_url", self.portfolio_url)?;
         let github_url = validate_optional_url("github_url", self.github_url)?;
@@ -128,6 +132,7 @@ impl CreateProfileRequest {
             salary_currency,
             languages,
             preferred_locations,
+            experience,
             work_mode_preference,
             search_preferences: self
                 .search_preferences
@@ -152,6 +157,7 @@ impl UpdateProfileRequest {
             && self.salary_currency.is_none()
             && self.languages.is_none()
             && self.preferred_locations.is_none()
+            && self.experience.is_none()
             && self.skills.is_none()
             && self.work_mode_preference.is_none()
             && self.preferred_language.is_none()
@@ -175,6 +181,7 @@ impl UpdateProfileRequest {
                         "salary_currency",
                         "languages",
                         "preferred_locations",
+                        "experience",
                         "skills",
                         "work_mode_preference",
                         "preferred_language",
@@ -210,6 +217,10 @@ impl UpdateProfileRequest {
         let preferred_locations = self
             .preferred_locations
             .map(|value| validate_preferred_locations(Some(value)))
+            .transpose()?;
+        let experience = self
+            .experience
+            .map(|value| validate_experience(Some(value)))
             .transpose()?;
         let skills = self.skills.map(validate_skills).transpose()?;
         let work_mode_preference = self
@@ -262,6 +273,7 @@ impl UpdateProfileRequest {
             salary_currency,
             languages,
             preferred_locations,
+            experience,
             skills,
             work_mode_preference,
             preferred_language,
@@ -340,6 +352,7 @@ impl From<Profile> for ProfileResponse {
             salary_currency: profile.salary_currency,
             languages: profile.languages,
             preferred_locations: profile.preferred_locations,
+            experience: profile.experience,
             work_mode_preference: profile.work_mode_preference,
             preferred_language: profile.preferred_language,
             search_preferences: profile
@@ -576,6 +589,93 @@ fn validate_preferred_locations(value: Option<Vec<String>>) -> Result<Vec<String
     Ok(result)
 }
 
+fn validate_experience(
+    value: Option<Vec<ExperienceEntry>>,
+) -> Result<Vec<ExperienceEntry>, ApiError> {
+    let mut result = Vec::new();
+
+    for entry in value.unwrap_or_default() {
+        let company = validate_required_string("experience.company", entry.company, 200)?;
+        let role = validate_required_string("experience.role", entry.role, 200)?;
+        let from = validate_profile_date("experience.from", entry.from)?;
+        let to = entry
+            .to
+            .map(|value| validate_profile_date("experience.to", value))
+            .transpose()?;
+        let description = entry
+            .description
+            .map(|value| validate_optional_string("experience.description", Some(value), 2_000))
+            .transpose()?
+            .flatten();
+
+        result.push(ExperienceEntry {
+            company,
+            role,
+            from,
+            to,
+            description,
+        });
+    }
+
+    result.sort_by(|left, right| right.from.cmp(&left.from));
+
+    if result.len() > 50 {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_profile_input",
+            "Field 'experience' must contain at most 50 entries",
+            json!({
+                "field": "experience",
+                "max_items": 50,
+                "received_items": result.len(),
+            }),
+        ));
+    }
+
+    Ok(result)
+}
+
+fn validate_profile_date(field: &'static str, value: String) -> Result<String, ApiError> {
+    let value = validate_required_string(field, value, 10)?;
+    let valid_year_month = value.len() == 7
+        && value.as_bytes()[4] == b'-'
+        && value[0..4]
+            .chars()
+            .all(|character| character.is_ascii_digit())
+        && value[5..7]
+            .chars()
+            .all(|character| character.is_ascii_digit())
+        && matches!(value[5..7].parse::<u8>(), Ok(month) if (1..=12).contains(&month));
+    let valid_full_date = value.len() == 10
+        && value.as_bytes()[4] == b'-'
+        && value.as_bytes()[7] == b'-'
+        && value[0..4]
+            .chars()
+            .all(|character| character.is_ascii_digit())
+        && value[5..7]
+            .chars()
+            .all(|character| character.is_ascii_digit())
+        && value[8..10]
+            .chars()
+            .all(|character| character.is_ascii_digit())
+        && matches!(value[5..7].parse::<u8>(), Ok(month) if (1..=12).contains(&month))
+        && matches!(value[8..10].parse::<u8>(), Ok(day) if (1..=31).contains(&day));
+
+    if valid_year_month || valid_full_date {
+        return Ok(value);
+    }
+
+    Err(ApiError::bad_request_with_details(
+        "invalid_profile_input",
+        format!(
+            "Field '{field}' must be an ISO 8601 date string with YYYY-MM or YYYY-MM-DD precision"
+        ),
+        json!({
+            "field": field,
+            "allowed_formats": ["YYYY-MM", "YYYY-MM-DD"],
+        }),
+    ))
+}
+
 fn validate_work_mode_preference(value: Option<String>) -> Result<String, ApiError> {
     let normalized = value
         .unwrap_or_else(|| "any".to_string())
@@ -690,6 +790,7 @@ mod tests {
             salary_currency: None,
             languages: None,
             preferred_locations: None,
+            experience: None,
             work_mode_preference: None,
             search_preferences: None,
             portfolio_url: None,

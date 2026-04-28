@@ -8,6 +8,14 @@ export interface LanguageProficiency {
   level: LanguageLevel;
 }
 
+export interface ExperienceEntry {
+  company: string;
+  role: string;
+  from: string;
+  to?: string;
+  description?: string;
+}
+
 export interface CandidateProfile {
   id: string;
   name: string;
@@ -19,14 +27,15 @@ export interface CandidateProfile {
   salaryCurrency: string;
   languages: LanguageProficiency[];
   preferredLocations: string[];
+  experience: ExperienceEntry[];
   workModePreference: WorkModePreference;
   summary?: string;
   skills: string[];
   updatedAt: string;
   skillsUpdatedAt?: string;
-	portfolioUrl?: string;
-	githubUrl?: string;
-	linkedinUrl?: string;
+  portfolioUrl?: string;
+  githubUrl?: string;
+  linkedinUrl?: string;
 }
 
 export interface CandidateProfileInput {
@@ -39,12 +48,13 @@ export interface CandidateProfileInput {
   salaryCurrency?: string;
   languages: LanguageProficiency[];
   preferredLocations: string[];
+  experience: ExperienceEntry[];
   workModePreference?: WorkModePreference;
   summary?: string;
   skills: string[];
-	portfolioUrl?: string;
-	githubUrl?: string;
-	linkedinUrl?: string;
+  portfolioUrl?: string;
+  githubUrl?: string;
+  linkedinUrl?: string;
 }
 
 export interface ResumeVersion {
@@ -54,6 +64,7 @@ export interface ResumeVersion {
   rawText: string;
   isActive: boolean;
   uploadedAt: string;
+  downloadUrl?: string;
 }
 
 export interface ResumeUploadInput {

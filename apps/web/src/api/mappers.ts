@@ -10,11 +10,7 @@ import type {
   JobFeedbackRecord,
   JobFeedbackState,
 } from '@job-copilot/shared/feedback';
-import type {
-  JobFeedSummary,
-  JobPosting,
-  MatchResult,
-} from '@job-copilot/shared/jobs';
+import type { JobFeedSummary, JobPosting, MatchResult } from '@job-copilot/shared/jobs';
 
 import type {
   EngineApplication,
@@ -181,14 +177,17 @@ export function mapProfile(profile: EngineProfile): CandidateProfile {
     salaryCurrency: profile.salary_currency ?? 'USD',
     languages: profile.languages ?? [],
     preferredLocations: profile.preferred_locations ?? [],
+    experience: [...(profile.experience ?? [])].sort((left, right) =>
+      right.from.localeCompare(left.from),
+    ),
     workModePreference: profile.work_mode_preference ?? 'any',
     summary: profile.analysis?.summary,
     skills: profile.analysis?.skills ?? [],
     updatedAt: profile.updated_at,
     skillsUpdatedAt: profile.skills_updated_at ?? undefined,
-		portfolioUrl: profile.portfolio_url ?? undefined,
-		githubUrl: profile.github_url ?? undefined,
-		linkedinUrl: profile.linkedin_url ?? undefined,
+    portfolioUrl: profile.portfolio_url ?? undefined,
+    githubUrl: profile.github_url ?? undefined,
+    linkedinUrl: profile.linkedin_url ?? undefined,
   };
 }
 
@@ -227,6 +226,7 @@ export function mapResume(resume: EngineResume): ResumeVersion {
     rawText: resume.raw_text,
     isActive: resume.is_active,
     uploadedAt: resume.uploaded_at,
+    downloadUrl: resume.download_url ?? undefined,
   };
 }
 

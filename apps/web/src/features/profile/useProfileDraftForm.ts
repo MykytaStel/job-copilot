@@ -1,4 +1,5 @@
 import type {
+  ExperienceEntry,
   LanguageLevel,
   LanguageProficiency,
   WorkModePreference,
@@ -17,10 +18,11 @@ export type ProfileFormState = {
   salaryCurrency: string;
   languages: LanguageProficiency[];
   preferredLocations: string[];
+  experience: ExperienceEntry[];
   workModePreference: WorkModePreference;
-	portfolioUrl: string;
-	githubUrl: string;
-	linkedinUrl: string;
+  portfolioUrl: string;
+  githubUrl: string;
+  linkedinUrl: string;
 };
 
 function buildFormState(
@@ -38,10 +40,11 @@ function buildFormState(
     salaryCurrency: profile?.salaryCurrency ?? 'USD',
     languages: profile?.languages ?? [],
     preferredLocations: profile?.preferredLocations ?? [],
+    experience: sortExperience(profile?.experience ?? []),
     workModePreference: profile?.workModePreference ?? 'any',
-		portfolioUrl: profile?.portfolioUrl ?? '',
-		githubUrl: profile?.githubUrl ?? '',
-		linkedinUrl: profile?.linkedinUrl ?? '',
+    portfolioUrl: profile?.portfolioUrl ?? '',
+    githubUrl: profile?.githubUrl ?? '',
+    linkedinUrl: profile?.linkedinUrl ?? '',
   };
 }
 
@@ -81,15 +84,29 @@ export function useProfileDraftForm(
       updateDraft({
         preferredLocations: removePreferredLocation(form.preferredLocations, location),
       }),
+    addExperience: (entry: ExperienceEntry) =>
+      updateDraft({ experience: sortExperience([...form.experience, entry]) }),
+    updateExperience: (index: number, entry: ExperienceEntry) =>
+      updateDraft({
+        experience: sortExperience(
+          form.experience.map((current, currentIndex) =>
+            currentIndex === index ? entry : current,
+          ),
+        ),
+      }),
+    removeExperience: (index: number) =>
+      updateDraft({
+        experience: form.experience.filter((_, currentIndex) => currentIndex !== index),
+      }),
     addLanguage: (language: string, level: LanguageLevel) =>
       updateDraft({ languages: addLanguage(form.languages, language, level) }),
     removeLanguage: (language: string) =>
       updateDraft({ languages: removeLanguage(form.languages, language) }),
     updateLanguageLevel: (language: string, level: LanguageLevel) =>
       updateDraft({ languages: updateLanguageLevel(form.languages, language, level) }),
-		setPortfolioUrl: (value: string) => updateDraft({ portfolioUrl: value }),
-		setGithubUrl: (value: string) => updateDraft({ githubUrl: value }),
-		setLinkedinUrl: (value: string) => updateDraft({ linkedinUrl: value }),
+    setPortfolioUrl: (value: string) => updateDraft({ portfolioUrl: value }),
+    setGithubUrl: (value: string) => updateDraft({ githubUrl: value }),
+    setLinkedinUrl: (value: string) => updateDraft({ linkedinUrl: value }),
   };
 }
 
@@ -146,4 +163,8 @@ function addPreferredLocation(locations: string[], location: string): string[] {
 function removePreferredLocation(locations: string[], location: string): string[] {
   const normalized = normalizePreferredLocation(location);
   return locations.filter((entry) => normalizePreferredLocation(entry) !== normalized);
+}
+
+function sortExperience(entries: ExperienceEntry[]): ExperienceEntry[] {
+  return [...entries].sort((left, right) => right.from.localeCompare(left.from));
 }

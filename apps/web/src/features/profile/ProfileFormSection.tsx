@@ -1,11 +1,12 @@
 import type {
+  ExperienceEntry,
   LanguageLevel,
   LanguageProficiency,
   WorkModePreference,
 } from '@job-copilot/shared/profiles';
 import type { ChangeEventHandler, RefObject } from 'react';
 import { useState } from 'react';
-import { Code2, ContactRound, Link, Upload, X } from 'lucide-react';
+import { BriefcaseBusiness, Code2, ContactRound, Link, Pencil, Upload, X } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { SurfaceHero, SurfaceSection } from '../../components/ui/Surface';
@@ -28,6 +29,7 @@ export function ProfileFormSection({
   salaryCurrency,
   languages,
   preferredLocations,
+  experience,
   workModePreference,
   profileExists,
   fileInputRef,
@@ -48,15 +50,18 @@ export function ProfileFormSection({
   setWorkModePreference,
   onAddPreferredLocation,
   onRemovePreferredLocation,
+  onAddExperience,
+  onUpdateExperience,
+  onRemoveExperience,
   onAddLanguage,
   onRemoveLanguage,
   onUpdateLanguageLevel,
-	portfolioUrl,
-	githubUrl,
-	linkedinUrl,
-	setPortfolioUrl,
-	setGithubUrl,
-	setLinkedinUrl,
+  portfolioUrl,
+  githubUrl,
+  linkedinUrl,
+  setPortfolioUrl,
+  setGithubUrl,
+  setLinkedinUrl,
 }: {
   name: string;
   email: string;
@@ -68,6 +73,7 @@ export function ProfileFormSection({
   salaryCurrency: string;
   languages: LanguageProficiency[];
   preferredLocations: string[];
+  experience: ExperienceEntry[];
   workModePreference: WorkModePreference;
   profileExists: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
@@ -88,15 +94,18 @@ export function ProfileFormSection({
   setWorkModePreference: (value: WorkModePreference) => void;
   onAddPreferredLocation: (location: string) => void;
   onRemovePreferredLocation: (location: string) => void;
+  onAddExperience: (entry: ExperienceEntry) => void;
+  onUpdateExperience: (index: number, entry: ExperienceEntry) => void;
+  onRemoveExperience: (index: number) => void;
   onAddLanguage: (language: string, level: LanguageLevel) => void;
   onRemoveLanguage: (language: string) => void;
   onUpdateLanguageLevel: (language: string, level: LanguageLevel) => void;
-	portfolioUrl: string;
-	githubUrl: string;
-	linkedinUrl: string;
-	setPortfolioUrl: (value: string) => void;
-	setGithubUrl: (value: string) => void;
-	setLinkedinUrl: (value: string) => void;
+  portfolioUrl: string;
+  githubUrl: string;
+  linkedinUrl: string;
+  setPortfolioUrl: (value: string) => void;
+  setGithubUrl: (value: string) => void;
+  setLinkedinUrl: (value: string) => void;
 }) {
   const [languageInput, setLanguageInput] = useState('');
   const [languageLevel, setLanguageLevel] = useState<LanguageLevel>('B2');
@@ -193,83 +202,83 @@ export function ProfileFormSection({
             placeholder="5"
           />
         </label>
-				<div className="grid gap-4 md:grid-cols-3">
-				<label className="space-y-2">
-					<span className="flex items-center gap-2 text-sm font-medium text-foreground">
-						<Link className="h-4 w-4 text-muted-foreground" />
-						Portfolio URL
-					</span>
-					<input
-						type="url"
-						value={portfolioUrl}
-						onChange={(event) => setPortfolioUrl(event.target.value)}
-						placeholder="https://your-site.com"
-						className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
-					/>
-				</label>
+        <div className="grid gap-4 md:grid-cols-3">
+          <label className="space-y-2">
+            <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Link className="h-4 w-4 text-muted-foreground" />
+              Portfolio URL
+            </span>
+            <input
+              type="url"
+              value={portfolioUrl}
+              onChange={(event) => setPortfolioUrl(event.target.value)}
+              placeholder="https://your-site.com"
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+            />
+          </label>
 
-				<label className="space-y-2">
-					<span className="flex items-center gap-2 text-sm font-medium text-foreground">
-						<Code2 className="h-4 w-4 text-muted-foreground" />
-						GitHub URL
-					</span>
-					<input
-						type="url"
-						value={githubUrl}
-						onChange={(event) => setGithubUrl(event.target.value)}
-						placeholder="https://github.com/username"
-						className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
-					/>
-				</label>
+          <label className="space-y-2">
+            <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Code2 className="h-4 w-4 text-muted-foreground" />
+              GitHub URL
+            </span>
+            <input
+              type="url"
+              value={githubUrl}
+              onChange={(event) => setGithubUrl(event.target.value)}
+              placeholder="https://github.com/username"
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+            />
+          </label>
 
-				<label className="space-y-2">
-					<span className="flex items-center gap-2 text-sm font-medium text-foreground">
-						<ContactRound className="h-4 w-4 text-muted-foreground" />
-						LinkedIn URL
-					</span>
-					<input
-						type="url"
-						value={linkedinUrl}
-						onChange={(event) => setLinkedinUrl(event.target.value)}
-						placeholder="https://linkedin.com/in/username"
-						className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
-					/>
-				</label>
-				{(portfolioUrl || githubUrl || linkedinUrl) && (
-				<div className="flex flex-wrap gap-2 text-sm">
-					{portfolioUrl && (
-						<a
-							href={portfolioUrl}
-							target="_blank"
-							rel="noreferrer"
-							className="rounded-full border border-border px-3 py-1 text-muted-foreground hover:text-foreground"
-						>
-							Portfolio
-						</a>
-					)}
-					{githubUrl && (
-						<a
-							href={githubUrl}
-							target="_blank"
-							rel="noreferrer"
-							className="rounded-full border border-border px-3 py-1 text-muted-foreground hover:text-foreground"
-						>
-							GitHub
-						</a>
-					)}
-					{linkedinUrl && (
-						<a
-							href={linkedinUrl}
-							target="_blank"
-							rel="noreferrer"
-							className="rounded-full border border-border px-3 py-1 text-muted-foreground hover:text-foreground"
-						>
-							LinkedIn
-						</a>
-					)}
-				</div>
-			)}
-			</div>
+          <label className="space-y-2">
+            <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <ContactRound className="h-4 w-4 text-muted-foreground" />
+              LinkedIn URL
+            </span>
+            <input
+              type="url"
+              value={linkedinUrl}
+              onChange={(event) => setLinkedinUrl(event.target.value)}
+              placeholder="https://linkedin.com/in/username"
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+            />
+          </label>
+          {(portfolioUrl || githubUrl || linkedinUrl) && (
+            <div className="flex flex-wrap gap-2 text-sm">
+              {portfolioUrl && (
+                <a
+                  href={portfolioUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-border px-3 py-1 text-muted-foreground hover:text-foreground"
+                >
+                  Portfolio
+                </a>
+              )}
+              {githubUrl && (
+                <a
+                  href={githubUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-border px-3 py-1 text-muted-foreground hover:text-foreground"
+                >
+                  GitHub
+                </a>
+              )}
+              {linkedinUrl && (
+                <a
+                  href={linkedinUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-border px-3 py-1 text-muted-foreground hover:text-foreground"
+                >
+                  LinkedIn
+                </a>
+              )}
+            </div>
+          )}
+        </div>
         <div id="profile-field-salary" className="fieldGroup">
           <span className="fieldLabel">Expected salary</span>
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px]">
@@ -478,6 +487,12 @@ export function ProfileFormSection({
             ))}
           </div>
         </fieldset>
+        <ExperienceTimelineEditor
+          entries={experience}
+          onAdd={onAddExperience}
+          onUpdate={onUpdateExperience}
+          onRemove={onRemoveExperience}
+        />
         <label id="profile-field-cv">
           <span className="flex items-center justify-between gap-3">
             CV / текст профілю
@@ -512,4 +527,190 @@ export function ProfileFormSection({
       </SurfaceSection>
     </>
   );
+}
+
+const EMPTY_EXPERIENCE_ENTRY: ExperienceEntry = {
+  company: '',
+  role: '',
+  from: '',
+  to: undefined,
+  description: undefined,
+};
+
+function ExperienceTimelineEditor({
+  entries,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: {
+  entries: ExperienceEntry[];
+  onAdd: (entry: ExperienceEntry) => void;
+  onUpdate: (index: number, entry: ExperienceEntry) => void;
+  onRemove: (index: number) => void;
+}) {
+  const [draft, setDraft] = useState<ExperienceEntry>(EMPTY_EXPERIENCE_ENTRY);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
+  const sortedEntries = [...entries].sort((left, right) => right.from.localeCompare(left.from));
+  const canSave = Boolean(draft.company.trim() && draft.role.trim() && draft.from.trim());
+
+  function resetDraft() {
+    setDraft(EMPTY_EXPERIENCE_ENTRY);
+    setEditingIndex(null);
+  }
+
+  function submitDraft() {
+    if (!canSave) return;
+    const entry = normalizeExperienceEntry(draft);
+    if (editingIndex === null) {
+      onAdd(entry);
+    } else {
+      onUpdate(editingIndex, entry);
+    }
+    resetDraft();
+  }
+
+  function startEdit(index: number) {
+    setDraft(sortedEntries[index]);
+    setEditingIndex(index);
+  }
+
+  return (
+    <section id="profile-field-experience" className="fieldGroup">
+      <div className="flex items-center justify-between gap-3">
+        <span className="fieldLabel">Experience timeline</span>
+        {editingIndex !== null && (
+          <Button type="button" variant="ghost" size="sm" onClick={resetDraft}>
+            Cancel edit
+          </Button>
+        )}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="m-0">
+          Company
+          <input
+            value={draft.company}
+            onChange={(event) => setDraft({ ...draft, company: event.target.value })}
+            placeholder="Company"
+          />
+        </label>
+        <label className="m-0">
+          Role
+          <input
+            value={draft.role}
+            onChange={(event) => setDraft({ ...draft, role: event.target.value })}
+            placeholder="Senior Frontend Engineer"
+          />
+        </label>
+        <label className="m-0">
+          From
+          <input
+            type="month"
+            value={draft.from}
+            onChange={(event) => setDraft({ ...draft, from: event.target.value })}
+          />
+        </label>
+        <label className="m-0">
+          To <span className="text-muted-foreground">(blank means current)</span>
+          <input
+            type="month"
+            value={draft.to ?? ''}
+            onChange={(event) => setDraft({ ...draft, to: event.target.value || undefined })}
+          />
+        </label>
+        <label className="m-0 md:col-span-2">
+          Description <span className="text-muted-foreground">(optional)</span>
+          <textarea
+            value={draft.description ?? ''}
+            onChange={(event) =>
+              setDraft({ ...draft, description: event.target.value || undefined })
+            }
+            rows={3}
+            placeholder="Scope, impact, stack, or responsibilities"
+          />
+        </label>
+      </div>
+
+      <Button type="button" variant="outline" onClick={submitDraft} disabled={!canSave}>
+        <BriefcaseBusiness className="h-4 w-4" />
+        {editingIndex === null ? 'Add experience' : 'Save experience'}
+      </Button>
+
+      {sortedEntries.length > 0 && (
+        <ol className="space-y-3">
+          {sortedEntries.map((entry, index) => (
+            <li
+              key={`${entry.company}-${entry.role}-${entry.from}-${index}`}
+              className="rounded-[var(--radius-card)] border border-border bg-surface-muted p-4"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="m-0 font-semibold text-card-foreground">
+                      {entry.role} at {entry.company}
+                    </p>
+                    {!entry.to && (
+                      <span className="rounded-full border border-fit-excellent/25 bg-fit-excellent/12 px-2 py-0.5 text-xs font-semibold text-fit-excellent">
+                        Current
+                      </span>
+                    )}
+                  </div>
+                  <p className="m-0 mt-1 text-sm text-muted-foreground">
+                    {formatExperienceDate(entry.from)} -{' '}
+                    {entry.to ? formatExperienceDate(entry.to) : 'Current'}
+                  </p>
+                  {entry.description && (
+                    <p className="m-0 mt-3 whitespace-pre-wrap text-sm leading-6 text-card-foreground">
+                      {entry.description}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="icon"
+                    size="icon"
+                    onClick={() => startEdit(index)}
+                    aria-label={`Edit ${entry.role} at ${entry.company}`}
+                    title={`Edit ${entry.role} at ${entry.company}`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="icon"
+                    size="icon"
+                    onClick={() => onRemove(index)}
+                    aria-label={`Remove ${entry.role} at ${entry.company}`}
+                    title={`Remove ${entry.role} at ${entry.company}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function normalizeExperienceEntry(entry: ExperienceEntry): ExperienceEntry {
+  return {
+    company: entry.company.trim(),
+    role: entry.role.trim(),
+    from: entry.from.trim(),
+    to: entry.to?.trim() || undefined,
+    description: entry.description?.trim() || undefined,
+  };
+}
+
+function formatExperienceDate(value: string): string {
+  if (!value) return '';
+  const [year, month] = value.split('-');
+  if (!year || !month) return value;
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(date);
 }

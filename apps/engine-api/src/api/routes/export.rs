@@ -543,6 +543,7 @@ mod tests {
                 level: LanguageLevel::C1,
             }],
             preferred_locations: vec![],
+            experience: vec![],
             work_mode_preference: "any".to_string(),
             preferred_language: None,
             search_preferences: None,

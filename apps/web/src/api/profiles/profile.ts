@@ -46,9 +46,7 @@ export function mapScoringWeights(
   };
 }
 
-function toEngineScoringWeights(
-  weights: ScoringWeights = DEFAULT_SCORING_WEIGHTS,
-) {
+function toEngineScoringWeights(weights: ScoringWeights = DEFAULT_SCORING_WEIGHTS) {
   return {
     skill_match_importance: weights.skillMatchImportance,
     salary_fit_importance: weights.salaryFitImportance,
@@ -135,13 +133,14 @@ export async function saveProfile(
     salary_currency: payload.salaryCurrency ?? null,
     languages: payload.languages,
     preferred_locations: payload.preferredLocations,
+    experience: payload.experience,
     work_mode_preference: payload.workModePreference ?? 'any',
     search_preferences: payload.searchPreferences
       ? toEngineSearchPreferences(payload.searchPreferences)
       : null,
-		portfolio_url: payload.portfolioUrl ?? null,
-		github_url: payload.githubUrl ?? null,
-		linkedin_url: payload.linkedinUrl ?? null,
+    portfolio_url: payload.portfolioUrl ?? null,
+    github_url: payload.githubUrl ?? null,
+    linkedin_url: payload.linkedinUrl ?? null,
   };
 
   const profile = profileId
@@ -169,6 +168,7 @@ export async function saveProfile(
   return {
     ...mapPersistedProfile(profile),
     summary: analyzed.summary,
+    skills: analyzed.skills ?? [],
   };
 }
 
@@ -191,13 +191,12 @@ export async function saveProfileSearchPreferences(
   const profile = await request<EngineProfile>(
     `/api/v1/profiles/${profileId}`,
     json('PATCH', {
-  		search_preferences: toEngineSearchPreferences(searchPreferences),
-		}),
+      search_preferences: toEngineSearchPreferences(searchPreferences),
+    }),
   );
 
   return mapPersistedProfile(profile);
 }
-
 
 export async function updateScoringWeights(
   weights: ScoringWeights,
@@ -209,16 +208,15 @@ export async function updateScoringWeights(
   }
 
   const current = await request<EngineProfile>(`/api/v1/profiles/${profileId}`);
-  const currentPreferences =
-    mapSearchPreferences(current.search_preferences) ?? {
-      targetRegions: [],
-      workModes: [],
-      preferredRoles: [],
-      allowedSources: [],
-      includeKeywords: [],
-      excludeKeywords: [],
-      scoringWeights: DEFAULT_SCORING_WEIGHTS,
-    };
+  const currentPreferences = mapSearchPreferences(current.search_preferences) ?? {
+    targetRegions: [],
+    workModes: [],
+    preferredRoles: [],
+    allowedSources: [],
+    includeKeywords: [],
+    excludeKeywords: [],
+    scoringWeights: DEFAULT_SCORING_WEIGHTS,
+  };
 
   const updated = await request<EngineProfile>(
     `/api/v1/profiles/${profileId}`,
