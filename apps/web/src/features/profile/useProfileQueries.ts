@@ -1,6 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { getLlmContext } from '../../api/analytics';
-import { getProfile, getRoles, getSources, getStoredProfileRawText } from '../../api/profiles';
+import { getJobsFeed } from '../../api/jobs';
+import {
+  getProfile,
+  getResumes,
+  getRoles,
+  getSources,
+  getStoredProfileRawText,
+} from '../../api/profiles';
 import { queryKeys } from '../../queryKeys';
 
 export function useProfileQueries() {
@@ -18,6 +25,14 @@ export function useProfileQueries() {
     queryKey: queryKeys.roles.all(),
     queryFn: getRoles,
   });
+  const resumesQuery = useQuery({
+    queryKey: queryKeys.resumes.all(),
+    queryFn: getResumes,
+  });
+  const activeJobsQuery = useQuery({
+    queryKey: queryKeys.jobs.filtered('active', null, profileQuery.data?.id),
+    queryFn: () => getJobsFeed({ lifecycle: 'active', limit: 1 }),
+  });
   const sourcesQuery = useQuery({
     queryKey: queryKeys.sources.all(),
     queryFn: getSources,
@@ -28,5 +43,13 @@ export function useProfileQueries() {
     enabled: !!profileQuery.data?.id,
   });
 
-  return { profileQuery, rawTextQuery, rolesQuery, sourcesQuery, llmContextQuery };
+  return {
+    profileQuery,
+    rawTextQuery,
+    rolesQuery,
+    resumesQuery,
+    activeJobsQuery,
+    sourcesQuery,
+    llmContextQuery,
+  };
 }

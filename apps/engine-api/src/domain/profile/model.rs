@@ -19,6 +19,15 @@ pub enum LanguageLevel {
     Native,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExperienceEntry {
+    pub company: String,
+    pub role: String,
+    pub from: String,
+    pub to: Option<String>,
+    pub description: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Profile {
     pub id: String,
@@ -33,6 +42,7 @@ pub struct Profile {
     pub salary_currency: String,
     pub languages: Vec<LanguageProficiency>,
     pub preferred_locations: Vec<String>,
+    pub experience: Vec<ExperienceEntry>,
     pub work_mode_preference: String,
     pub preferred_language: Option<String>,
     pub search_preferences: Option<SearchPreferences>,
@@ -65,6 +75,7 @@ pub struct CreateProfile {
     pub salary_currency: String,
     pub languages: Vec<LanguageProficiency>,
     pub preferred_locations: Vec<String>,
+    pub experience: Vec<ExperienceEntry>,
     pub work_mode_preference: String,
     pub search_preferences: Option<SearchPreferences>,
     pub portfolio_url: Option<String>,
@@ -84,6 +95,7 @@ pub struct UpdateProfile {
     pub salary_currency: Option<String>,
     pub languages: Option<Vec<LanguageProficiency>>,
     pub preferred_locations: Option<Vec<String>>,
+    pub experience: Option<Vec<ExperienceEntry>>,
     pub skills: Option<Vec<String>>,
     pub work_mode_preference: Option<String>,
     pub preferred_language: Option<Option<String>>,

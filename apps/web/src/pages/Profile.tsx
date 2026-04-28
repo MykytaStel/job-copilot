@@ -15,12 +15,16 @@ import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { SurfaceMetric } from '../components/ui/Surface';
 import { useProfilePage } from '../features/profile/useProfilePage';
+import { ProfileStrength } from '../components/ProfileStrength';
+import { ResumeHistory } from '../components/ResumeHistory';
 
 export default function Profile() {
   const {
     fileInputRef,
     profile,
     roles,
+    resumes,
+    activeJobsCount,
     sources,
     rolesError,
     sourcesError,
@@ -37,6 +41,7 @@ export default function Profile() {
     salaryCurrency,
     languages,
     preferredLocations,
+    experience,
     workModePreference,
     profileCompletion,
     targetRegions,
@@ -54,6 +59,7 @@ export default function Profile() {
     saveMutation,
     analyzeMutation,
     updateSkillsMutation,
+    activateResumeMutation,
     buildMutation,
     runMutation,
     setName,
@@ -67,6 +73,9 @@ export default function Profile() {
     setWorkModePreference,
     addPreferredLocation,
     removePreferredLocation,
+    addExperience,
+    updateExperience,
+    removeExperience,
     setIncludeKeywordsInput,
     setExcludeKeywordsInput,
     addLanguage,
@@ -84,12 +93,12 @@ export default function Profile() {
     addAllSuggestedSkills,
     openFilePicker,
     handleFileChange,
-		portfolioUrl,
-		githubUrl,
-		linkedinUrl,
-		setPortfolioUrl,
-		setGithubUrl,
-		setLinkedinUrl,
+    portfolioUrl,
+    githubUrl,
+    linkedinUrl,
+    setPortfolioUrl,
+    setGithubUrl,
+    setLinkedinUrl,
   } = useProfilePage();
 
   return (
@@ -177,6 +186,13 @@ export default function Profile() {
                 <SurfaceMetric className="sm:col-span-3">
                   <ProfileCompletion completion={profileCompletion} />
                 </SurfaceMetric>
+                <SurfaceMetric className="sm:col-span-3">
+                  <ProfileStrength
+                    skills={profile?.skills ?? []}
+                    roles={roles}
+                    activeJobsCount={activeJobsCount}
+                  />
+                </SurfaceMetric>
               </div>
             </div>
           </div>
@@ -202,6 +218,7 @@ export default function Profile() {
             salaryCurrency={salaryCurrency}
             languages={languages}
             preferredLocations={preferredLocations}
+            experience={experience}
             workModePreference={workModePreference}
             profileExists={Boolean(profile)}
             fileInputRef={fileInputRef}
@@ -222,15 +239,26 @@ export default function Profile() {
             setWorkModePreference={setWorkModePreference}
             onAddPreferredLocation={addPreferredLocation}
             onRemovePreferredLocation={removePreferredLocation}
+            onAddExperience={addExperience}
+            onUpdateExperience={updateExperience}
+            onRemoveExperience={removeExperience}
             onAddLanguage={addLanguage}
             onRemoveLanguage={removeLanguage}
             onUpdateLanguageLevel={updateLanguageLevel}
-						portfolioUrl={portfolioUrl}
-						githubUrl={githubUrl}
-						linkedinUrl={linkedinUrl}
-						setPortfolioUrl={setPortfolioUrl}
-						setGithubUrl={setGithubUrl}
-						setLinkedinUrl={setLinkedinUrl}
+            portfolioUrl={portfolioUrl}
+            githubUrl={githubUrl}
+            linkedinUrl={linkedinUrl}
+            setPortfolioUrl={setPortfolioUrl}
+            setGithubUrl={setGithubUrl}
+            setLinkedinUrl={setLinkedinUrl}
+          />
+
+          <ResumeHistory
+            resumes={resumes}
+            activatingResumeId={
+              activateResumeMutation.isPending ? activateResumeMutation.variables : undefined
+            }
+            onActivate={(resumeId) => activateResumeMutation.mutate(resumeId)}
           />
 
           {suggestedSkills.length > 0 && (

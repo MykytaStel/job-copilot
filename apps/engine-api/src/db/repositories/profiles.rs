@@ -5,7 +5,8 @@ use uuid::Uuid;
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::profile::model::{
-    CreateProfile, LanguageLevel, LanguageProficiency, Profile, ProfileAnalysis, UpdateProfile,
+    CreateProfile, ExperienceEntry, LanguageLevel, LanguageProficiency, Profile, ProfileAnalysis,
+    UpdateProfile,
 };
 use crate::domain::role::RoleId;
 use crate::domain::search::profile::SearchPreferences;
@@ -33,6 +34,7 @@ struct ProfileRow {
     salary_currency: Option<String>,
     languages_json: String,
     preferred_locations_json: String,
+    experience_json: String,
     work_mode_preference: String,
     preferred_language: Option<String>,
     search_preferences: Option<Json<SearchPreferences>>,
@@ -68,6 +70,7 @@ impl ProfilesRepository {
                 salary_currency,
                 languages,
                 preferred_locations,
+                experience,
                 work_mode_preference,
                 search_preferences,
                 portfolio_url,
@@ -76,7 +79,7 @@ impl ProfilesRepository {
                 created_at,
                 updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW())
             RETURNING
                 id,
                 name,
@@ -94,6 +97,7 @@ impl ProfilesRepository {
                 salary_currency,
                 languages::text AS languages_json,
                 COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
                 COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
@@ -116,6 +120,7 @@ impl ProfilesRepository {
         .bind(&input.salary_currency)
         .bind(Json(input.languages.clone()))
         .bind(Json(input.preferred_locations.clone()))
+        .bind(Json(input.experience.clone()))
         .bind(&input.work_mode_preference)
         .bind(
             input
@@ -156,6 +161,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
                 COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
@@ -200,6 +206,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
                 COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
@@ -246,6 +253,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
                 COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
@@ -306,6 +314,10 @@ impl ProfilesRepository {
                 preferred_locations = CASE
                     WHEN $16 THEN $17
                     ELSE preferred_locations
+                END,
+                experience = CASE
+                    WHEN $31 THEN $32
+                    ELSE experience
                 END,
                 work_mode_preference = COALESCE($18, work_mode_preference, 'any'),
                 preferred_language = CASE
@@ -373,6 +385,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
                 COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
@@ -429,6 +442,8 @@ impl ProfilesRepository {
         .bind(input.github_url.as_ref().and_then(|value| value.clone()))
         .bind(input.linkedin_url.is_some())
         .bind(input.linkedin_url.as_ref().and_then(|value| value.clone()))
+        .bind(input.experience.is_some())
+        .bind(input.experience.as_ref().map(|value| Json(value.clone())))
         .fetch_optional(pool)
         .await?;
 
@@ -473,6 +488,7 @@ impl ProfilesRepository {
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
                 COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
                 COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
@@ -529,6 +545,7 @@ impl TryFrom<ProfileRow> for Profile {
             salary_currency: row.salary_currency.unwrap_or_else(|| "USD".to_string()),
             languages: parse_languages_json(&row.languages_json)?,
             preferred_locations: parse_string_array_json(&row.preferred_locations_json)?,
+            experience: parse_experience_json(&row.experience_json)?,
             work_mode_preference: row.work_mode_preference,
             preferred_language: row.preferred_language,
             search_preferences: row.search_preferences.map(|value| value.0),
@@ -576,6 +593,20 @@ fn parse_string_array_json(value: &str) -> Result<Vec<String>, RepositoryError> 
         .collect())
 }
 
+fn parse_experience_json(value: &str) -> Result<Vec<ExperienceEntry>, RepositoryError> {
+    let parsed: serde_json::Value = serde_json::from_str(value)?;
+    let Some(entries) = parsed.as_array() else {
+        return Ok(Vec::new());
+    };
+
+    let mut result: Vec<ExperienceEntry> = entries
+        .iter()
+        .map(|entry| serde_json::from_value(entry.clone()))
+        .collect::<Result<_, _>>()?;
+    result.sort_by(|left, right| right.from.cmp(&left.from));
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::db::Database;
@@ -610,6 +641,7 @@ mod tests {
                 salary_currency: "USD".to_string(),
                 languages: vec![],
                 preferred_locations: vec![],
+                experience: vec![],
                 work_mode_preference: "any".to_string(),
                 search_preferences: None,
                 portfolio_url: None,

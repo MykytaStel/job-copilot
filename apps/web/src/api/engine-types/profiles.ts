@@ -1,6 +1,7 @@
 import type {
   EngineAnalyzeProfileResponse as SharedEngineAnalyzeProfileResponse,
   LanguageProficiency,
+  ExperienceEntry,
   EngineRoleCandidateResponse,
 } from '@job-copilot/shared/profiles';
 
@@ -11,6 +12,7 @@ export type EngineResume = {
   raw_text: string;
   is_active: boolean;
   uploaded_at: string;
+  download_url?: string | null;
 };
 
 export type EngineMatchResult = {
@@ -51,6 +53,7 @@ export type EngineProfile = {
   salary_currency?: string | null;
   languages?: LanguageProficiency[] | null;
   preferred_locations?: string[] | null;
+  experience?: ExperienceEntry[] | null;
   work_mode_preference?: 'remote_only' | 'hybrid' | 'onsite' | 'any' | null;
   search_preferences?: {
     target_regions: ('ua' | 'eu' | 'eu_remote' | 'poland' | 'germany' | 'uk' | 'us')[];

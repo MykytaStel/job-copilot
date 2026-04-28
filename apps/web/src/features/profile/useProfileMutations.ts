@@ -1,8 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { LanguageProficiency, WorkModePreference } from '@job-copilot/shared/profiles';
+import type {
+  ExperienceEntry,
+  LanguageProficiency,
+  WorkModePreference,
+} from '@job-copilot/shared/profiles';
 import toast from 'react-hot-toast';
 import {
   analyzeStoredProfile,
+  activateResume,
   getProfile,
   saveProfile,
   updateProfileSkills,
@@ -26,11 +31,12 @@ export function useProfileMutations(clearDraft: () => void) {
       salaryCurrency: string;
       languages: LanguageProficiency[];
       preferredLocations: string[];
+      experience: ExperienceEntry[];
       workModePreference: WorkModePreference;
       searchPreferences?: PersistedSearchPreferences;
-			portfolioUrl?: string;
-			githubUrl?: string;
-			linkedinUrl?: string;
+      portfolioUrl?: string;
+      githubUrl?: string;
+      linkedinUrl?: string;
     }) =>
       saveProfile({
         name: vars.name,
@@ -43,13 +49,14 @@ export function useProfileMutations(clearDraft: () => void) {
         salaryCurrency: vars.salaryCurrency,
         languages: vars.languages,
         preferredLocations: vars.preferredLocations,
+        experience: vars.experience,
         workModePreference: vars.workModePreference,
         searchPreferences: vars.searchPreferences,
         summary: undefined,
         skills: [],
-				portfolioUrl: vars.portfolioUrl,
-				githubUrl: vars.githubUrl,
-				linkedinUrl: vars.linkedinUrl,
+        portfolioUrl: vars.portfolioUrl,
+        githubUrl: vars.githubUrl,
+        linkedinUrl: vars.linkedinUrl,
       }),
     onSuccess: (updated, vars) => {
       queryClient.setQueryData(queryKeys.profile.root(), updated);
@@ -91,5 +98,14 @@ export function useProfileMutations(clearDraft: () => void) {
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
   });
 
-  return { saveMutation, analyzeMutation, updateSkillsMutation };
+  const activateResumeMutation = useMutation({
+    mutationFn: activateResume,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.all() });
+      toast.success('CV activated');
+    },
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
+  });
+
+  return { saveMutation, analyzeMutation, updateSkillsMutation, activateResumeMutation };
 }
