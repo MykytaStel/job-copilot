@@ -43,6 +43,7 @@ export type EngineFitExplanation = {
   matched_skills: string[];
   matched_keywords: string[];
   missing_signals: string[];
+  missing_signal_details?: EngineMissingSignalDetail[];
   source_match: boolean;
   work_mode_match?: boolean | null;
   region_match?: boolean | null;
@@ -50,6 +51,11 @@ export type EngineFitExplanation = {
   positive_reasons: string[];
   negative_reasons: string[];
   reasons: string[];
+};
+
+export type EngineMissingSignalDetail = {
+  term: string;
+  category: string;
 };
 
 export type EngineScoreBreakdown = {

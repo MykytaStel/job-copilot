@@ -61,6 +61,18 @@ export async function hideJobForProfile(
   return mapJobFeedbackRecord(record);
 }
 
+export async function bulkHideJobsByCompany(
+  profileId: string,
+  companyName: string,
+): Promise<{ affectedCount: number }> {
+  const response = await request<{ affected_count: number }>(
+    `/api/v1/feedback/jobs/bulk-hide?profile_id=${encodeURIComponent(profileId)}`,
+    json('POST', { company_name: companyName }),
+  );
+  await bustRerankCache(profileId);
+  return { affectedCount: response.affected_count };
+}
+
 export async function markJobBadFit(profileId: string, jobId: string): Promise<JobFeedbackRecord> {
   const record = await request<EngineJobFeedbackRecord>(
     `/api/v1/profiles/${profileId}/jobs/${jobId}/bad-fit`,
@@ -80,6 +92,26 @@ export async function unhideJob(profileId: string, jobId: string): Promise<void>
 
 export async function unmarkJobBadFit(profileId: string, jobId: string): Promise<void> {
   await request<void>(`/api/v1/profiles/${profileId}/jobs/${jobId}/bad-fit`, { method: 'DELETE' });
+}
+
+export async function undoJobHide(profileId: string, jobId: string): Promise<void> {
+  await request<void>(
+    `/api/v1/feedback/jobs/${encodeURIComponent(jobId)}/hide?profile_id=${encodeURIComponent(
+      profileId,
+    )}`,
+    { method: 'DELETE' },
+  );
+  await bustRerankCache(profileId);
+}
+
+export async function undoJobBadFit(profileId: string, jobId: string): Promise<void> {
+  await request<void>(
+    `/api/v1/feedback/jobs/${encodeURIComponent(jobId)}/bad-fit?profile_id=${encodeURIComponent(
+      profileId,
+    )}`,
+    { method: 'DELETE' },
+  );
+  await bustRerankCache(profileId);
 }
 
 export async function addCompanyWhitelist(

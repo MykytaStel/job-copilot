@@ -87,6 +87,12 @@ impl JobScoreBreakdown {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MissingSignalDetail {
+    pub term: String,
+    pub category: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JobFit {
     pub job_id: String,
     pub score: u8,
@@ -98,6 +104,7 @@ pub struct JobFit {
     pub work_mode_match: Option<bool>,
     pub region_match: Option<bool>,
     pub missing_signals: Vec<String>,
+    pub missing_signal_details: Vec<MissingSignalDetail>,
     pub description_quality: JobTextQuality,
     pub reasons: Vec<String>,
 }

@@ -138,6 +138,7 @@ export function useProfilePage() {
     analyzeMutation: mutations.analyzeMutation,
     updateSkillsMutation: mutations.updateSkillsMutation,
     activateResumeMutation: mutations.activateResumeMutation,
+    deleteResumeMutation: mutations.deleteResumeMutation,
     buildMutation: search.buildMutation,
     runMutation: search.runMutation,
     setName: draftForm.setName,

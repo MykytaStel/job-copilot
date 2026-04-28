@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use crate::domain::job::presentation::JobTextQuality;
-use crate::domain::matching::{JobFit, JobScoreBreakdown};
+use crate::domain::matching::{JobFit, JobScoreBreakdown, MissingSignalDetail};
 use crate::domain::role::RoleId;
 use crate::services::matching::{RankedJob, SearchRunResult};
 
@@ -107,6 +107,10 @@ fn serializes_fit_response_with_reasons() {
         work_mode_match: Some(true),
         region_match: Some(true),
         missing_signals: vec!["graphql".to_string()],
+        missing_signal_details: vec![MissingSignalDetail {
+            term: "graphql".to_string(),
+            category: "profile_skill".to_string(),
+        }],
         description_quality: JobTextQuality::Strong,
         reasons: vec!["Matched target roles: backend_engineer".to_string()],
     };
@@ -121,6 +125,10 @@ fn serializes_fit_response_with_reasons() {
         json!("deterministic")
     );
     assert_eq!(response["missing_signals"], json!(["graphql"]));
+    assert_eq!(
+        response["missing_signal_details"],
+        json!([{ "term": "graphql", "category": "profile_skill" }])
+    );
     assert_eq!(response["description_quality"], json!("strong"));
     assert_eq!(
         response["reasons"],

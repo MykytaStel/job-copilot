@@ -252,11 +252,17 @@ export function AnalyticsMainSections({
       {behavior ? (
         <Section
           title="Behavior Signals"
-          description="See which sources and role families consistently produce positive or negative outcomes."
+          description="See which companies, sources, and role families consistently produce positive or negative outcomes."
           icon={TrendingUp}
           eyebrow="Learning loop"
         >
           <div className="grid gap-4 xl:grid-cols-2">
+            <SignalList
+              title="Company outcomes"
+              description="Companies grouped by saves, applications, hides, and bad-fit marks."
+              items={behavior.companySignalCounts}
+              tone="primary"
+            />
             <SignalList
               title="Positive sources"
               description="Sources with the strongest positive behavior history."

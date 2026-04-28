@@ -23,6 +23,7 @@ pub struct ProfileBehaviorSummaryResponse {
     pub top_positive_role_families: Vec<BehaviorSignalCountResponse>,
     pub top_negative_role_families: Vec<BehaviorSignalCountResponse>,
     pub source_signal_counts: Vec<BehaviorSignalCountResponse>,
+    pub company_signal_counts: Vec<BehaviorSignalCountResponse>,
     pub role_family_signal_counts: Vec<BehaviorSignalCountResponse>,
 }
 
@@ -53,6 +54,11 @@ impl ProfileBehaviorSummaryResponse {
                 .collect(),
             source_signal_counts: summary
                 .source_signal_counts
+                .into_iter()
+                .map(BehaviorSignalCountResponse::from)
+                .collect(),
+            company_signal_counts: summary
+                .company_signal_counts
                 .into_iter()
                 .map(BehaviorSignalCountResponse::from)
                 .collect(),

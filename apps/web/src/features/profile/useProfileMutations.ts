@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import {
   analyzeStoredProfile,
   activateResume,
+  deleteResume,
   getProfile,
   saveProfile,
   updateProfileSkills,
@@ -107,5 +108,21 @@ export function useProfileMutations(clearDraft: () => void) {
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
   });
 
-  return { saveMutation, analyzeMutation, updateSkillsMutation, activateResumeMutation };
+  const deleteResumeMutation = useMutation({
+    mutationFn: deleteResume,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.active() });
+      toast.success('CV deleted');
+    },
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
+  });
+
+  return {
+    saveMutation,
+    analyzeMutation,
+    updateSkillsMutation,
+    activateResumeMutation,
+    deleteResumeMutation,
+  };
 }

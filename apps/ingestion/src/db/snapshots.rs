@@ -34,7 +34,12 @@ async fn build_overview(pool: &PgPool) -> Result<serde_json::Value, String> {
                 WHERE is_active AND first_seen_at >= NOW() - INTERVAL '7 days'
             )::bigint,
             'active_companies_count',
-            COUNT(DISTINCT company_name) FILTER (WHERE is_active)::bigint,
+            COUNT(DISTINCT company_name) FILTER (
+                WHERE is_active
+                  AND company_name IS NOT NULL
+                  AND BTRIM(company_name) <> ''
+                  AND LOWER(BTRIM(company_name)) NOT IN ('unknown', 'uknonwn', 'unknonwn', 'n/a', 'na', 'none', 'null', '—', '-')
+            )::bigint,
             'active_jobs_count',
             COUNT(*) FILTER (WHERE is_active)::bigint,
             'remote_percentage',
@@ -61,42 +66,71 @@ async fn build_overview(pool: &PgPool) -> Result<serde_json::Value, String> {
 }
 
 async fn build_company_stats(pool: &PgPool) -> Result<serde_json::Value, String> {
-    sqlx::query_scalar::<_, serde_json::Value>(
+    let query = format!(
         r#"
-        WITH company_stats AS (
+        WITH active_company_jobs AS (
+            SELECT
+                jobs.id,
+                jobs.title,
+                jobs.company_name,
+                LOWER(REGEXP_REPLACE(BTRIM(jobs.company_name), '\s+', ' ', 'g')) AS normalized_company_name,
+                jobs.first_seen_at,
+                jobs.last_seen_at,
+                {role_group_classifier} AS role_group
+            FROM jobs
+            WHERE company_name IS NOT NULL
+              AND BTRIM(company_name) <> ''
+              AND LOWER(BTRIM(company_name)) NOT IN ('unknown', 'uknonwn', 'unknonwn', 'n/a', 'na', 'none', 'null', '—', '-')
+              AND jobs.is_active
+        ),
+        company_stats AS (
             SELECT
                 company_name,
-                COUNT(*) FILTER (WHERE is_active)::bigint AS active_jobs,
+                normalized_company_name,
+                COUNT(*)::bigint AS active_jobs,
                 COUNT(*) FILTER (
-                    WHERE is_active AND first_seen_at >= NOW() - INTERVAL '7 days'
+                    WHERE first_seen_at >= NOW() - INTERVAL '7 days'
                 )::bigint AS this_week,
                 COUNT(*) FILTER (
-                    WHERE is_active
-                      AND first_seen_at >= NOW() - INTERVAL '14 days'
+                    WHERE first_seen_at >= NOW() - INTERVAL '14 days'
                       AND first_seen_at < NOW() - INTERVAL '7 days'
-                )::bigint AS prev_week
-            FROM jobs
-            GROUP BY company_name
-            HAVING COUNT(*) FILTER (WHERE is_active) > 0
+                )::bigint AS prev_week,
+                ARRAY_REMOVE(ARRAY_AGG(DISTINCT role_group), NULL)::text[] AS top_role_groups,
+                (ARRAY_AGG(id ORDER BY last_seen_at DESC))[1:5]::text[] AS latest_job_ids
+            FROM active_company_jobs
+            GROUP BY company_name, normalized_company_name
         )
         SELECT COALESCE(
             jsonb_agg(
                 jsonb_build_object(
                     'company_name', company_name,
+                    'normalized_company_name', normalized_company_name,
                     'active_jobs', active_jobs,
                     'this_week', this_week,
-                    'prev_week', prev_week
+                    'prev_week', prev_week,
+                    'sources', COALESCE(sources.sources, ARRAY[]::text[]),
+                    'top_role_groups', top_role_groups,
+                    'latest_job_ids', latest_job_ids,
+                    'data_quality_flags', ARRAY[]::text[]
                 )
                 ORDER BY active_jobs DESC, company_name ASC
             ),
             '[]'::jsonb
         )
         FROM company_stats
+        LEFT JOIN LATERAL (
+            SELECT ARRAY_AGG(DISTINCT variants.source ORDER BY variants.source)::text[] AS sources
+            FROM job_variants variants
+            WHERE variants.job_id = ANY(company_stats.latest_job_ids)
+        ) sources ON TRUE
         "#,
-    )
-    .fetch_one(pool)
-    .await
-    .map_err(|error| format!("failed to build market company stats snapshot: {error}"))
+        role_group_classifier = MARKET_ROLE_GROUP_CLASSIFIER_CASE_SQL,
+    );
+
+    sqlx::query_scalar::<_, serde_json::Value>(&query)
+        .fetch_one(pool)
+        .await
+        .map_err(|error| format!("failed to build market company stats snapshot: {error}"))
 }
 
 async fn build_salary_trends(pool: &PgPool) -> Result<serde_json::Value, String> {
@@ -106,10 +140,13 @@ async fn build_salary_trends(pool: &PgPool) -> Result<serde_json::Value, String>
             SELECT
                 LOWER(TRIM(seniority)) AS seniority,
                 COALESCE(NULLIF(UPPER(TRIM(salary_currency)), ''), 'UNKNOWN') AS salary_currency,
-                salary_min
+                ROUND((salary_min + COALESCE(salary_max, salary_min))::numeric / 2.0)::integer AS salary_midpoint
             FROM jobs
             WHERE is_active
               AND salary_min IS NOT NULL
+              AND salary_min > 0
+              AND (salary_max IS NULL OR salary_max >= salary_min)
+              AND COALESCE(NULLIF(UPPER(TRIM(salary_currency)), ''), 'UNKNOWN') <> 'UNKNOWN'
               AND seniority IS NOT NULL
               AND last_seen_at >= NOW() - INTERVAL '30 days'
         ),
@@ -135,17 +172,19 @@ async fn build_salary_trends(pool: &PgPool) -> Result<serde_json::Value, String>
         salary_trends AS (
             SELECT
                 seniority,
-                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY salary_min))::integer AS p25,
-                ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY salary_min))::integer AS median,
-                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY salary_min))::integer AS p75,
+                salary_currency AS currency,
+                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY salary_midpoint))::integer AS p25,
+                ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY salary_midpoint))::integer AS median,
+                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY salary_midpoint))::integer AS p75,
                 COUNT(*)::bigint AS sample_count
             FROM dominant_jobs
-            GROUP BY seniority
+            GROUP BY seniority, salary_currency
         )
         SELECT COALESCE(
             jsonb_agg(
                 jsonb_build_object(
                     'seniority', seniority,
+                    'currency', currency,
                     'p25', p25,
                     'median', median,
                     'p75', p75,
