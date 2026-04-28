@@ -305,6 +305,24 @@ impl FeedbackService {
         }
     }
 
+    pub async fn bulk_hide_jobs_by_company(
+        &self,
+        profile_id: &str,
+        normalized_company_name: &str,
+    ) -> Result<u64, RepositoryError> {
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository
+                    .bulk_hide_jobs_by_company(profile_id, normalized_company_name)
+                    .await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(stub) => {
+                stub.bulk_hide_jobs_by_company(profile_id, normalized_company_name)
+            }
+        }
+    }
+
     pub async fn delete_all_for_profile(&self, profile_id: &str) -> Result<u64, RepositoryError> {
         match &self.backend {
             FeedbackServiceBackend::Repository(repository) => {

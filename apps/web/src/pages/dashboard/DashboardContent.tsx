@@ -57,12 +57,18 @@ export function DashboardContent({ state }: { state: DashboardPageState }) {
           updateFilters={state.updateFilters}
           sourceOptions={state.sourceOptions}
           selectedSource={state.selectedSource}
+          notificationJobIds={state.notificationJobIds}
+          companyFilter={state.companyFilter}
+          clearContextFilters={state.clearContextFilters}
           sourcesError={state.sourcesError}
           applicationByJob={state.applicationByJob}
           scoreById={state.scoreById}
           saveMutation={state.saveMutation}
           hideMutation={state.hideMutation}
+          undoHideMutation={state.undoHideMutation}
+          bulkHideCompanyMutation={state.bulkHideCompanyMutation}
           badFitMutation={state.badFitMutation}
+          undoBadFitMutation={state.undoBadFitMutation}
           unmarkBadFitMutation={state.unmarkBadFitMutation}
         />
       </PageGrid>

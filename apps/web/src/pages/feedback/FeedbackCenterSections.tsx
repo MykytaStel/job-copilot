@@ -181,8 +181,10 @@ function CompanyFeedbackPanel({
   moveToStatus,
   onMove,
   onRemove,
+  onBulkHide,
   isMovePending,
   isRemovePending,
+  isBulkHidePending,
 }: {
   title: string;
   description: string;
@@ -201,8 +203,10 @@ function CompanyFeedbackPanel({
   moveToStatus: 'whitelist' | 'blacklist';
   onMove: (companyName: string, nextStatus: 'whitelist' | 'blacklist') => void;
   onRemove: (companyName: string) => void;
+  onBulkHide: (companyName: string) => void;
   isMovePending: boolean;
   isRemovePending: boolean;
+  isBulkHidePending: boolean;
 }) {
   return (
     <CompanyPanel
@@ -227,8 +231,10 @@ function CompanyFeedbackPanel({
           moveTitle={moveTitle}
           onMove={() => onMove(company.companyName, moveToStatus)}
           onRemove={() => onRemove(company.companyName)}
+          onBulkHide={() => onBulkHide(company.companyName)}
           isMovePending={isMovePending}
           isRemovePending={isRemovePending}
+          isBulkHidePending={isBulkHidePending}
         />
       ))}
     </CompanyPanel>
@@ -246,11 +252,13 @@ export function CompaniesSection({
   onMoveCompany,
   onRemoveWhitelist,
   onRemoveBlacklist,
+  onBulkHideCompany,
   isAddWhitelistPending,
   isAddBlacklistPending,
   isMovePending,
   isRemoveWhitelistPending,
   isRemoveBlacklistPending,
+  isBulkHidePending,
 }: {
   whitelistedCompanies: CompanyFeedbackRecord[];
   blacklistedCompanies: CompanyFeedbackRecord[];
@@ -262,11 +270,13 @@ export function CompaniesSection({
   onMoveCompany: (companyName: string, nextStatus: 'whitelist' | 'blacklist') => void;
   onRemoveWhitelist: (companyName: string) => void;
   onRemoveBlacklist: (companyName: string) => void;
+  onBulkHideCompany: (companyName: string) => void;
   isAddWhitelistPending: boolean;
   isAddBlacklistPending: boolean;
   isMovePending: boolean;
   isRemoveWhitelistPending: boolean;
   isRemoveBlacklistPending: boolean;
+  isBulkHidePending: boolean;
 }) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -288,8 +298,10 @@ export function CompaniesSection({
         moveToStatus="blacklist"
         onMove={onMoveCompany}
         onRemove={onRemoveWhitelist}
+        onBulkHide={onBulkHideCompany}
         isMovePending={isMovePending}
         isRemovePending={isRemoveWhitelistPending}
+        isBulkHidePending={isBulkHidePending}
       />
 
       <CompanyFeedbackPanel
@@ -310,8 +322,10 @@ export function CompaniesSection({
         moveToStatus="whitelist"
         onMove={onMoveCompany}
         onRemove={onRemoveBlacklist}
+        onBulkHide={onBulkHideCompany}
         isMovePending={isMovePending}
         isRemovePending={isRemoveBlacklistPending}
+        isBulkHidePending={isBulkHidePending}
       />
     </div>
   );

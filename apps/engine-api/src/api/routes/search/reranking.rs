@@ -508,6 +508,7 @@ mod company_reputation_tests {
                 work_mode_match: Some(true),
                 region_match: Some(true),
                 missing_signals: Vec::new(),
+                missing_signal_details: Vec::new(),
                 description_quality: crate::domain::job::presentation::JobTextQuality::Strong,
                 reasons: Vec::new(),
             },

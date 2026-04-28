@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, BriefcaseBusiness, CheckCheck, Clock3, RefreshCcw } from 'lucide-react';
+import { Bell, BriefcaseBusiness, CheckCheck, Clock3, ExternalLink, RefreshCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 import { getNotifications, markNotificationRead } from '../api/notifications';
 import type { AppNotification } from '../api/notifications';
@@ -55,23 +56,56 @@ function formatTimestamp(value: string) {
   });
 }
 
+function jobIdsFromPayload(payload: AppNotification['payload']) {
+  const jobIds = payload?.job_ids;
+  if (!Array.isArray(jobIds)) return [];
+
+  return Array.from(
+    new Set(jobIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)),
+  );
+}
+
 function NotificationRow({
   notification,
   onMarkRead,
+  onOpenJob,
+  onReviewMatches,
   isPending,
 }: {
   notification: AppNotification;
   onMarkRead: (id: string) => void;
+  onOpenJob: (notification: AppNotification, jobId: string) => void;
+  onReviewMatches: (notification: AppNotification, jobIds: string[]) => void;
   isPending: boolean;
 }) {
   const meta = NOTIFICATION_META[notification.type];
+  const jobIds = jobIdsFromPayload(notification.payload);
+  const firstJobId = jobIds[0] ?? null;
+  const isActionable = jobIds.length > 0;
+
+  function handleOpen() {
+    if (jobIds.length > 0) {
+      onReviewMatches(notification, jobIds);
+    }
+  }
 
   return (
     <Card
       className={cn(
         'border-border bg-card transition-colors',
+        isActionable && 'cursor-pointer hover:bg-surface-elevated',
         !notification.readAt && 'border-primary/15 bg-primary/[0.03]',
       )}
+      role={isActionable ? 'button' : undefined}
+      tabIndex={isActionable ? 0 : undefined}
+      onClick={handleOpen}
+      onKeyDown={(event) => {
+        if (!isActionable) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          handleOpen();
+        }
+      }}
     >
       <CardContent className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 gap-4">
@@ -107,12 +141,41 @@ function NotificationRow({
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white-a04 px-2.5 py-1">
                 <BriefcaseBusiness className="h-3.5 w-3.5" />
-                {formatEnumLabel(notification.type)}
+                {jobIds.length > 0 ? `${jobIds.length} match${jobIds.length === 1 ? '' : 'es'}` : formatEnumLabel(notification.type)}
               </span>
             </div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 lg:pl-4">
+          {jobIds.length > 0 ? (
+            <Button
+              variant="default"
+              size="sm"
+              className="h-10 rounded-xl px-3"
+              onClick={(event) => {
+                event.stopPropagation();
+                onReviewMatches(notification, jobIds);
+              }}
+              disabled={isPending}
+            >
+              Review matches
+            </Button>
+          ) : null}
+          {firstJobId ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 rounded-xl px-3"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenJob(notification, firstJobId);
+              }}
+              disabled={isPending}
+            >
+              <ExternalLink className="h-4 w-4" />
+              First match
+            </Button>
+          ) : null}
           {notification.readAt ? (
             <span className="text-xs text-muted-foreground">
               Read {formatTimestamp(notification.readAt)}
@@ -122,7 +185,10 @@ function NotificationRow({
               variant="link"
               size="sm"
               className="h-10 rounded-xl px-3"
-              onClick={() => onMarkRead(notification.id)}
+              onClick={(event) => {
+                event.stopPropagation();
+                onMarkRead(notification.id);
+              }}
               disabled={isPending}
             >
               Mark read
@@ -136,6 +202,7 @@ function NotificationRow({
 
 export default function Notifications() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const profileId = readProfileId();
 
   const {
@@ -157,6 +224,28 @@ export default function Notifications() {
       toast.error(value instanceof Error ? value.message : 'Failed to update notification');
     },
   });
+
+  async function openNotificationJob(notification: AppNotification, jobId: string) {
+    try {
+      if (!notification.readAt) {
+        await markReadMutation.mutateAsync(notification.id);
+      }
+      navigate(`/jobs/${encodeURIComponent(jobId)}`);
+    } catch (value) {
+      toast.error(value instanceof Error ? value.message : 'Failed to open notification');
+    }
+  }
+
+  async function reviewNotificationMatches(notification: AppNotification, jobIds: string[]) {
+    try {
+      if (!notification.readAt) {
+        await markReadMutation.mutateAsync(notification.id);
+      }
+      navigate(`/?job_ids=${encodeURIComponent(jobIds.join(','))}`);
+    } catch (value) {
+      toast.error(value instanceof Error ? value.message : 'Failed to open notification matches');
+    }
+  }
 
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
@@ -272,6 +361,8 @@ export default function Notifications() {
                     key={notification.id}
                     notification={notification}
                     onMarkRead={(id) => markReadMutation.mutate(id)}
+                    onOpenJob={openNotificationJob}
+                    onReviewMatches={reviewNotificationMatches}
                     isPending={markReadMutation.isPending}
                   />
                 ))

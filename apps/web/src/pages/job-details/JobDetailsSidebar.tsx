@@ -115,6 +115,8 @@ export function JobDetailsSidebar({ state }: { state: JobDetailsPageState }) {
     return null;
   }
 
+  const sourceHref = job.url;
+
   const currentInterest = job.feedback?.interestRating;
   const currentSalary = job.feedback?.salarySignal;
   const currentWorkMode = job.feedback?.workModeSignal;
@@ -374,9 +376,9 @@ export function JobDetailsSidebar({ state }: { state: JobDetailsPageState }) {
         icon={ExternalLink}
       >
         <div className="space-y-2">
-          {job.primaryVariant?.sourceUrl ? (
+          {sourceHref ? (
             <a
-              href={job.primaryVariant.sourceUrl}
+              href={sourceHref}
               target="_blank"
               rel="noreferrer"
               className="block no-underline"

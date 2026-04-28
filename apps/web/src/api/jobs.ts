@@ -34,6 +34,7 @@ export type RankedJob = {
   positiveReasons: string[];
   negativeReasons: string[];
   missingSignals: string[];
+  missingSignalDetails: MissingSignalDetail[];
   descriptionQuality: string;
 };
 
@@ -47,10 +48,16 @@ export type FitAnalysis = {
   matchedSkills: string[];
   matchedKeywords: string[];
   missingTerms: string[];
+  missingSignalDetails: MissingSignalDetail[];
   descriptionQuality: string;
   positiveReasons: string[];
   negativeReasons: string[];
   evidence: string[];
+};
+
+export type MissingSignalDetail = {
+  term: string;
+  category: string;
 };
 
 export type SearchRunRequest = {
@@ -229,6 +236,10 @@ export async function runSearch(payload: SearchRunRequest): Promise<SearchRunRes
         matchedSkills: result.fit.matched_skills,
         matchedKeywords: result.fit.matched_keywords,
         missingSignals: result.fit.missing_signals,
+        missingSignalDetails: mapMissingSignalDetails(
+          result.fit.missing_signal_details,
+          result.fit.missing_signals,
+        ),
         sourceMatch: result.fit.source_match,
         workModeMatch: result.fit.work_mode_match ?? undefined,
         regionMatch: result.fit.region_match ?? undefined,
@@ -288,6 +299,7 @@ export async function rerankJobs(profileId: string, jobIds: string[]): Promise<R
       positiveReasons: fit.positive_reasons,
       negativeReasons: fit.negative_reasons,
       missingSignals: fit.missing_signals,
+      missingSignalDetails: mapMissingSignalDetails(fit.missing_signal_details, fit.missing_signals),
       descriptionQuality: fit.description_quality,
     }))
     .sort((left, right) => right.score - left.score || left.jobId.localeCompare(right.jobId));
@@ -314,11 +326,29 @@ export async function analyzeFit(profileId: string, jobId: string): Promise<FitA
     matchedSkills: result.matched_skills,
     matchedKeywords: result.matched_keywords,
     missingTerms: result.missing_signals,
+    missingSignalDetails: mapMissingSignalDetails(
+      result.missing_signal_details,
+      result.missing_signals,
+    ),
     descriptionQuality: result.description_quality,
     positiveReasons: result.positive_reasons,
     negativeReasons: result.negative_reasons,
     evidence,
   };
+}
+
+function mapMissingSignalDetails(
+  details: EngineFitExplanation['missing_signal_details'],
+  fallbackTerms: string[],
+): MissingSignalDetail[] {
+  if (details && details.length > 0) {
+    return details.map((detail) => ({
+      term: detail.term,
+      category: detail.category,
+    }));
+  }
+
+  return fallbackTerms.map((term) => ({ term, category: 'unknown' }));
 }
 
 export async function runMatch(jobId: string): Promise<MatchResult> {

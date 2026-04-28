@@ -41,8 +41,9 @@ use scoring::{
     push_unique_region, push_unique_role, push_unique_string, weighted_overlap_ratio,
 };
 use text::{
-    build_searchable_text, build_searchable_text_parts, collect_missing_signals, evaluate_terms,
-    evaluate_terms_section_aware, extract_significant_tokens, merge_terms, parse_skill_sections,
+    build_searchable_text, build_searchable_text_parts, collect_missing_signal_details,
+    collect_missing_signals, evaluate_terms, evaluate_terms_section_aware,
+    extract_significant_tokens, merge_terms, parse_skill_sections,
 };
 
 const PRIMARY_ROLE_WEIGHT: f32 = 22.0;
@@ -226,6 +227,12 @@ impl SearchMatchingService {
             &matched_profile_keywords,
             &matched_search_terms,
         );
+        let missing_signal_details = collect_missing_signal_details(
+            &matched_profile_skills,
+            &matched_profile_keywords,
+            &matched_search_terms,
+            &skill_sections,
+        );
         let description_quality = assess_description_quality(&job.job.description_text);
         let scoring_weights = search_profile.scoring_weights.clone().normalized();
         let skill_match_multiplier = scoring_weights.skill_match_multiplier();
@@ -394,6 +401,7 @@ impl SearchMatchingService {
             work_mode_match,
             region_match,
             missing_signals,
+            missing_signal_details,
             description_quality,
             reasons,
         }

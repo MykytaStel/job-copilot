@@ -32,14 +32,20 @@ export type MarketOverview = {
 
 export type MarketCompany = {
   companyName: string;
+  normalizedCompanyName: string;
   activeJobs: number;
   thisWeek: number;
   prevWeek: number;
   velocity: number;
+  sources: string[];
+  topRoleGroups: string[];
+  latestJobIds: string[];
+  dataQualityFlags: string[];
 };
 
 export type MarketSalaryTrend = {
   seniority: string;
+  currency: string;
   p25: number;
   median: number;
   p75: number;
@@ -73,10 +79,15 @@ export async function getMarketCompanies(limit = 10): Promise<MarketCompany[]> {
 
   return response.companies.map((company) => ({
     companyName: company.company_name,
+    normalizedCompanyName: company.normalized_company_name ?? company.company_name.trim().toLowerCase(),
     activeJobs: company.active_jobs,
     thisWeek: company.this_week,
     prevWeek: company.prev_week,
     velocity: company.velocity,
+    sources: company.sources ?? [],
+    topRoleGroups: company.top_role_groups ?? [],
+    latestJobIds: company.latest_job_ids ?? [],
+    dataQualityFlags: company.data_quality_flags ?? [],
   }));
 }
 
@@ -94,6 +105,7 @@ export async function getMarketSalaries(
       trend.seniority.toLowerCase(),
       {
         seniority: trend.seniority,
+        currency: trend.currency,
         p25: trend.p25,
         median: trend.median,
         p75: trend.p75,
@@ -119,4 +131,3 @@ export async function getMarketRoles(period = 30): Promise<MarketRoleDemand[]> {
     trend: entry.trend,
   }));
 }
-

@@ -8,9 +8,10 @@ use serde::Deserialize;
 use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 
 use crate::api::dto::feedback::{
-    CompanyFeedbackResponse, FeedbackOverviewResponse, FeedbackSummary, JobFeedbackResponse,
-    SetInterestRatingRequest, SetLegitimacySignalRequest, SetSalaryFeedbackRequest,
-    SetWorkModeFeedbackRequest, TagJobFeedbackRequest, UpdateCompanyFeedbackRequest,
+    BulkFeedbackActionResponse, BulkHideJobsByCompanyRequest, CompanyFeedbackResponse,
+    FeedbackOverviewResponse, FeedbackSummary, JobFeedbackResponse, SetInterestRatingRequest,
+    SetLegitimacySignalRequest, SetSalaryFeedbackRequest, SetWorkModeFeedbackRequest,
+    TagJobFeedbackRequest, UpdateCompanyFeedbackRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
 use crate::api::routes::events::{
@@ -23,6 +24,16 @@ use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct RemoveCompanyBlacklistBySlugQuery {
+    pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BulkHideJobsByCompanyQuery {
+    pub profile_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JobFeedbackActionQuery {
     pub profile_id: Option<String>,
 }
 
@@ -168,6 +179,50 @@ pub async fn unmark_job_bad_fit(
     auth: Option<Extension<AuthUser>>,
     Path((profile_id, job_id)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
+    clear_job_feedback_flags(
+        state,
+        auth.as_deref(),
+        profile_id,
+        job_id,
+        UserEventType::JobBadFitRemoved,
+        JobFeedbackFlags {
+            bad_fit: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+pub async fn undo_job_hide(
+    State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
+    Path(job_id): Path<String>,
+    Query(query): Query<JobFeedbackActionQuery>,
+) -> Result<StatusCode, ApiError> {
+    let profile_id = resolve_action_profile_id(auth.as_deref(), query.profile_id)?;
+
+    clear_job_feedback_flags(
+        state,
+        auth.as_deref(),
+        profile_id,
+        job_id,
+        UserEventType::JobUnhidden,
+        JobFeedbackFlags {
+            hidden: true,
+            ..JobFeedbackFlags::default()
+        },
+    )
+    .await
+}
+
+pub async fn undo_job_bad_fit(
+    State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
+    Path(job_id): Path<String>,
+    Query(query): Query<JobFeedbackActionQuery>,
+) -> Result<StatusCode, ApiError> {
+    let profile_id = resolve_action_profile_id(auth.as_deref(), query.profile_id)?;
+
     clear_job_feedback_flags(
         state,
         auth.as_deref(),
@@ -367,6 +422,51 @@ pub async fn tag_job_feedback(
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
+pub async fn bulk_hide_jobs_by_company(
+    State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
+    Query(query): Query<BulkHideJobsByCompanyQuery>,
+    ApiJson(payload): ApiJson<BulkHideJobsByCompanyRequest>,
+) -> Result<axum::Json<BulkFeedbackActionResponse>, ApiError> {
+    let profile_id = auth
+        .as_ref()
+        .map(|user| user.profile_id.clone())
+        .or(query.profile_id)
+        .ok_or_else(|| {
+            ApiError::bad_request_with_details(
+                "missing_profile_id",
+                "profile_id query parameter is required when authentication is disabled",
+                serde_json::json!({ "field": "profile_id" }),
+            )
+        })?;
+
+    ensure_profile_exists(&state, auth.as_deref(), &profile_id).await?;
+
+    let company_name = payload.validate_company_name()?;
+    let normalized_company_name = FeedbackService::normalize_company_name(&company_name);
+    let affected_count = state
+        .feedback_service
+        .bulk_hide_jobs_by_company(&profile_id, &normalized_company_name)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_bulk_hide_failed"))?;
+
+    log_user_event_softly(
+        &state,
+        CreateUserEvent {
+            profile_id,
+            event_type: UserEventType::CompanyBlacklisted,
+            job_id: None,
+            company_name: Some(company_name),
+            source: None,
+            role_family: None,
+            payload_json: Some(serde_json::json!({ "affected_count": affected_count })),
+        },
+    )
+    .await;
+
+    Ok(axum::Json(BulkFeedbackActionResponse { affected_count }))
+}
+
 pub(crate) async fn ensure_profile_exists(
     state: &AppState,
     auth: Option<&AuthUser>,
@@ -387,6 +487,21 @@ pub(crate) async fn ensure_profile_exists(
     };
 
     Ok(())
+}
+
+fn resolve_action_profile_id(
+    auth: Option<&AuthUser>,
+    query_profile_id: Option<String>,
+) -> Result<String, ApiError> {
+    auth.map(|user| user.profile_id.clone())
+        .or(query_profile_id)
+        .ok_or_else(|| {
+            ApiError::bad_request_with_details(
+                "missing_profile_id",
+                "profile_id query parameter is required when authentication is disabled",
+                serde_json::json!({ "field": "profile_id" }),
+            )
+        })
 }
 
 async fn clear_job_feedback_flags(

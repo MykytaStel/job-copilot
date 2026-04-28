@@ -1,12 +1,11 @@
-import { useState } from 'react';
 import { Briefcase, CalendarDays, DollarSign, Search, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { DashboardPageState } from '../../features/dashboard/useDashboardPage';
 import type { LifecycleFilter } from '../../features/dashboard/useDashboardPage';
-import { readDensity, DENSITY_GAP, type SortMode } from '../../lib/displayPrefs';
+import { DENSITY_GAP, type SortMode } from '../../lib/displayPrefs';
+import { useDisplayPrefs } from '../../lib/useDisplayPrefs';
 
 import { Button } from '../../components/ui/Button';
-import { Card, CardContent } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { FilterChips } from '../../components/ui/FilterChips';
 import { JobCard, JobCardSkeleton } from '../../components/ui/JobCard';
@@ -34,12 +33,18 @@ export function DashboardMatchesSection({
   updateFilters,
   sourceOptions,
   selectedSource,
+  notificationJobIds,
+  companyFilter,
+  clearContextFilters,
   sourcesError,
   applicationByJob,
   scoreById,
   saveMutation,
   hideMutation,
+  undoHideMutation,
+  bulkHideCompanyMutation,
   badFitMutation,
+  undoBadFitMutation,
   unmarkBadFitMutation,
 }: Pick<
   DashboardPageState,
@@ -58,20 +63,28 @@ export function DashboardMatchesSection({
   | 'updateFilters'
   | 'sourceOptions'
   | 'selectedSource'
+  | 'notificationJobIds'
+  | 'companyFilter'
+  | 'clearContextFilters'
   | 'sourcesError'
   | 'applicationByJob'
   | 'scoreById'
   | 'saveMutation'
   | 'hideMutation'
+  | 'undoHideMutation'
+  | 'bulkHideCompanyMutation'
   | 'badFitMutation'
+  | 'undoBadFitMutation'
   | 'unmarkBadFitMutation'
 >) {
-  const [density] = useState(() => readDensity());
+  const { density } = useDisplayPrefs();
+  const hasContextFilter = notificationJobIds.length > 0 || Boolean(companyFilter);
 
   const hasActiveFilters =
     search.trim().length > 0 ||
     !selectedLifecycle.includes('all') ||
-    !selectedSource.includes('__all__');
+    !selectedSource.includes('__all__') ||
+    hasContextFilter;
 
   function clearFilters() {
     setSearch('');
@@ -89,8 +102,27 @@ export function DashboardMatchesSection({
         action={{ label: 'Open Feedback', href: '/feedback' }}
       />
 
-      <Card className="border-border bg-card">
-        <CardContent className="space-y-5 px-6 py-6">
+      <div className="mb-5 space-y-4 border-b border-border/70 pb-5">
+          {hasContextFilter ? (
+            <div className="rounded-2xl border border-primary/25 bg-primary/8 px-4 py-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="m-0 text-sm font-semibold text-card-foreground">
+                    Reviewing a focused match set
+                  </p>
+                  <p className="m-0 mt-1 text-xs leading-5 text-muted-foreground">
+                    {notificationJobIds.length > 0
+                      ? `${notificationJobIds.length} notification jobs are visible.`
+                      : `Showing jobs from ${companyFilter}.`}
+                  </p>
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={clearContextFilters}>
+                  Clear context
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
               <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -177,17 +209,16 @@ export function DashboardMatchesSection({
               </Link>
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       <div className={DENSITY_GAP[density]}>
         {jobsLoading ? (
-  <div className={density === 'compact' ? 'space-y-2' : 'space-y-3'}>
-    {Array.from({ length: 5 }, (_, index) => (
-      <JobCardSkeleton key={index} compact={density === 'compact'} />
-    ))}
-  </div>
-) : jobs.length === 0 ? (
+          <div className={density === 'compact' ? 'space-y-2' : 'space-y-3'}>
+            {Array.from({ length: 5 }, (_, index) => (
+              <JobCardSkeleton key={index} compact={density === 'compact'} />
+            ))}
+          </div>
+        ) : jobs.length === 0 ? (
           <EmptyState
             message={hasActiveFilters ? 'No jobs found. Try adjusting your filters.' : 'No jobs available yet.'}
             description={
@@ -216,7 +247,10 @@ export function DashboardMatchesSection({
             const isPendingAny =
               saveMutation.isPending ||
               hideMutation.isPending ||
+              undoHideMutation.isPending ||
+              bulkHideCompanyMutation.isPending ||
               badFitMutation.isPending ||
+              undoBadFitMutation.isPending ||
               unmarkBadFitMutation.isPending;
 
             return (
@@ -238,6 +272,9 @@ export function DashboardMatchesSection({
                     : undefined
                 }
                 onHide={profileId ? () => hideMutation.mutate(job.id) : undefined}
+                onHideCompany={
+                  profileId ? () => bulkHideCompanyMutation.mutate(job.company) : undefined
+                }
                 onBadFit={profileId && !isBadFit ? () => badFitMutation.mutate(job.id) : undefined}
                 onUnmarkBadFit={
                   profileId && isBadFit ? () => unmarkBadFitMutation.mutate(job.id) : undefined

@@ -121,6 +121,13 @@ export async function saveProfile(
   },
 ): Promise<PersistedCandidateProfile> {
   const profileId = readStoredProfileId();
+  const normalizedResumeText = payload.rawText.replace(/\r\n/g, '\n').trim();
+  const activeResumeBeforeSave = profileId
+    ? await request<EngineResume>('/api/v1/resumes/active').catch(() => null)
+    : null;
+  const shouldUploadResume =
+    !activeResumeBeforeSave ||
+    activeResumeBeforeSave.raw_text.replace(/\r\n/g, '\n').trim() !== normalizedResumeText;
 
   const body = {
     name: payload.name,
@@ -149,20 +156,22 @@ export async function saveProfile(
 
   writeStoredProfileId(profile.id);
 
-  // Upload resume in parallel with analysis so the engine-api fit-score endpoint
-  // has an active resume to work with (resumes and profiles are separate records).
+  // Keep resume versions meaningful: profile edits only create a new CV version
+  // when the CV text actually changes.
   const [analyzed] = await Promise.all([
     request<EngineAnalyzeProfile>(`/api/v1/profiles/${profile.id}/analyze`, json('POST', {})),
-    request<EngineResume>(
-      '/api/v1/resume/upload',
-      json('POST', {
-        filename: 'profile.md',
-        raw_text: payload.rawText,
-      }),
-    ).catch((err: unknown) => {
-      console.warn('Resume upload failed during profile save; profile was still created:', err);
-      return null;
-    }),
+    shouldUploadResume
+      ? request<EngineResume>(
+          '/api/v1/resume/upload',
+          json('POST', {
+            filename: 'profile.md',
+            raw_text: payload.rawText,
+          }),
+        ).catch((err: unknown) => {
+          console.warn('Resume upload failed during profile save; profile was still created:', err);
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
 
   return {

@@ -1,5 +1,5 @@
 import type { ResumeVersion } from '@job-copilot/shared/profiles';
-import { CheckCircle2, Download, FileText } from 'lucide-react';
+import { CheckCircle2, Download, FileText, Trash2 } from 'lucide-react';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { SurfaceSection } from './ui/Surface';
@@ -7,16 +7,29 @@ import { SurfaceSection } from './ui/Surface';
 type ResumeHistoryProps = {
   resumes: ResumeVersion[];
   activatingResumeId?: string;
+  deletingResumeId?: string;
   onActivate: (resumeId: string) => void;
+  onDelete?: (resumeId: string) => void;
 };
 
-export function ResumeHistory({ resumes, activatingResumeId, onActivate }: ResumeHistoryProps) {
+export function ResumeHistory({
+  resumes,
+  activatingResumeId,
+  deletingResumeId,
+  onActivate,
+  onDelete,
+}: ResumeHistoryProps) {
+  const duplicateCounts = buildDuplicateCounts(resumes);
+
   return (
     <SurfaceSection className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="eyebrow">CV history</p>
           <h3 className="m-0 text-base font-semibold text-card-foreground">Uploaded CV versions</h3>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">
+            A new version is created only when the CV text changes.
+          </p>
         </div>
         <FileText className="h-5 w-5 text-muted-foreground" />
       </div>
@@ -27,6 +40,9 @@ export function ResumeHistory({ resumes, activatingResumeId, onActivate }: Resum
         <div className="space-y-3">
           {resumes.map((resume) => {
             const isActivating = activatingResumeId === resume.id;
+            const isDeleting = deletingResumeId === resume.id;
+            const duplicateCount = duplicateCounts.get(normalizeResumeText(resume.rawText)) ?? 0;
+            const isDuplicate = duplicateCount > 1;
             return (
               <div
                 key={resume.id}
@@ -48,9 +64,15 @@ export function ResumeHistory({ resumes, activatingResumeId, onActivate }: Resum
                           Active
                         </Badge>
                       )}
+                      {isDuplicate && (
+                        <Badge variant="warning" className="px-2 py-0.5 text-xs">
+                          Duplicate text
+                        </Badge>
+                      )}
                     </div>
                     <p className="m-0 mt-1 text-xs text-muted-foreground">
                       Uploaded {formatUploadedDate(resume.uploadedAt)}
+                      {isDuplicate ? ` • ${duplicateCount} versions share this CV text` : ''}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -72,6 +94,18 @@ export function ResumeHistory({ resumes, activatingResumeId, onActivate }: Resum
                     >
                       {isActivating ? 'Activating...' : resume.isActive ? 'Active' : 'Activate'}
                     </Button>
+                    {onDelete && !resume.isActive && isDuplicate ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDelete(resume.id)}
+                        disabled={isDeleting || Boolean(activatingResumeId)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {isDeleting ? 'Deleting...' : 'Delete duplicate'}
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -81,6 +115,19 @@ export function ResumeHistory({ resumes, activatingResumeId, onActivate }: Resum
       )}
     </SurfaceSection>
   );
+}
+
+function normalizeResumeText(value: string): string {
+  return value.replace(/\r\n/g, '\n').trim();
+}
+
+function buildDuplicateCounts(resumes: ResumeVersion[]) {
+  const counts = new Map<string, number>();
+  for (const resume of resumes) {
+    const key = normalizeResumeText(resume.rawText);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function formatUploadedDate(value: string): string {

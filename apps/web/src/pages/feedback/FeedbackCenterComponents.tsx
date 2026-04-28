@@ -139,11 +139,6 @@ export function JobRow({
             <p className="m-0 text-sm text-muted-foreground">
               {presentation?.company ?? job.company}
             </p>
-            {presentation?.summary ? (
-              <p className="m-0 max-w-3xl text-sm leading-6 text-muted-foreground">
-                {presentation.summary}
-              </p>
-            ) : null}
             {metaItems.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {metaItems.map((item) => (
@@ -293,8 +288,10 @@ export function CompanyRow({
   moveTitle,
   onMove,
   onRemove,
+  onBulkHide,
   isMovePending,
   isRemovePending,
+  isBulkHidePending,
 }: {
   companyName: string;
   accent: 'success' | 'danger';
@@ -303,8 +300,10 @@ export function CompanyRow({
   moveTitle: string;
   onMove: () => void;
   onRemove: () => void;
+  onBulkHide: () => void;
   isMovePending: boolean;
   isRemovePending: boolean;
+  isBulkHidePending: boolean;
 }) {
   const iconClass =
     accent === 'success'
@@ -341,6 +340,17 @@ export function CompanyRow({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onBulkHide}
+            disabled={isBulkHidePending}
+            title={`Hide all from ${companyName}`}
+          >
+            <EyeOff className="h-4 w-4" />
+            Hide all
+          </Button>
           <Button
             type="button"
             variant="ghost"

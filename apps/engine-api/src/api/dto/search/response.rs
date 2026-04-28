@@ -3,7 +3,7 @@ use serde::Serialize;
 use crate::api::dto::applications::ApplicationResponse;
 use crate::api::dto::jobs::JobResponse;
 use crate::domain::job::model::Job;
-use crate::domain::matching::{JobFit, JobScoreBreakdown, JobScorePenalty};
+use crate::domain::matching::{JobFit, JobScoreBreakdown, JobScorePenalty, MissingSignalDetail};
 use crate::domain::search::global::ApplicationSearchHit;
 use crate::services::search_ranking::{RankedJob, SearchRunResult};
 
@@ -42,6 +42,7 @@ pub struct JobFitResponse {
     pub matched_skills: Vec<String>,
     pub matched_keywords: Vec<String>,
     pub missing_signals: Vec<String>,
+    pub missing_signal_details: Vec<MissingSignalDetailResponse>,
     pub source_match: bool,
     pub work_mode_match: Option<bool>,
     pub region_match: Option<bool>,
@@ -49,6 +50,12 @@ pub struct JobFitResponse {
     pub positive_reasons: Vec<String>,
     pub negative_reasons: Vec<String>,
     pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MissingSignalDetailResponse {
+    pub term: String,
+    pub category: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -221,6 +228,11 @@ impl From<JobFit> for JobFitResponse {
             matched_skills: value.matched_skills,
             matched_keywords: value.matched_keywords,
             missing_signals: value.missing_signals,
+            missing_signal_details: value
+                .missing_signal_details
+                .into_iter()
+                .map(MissingSignalDetailResponse::from)
+                .collect(),
             source_match: value.source_match,
             work_mode_match: value.work_mode_match,
             region_match: value.region_match,
@@ -228,6 +240,15 @@ impl From<JobFit> for JobFitResponse {
             positive_reasons,
             negative_reasons,
             reasons: value.reasons,
+        }
+    }
+}
+
+impl From<MissingSignalDetail> for MissingSignalDetailResponse {
+    fn from(value: MissingSignalDetail) -> Self {
+        Self {
+            term: value.term,
+            category: value.category,
         }
     }
 }

@@ -1,3 +1,5 @@
+use crate::domain::matching::MissingSignalDetail;
+
 use super::{
     EvaluatedTerms, LOW_SIGNAL_TERM_MATCH_WEIGHT, PARTIAL_PHRASE_MATCH_WEIGHT, PreparedText,
     TermSpec, is_low_signal_term, normalize_term_for_output, normalize_text, push_unique_string,
@@ -72,6 +74,28 @@ impl SkillSections {
             return PREFERRED_SKILL_WEIGHT;
         }
         1.0
+    }
+
+    fn contains_term(&self, prepared: &PreparedText, term: &str) -> bool {
+        prepared.matches_signal(term)
+    }
+
+    pub(super) fn category_for_missing_skill(&self, term: &str) -> &'static str {
+        if self
+            .required_text
+            .as_ref()
+            .is_some_and(|text| self.contains_term(text, term))
+        {
+            "required_skill"
+        } else if self
+            .preferred_text
+            .as_ref()
+            .is_some_and(|text| self.contains_term(text, term))
+        {
+            "preferred_skill"
+        } else {
+            "profile_skill"
+        }
     }
 }
 
@@ -259,6 +283,45 @@ pub(super) fn collect_missing_signals(
 
     missing.truncate(8);
     missing
+}
+
+pub(super) fn collect_missing_signal_details(
+    matched_profile_skills: &EvaluatedTerms,
+    matched_profile_keywords: &EvaluatedTerms,
+    matched_search_terms: &EvaluatedTerms,
+    skill_sections: &SkillSections,
+) -> Vec<MissingSignalDetail> {
+    let mut details = Vec::new();
+
+    for term in &matched_profile_skills.missing_terms {
+        push_missing_detail(
+            &mut details,
+            term,
+            skill_sections.category_for_missing_skill(term),
+        );
+    }
+
+    for term in &matched_search_terms.missing_terms {
+        push_missing_detail(&mut details, term, "role_signal");
+    }
+
+    for term in &matched_profile_keywords.missing_terms {
+        push_missing_detail(&mut details, term, "keyword");
+    }
+
+    details.truncate(8);
+    details
+}
+
+fn push_missing_detail(details: &mut Vec<MissingSignalDetail>, term: &str, category: &str) {
+    if term.is_empty() || details.iter().any(|detail| detail.term == term) {
+        return;
+    }
+
+    details.push(MissingSignalDetail {
+        term: term.to_string(),
+        category: category.to_string(),
+    });
 }
 
 pub(super) fn build_term_specs(terms: &[String]) -> Vec<TermSpec> {

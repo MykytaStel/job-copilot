@@ -125,6 +125,7 @@ interface JobCardProps {
   compact?: boolean;
   onSave?: () => void;
   onHide?: () => void;
+  onHideCompany?: () => void;
   onBadFit?: () => void;
   onUnmarkBadFit?: () => void;
 }
@@ -139,6 +140,7 @@ export function JobCard({
   compact = false,
   onSave,
   onHide,
+  onHideCompany,
   onBadFit,
   onUnmarkBadFit,
 }: JobCardProps) {
@@ -252,7 +254,7 @@ export function JobCard({
               </div>
 
               {/* Hover-revealed actions */}
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                 {onSave && (
                   <button
                     type="button"
@@ -277,6 +279,17 @@ export function JobCard({
                     className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors disabled:opacity-40"
                   >
                     <EyeOff className="h-4 w-4" />
+                  </button>
+                )}
+                {onHideCompany && (
+                  <button
+                    type="button"
+                    title={`Hide all from ${company}`}
+                    disabled={isPending}
+                    onClick={onHideCompany}
+                    className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors disabled:opacity-40"
+                  >
+                    <Building2 className="h-4 w-4" />
                   </button>
                 )}
                 {isBadFit && onUnmarkBadFit ? (

@@ -26,10 +26,15 @@ impl From<MarketOverview> for MarketOverviewResponse {
 #[derive(Debug, Serialize)]
 pub struct MarketCompanyEntryResponse {
     pub company_name: String,
+    pub normalized_company_name: String,
     pub active_jobs: i64,
     pub this_week: i64,
     pub prev_week: i64,
     pub velocity: i64,
+    pub sources: Vec<String>,
+    pub top_role_groups: Vec<String>,
+    pub latest_job_ids: Vec<String>,
+    pub data_quality_flags: Vec<String>,
 }
 
 impl From<MarketCompanyEntry> for MarketCompanyEntryResponse {
@@ -37,9 +42,14 @@ impl From<MarketCompanyEntry> for MarketCompanyEntryResponse {
         Self {
             velocity: e.this_week - e.prev_week,
             company_name: e.company_name,
+            normalized_company_name: e.normalized_company_name,
             active_jobs: e.active_jobs,
             this_week: e.this_week,
             prev_week: e.prev_week,
+            sources: e.sources,
+            top_role_groups: e.top_role_groups,
+            latest_job_ids: e.latest_job_ids,
+            data_quality_flags: e.data_quality_flags,
         }
     }
 }
@@ -52,6 +62,7 @@ pub struct MarketCompaniesResponse {
 #[derive(Debug, Serialize)]
 pub struct MarketSalaryTrendResponse {
     pub seniority: String,
+    pub currency: String,
     pub p25: i32,
     pub median: i32,
     pub p75: i32,
@@ -62,6 +73,7 @@ impl From<MarketSalaryTrend> for MarketSalaryTrendResponse {
     fn from(value: MarketSalaryTrend) -> Self {
         Self {
             seniority: value.seniority,
+            currency: value.currency,
             p25: value.p25,
             median: value.median,
             p75: value.p75,

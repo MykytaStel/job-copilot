@@ -21,11 +21,15 @@ pub struct ProfileBehaviorAggregates {
     pub save_count_by_source: BTreeMap<String, usize>,
     pub hide_count_by_source: BTreeMap<String, usize>,
     pub bad_fit_count_by_source: BTreeMap<String, usize>,
+    pub save_count_by_company: BTreeMap<String, usize>,
+    pub hide_count_by_company: BTreeMap<String, usize>,
+    pub bad_fit_count_by_company: BTreeMap<String, usize>,
     pub search_run_count: usize,
     pub save_count_by_role_family: BTreeMap<String, usize>,
     pub hide_count_by_role_family: BTreeMap<String, usize>,
     pub bad_fit_count_by_role_family: BTreeMap<String, usize>,
     pub application_created_count_by_source: BTreeMap<String, usize>,
+    pub application_created_count_by_company: BTreeMap<String, usize>,
     pub application_created_count_by_role_family: BTreeMap<String, usize>,
 }
 
@@ -49,6 +53,7 @@ pub struct ProfileBehaviorSummary {
     pub top_positive_role_families: Vec<BehaviorSignalCount>,
     pub top_negative_role_families: Vec<BehaviorSignalCount>,
     pub source_signal_counts: Vec<BehaviorSignalCount>,
+    pub company_signal_counts: Vec<BehaviorSignalCount>,
     pub role_family_signal_counts: Vec<BehaviorSignalCount>,
 }
 
@@ -83,6 +88,10 @@ impl BehaviorService {
                         &mut aggregates.save_count_by_role_family,
                         event.role_family.as_deref(),
                     );
+                    increment_optional(
+                        &mut aggregates.save_count_by_company,
+                        event.company_name.as_deref(),
+                    );
                 }
                 UserEventType::JobHidden => {
                     increment_optional(
@@ -93,6 +102,10 @@ impl BehaviorService {
                         &mut aggregates.hide_count_by_role_family,
                         event.role_family.as_deref(),
                     );
+                    increment_optional(
+                        &mut aggregates.hide_count_by_company,
+                        event.company_name.as_deref(),
+                    );
                 }
                 UserEventType::JobBadFit => {
                     increment_optional(
@@ -102,6 +115,10 @@ impl BehaviorService {
                     increment_optional(
                         &mut aggregates.bad_fit_count_by_role_family,
                         event.role_family.as_deref(),
+                    );
+                    increment_optional(
+                        &mut aggregates.bad_fit_count_by_company,
+                        event.company_name.as_deref(),
                     );
                 }
                 UserEventType::SearchRun => {
@@ -115,6 +132,10 @@ impl BehaviorService {
                     increment_optional(
                         &mut aggregates.application_created_count_by_role_family,
                         event.role_family.as_deref(),
+                    );
+                    increment_optional(
+                        &mut aggregates.application_created_count_by_company,
+                        event.company_name.as_deref(),
                     );
                 }
                 _ => {}
@@ -137,6 +158,12 @@ impl BehaviorService {
             &aggregates.bad_fit_count_by_role_family,
             &aggregates.application_created_count_by_role_family,
         );
+        let company_signal_counts = build_signal_counts(
+            &aggregates.save_count_by_company,
+            &aggregates.hide_count_by_company,
+            &aggregates.bad_fit_count_by_company,
+            &aggregates.application_created_count_by_company,
+        );
 
         ProfileBehaviorSummary {
             search_run_count: aggregates.search_run_count,
@@ -145,6 +172,7 @@ impl BehaviorService {
             top_positive_role_families: top_positive(&role_family_signal_counts),
             top_negative_role_families: top_negative(&role_family_signal_counts),
             source_signal_counts,
+            company_signal_counts,
             role_family_signal_counts,
         }
     }

@@ -60,6 +60,7 @@ export default function Profile() {
     analyzeMutation,
     updateSkillsMutation,
     activateResumeMutation,
+    deleteResumeMutation,
     buildMutation,
     runMutation,
     setName,
@@ -258,7 +259,11 @@ export default function Profile() {
             activatingResumeId={
               activateResumeMutation.isPending ? activateResumeMutation.variables : undefined
             }
+            deletingResumeId={
+              deleteResumeMutation.isPending ? deleteResumeMutation.variables : undefined
+            }
             onActivate={(resumeId) => activateResumeMutation.mutate(resumeId)}
+            onDelete={(resumeId) => deleteResumeMutation.mutate(resumeId)}
           />
 
           {suggestedSkills.length > 0 && (
