@@ -53,6 +53,9 @@ export function useProfilePage() {
         includeKeywordsInput: search.includeKeywordsInput,
         excludeKeywordsInput: search.excludeKeywordsInput,
       }),
+			portfolioUrl: form.portfolioUrl.trim() || undefined,
+			githubUrl: form.githubUrl.trim() || undefined,
+			linkedinUrl: form.linkedinUrl.trim() || undefined,
     });
   }
 
@@ -160,6 +163,12 @@ export function useProfilePage() {
     addAllSuggestedSkills,
     openFilePicker: picker.openFilePicker,
     handleFileChange: picker.handleFileChange,
+		portfolioUrl: form.portfolioUrl,
+		githubUrl: form.githubUrl,
+		linkedinUrl: form.linkedinUrl,
+		setPortfolioUrl: draftForm.setPortfolioUrl,
+		setGithubUrl: draftForm.setGithubUrl,
+		setLinkedinUrl: draftForm.setLinkedinUrl,
   };
 }
 

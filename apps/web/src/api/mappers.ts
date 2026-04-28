@@ -186,6 +186,9 @@ export function mapProfile(profile: EngineProfile): CandidateProfile {
     skills: profile.analysis?.skills ?? [],
     updatedAt: profile.updated_at,
     skillsUpdatedAt: profile.skills_updated_at ?? undefined,
+		portfolioUrl: profile.portfolio_url ?? undefined,
+		githubUrl: profile.github_url ?? undefined,
+		linkedinUrl: profile.linkedin_url ?? undefined,
   };
 }
 

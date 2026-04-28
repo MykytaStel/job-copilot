@@ -35,6 +35,9 @@ pub async fn register(
             preferred_locations: vec![],
             work_mode_preference: "any".to_string(),
             search_preferences: None,
+            portfolio_url: None,
+            github_url: None,
+            linkedin_url: None,
         })
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?;

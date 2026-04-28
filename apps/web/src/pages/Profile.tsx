@@ -84,6 +84,12 @@ export default function Profile() {
     addAllSuggestedSkills,
     openFilePicker,
     handleFileChange,
+		portfolioUrl,
+		githubUrl,
+		linkedinUrl,
+		setPortfolioUrl,
+		setGithubUrl,
+		setLinkedinUrl,
   } = useProfilePage();
 
   return (
@@ -219,6 +225,12 @@ export default function Profile() {
             onAddLanguage={addLanguage}
             onRemoveLanguage={removeLanguage}
             onUpdateLanguageLevel={updateLanguageLevel}
+						portfolioUrl={portfolioUrl}
+						githubUrl={githubUrl}
+						linkedinUrl={linkedinUrl}
+						setPortfolioUrl={setPortfolioUrl}
+						setGithubUrl={setGithubUrl}
+						setLinkedinUrl={setLinkedinUrl}
           />
 
           {suggestedSkills.length > 0 && (

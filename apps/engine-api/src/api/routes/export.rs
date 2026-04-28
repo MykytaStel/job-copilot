@@ -41,6 +41,9 @@ pub struct ExportProfileResponse {
     pub created_at: String,
     pub updated_at: String,
     pub skills_updated_at: Option<String>,
+    pub portfolio_url: Option<String>,
+    pub github_url: Option<String>,
+    pub linkedin_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -338,6 +341,9 @@ impl From<Profile> for ExportProfileResponse {
             created_at: profile.created_at,
             updated_at: profile.updated_at,
             skills_updated_at: profile.skills_updated_at,
+            portfolio_url: profile.portfolio_url,
+            github_url: profile.github_url,
+            linkedin_url: profile.linkedin_url,
         }
     }
 }
@@ -543,6 +549,9 @@ mod tests {
             created_at: "2026-04-14T00:00:00Z".to_string(),
             updated_at: "2026-04-14T00:00:00Z".to_string(),
             skills_updated_at: None,
+            portfolio_url: None,
+            github_url: None,
+            linkedin_url: None,
         }
     }
 

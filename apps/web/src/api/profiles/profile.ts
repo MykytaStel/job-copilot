@@ -139,6 +139,9 @@ export async function saveProfile(
     search_preferences: payload.searchPreferences
       ? toEngineSearchPreferences(payload.searchPreferences)
       : null,
+		portfolio_url: payload.portfolioUrl ?? null,
+		github_url: payload.githubUrl ?? null,
+		linkedin_url: payload.linkedinUrl ?? null,
   };
 
   const profile = profileId

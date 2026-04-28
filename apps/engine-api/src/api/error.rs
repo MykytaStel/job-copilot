@@ -53,6 +53,21 @@ impl ApiError {
         }
     }
 
+    pub fn unprocessable_entity_with_details(
+        code: &'static str,
+        message: impl Into<String>,
+        details: Value,
+    ) -> Self {
+        Self {
+            status: StatusCode::UNPROCESSABLE_ENTITY,
+            body: ApiErrorResponse {
+                code,
+                message: message.into(),
+                details: Some(details),
+            },
+        }
+    }
+
     pub fn not_found(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::NOT_FOUND,

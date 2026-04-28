@@ -39,6 +39,9 @@ struct ProfileRow {
     created_at: String,
     updated_at: String,
     skills_updated_at: Option<String>,
+    portfolio_url: Option<String>,
+    github_url: Option<String>,
+    linkedin_url: Option<String>,
 }
 
 impl ProfilesRepository {
@@ -67,10 +70,13 @@ impl ProfilesRepository {
                 preferred_locations,
                 work_mode_preference,
                 search_preferences,
+                portfolio_url,
+                github_url,
+                linkedin_url,
                 created_at,
                 updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
             RETURNING
                 id,
                 name,
@@ -93,7 +99,10 @@ impl ProfilesRepository {
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at
+                skills_updated_at::text AS skills_updated_at,
+                portfolio_url,
+                github_url,
+                linkedin_url
             "#,
         )
         .bind(Uuid::now_v7().to_string())
@@ -114,6 +123,9 @@ impl ProfilesRepository {
                 .as_ref()
                 .map(|value| Json(value.clone())),
         )
+        .bind(&input.portfolio_url)
+        .bind(&input.github_url)
+        .bind(&input.linkedin_url)
         .fetch_one(pool)
         .await?;
 
@@ -149,7 +161,10 @@ impl ProfilesRepository {
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at
+                skills_updated_at::text AS skills_updated_at,
+                portfolio_url,
+                github_url,
+                linkedin_url
             FROM profiles
             WHERE id = $1
             "#,
@@ -190,7 +205,10 @@ impl ProfilesRepository {
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at
+                skills_updated_at::text AS skills_updated_at,
+                portfolio_url,
+                github_url,
+                linkedin_url
             FROM profiles
             WHERE email = $1
             ORDER BY created_at ASC
@@ -233,7 +251,10 @@ impl ProfilesRepository {
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at
+                skills_updated_at::text AS skills_updated_at,
+                portfolio_url,
+                github_url,
+                linkedin_url
             FROM profiles
             ORDER BY updated_at DESC
             LIMIT 1
@@ -295,6 +316,18 @@ impl ProfilesRepository {
                     WHEN $21 THEN $22
                     ELSE search_preferences
                 END,
+                portfolio_url = CASE
+                    WHEN $25 THEN $26
+                    ELSE portfolio_url
+                END,
+                github_url = CASE
+                    WHEN $27 THEN $28
+                    ELSE github_url
+                END,
+                linkedin_url = CASE
+                    WHEN $29 THEN $30
+                    ELSE linkedin_url
+                END,
                 summary = CASE
                     WHEN $6 IS NULL THEN summary
                     ELSE NULL
@@ -345,7 +378,10 @@ impl ProfilesRepository {
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at
+                skills_updated_at::text AS skills_updated_at,
+                portfolio_url,
+                github_url,
+                linkedin_url
             "#,
         )
         .bind(id)
@@ -387,6 +423,12 @@ impl ProfilesRepository {
         )
         .bind(input.skills.is_some())
         .bind(input.skills.as_ref().map(|value| Json(value.clone())))
+        .bind(input.portfolio_url.is_some())
+        .bind(input.portfolio_url.as_ref().and_then(|value| value.clone()))
+        .bind(input.github_url.is_some())
+        .bind(input.github_url.as_ref().and_then(|value| value.clone()))
+        .bind(input.linkedin_url.is_some())
+        .bind(input.linkedin_url.as_ref().and_then(|value| value.clone()))
         .fetch_optional(pool)
         .await?;
 
@@ -436,7 +478,10 @@ impl ProfilesRepository {
                 search_preferences,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at
+                skills_updated_at::text AS skills_updated_at,
+                portfolio_url,
+                github_url,
+                linkedin_url
             "#,
         )
         .bind(id)
@@ -490,6 +535,9 @@ impl TryFrom<ProfileRow> for Profile {
             created_at: row.created_at,
             updated_at: row.updated_at,
             skills_updated_at: row.skills_updated_at,
+            portfolio_url: row.portfolio_url,
+            github_url: row.github_url,
+            linkedin_url: row.linkedin_url,
         })
     }
 }
@@ -564,6 +612,9 @@ mod tests {
                 preferred_locations: vec![],
                 work_mode_preference: "any".to_string(),
                 search_preferences: None,
+                portfolio_url: None,
+                github_url: None,
+                linkedin_url: None,
             })
             .await
             .expect_err("repository should fail without configured database");
