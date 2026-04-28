@@ -86,6 +86,19 @@ impl ApplicationsService {
         }
     }
 
+    pub async fn list_by_profile(
+        &self,
+        profile_id: &str,
+    ) -> Result<Vec<Application>, RepositoryError> {
+        match &self.backend {
+            ApplicationsServiceBackend::Repository(repository) => {
+                repository.list_by_profile(profile_id).await
+            }
+            #[cfg(test)]
+            ApplicationsServiceBackend::Stub(stub) => stub.list_by_profile(profile_id),
+        }
+    }
+
     pub async fn search_by_job_title(
         &self,
         query: &str,
