@@ -79,7 +79,7 @@ impl RankingService {
         // Applies a signed score delta based on the candidate's stated preference
         // vs the job's remote_type. 0 when no preference is set or pref is "any".
         let work_mode_signal = compute_work_mode_preference_signal(
-            profile.and_then(|p| p.preferred_work_mode.as_deref()),
+            profile.map(|p| p.work_mode_preference.as_str()),
             job.remote_type.as_deref(),
         );
 
@@ -592,7 +592,8 @@ mod tests {
             salary_max: None,
             salary_currency: "USD".to_string(),
             languages: vec![],
-            preferred_work_mode: Some("remote".to_string()),
+            preferred_locations: vec![],
+            work_mode_preference: "remote_only".to_string(),
             preferred_language: None,
             search_preferences: None,
             created_at: "2026-01-01".to_string(),
@@ -785,7 +786,8 @@ mod tests {
             salary_max: None,
             salary_currency: "USD".to_string(),
             languages: vec![],
-            preferred_work_mode: Some("remote_only".to_string()),
+            preferred_locations: vec![],
+            work_mode_preference: "remote_only".to_string(),
             preferred_language: None,
             search_preferences: None,
             created_at: "2026-01-01".to_string(),
@@ -914,7 +916,8 @@ mod tests {
             salary_max: None,
             salary_currency: "USD".to_string(),
             languages: vec![],
-            preferred_work_mode: None,
+            preferred_locations: vec![],
+            work_mode_preference: "any".to_string(),
             preferred_language: Some("Ukrainian".to_string()),
             search_preferences: None,
             created_at: "2026-01-01".to_string(),

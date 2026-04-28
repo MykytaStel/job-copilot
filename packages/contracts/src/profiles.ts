@@ -1,4 +1,12 @@
-import type { EngineRoleId } from './search';
+import type { EngineRoleId } from "./search";
+
+export type WorkModePreference = "remote_only" | "hybrid" | "onsite" | "any";
+export type LanguageLevel = "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "Native";
+
+export interface LanguageProficiency {
+  language: string;
+  level: LanguageLevel;
+}
 
 export interface CandidateProfile {
   id: string;
@@ -9,7 +17,9 @@ export interface CandidateProfile {
   salaryMin?: number;
   salaryMax?: number;
   salaryCurrency: string;
-  languages: string[];
+  languages: LanguageProficiency[];
+  preferredLocations: string[];
+  workModePreference: WorkModePreference;
   summary?: string;
   skills: string[];
   updatedAt: string;
@@ -24,7 +34,9 @@ export interface CandidateProfileInput {
   salaryMin?: number;
   salaryMax?: number;
   salaryCurrency?: string;
-  languages: string[];
+  languages: LanguageProficiency[];
+  preferredLocations: string[];
+  workModePreference?: WorkModePreference;
   summary?: string;
   skills: string[];
 }

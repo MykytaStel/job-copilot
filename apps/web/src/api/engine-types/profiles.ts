@@ -1,5 +1,6 @@
 import type {
   EngineAnalyzeProfileResponse as SharedEngineAnalyzeProfileResponse,
+  LanguageProficiency,
   EngineRoleCandidateResponse,
 } from '@job-copilot/shared/profiles';
 
@@ -48,23 +49,17 @@ export type EngineProfile = {
   salary_min?: number | null;
   salary_max?: number | null;
   salary_currency?: string | null;
-  languages?: string[] | null;
+  languages?: LanguageProficiency[] | null;
+  preferred_locations?: string[] | null;
+  work_mode_preference?: 'remote_only' | 'hybrid' | 'onsite' | 'any' | null;
   search_preferences?: {
-    target_regions: (
-      | 'ua'
-      | 'eu'
-      | 'eu_remote'
-      | 'poland'
-      | 'germany'
-      | 'uk'
-      | 'us'
-    )[];
+    target_regions: ('ua' | 'eu' | 'eu_remote' | 'poland' | 'germany' | 'uk' | 'us')[];
     work_modes: ('remote' | 'hybrid' | 'onsite')[];
     preferred_roles: string[];
     allowed_sources: string[];
     include_keywords: string[];
     exclude_keywords: string[];
-		scoring_weights?: EngineProfileScoringWeights | null;
+    scoring_weights?: EngineProfileScoringWeights | null;
   } | null;
   analysis?: EngineProfileAnalysis | null;
   created_at: string;

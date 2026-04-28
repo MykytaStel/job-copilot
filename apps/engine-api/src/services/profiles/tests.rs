@@ -34,6 +34,8 @@ async fn creates_profile_in_stub() {
             salary_max: None,
             salary_currency: "USD".to_string(),
             languages: vec![],
+            preferred_locations: vec![],
+            work_mode_preference: "any".to_string(),
             search_preferences: None,
         })
         .await
@@ -58,6 +60,8 @@ async fn unrelated_profile_updates_keep_skills_timestamp() {
             salary_max: None,
             salary_currency: "USD".to_string(),
             languages: vec![],
+            preferred_locations: vec![],
+            work_mode_preference: "any".to_string(),
             search_preferences: None,
         })
         .await

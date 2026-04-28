@@ -1,5 +1,23 @@
 use crate::domain::role::RoleId;
 use crate::domain::search::profile::SearchPreferences;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LanguageProficiency {
+    pub language: String,
+    pub level: LanguageLevel,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LanguageLevel {
+    A1,
+    A2,
+    B1,
+    B2,
+    C1,
+    C2,
+    Native,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Profile {
@@ -13,8 +31,9 @@ pub struct Profile {
     pub salary_min: Option<i32>,
     pub salary_max: Option<i32>,
     pub salary_currency: String,
-    pub languages: Vec<String>,
-    pub preferred_work_mode: Option<String>,
+    pub languages: Vec<LanguageProficiency>,
+    pub preferred_locations: Vec<String>,
+    pub work_mode_preference: String,
     pub preferred_language: Option<String>,
     pub search_preferences: Option<SearchPreferences>,
     pub created_at: String,
@@ -41,7 +60,9 @@ pub struct CreateProfile {
     pub salary_min: Option<i32>,
     pub salary_max: Option<i32>,
     pub salary_currency: String,
-    pub languages: Vec<String>,
+    pub languages: Vec<LanguageProficiency>,
+    pub preferred_locations: Vec<String>,
+    pub work_mode_preference: String,
     pub search_preferences: Option<SearchPreferences>,
 }
 
@@ -55,7 +76,10 @@ pub struct UpdateProfile {
     pub salary_min: Option<Option<i32>>,
     pub salary_max: Option<Option<i32>>,
     pub salary_currency: Option<String>,
-    pub languages: Option<Vec<String>>,
+    pub languages: Option<Vec<LanguageProficiency>>,
+    pub preferred_locations: Option<Vec<String>>,
+    pub skills: Option<Vec<String>>,
+    pub work_mode_preference: Option<String>,
     pub preferred_language: Option<Option<String>>,
     pub search_preferences: Option<Option<SearchPreferences>>,
 }

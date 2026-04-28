@@ -10,7 +10,7 @@ use crate::api::dto::search_profile::{
 };
 use crate::api::error::{ApiError, ApiJson};
 use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
-use crate::domain::profile::model::ProfileAnalysis;
+use crate::domain::profile::model::{Profile, ProfileAnalysis, UpdateProfile};
 use crate::state::AppState;
 
 pub async fn create_profile(
@@ -54,9 +54,22 @@ pub async fn update_profile(
     ApiJson(payload): ApiJson<UpdateProfileRequest>,
 ) -> Result<axum::Json<ProfileResponse>, ApiError> {
     check_profile_ownership(auth.as_deref(), &profile_id)?;
+    let update = payload.validate()?;
+
+    let Some(current_profile) = state
+        .profile_records
+        .get_by_id(&profile_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
+    else {
+        return Err(profile_not_found(&profile_id));
+    };
+
+    validate_effective_salary_bounds(&current_profile, &update)?;
+
     let Some(profile) = state
         .profile_records
-        .update(&profile_id, payload.validate()?)
+        .update(&profile_id, update)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
     else {
@@ -141,6 +154,31 @@ fn profile_not_found(profile_id: &str) -> ApiError {
     )
 }
 
+fn validate_effective_salary_bounds(
+    current_profile: &Profile,
+    update: &UpdateProfile,
+) -> Result<(), ApiError> {
+    let salary_min = update.salary_min.unwrap_or(current_profile.salary_min);
+    let salary_max = update.salary_max.unwrap_or(current_profile.salary_max);
+
+    if let (Some(salary_min), Some(salary_max)) = (salary_min, salary_max)
+        && salary_min > salary_max
+    {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_profile_input",
+            "Field 'salary_min' must be less than or equal to 'salary_max'",
+            serde_json::json!({
+                "field": "salary_min",
+                "related_field": "salary_max",
+                "salary_min": salary_min,
+                "salary_max": salary_max,
+            }),
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use axum::Extension;
@@ -185,6 +223,12 @@ mod tests {
                 salary_max: None,
                 salary_currency: None,
                 languages: None,
+                preferred_locations: Some(vec![
+                    "Kyiv".to_string(),
+                    "Remote".to_string(),
+                    "kyiv".to_string(),
+                ]),
+                work_mode_preference: None,
                 search_preferences: None,
             }),
         )
@@ -192,6 +236,7 @@ mod tests {
         .expect("handler should create profile");
 
         assert_eq!(result.0, StatusCode::CREATED);
+        assert_eq!(result.1.0.preferred_locations, vec!["Kyiv", "Remote"]);
     }
 
     #[tokio::test]
@@ -231,6 +276,8 @@ mod tests {
                 salary_max: None,
                 salary_currency: None,
                 languages: None,
+                preferred_locations: None,
+                work_mode_preference: None,
                 search_preferences: None,
             }),
         )
@@ -271,6 +318,8 @@ mod tests {
                 salary_max: None,
                 salary_currency: None,
                 languages: None,
+                preferred_locations: None,
+                work_mode_preference: None,
                 search_preferences: None,
             }),
         )
@@ -327,6 +376,8 @@ mod tests {
                 salary_max: None,
                 salary_currency: None,
                 languages: None,
+                preferred_locations: None,
+                work_mode_preference: None,
                 search_preferences: None,
             }),
         )
@@ -394,6 +445,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rejects_patch_that_breaks_existing_salary_bounds() {
+        let state = AppState::for_services(
+            ProfilesService::for_tests(ProfilesServiceStub::default()),
+            JobsService::for_tests(JobsServiceStub::default()),
+            ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+            ResumesService::for_tests(ResumesServiceStub::default()),
+        );
+
+        let _ = create_profile(
+            State(state.clone()),
+            ApiJson(CreateProfileRequest {
+                name: "Jane Doe".to_string(),
+                email: "jane@example.com".to_string(),
+                location: Some("Kyiv".to_string()),
+                raw_text: "Senior frontend engineer".to_string(),
+                years_of_experience: None,
+                salary_min: Some(3000),
+                salary_max: Some(4500),
+                salary_currency: Some("USD".to_string()),
+                languages: None,
+                preferred_locations: None,
+                work_mode_preference: None,
+                search_preferences: None,
+            }),
+        )
+        .await
+        .expect("setup should create profile");
+
+        let response = update_profile(
+            State(state),
+            None,
+            Path("profile_test_001".to_string()),
+            ApiJson(crate::api::dto::profile::UpdateProfileRequest {
+                salary_min: Some(Some(5000)),
+                ..Default::default()
+            }),
+        )
+        .await
+        .expect_err("handler should reject an invalid effective salary range")
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
     async fn persists_search_preferences_via_profile_patch() {
         let state = AppState::for_services(
             ProfilesService::for_tests(ProfilesServiceStub::default()),
@@ -414,6 +510,8 @@ mod tests {
                 salary_max: None,
                 salary_currency: None,
                 languages: None,
+                preferred_locations: None,
+                work_mode_preference: None,
                 search_preferences: None,
             }),
         )
@@ -425,6 +523,7 @@ mod tests {
             None,
             Path("profile_test_001".to_string()),
             ApiJson(crate::api::dto::profile::UpdateProfileRequest {
+                work_mode_preference: Some("hybrid".to_string()),
                 search_preferences: Some(Some(
                     serde_json::from_value(json!({
                         "target_regions": ["ua", "eu_remote"],
@@ -448,6 +547,8 @@ mod tests {
             .expect("response body should be readable");
         let payload: Value =
             serde_json::from_slice(&body).expect("response body should be valid json");
+
+        assert_eq!(payload["work_mode_preference"], json!("hybrid"));
 
         assert_eq!(
             payload["search_preferences"],

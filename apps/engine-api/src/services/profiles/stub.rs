@@ -36,7 +36,8 @@ impl ProfilesServiceStub {
             salary_max: input.salary_max,
             salary_currency: input.salary_currency,
             languages: input.languages,
-            preferred_work_mode: None,
+            preferred_locations: input.preferred_locations,
+            work_mode_preference: input.work_mode_preference,
             preferred_language: None,
             search_preferences: input.search_preferences,
             created_at: "2026-04-11T00:00:00+00:00".to_string(),
@@ -110,6 +111,18 @@ impl ProfilesServiceStub {
         }
         if let Some(languages) = input.languages {
             profile.languages = languages;
+        }
+        if let Some(preferred_locations) = input.preferred_locations {
+            profile.preferred_locations = preferred_locations;
+        }
+        if let Some(work_mode_preference) = input.work_mode_preference {
+            profile.work_mode_preference = work_mode_preference;
+        }
+        if let Some(skills) = input.skills {
+            if let Some(analysis) = profile.analysis.as_mut() {
+                analysis.skills = skills;
+                profile.skills_updated_at = Some("2026-04-11T00:00:02+00:00".to_string());
+            }
         }
         if let Some(search_preferences) = input.search_preferences {
             profile.search_preferences = search_preferences;

@@ -3,47 +3,68 @@ import { describe, expect, it } from 'vitest';
 import { buildProfileCompletionState } from '../src/features/profile/profileCompletion';
 
 describe('buildProfileCompletionState', () => {
-  it('counts completed checkpoints and reports missing labels', () => {
+  it('counts completed weighted checkpoints and reports missing labels', () => {
     const state = buildProfileCompletionState({
       name: 'Jane Doe',
       email: 'jane@example.com',
-      location: '',
       rawText: 'Senior frontend engineer',
-      yearsOfExperience: '',
+      skills: [],
       salaryMin: '4000',
       salaryMax: '',
       salaryCurrency: 'USD',
       languages: [],
-      analysisReady: false,
+      preferredLocations: [],
+      targetRegions: [],
+      workModes: [],
     });
 
-    expect(state.completed).toBe(3);
-    expect(state.total).toBe(8);
-    expect(state.percent).toBe(38);
+    expect(state.completedWeight).toBe(50);
+    expect(state.totalWeight).toBe(100);
+    expect(state.percent).toBe(50);
     expect(state.missingLabels).toEqual([
-      'Location',
-      'Experience',
-      'Compensation',
-      'Languages',
-      'Analysis',
+      'At least 3 skills',
+      'Work mode preference',
+      'Location preference',
+      'Language preference',
     ]);
   });
 
-  it('marks compensation complete only when range and currency are present', () => {
+  it('marks profile complete when all weighted checkpoints are complete', () => {
     const state = buildProfileCompletionState({
       name: 'Jane Doe',
       email: 'jane@example.com',
-      location: 'Kyiv',
       rawText: 'Senior frontend engineer',
-      yearsOfExperience: '7',
+      skills: ['react', 'typescript', 'node.js'],
       salaryMin: '4000',
       salaryMax: '5500',
       salaryCurrency: 'USD',
-      languages: ['english'],
-      analysisReady: true,
+      languages: [{ language: 'english', proficiency: 'b2' }],
+      preferredLocations: ['Kyiv'],
+      targetRegions: ['ua'],
+      workModes: ['remote'],
     });
 
     expect(state.percent).toBe(100);
+    expect(state.completedWeight).toBe(100);
+    expect(state.totalWeight).toBe(100);
     expect(state.missingLabels).toEqual([]);
+  });
+
+  it('marks salary incomplete when amount is present but currency is missing', () => {
+    const state = buildProfileCompletionState({
+      name: 'Jane Doe',
+      email: 'jane@example.com',
+      rawText: 'Senior frontend engineer',
+      skills: ['react', 'typescript', 'node.js'],
+      salaryMin: '4000',
+      salaryMax: '',
+      salaryCurrency: '',
+      languages: [{ language: 'english', proficiency: 'b2' }],
+      preferredLocations: ['Kyiv'],
+      targetRegions: [],
+      workModes: ['remote'],
+    });
+
+    expect(state.missingLabels).toContain('Salary expectation');
   });
 });

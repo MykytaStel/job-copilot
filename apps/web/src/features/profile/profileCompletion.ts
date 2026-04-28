@@ -1,70 +1,122 @@
+import type { LanguageProficiency } from '@job-copilot/shared/profiles';
+
 export type ProfileCompletionInput = {
   name: string;
   email: string;
-  location: string;
   rawText: string;
-  yearsOfExperience: string;
+  skills: string[];
   salaryMin: string;
   salaryMax: string;
   salaryCurrency: string;
-  languages: string[];
-  analysisReady: boolean;
+  languages: LanguageProficiency[];
+  preferredLocations: string[];
+  targetRegions: string[];
+  workModes: string[];
 };
 
 export type ProfileCompletionCheckpoint = {
   id:
     | 'name'
     | 'email'
-    | 'location'
-    | 'raw_text'
-    | 'experience'
-    | 'compensation'
-    | 'languages'
-    | 'analysis';
+    | 'skills'
+    | 'cv'
+    | 'salary'
+    | 'work_mode'
+    | 'location_preference'
+    | 'language_preference';
   label: string;
   complete: boolean;
+  weight: number;
+  targetId: string;
 };
 
 export type ProfileCompletionState = {
   percent: number;
-  completed: number;
-  total: number;
+  completedWeight: number;
+  totalWeight: number;
   checkpoints: ProfileCompletionCheckpoint[];
+  missing: ProfileCompletionCheckpoint[];
   missingLabels: string[];
 };
 
 export function buildProfileCompletionState(input: ProfileCompletionInput): ProfileCompletionState {
-  const compensationComplete =
-    input.salaryMin.trim().length > 0 &&
-    input.salaryMax.trim().length > 0 &&
+  const hasSalaryExpectation =
+    (input.salaryMin.trim().length > 0 || input.salaryMax.trim().length > 0) &&
     input.salaryCurrency.trim().length > 0;
 
   const checkpoints: ProfileCompletionCheckpoint[] = [
-    { id: 'name', label: 'Name', complete: input.name.trim().length > 0 },
-    { id: 'email', label: 'Email', complete: input.email.trim().length > 0 },
-    { id: 'location', label: 'Location', complete: input.location.trim().length > 0 },
-    { id: 'raw_text', label: 'Resume text', complete: input.rawText.trim().length > 0 },
     {
-      id: 'experience',
-      label: 'Experience',
-      complete: input.yearsOfExperience.trim().length > 0,
+      id: 'name',
+      label: 'Name',
+      complete: input.name.trim().length > 0,
+      weight: 10,
+      targetId: 'profile-field-name',
     },
-    { id: 'compensation', label: 'Compensation', complete: compensationComplete },
-    { id: 'languages', label: 'Languages', complete: input.languages.length > 0 },
-    { id: 'analysis', label: 'Analysis', complete: input.analysisReady },
+    {
+      id: 'email',
+      label: 'Email',
+      complete: input.email.trim().length > 0,
+      weight: 10,
+      targetId: 'profile-field-email',
+    },
+    {
+      id: 'skills',
+      label: 'At least 3 skills',
+      complete: input.skills.length >= 3,
+      weight: 20,
+      targetId: 'profile-field-cv',
+    },
+    {
+      id: 'cv',
+      label: 'CV uploaded',
+      complete: input.rawText.trim().length > 0,
+      weight: 20,
+      targetId: 'profile-field-cv',
+    },
+    {
+      id: 'salary',
+      label: 'Salary expectation',
+      complete: hasSalaryExpectation,
+      weight: 10,
+      targetId: 'profile-field-salary',
+    },
+    {
+      id: 'work_mode',
+      label: 'Work mode preference',
+      complete: input.workModes.length > 0,
+      weight: 10,
+      targetId: 'profile-field-work-mode',
+    },
+    {
+      id: 'location_preference',
+      label: 'Location preference',
+      complete: input.targetRegions.length > 0 || input.preferredLocations.length > 0,
+      weight: 10,
+      targetId: 'profile-field-preferred-locations',
+    },
+    {
+      id: 'language_preference',
+      label: 'Language preference',
+      complete: input.languages.length > 0,
+      weight: 10,
+      targetId: 'profile-field-languages',
+    },
   ];
 
-  const completed = checkpoints.filter((checkpoint) => checkpoint.complete).length;
-  const total = checkpoints.length;
-  const percent = Math.round((completed / total) * 100);
+  const completedWeight = checkpoints.reduce(
+    (sum, checkpoint) => sum + (checkpoint.complete ? checkpoint.weight : 0),
+    0,
+  );
+  const totalWeight = checkpoints.reduce((sum, checkpoint) => sum + checkpoint.weight, 0);
+  const percent = Math.round((completedWeight / totalWeight) * 100);
+  const missing = checkpoints.filter((checkpoint) => !checkpoint.complete);
 
   return {
     percent,
-    completed,
-    total,
+    completedWeight,
+    totalWeight,
     checkpoints,
-    missingLabels: checkpoints
-      .filter((checkpoint) => !checkpoint.complete)
-      .map((checkpoint) => checkpoint.label),
+    missing,
+    missingLabels: missing.map((checkpoint) => checkpoint.label),
   };
 }

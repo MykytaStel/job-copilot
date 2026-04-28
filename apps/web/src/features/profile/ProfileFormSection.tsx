@@ -1,12 +1,20 @@
+import type {
+  LanguageLevel,
+  LanguageProficiency,
+  WorkModePreference,
+} from '@job-copilot/shared/profiles';
 import type { ChangeEventHandler, RefObject } from 'react';
-import { Upload } from 'lucide-react';
+import { useState } from 'react';
+import { Upload, X } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
-import { OptionCardGroup } from '../../components/ui/OptionCardGroup';
 import { SurfaceHero, SurfaceSection } from '../../components/ui/Surface';
+import { cn } from '../../lib/cn';
 import {
-  PROFILE_LANGUAGE_OPTIONS,
+  PROFILE_LANGUAGE_LEVEL_OPTIONS,
+  PROFILE_LOCATION_QUICK_ADD_OPTIONS,
   PROFILE_SALARY_CURRENCY_OPTIONS,
+  PROFILE_WORK_MODE_OPTIONS,
 } from './profile.constants';
 
 export function ProfileFormSection({
@@ -19,6 +27,8 @@ export function ProfileFormSection({
   salaryMax,
   salaryCurrency,
   languages,
+  preferredLocations,
+  workModePreference,
   profileExists,
   fileInputRef,
   isSaving,
@@ -35,7 +45,12 @@ export function ProfileFormSection({
   setSalaryMin,
   setSalaryMax,
   setSalaryCurrency,
-  onToggleLanguage,
+  setWorkModePreference,
+  onAddPreferredLocation,
+  onRemovePreferredLocation,
+  onAddLanguage,
+  onRemoveLanguage,
+  onUpdateLanguageLevel,
 }: {
   name: string;
   email: string;
@@ -45,7 +60,9 @@ export function ProfileFormSection({
   salaryMin: string;
   salaryMax: string;
   salaryCurrency: string;
-  languages: string[];
+  languages: LanguageProficiency[];
+  preferredLocations: string[];
+  workModePreference: WorkModePreference;
   profileExists: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
   isSaving: boolean;
@@ -62,8 +79,35 @@ export function ProfileFormSection({
   setSalaryMin: (value: string) => void;
   setSalaryMax: (value: string) => void;
   setSalaryCurrency: (value: string) => void;
-  onToggleLanguage: (value: string) => void;
+  setWorkModePreference: (value: WorkModePreference) => void;
+  onAddPreferredLocation: (location: string) => void;
+  onRemovePreferredLocation: (location: string) => void;
+  onAddLanguage: (language: string, level: LanguageLevel) => void;
+  onRemoveLanguage: (language: string) => void;
+  onUpdateLanguageLevel: (language: string, level: LanguageLevel) => void;
 }) {
+  const [languageInput, setLanguageInput] = useState('');
+  const [languageLevel, setLanguageLevel] = useState<LanguageLevel>('B2');
+  const [preferredLocationInput, setPreferredLocationInput] = useState('');
+
+  function addLanguage() {
+    const trimmed = languageInput.trim();
+    if (!trimmed) return;
+    onAddLanguage(trimmed, languageLevel);
+    setLanguageInput('');
+  }
+
+  function addPreferredLocation(value = preferredLocationInput) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    onAddPreferredLocation(trimmed);
+    setPreferredLocationInput('');
+  }
+
+  function hasPreferredLocation(value: string) {
+    return preferredLocations.some((location) => location.toLowerCase() === value.toLowerCase());
+  }
+
   return (
     <>
       <SurfaceHero className="flex flex-col gap-5 p-7 md:flex-row md:items-end md:justify-between">
@@ -99,7 +143,7 @@ export function ProfileFormSection({
           onSave();
         }}
       >
-        <label>
+        <label id="profile-field-name">
           Name
           <input
             value={name}
@@ -108,7 +152,7 @@ export function ProfileFormSection({
             required
           />
         </label>
-        <label>
+        <label id="profile-field-email">
           Email
           <input
             type="email"
@@ -137,7 +181,7 @@ export function ProfileFormSection({
             placeholder="5"
           />
         </label>
-        <div className="fieldGroup">
+        <div id="profile-field-salary" className="fieldGroup">
           <span className="fieldLabel">Expected salary</span>
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px]">
             <label>
@@ -175,18 +219,177 @@ export function ProfileFormSection({
             </label>
           </div>
         </div>
-        <div className="fieldGroup">
+        <div id="profile-field-languages" className="fieldGroup">
           <span className="fieldLabel">Languages</span>
-          <OptionCardGroup
-            options={PROFILE_LANGUAGE_OPTIONS.map((option) => ({
-              id: option.id,
-              label: option.label,
-            }))}
-            value={languages}
-            onToggle={onToggleLanguage}
-          />
+          <div className="flex flex-col gap-3">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_140px_auto]">
+              <label className="m-0">
+                Language
+                <input
+                  value={languageInput}
+                  onChange={(event) => setLanguageInput(event.target.value)}
+                  placeholder="English"
+                />
+              </label>
+              <label className="m-0">
+                Level
+                <select
+                  value={languageLevel}
+                  onChange={(event) => setLanguageLevel(event.target.value as LanguageLevel)}
+                >
+                  {PROFILE_LANGUAGE_LEVEL_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                className="self-end"
+                onClick={addLanguage}
+                disabled={!languageInput.trim()}
+              >
+                Add
+              </Button>
+            </div>
+
+            {languages.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {languages.map((entry) => (
+                  <span
+                    key={entry.language}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-full border border-border bg-surface-muted px-3 py-1 text-xs font-medium text-card-foreground"
+                  >
+                    <span>{entry.language}</span>
+                    <select
+                      value={entry.level}
+                      onChange={(event) =>
+                        onUpdateLanguageLevel(entry.language, event.target.value as LanguageLevel)
+                      }
+                      className="h-7 rounded-full border-border bg-card px-2 py-0 text-xs"
+                      aria-label={`${entry.language} level`}
+                    >
+                      {PROFILE_LANGUAGE_LEVEL_OPTIONS.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="icon"
+                      size="icon"
+                      className="h-6 w-6 rounded-full"
+                      onClick={() => onRemoveLanguage(entry.language)}
+                      aria-label={`Remove ${entry.language}`}
+                      title={`Remove ${entry.language}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <label>
+        <div id="profile-field-preferred-locations" className="fieldGroup">
+          <span className="fieldLabel">Preferred locations</span>
+          <div className="flex flex-col gap-3">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+              <label className="m-0">
+                City / country
+                <input
+                  value={preferredLocationInput}
+                  onChange={(event) => setPreferredLocationInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      addPreferredLocation();
+                    }
+                  }}
+                  placeholder="Kyiv, Remote, Lviv"
+                />
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                className="self-end"
+                onClick={() => addPreferredLocation()}
+                disabled={!preferredLocationInput.trim()}
+              >
+                Add
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {PROFILE_LOCATION_QUICK_ADD_OPTIONS.map((option) => (
+                <Button
+                  key={option}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  active={hasPreferredLocation(option)}
+                  onClick={() => addPreferredLocation(option)}
+                  disabled={hasPreferredLocation(option)}
+                >
+                  {option}
+                </Button>
+              ))}
+            </div>
+
+            {preferredLocations.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {preferredLocations.map((location) => (
+                  <span
+                    key={location}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-full border border-border bg-surface-muted px-3 py-1 text-xs font-medium text-card-foreground"
+                  >
+                    <span>{location}</span>
+                    <Button
+                      type="button"
+                      variant="icon"
+                      size="icon"
+                      className="h-6 w-6 rounded-full"
+                      onClick={() => onRemovePreferredLocation(location)}
+                      aria-label={`Remove ${location}`}
+                      title={`Remove ${location}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <fieldset id="profile-field-work-mode-preference" className="fieldGroup">
+          <legend className="fieldLabel">Work mode preference</legend>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {PROFILE_WORK_MODE_OPTIONS.map((option) => (
+              <label
+                key={option.id}
+                className={cn(
+                  'flex cursor-pointer items-center gap-3 rounded-2xl border border-border bg-card/70 px-4 py-3.5 text-sm transition-colors',
+                  workModePreference === option.id &&
+                    'border-primary/35 bg-primary/8 text-card-foreground shadow-[inset_0_0_0_1px_rgba(149,167,255,0.1)]',
+                )}
+              >
+                <input
+                  type="radio"
+                  name="work_mode_preference"
+                  value={option.id}
+                  checked={workModePreference === option.id}
+                  onChange={() => setWorkModePreference(option.id)}
+                  className="h-4 w-4 accent-[var(--color-primary)]"
+                />
+                <span className="leading-6">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label id="profile-field-cv">
           <span className="flex items-center justify-between gap-3">
             CV / текст профілю
             <Button type="button" variant="ghost" size="sm" onClick={onOpenFilePicker}>

@@ -32,6 +32,8 @@ pub async fn register(
             salary_max: None,
             salary_currency: "USD".to_string(),
             languages: vec![],
+            preferred_locations: vec![],
+            work_mode_preference: "any".to_string(),
             search_preferences: None,
         })
         .await

@@ -92,7 +92,7 @@ export function SearchProfileBuilderSection({
       </div>
 
       <div className="flex flex-col gap-5">
-        <div className="fieldGroup">
+        <div id="profile-field-location-preference" className="fieldGroup">
           <span className="fieldLabel">Target regions</span>
           <OptionCardGroup
             options={TARGET_REGION_OPTIONS}
@@ -101,7 +101,7 @@ export function SearchProfileBuilderSection({
           />
         </div>
 
-        <div className="fieldGroup">
+        <div id="profile-field-work-mode" className="fieldGroup">
           <span className="fieldLabel">Work modes</span>
           <OptionCardGroup
             options={WORK_MODE_OPTIONS}
