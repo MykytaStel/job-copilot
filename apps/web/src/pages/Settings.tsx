@@ -4,6 +4,7 @@ import {
   Ban,
   Bell,
   Building2,
+  Download,
   Settings as SettingsIcon,
   ShieldCheck,
   SlidersHorizontal,
@@ -52,6 +53,7 @@ import {
 import { queryKeys } from '../queryKeys';
 import { buildProfileCompletionState } from '../features/profile/profileCompletion';
 import { clearAllHiddenJobs, getFeedback, removeCompanyBlacklistBySlug } from '../api/feedback';
+import { exportUserData } from '../api/export';
 import { invalidateFeedbackViewQueries } from '../lib/queryInvalidation';
 
 const NOTIFICATION_PREVIEW_LIMIT = 20;
@@ -225,6 +227,23 @@ export default function Settings() {
       if (!profileId) return;
 
       void invalidateFeedbackViewQueries(queryClient, profileId);
+    },
+  });
+
+  const exportDataMutation = useMutation({
+    mutationFn: exportUserData,
+    onSuccess: (data) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `job-copilot-export-${formatDateForFilename(new Date())}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
     },
   });
 
@@ -739,6 +758,34 @@ export default function Settings() {
                 </div>
 
                 <div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Export my data</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Download profile, feedback, company lists, and applications as JSON.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => exportDataMutation.mutate()}
+                      disabled={exportDataMutation.isPending}
+                      className="shrink-0"
+                    >
+                      <Download className="h-4 w-4" />
+                      {exportDataMutation.isPending ? 'Exporting data' : 'Export my data'}
+                    </Button>
+                  </div>
+
+                  {exportDataMutation.isError && (
+                    <p className="mt-3 text-sm text-danger">
+                      Could not export your data. Please sign in and try again.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
                   <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-foreground">Blocked companies</p>
@@ -838,4 +885,12 @@ function SettingRow({ label, value }: { label: string; value: string }) {
       <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">{value}</p>
     </SurfaceMetric>
   );
+}
+
+function formatDateForFilename(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
 }
