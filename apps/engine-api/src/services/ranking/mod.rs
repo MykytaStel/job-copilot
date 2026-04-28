@@ -599,6 +599,9 @@ mod tests {
             created_at: "2026-01-01".to_string(),
             updated_at: "2026-04-01".to_string(),
             skills_updated_at: Some("2026-01-01".to_string()),
+            portfolio_url: None,
+            github_url: None,
+            linkedin_url: None,
         };
 
         let score = service.compute(&candidate, &job, Some(&profile));
@@ -793,6 +796,9 @@ mod tests {
             created_at: "2026-01-01".to_string(),
             updated_at: "2026-01-01".to_string(),
             skills_updated_at: None,
+            portfolio_url: None,
+            github_url: None,
+            linkedin_url: None,
         };
 
         let score_remote = service.compute(&candidate, &remote_job, Some(&profile_remote));
@@ -923,6 +929,9 @@ mod tests {
             created_at: "2026-01-01".to_string(),
             updated_at: "2026-01-01".to_string(),
             skills_updated_at: None,
+            portfolio_url: None,
+            github_url: None,
+            linkedin_url: None,
         };
 
         let score_ua_match = service.compute(&candidate, &ukrainian_job, Some(&profile_ua));

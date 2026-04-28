@@ -37,6 +37,9 @@ async fn creates_profile_in_stub() {
             preferred_locations: vec![],
             work_mode_preference: "any".to_string(),
             search_preferences: None,
+            portfolio_url: None,
+            github_url: None,
+            linkedin_url: None,
         })
         .await
         .expect("stub should create a profile");
@@ -63,6 +66,9 @@ async fn unrelated_profile_updates_keep_skills_timestamp() {
             preferred_locations: vec![],
             work_mode_preference: "any".to_string(),
             search_preferences: None,
+            portfolio_url: None,
+            github_url: None,
+            linkedin_url: None,
         })
         .await
         .expect("stub should create a profile");

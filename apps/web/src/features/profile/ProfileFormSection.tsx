@@ -5,7 +5,7 @@ import type {
 } from '@job-copilot/shared/profiles';
 import type { ChangeEventHandler, RefObject } from 'react';
 import { useState } from 'react';
-import { Upload, X } from 'lucide-react';
+import { Code2, ContactRound, Link, Upload, X } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { SurfaceHero, SurfaceSection } from '../../components/ui/Surface';
@@ -51,6 +51,12 @@ export function ProfileFormSection({
   onAddLanguage,
   onRemoveLanguage,
   onUpdateLanguageLevel,
+	portfolioUrl,
+	githubUrl,
+	linkedinUrl,
+	setPortfolioUrl,
+	setGithubUrl,
+	setLinkedinUrl,
 }: {
   name: string;
   email: string;
@@ -85,6 +91,12 @@ export function ProfileFormSection({
   onAddLanguage: (language: string, level: LanguageLevel) => void;
   onRemoveLanguage: (language: string) => void;
   onUpdateLanguageLevel: (language: string, level: LanguageLevel) => void;
+	portfolioUrl: string;
+	githubUrl: string;
+	linkedinUrl: string;
+	setPortfolioUrl: (value: string) => void;
+	setGithubUrl: (value: string) => void;
+	setLinkedinUrl: (value: string) => void;
 }) {
   const [languageInput, setLanguageInput] = useState('');
   const [languageLevel, setLanguageLevel] = useState<LanguageLevel>('B2');
@@ -181,6 +193,83 @@ export function ProfileFormSection({
             placeholder="5"
           />
         </label>
+				<div className="grid gap-4 md:grid-cols-3">
+				<label className="space-y-2">
+					<span className="flex items-center gap-2 text-sm font-medium text-foreground">
+						<Link className="h-4 w-4 text-muted-foreground" />
+						Portfolio URL
+					</span>
+					<input
+						type="url"
+						value={portfolioUrl}
+						onChange={(event) => setPortfolioUrl(event.target.value)}
+						placeholder="https://your-site.com"
+						className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+					/>
+				</label>
+
+				<label className="space-y-2">
+					<span className="flex items-center gap-2 text-sm font-medium text-foreground">
+						<Code2 className="h-4 w-4 text-muted-foreground" />
+						GitHub URL
+					</span>
+					<input
+						type="url"
+						value={githubUrl}
+						onChange={(event) => setGithubUrl(event.target.value)}
+						placeholder="https://github.com/username"
+						className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+					/>
+				</label>
+
+				<label className="space-y-2">
+					<span className="flex items-center gap-2 text-sm font-medium text-foreground">
+						<ContactRound className="h-4 w-4 text-muted-foreground" />
+						LinkedIn URL
+					</span>
+					<input
+						type="url"
+						value={linkedinUrl}
+						onChange={(event) => setLinkedinUrl(event.target.value)}
+						placeholder="https://linkedin.com/in/username"
+						className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+					/>
+				</label>
+				{(portfolioUrl || githubUrl || linkedinUrl) && (
+				<div className="flex flex-wrap gap-2 text-sm">
+					{portfolioUrl && (
+						<a
+							href={portfolioUrl}
+							target="_blank"
+							rel="noreferrer"
+							className="rounded-full border border-border px-3 py-1 text-muted-foreground hover:text-foreground"
+						>
+							Portfolio
+						</a>
+					)}
+					{githubUrl && (
+						<a
+							href={githubUrl}
+							target="_blank"
+							rel="noreferrer"
+							className="rounded-full border border-border px-3 py-1 text-muted-foreground hover:text-foreground"
+						>
+							GitHub
+						</a>
+					)}
+					{linkedinUrl && (
+						<a
+							href={linkedinUrl}
+							target="_blank"
+							rel="noreferrer"
+							className="rounded-full border border-border px-3 py-1 text-muted-foreground hover:text-foreground"
+						>
+							LinkedIn
+						</a>
+					)}
+				</div>
+			)}
+			</div>
         <div id="profile-field-salary" className="fieldGroup">
           <span className="fieldLabel">Expected salary</span>
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_140px]">

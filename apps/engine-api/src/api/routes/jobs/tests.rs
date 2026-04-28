@@ -107,6 +107,9 @@ fn sample_profile() -> Profile {
         created_at: "2026-04-14T08:00:00Z".to_string(),
         updated_at: "2026-04-14T08:00:00Z".to_string(),
         skills_updated_at: Some("2026-04-14T08:00:00Z".to_string()),
+        portfolio_url: None,
+        github_url: None,
+        linkedin_url: None,
     }
 }
 

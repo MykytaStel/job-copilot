@@ -23,6 +23,9 @@ pub struct CreateProfileRequest {
     pub preferred_locations: Option<Vec<String>>,
     pub work_mode_preference: Option<String>,
     pub search_preferences: Option<SearchPreferencesRequest>,
+    pub portfolio_url: Option<String>,
+    pub github_url: Option<String>,
+    pub linkedin_url: Option<String>,
 }
 
 #[derive(Default, Deserialize)]
@@ -41,6 +44,9 @@ pub struct UpdateProfileRequest {
     pub work_mode_preference: Option<String>,
     pub preferred_language: Option<Option<String>>,
     pub search_preferences: Option<Option<SearchPreferencesRequest>>,
+    pub portfolio_url: Option<Option<String>>,
+    pub github_url: Option<Option<String>>,
+    pub linkedin_url: Option<Option<String>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -91,6 +97,9 @@ pub struct ProfileResponse {
     pub created_at: String,
     pub updated_at: String,
     pub skills_updated_at: Option<String>,
+    pub portfolio_url: Option<String>,
+    pub github_url: Option<String>,
+    pub linkedin_url: Option<String>,
 }
 
 impl CreateProfileRequest {
@@ -103,7 +112,9 @@ impl CreateProfileRequest {
         let languages = validate_languages(self.languages)?;
         let preferred_locations = validate_preferred_locations(self.preferred_locations)?;
         let work_mode_preference = validate_work_mode_preference(self.work_mode_preference)?;
-
+        let portfolio_url = validate_optional_url("portfolio_url", self.portfolio_url)?;
+        let github_url = validate_optional_url("github_url", self.github_url)?;
+        let linkedin_url = validate_optional_url("linkedin_url", self.linkedin_url)?;
         validate_salary_bounds(salary_min, salary_max, "salary_min", "salary_max")?;
 
         Ok(CreateProfile {
@@ -122,6 +133,9 @@ impl CreateProfileRequest {
                 .search_preferences
                 .map(|value| value.validate())
                 .transpose()?,
+            portfolio_url,
+            github_url,
+            linkedin_url,
         })
     }
 }
@@ -142,6 +156,9 @@ impl UpdateProfileRequest {
             && self.work_mode_preference.is_none()
             && self.preferred_language.is_none()
             && self.search_preferences.is_none()
+            && self.portfolio_url.is_none()
+            && self.github_url.is_none()
+            && self.linkedin_url.is_none()
         {
             return Err(ApiError::bad_request_with_details(
                 "empty_profile_patch",
@@ -161,7 +178,10 @@ impl UpdateProfileRequest {
                         "skills",
                         "work_mode_preference",
                         "preferred_language",
-                        "search_preferences"
+                        "search_preferences",
+                        "portfolio_url",
+                        "github_url",
+                        "linkedin_url",
                     ]
                 }),
             ));
@@ -200,6 +220,20 @@ impl UpdateProfileRequest {
             .preferred_language
             .map(|value| validate_preferred_language(value))
             .transpose()?;
+        let portfolio_url = self
+            .portfolio_url
+            .map(|value| validate_optional_url("portfolio_url", value))
+            .transpose()?;
+
+        let github_url = self
+            .github_url
+            .map(|value| validate_optional_url("github_url", value))
+            .transpose()?;
+
+        let linkedin_url = self
+            .linkedin_url
+            .map(|value| validate_optional_url("linkedin_url", value))
+            .transpose()?;
 
         validate_salary_bounds(
             salary_min.flatten(),
@@ -235,6 +269,9 @@ impl UpdateProfileRequest {
                 .search_preferences
                 .map(|value| value.map(|prefs| prefs.validate()).transpose())
                 .transpose()?,
+            portfolio_url,
+            github_url,
+            linkedin_url,
         })
     }
 }
@@ -312,6 +349,9 @@ impl From<Profile> for ProfileResponse {
             created_at: profile.created_at,
             updated_at: profile.updated_at,
             skills_updated_at: profile.skills_updated_at,
+            portfolio_url: profile.portfolio_url,
+            github_url: profile.github_url,
+            linkedin_url: profile.linkedin_url,
         }
     }
 }
@@ -354,6 +394,30 @@ fn validate_optional_string(
     value
         .map(|value| validate_required_string(field, value, max_len))
         .transpose()
+}
+
+fn validate_optional_url(
+    field: &'static str,
+    value: Option<String>,
+) -> Result<Option<String>, ApiError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+
+    let value = validate_required_string(field, value, 2048)?;
+
+    if !value.starts_with("http://") && !value.starts_with("https://") {
+        return Err(ApiError::unprocessable_entity_with_details(
+            "invalid_profile_input",
+            format!("Field '{field}' must start with http:// or https://"),
+            json!({
+                "field": field,
+                "allowed_prefixes": ["http://", "https://"],
+            }),
+        ));
+    }
+
+    Ok(Some(value))
 }
 
 fn validate_skills(values: Vec<String>) -> Result<Vec<String>, ApiError> {
@@ -628,6 +692,9 @@ mod tests {
             preferred_locations: None,
             work_mode_preference: None,
             search_preferences: None,
+            portfolio_url: None,
+            github_url: None,
+            linkedin_url: None,
         }
         .validate()
         .expect_err("validation should fail");
@@ -716,6 +783,33 @@ mod tests {
         assert_eq!(
             validated.preferred_locations,
             Some(vec!["Kyiv".to_string(), "Remote".to_string()])
+        );
+    }
+    #[test]
+    fn rejects_invalid_profile_urls() {
+        let error = UpdateProfileRequest {
+            github_url: Some(Some("github.com/user".to_string())),
+            ..Default::default()
+        }
+        .validate()
+        .expect_err("validation should fail");
+
+        assert_eq!(error.into_response().status(), 422);
+    }
+    #[test]
+    fn accepts_valid_profile_urls() {
+        let validated = UpdateProfileRequest {
+            portfolio_url: Some(Some("https://example.com".to_string())),
+            github_url: Some(Some("https://github.com/example".to_string())),
+            linkedin_url: Some(Some("https://linkedin.com/in/example".to_string())),
+            ..Default::default()
+        }
+        .validate()
+        .expect("validation should succeed");
+
+        assert_eq!(
+            validated.portfolio_url,
+            Some(Some("https://example.com".to_string()))
         );
     }
 }

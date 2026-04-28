@@ -46,6 +46,9 @@ fn sample_profile_with_analysis() -> Profile {
         created_at: "2026-04-14T00:00:00Z".to_string(),
         updated_at: "2026-04-14T00:00:00Z".to_string(),
         skills_updated_at: None,
+        portfolio_url: None,
+        github_url: None,
+        linkedin_url: None,
     }
 }
 
