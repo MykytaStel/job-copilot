@@ -123,12 +123,16 @@ pub(crate) async fn load_search_salary_expectation(
 pub(crate) fn apply_salary_scoring(
     mut ranked_jobs: Vec<RankedJob>,
     expectation: Option<&SearchSalaryExpectation>,
+    salary_fit_importance: u8,
 ) -> Vec<RankedJob> {
+    let salary_multiplier = f32::from(salary_fit_importance.clamp(1, 10)) / 6.0;
     for ranked in &mut ranked_jobs {
         let adjustment = score_search_salary(expectation, &ranked.job.job);
+        let weighted_delta = (f32::from(adjustment.score_delta) * salary_multiplier).round() as i16;
+
         ranked
             .fit
-            .apply_salary_score(adjustment.score_delta, adjustment.reason);
+            .apply_salary_score(weighted_delta, adjustment.reason);
     }
 
     sort_ranked_jobs(&mut ranked_jobs);

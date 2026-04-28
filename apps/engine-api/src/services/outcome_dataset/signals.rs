@@ -46,6 +46,7 @@ pub(super) fn search_profile_from_analysis(analysis: &ProfileAnalysis) -> Search
         profile_keywords: analysis.keywords.clone(),
         search_terms: vec![analysis.primary_role.search_label()],
         exclude_terms: Vec::new(),
+        scoring_weights: Default::default(),
     }
 }
 

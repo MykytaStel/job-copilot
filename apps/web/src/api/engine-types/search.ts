@@ -19,11 +19,12 @@ export type EngineSearchRoleCandidate = {
   confidence: number;
 };
 
-export type EngineSearchProfile = Omit<SharedEngineSearchProfileResponse, 'role_candidates'> & {
+export type EngineSearchProfile = Omit<SharedEngineSearchProfileResponse, 'scoring_weights'> & {
   primary_role_confidence?: number | null;
   role_candidates: EngineSearchRoleCandidate[];
   profile_skills?: string[] | null;
   profile_keywords?: string[] | null;
+  scoring_weights?: EngineSearchScoringWeights | null;
 };
 
 export type EngineBuildSearchProfileResponse = Omit<
@@ -98,4 +99,11 @@ export type EngineRunSearchResponse = {
 export type EngineGlobalSearchResponse = {
   jobs: EngineJob[];
   applications: EngineGlobalSearchApplication[];
+};
+
+export type EngineSearchScoringWeights = {
+  skill_match_importance: number;
+  salary_fit_importance: number;
+  job_freshness_importance: number;
+  remote_work_importance: number;
 };

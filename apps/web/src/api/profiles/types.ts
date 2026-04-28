@@ -12,9 +12,30 @@ export type RoleCatalogItem = {
   isFallback: boolean;
 };
 
-export type SearchTargetRegion = 'ua' | 'eu' | 'eu_remote' | 'poland' | 'germany' | 'uk' | 'us';
+export type SearchTargetRegion =
+  | 'ua'
+  | 'eu'
+  | 'eu_remote'
+  | 'poland'
+  | 'germany'
+  | 'uk'
+  | 'us';
 
 export type SearchWorkMode = 'remote' | 'hybrid' | 'onsite';
+
+export type ScoringWeights = {
+  skillMatchImportance: number;
+  salaryFitImportance: number;
+  jobFreshnessImportance: number;
+  remoteWorkImportance: number;
+};
+
+export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
+  skillMatchImportance: 8,
+  salaryFitImportance: 6,
+  jobFreshnessImportance: 5,
+  remoteWorkImportance: 5,
+};
 
 export type PersistedSearchPreferences = {
   targetRegions: SearchTargetRegion[];
@@ -23,6 +44,7 @@ export type PersistedSearchPreferences = {
   allowedSources: string[];
   includeKeywords: string[];
   excludeKeywords: string[];
+  scoringWeights?: ScoringWeights;
 };
 
 export type SearchProfileBuildRequest = {
@@ -53,5 +75,6 @@ export type SearchProfileBuildResult = {
     profileKeywords: string[];
     searchTerms: string[];
     excludeTerms: string[];
+    scoringWeights: ScoringWeights;
   };
 };

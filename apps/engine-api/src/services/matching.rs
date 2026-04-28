@@ -227,7 +227,10 @@ impl SearchMatchingService {
             &matched_search_terms,
         );
         let description_quality = assess_description_quality(&job.job.description_text);
-
+        let scoring_weights = search_profile.scoring_weights.clone().normalized();
+        let skill_match_multiplier = scoring_weights.skill_match_multiplier();
+        let remote_work_multiplier = scoring_weights.remote_work_multiplier();
+        let job_freshness_multiplier = scoring_weights.job_freshness_multiplier();
         let primary_role_score = role_alignment.primary_overlap
             * PRIMARY_ROLE_WEIGHT
             * confidence_factor(search_profile.primary_role_confidence);
@@ -235,23 +238,29 @@ impl SearchMatchingService {
         let role_candidate_score = role_alignment.candidate_overlap * ROLE_CANDIDATE_WEIGHT;
         let profile_skill_score = weighted_overlap_ratio(
             matched_profile_skills.matched_strength,
-            matched_profile_skills.total_weight,
-        ) * PROFILE_SKILL_WEIGHT;
+            matched_profile_skills.eligible_terms as f32,
+        ) * PROFILE_SKILL_WEIGHT
+            * skill_match_multiplier;
+
         let profile_keyword_score = weighted_overlap_ratio(
             matched_profile_keywords.matched_strength,
-            matched_profile_keywords.total_weight,
-        ) * PROFILE_KEYWORD_WEIGHT;
+            matched_profile_keywords.eligible_terms as f32,
+        ) * PROFILE_KEYWORD_WEIGHT
+            * skill_match_multiplier;
+
         let search_term_score = weighted_overlap_ratio(
             matched_search_terms.matched_strength,
-            matched_search_terms.total_weight,
-        ) * SEARCH_TERM_WEIGHT;
+            matched_search_terms.eligible_terms as f32,
+        ) * SEARCH_TERM_WEIGHT
+            * skill_match_multiplier;
+
         let source_score = if source_match && !search_profile.allowed_sources.is_empty() {
             SOURCE_WEIGHT
         } else {
             0.0
         };
         let work_mode_score = matches!(work_mode_match, Some(true))
-            .then_some(WORK_MODE_WEIGHT)
+            .then_some(WORK_MODE_WEIGHT * remote_work_multiplier)
             .unwrap_or(0.0);
         let region_score = match region_match {
             Some(true) => REGION_WEIGHT,
@@ -264,7 +273,7 @@ impl SearchMatchingService {
             matched_exclude_terms.total_weight,
         ) * EXCLUDE_PENALTY_WEIGHT;
         let work_mode_penalty = matches!(work_mode_match, Some(false))
-            .then_some(WORK_MODE_MISMATCH_PENALTY_WEIGHT)
+            .then_some(WORK_MODE_MISMATCH_PENALTY_WEIGHT * remote_work_multiplier)
             .unwrap_or(0.0);
         let seniority_penalty = seniority_alignment.penalty;
 
@@ -344,10 +353,12 @@ impl SearchMatchingService {
             - work_mode_penalty
             - seniority_penalty;
         let age_signal = assess_job_age(job);
-        let score = (base_score + f32::from(age_signal.score_delta))
+        let freshness_score =
+            (f32::from(age_signal.score_delta) * job_freshness_multiplier).round() as i16;
+
+        let score = (base_score + f32::from(freshness_score))
             .clamp(0.0, 100.0)
             .round() as u8;
-        let freshness_score = age_signal.score_delta;
         let mut reasons = build_reasons(
             search_profile,
             job,

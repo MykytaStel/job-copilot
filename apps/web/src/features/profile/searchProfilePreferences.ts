@@ -1,4 +1,7 @@
-import type { PersistedSearchPreferences } from '../../api/profiles';
+import {
+  DEFAULT_SCORING_WEIGHTS,
+  type PersistedSearchPreferences,
+} from '../../api/profiles';
 import { parseKeywordInput } from './profile.utils';
 import type { SearchProfileDraft } from './searchProfileDraft';
 
@@ -19,8 +22,11 @@ export function buildSearchProfileDraftFromPreferences(
   };
 }
 
-export function buildPersistedSearchPreferences(draft: SearchProfileDraft): PersistedSearchPreferences {
-  return {
+export function buildPersistedSearchPreferences(
+  draft: SearchProfileDraft,
+  existingPreferences?: PersistedSearchPreferences | null,
+): PersistedSearchPreferences {
+  const preferences: PersistedSearchPreferences = {
     targetRegions: draft.targetRegions,
     workModes: draft.workModes,
     preferredRoles: draft.preferredRoles,
@@ -28,6 +34,12 @@ export function buildPersistedSearchPreferences(draft: SearchProfileDraft): Pers
     includeKeywords: parseKeywordInput(draft.includeKeywordsInput),
     excludeKeywords: parseKeywordInput(draft.excludeKeywordsInput),
   };
+
+  if (existingPreferences?.scoringWeights) {
+    preferences.scoringWeights = existingPreferences.scoringWeights;
+  }
+
+  return preferences;
 }
 
 export function resolveSearchProfileDraft(
