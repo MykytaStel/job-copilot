@@ -5,29 +5,43 @@ use crate::api::error::ApiError;
 use crate::domain::role::RoleId;
 use crate::domain::role::catalog::ROLE_CATALOG;
 use crate::domain::search::profile::{
-    SearchPreferences, SearchProfile, SearchRoleCandidate, TargetRegion, WorkMode,
+    ScoringWeights, SearchPreferences, SearchProfile, SearchRoleCandidate, TargetRegion, WorkMode,
 };
 use crate::domain::source::SOURCE_CATALOG;
 use crate::domain::source::SourceId;
 
 use super::profile::AnalyzeProfileResponse;
 
-#[derive(Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct SearchPreferencesRequest {
     #[serde(default)]
     pub target_regions: Vec<TargetRegion>,
+
     #[serde(default)]
     pub work_modes: Vec<WorkMode>,
+
     #[serde(default)]
     pub preferred_roles: Vec<String>,
+
     #[serde(default)]
     pub allowed_sources: Vec<String>,
+
     #[serde(default)]
     pub include_keywords: Vec<String>,
+
     #[serde(default)]
     pub exclude_keywords: Vec<String>,
-}
 
+    #[serde(default)]
+    pub scoring_weights: ScoringWeightsRequest,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ScoringWeightsResponse {
+    pub skill_match_importance: u8,
+    pub salary_fit_importance: u8,
+    pub job_freshness_importance: u8,
+    pub remote_work_importance: u8,
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct SearchPreferencesResponse {
     pub target_regions: Vec<TargetRegion>,
@@ -36,6 +50,7 @@ pub struct SearchPreferencesResponse {
     pub allowed_sources: Vec<String>,
     pub include_keywords: Vec<String>,
     pub exclude_keywords: Vec<String>,
+    pub scoring_weights: ScoringWeightsResponse,
 }
 
 #[derive(Default, Deserialize)]
@@ -77,6 +92,7 @@ pub struct SearchProfileResponse {
     pub profile_keywords: Vec<String>,
     pub search_terms: Vec<String>,
     pub exclude_terms: Vec<String>,
+    pub scoring_weights: ScoringWeightsResponse,
 }
 
 #[derive(Serialize)]
@@ -92,6 +108,94 @@ impl BuildSearchProfileRequest {
             preferences: self.preferences.validate()?,
         })
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ScoringWeightsRequest {
+    #[serde(default = "default_skill_match_importance")]
+    pub skill_match_importance: u8,
+
+    #[serde(default = "default_salary_fit_importance")]
+    pub salary_fit_importance: u8,
+
+    #[serde(default = "default_job_freshness_importance")]
+    pub job_freshness_importance: u8,
+
+    #[serde(default = "default_remote_work_importance")]
+    pub remote_work_importance: u8,
+}
+
+impl Default for ScoringWeightsRequest {
+    fn default() -> Self {
+        Self {
+            skill_match_importance: default_skill_match_importance(),
+            salary_fit_importance: default_salary_fit_importance(),
+            job_freshness_importance: default_job_freshness_importance(),
+            remote_work_importance: default_remote_work_importance(),
+        }
+    }
+}
+
+impl ScoringWeightsRequest {
+    fn validate(self) -> Result<ScoringWeights, ApiError> {
+        validate_weight("skill_match_importance", self.skill_match_importance)?;
+        validate_weight("salary_fit_importance", self.salary_fit_importance)?;
+        validate_weight("job_freshness_importance", self.job_freshness_importance)?;
+        validate_weight("remote_work_importance", self.remote_work_importance)?;
+
+        Ok(ScoringWeights {
+            skill_match_importance: self.skill_match_importance,
+            salary_fit_importance: self.salary_fit_importance,
+            job_freshness_importance: self.job_freshness_importance,
+            remote_work_importance: self.remote_work_importance,
+        })
+    }
+}
+
+impl From<ScoringWeights> for ScoringWeightsResponse {
+    fn from(weights: ScoringWeights) -> Self {
+        let weights = weights.normalized();
+
+        Self {
+            skill_match_importance: weights.skill_match_importance,
+            salary_fit_importance: weights.salary_fit_importance,
+            job_freshness_importance: weights.job_freshness_importance,
+            remote_work_importance: weights.remote_work_importance,
+        }
+    }
+}
+
+fn validate_weight(field: &'static str, value: u8) -> Result<(), ApiError> {
+    if (1..=10).contains(&value) {
+        return Ok(());
+    }
+
+    Err(ApiError::bad_request_with_details(
+        "invalid_scoring_weight",
+        format!("Field '{field}' must be between 1 and 10"),
+        json!({
+            "field": field,
+            "min": 1,
+            "max": 10,
+            "received": value,
+        }),
+    ))
+}
+
+fn default_skill_match_importance() -> u8 {
+    8
+}
+
+fn default_salary_fit_importance() -> u8 {
+    6
+}
+
+fn default_job_freshness_importance() -> u8 {
+    5
+}
+
+fn default_remote_work_importance() -> u8 {
+    5
 }
 
 impl SearchPreferencesRequest {
@@ -161,6 +265,7 @@ impl SearchPreferencesRequest {
             allowed_sources,
             include_keywords: self.include_keywords,
             exclude_keywords: self.exclude_keywords,
+            scoring_weights: self.scoring_weights.validate()?,
         })
     }
 }
@@ -182,6 +287,7 @@ impl From<SearchPreferences> for SearchPreferencesResponse {
                 .collect(),
             include_keywords: preferences.include_keywords,
             exclude_keywords: preferences.exclude_keywords,
+            scoring_weights: ScoringWeightsResponse::from(preferences.scoring_weights),
         }
     }
 }
@@ -201,6 +307,7 @@ impl From<SearchProfile> for SearchProfileResponse {
             profile_keywords,
             search_terms,
             exclude_terms,
+            scoring_weights,
         } = search_profile;
 
         Self {
@@ -225,6 +332,7 @@ impl From<SearchProfile> for SearchProfileResponse {
             profile_keywords,
             search_terms,
             exclude_terms,
+            scoring_weights: ScoringWeightsResponse::from(scoring_weights),
         }
     }
 }
@@ -450,6 +558,7 @@ mod tests {
             profile_keywords: vec!["mobile".to_string()],
             search_terms: vec!["react native developer".to_string()],
             exclude_terms: vec!["gambling".to_string()],
+            scoring_weights: Default::default(),
         });
 
         assert_eq!(response.primary_role, "mobile_engineer");
@@ -460,5 +569,21 @@ mod tests {
         );
         assert_eq!(response.role_candidates[0].role, "mobile_engineer");
         assert_eq!(response.allowed_sources, vec!["djinni", "robota_ua"]);
+    }
+    #[test]
+    fn rejects_invalid_scoring_weights() {
+        let error = SearchPreferencesRequest {
+            scoring_weights: super::ScoringWeightsRequest {
+                skill_match_importance: 0,
+                salary_fit_importance: 6,
+                job_freshness_importance: 5,
+                remote_work_importance: 5,
+            },
+            ..SearchPreferencesRequest::default()
+        }
+        .validate()
+        .expect_err("zero weight should fail validation");
+
+        assert_eq!(error.into_response().status(), 400);
     }
 }

@@ -17,7 +17,13 @@ import {
   type AppNotificationType,
   type NotificationPreferences,
 } from '../api/notifications';
-import { getProfile, getStoredProfileRawText } from '../api/profiles';
+import {
+  DEFAULT_SCORING_WEIGHTS,
+  getProfile,
+  getStoredProfileRawText,
+  updateScoringWeights,
+  type ScoringWeights,
+} from '../api/profiles';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -75,6 +81,33 @@ const NOTIFICATION_PREF_LABELS: {
     key: 'marketIntelligenceUpdates',
     title: 'Market intelligence updates',
     description: 'Notify me when salary or market trends change.',
+  },
+];
+
+const SCORING_WEIGHT_CONTROLS: {
+  key: keyof ScoringWeights;
+  title: string;
+  description: string;
+}[] = [
+  {
+    key: 'skillMatchImportance',
+    title: 'Skill match importance',
+    description: 'Prioritizes jobs that mention your strongest skills and profile keywords.',
+  },
+  {
+    key: 'salaryFitImportance',
+    title: 'Salary fit importance',
+    description: 'Changes how strongly salary fit can boost or penalize a job.',
+  },
+  {
+    key: 'jobFreshnessImportance',
+    title: 'Job freshness importance',
+    description: 'Changes how strongly old job posts are penalized.',
+  },
+  {
+    key: 'remoteWorkImportance',
+    title: 'Remote work importance',
+    description: 'Changes how strongly remote/work-mode match affects ranking.',
   },
 ];
 
@@ -152,7 +185,15 @@ export default function Settings() {
 			});
 		},
 	});
-
+	const scoringWeightsMutation = useMutation({
+		mutationFn: updateScoringWeights,
+		onSuccess: (updatedProfile) => {
+			queryClient.setQueryData(queryKeys.profile.root(), updatedProfile);
+			void queryClient.invalidateQueries({
+				queryKey: queryKeys.profile.root(),
+			});
+		},
+	});
   function setDensity(value: DensityMode) {
     writeDensity(value);
     setDensityState(value);
@@ -224,6 +265,16 @@ export default function Settings() {
 
   const unreadCount = notifications.filter((n) => !n.readAt).length;
   const persistedSearchPreferences = profile.searchPreferences;
+	const scoringWeights =
+  persistedSearchPreferences?.scoringWeights ?? DEFAULT_SCORING_WEIGHTS;
+
+	function updateScoringWeight(key: keyof ScoringWeights, value: number) {
+		scoringWeightsMutation.mutate({
+			...scoringWeights,
+			[key]: value,
+		});
+	}
+
   const persistedPreferenceCount =
     (persistedSearchPreferences?.targetRegions.length ?? 0) +
     (persistedSearchPreferences?.workModes.length ?? 0) +
@@ -388,6 +439,56 @@ export default function Settings() {
 											Saved locally. Scraping currently runs every 60 min by system default unless
 											the ingestion daemon is started with a different interval.
 										</p>
+									</div>
+									<div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
+										<div className="mb-4">
+											<p className="text-sm font-semibold text-foreground">
+												Scoring weights
+											</p>
+											<p className="mt-1 text-sm text-muted-foreground">
+												Tune how Job Copilot ranks jobs for this profile. Changes are saved to engine-api and affect the next search run.
+											</p>
+										</div>
+
+										<div className="space-y-5">
+											{SCORING_WEIGHT_CONTROLS.map(({ key, title, description }) => (
+												<div key={key} className="space-y-2">
+													<div className="flex items-start justify-between gap-4">
+														<div>
+															<p className="text-sm font-medium text-foreground">
+																{title}
+															</p>
+															<p className="mt-1 text-xs text-muted-foreground">
+																{description}
+															</p>
+														</div>
+
+														<span className="rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-semibold text-foreground">
+															{scoringWeights[key]}/10
+														</span>
+													</div>
+
+													<input
+														type="range"
+														min={1}
+														max={10}
+														step={1}
+														value={scoringWeights[key]}
+														disabled={scoringWeightsMutation.isPending}
+														onChange={(event) =>
+															updateScoringWeight(key, Number(event.currentTarget.value))
+														}
+														className="w-full accent-primary"
+													/>
+												</div>
+											))}
+										</div>
+
+										{scoringWeightsMutation.isError && (
+											<p className="mt-3 text-sm text-danger">
+												Could not save scoring weights. Please try again.
+											</p>
+										)}
 									</div>
                 </div>
                 <p className="text-sm text-muted-foreground">

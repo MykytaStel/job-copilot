@@ -34,6 +34,7 @@ export type {
   EngineAnalyzeProfile,
   EngineProfileAnalysis,
   EngineProfile,
+  EngineProfileScoringWeights,
 } from './engine-types/profiles';
 
 export type {
@@ -69,6 +70,7 @@ export type {
   EngineSearchRoleCandidate,
   EngineSearchProfile,
   EngineBuildSearchProfileResponse,
+  EngineSearchScoringWeights,
   EngineScoreBreakdown,
   EngineScorePenalty,
   EngineFitExplanation,

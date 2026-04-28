@@ -28,23 +28,23 @@ describe('search profile preference helpers', () => {
   });
 
   it('normalizes builder draft inputs before persistence', () => {
-    expect(
-      buildPersistedSearchPreferences({
-        targetRegions: ['ua'],
-        workModes: ['remote'],
-        preferredRoles: ['frontend_engineer'],
-        allowedSources: ['djinni'],
-        includeKeywordsInput: 'product company,\nreact, react',
-        excludeKeywordsInput: 'gambling\n outsourcing ',
-      }),
-    ).toEqual({
-      targetRegions: ['ua'],
-      workModes: ['remote'],
-      preferredRoles: ['frontend_engineer'],
-      allowedSources: ['djinni'],
-      includeKeywords: ['product company', 'react'],
-      excludeKeywords: ['gambling', 'outsourcing'],
-    });
+		expect(
+			buildPersistedSearchPreferences({
+				targetRegions: ['ua'],
+				workModes: ['remote'],
+				preferredRoles: ['frontend_engineer'],
+				allowedSources: ['djinni', 'work_ua'],
+				includeKeywordsInput: 'react, typescript',
+				excludeKeywordsInput: 'gambling\n outsourcing ',
+			}),
+		).toEqual({
+			targetRegions: ['ua'],
+			workModes: ['remote'],
+			preferredRoles: ['frontend_engineer'],
+			allowedSources: ['djinni', 'work_ua'],
+			includeKeywords: ['react', 'typescript'],
+			excludeKeywords: ['gambling', 'outsourcing'],
+		});
   });
 
   it('prefers persisted preferences over local draft fallback', () => {

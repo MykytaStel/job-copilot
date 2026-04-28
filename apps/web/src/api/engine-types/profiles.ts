@@ -64,9 +64,17 @@ export type EngineProfile = {
     allowed_sources: string[];
     include_keywords: string[];
     exclude_keywords: string[];
+		scoring_weights?: EngineProfileScoringWeights | null;
   } | null;
   analysis?: EngineProfileAnalysis | null;
   created_at: string;
   updated_at: string;
   skills_updated_at?: string | null;
+};
+
+export type EngineProfileScoringWeights = {
+  skill_match_importance: number;
+  salary_fit_importance: number;
+  job_freshness_importance: number;
+  remote_work_importance: number;
 };

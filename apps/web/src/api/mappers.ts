@@ -270,3 +270,4 @@ export function mapApplicationDetail(detail: EngineApplicationDetail): Applicati
     })),
   };
 }
+

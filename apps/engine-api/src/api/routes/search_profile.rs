@@ -63,6 +63,7 @@ mod tests {
                     allowed_sources: vec!["djinni".to_string(), "work_ua".to_string()],
                     include_keywords: vec!["product company".to_string()],
                     exclude_keywords: vec!["gambling".to_string()],
+                    scoring_weights: Default::default(),
                 },
             }),
         )
