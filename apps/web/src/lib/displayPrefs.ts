@@ -6,6 +6,7 @@ const SORT_KEY = 'jc_display_sort';
 
 const DEFAULT_DENSITY: DensityMode = 'normal';
 const DEFAULT_SORT: SortMode = 'date';
+export const DISPLAY_PREFS_EVENT = 'jc-display-prefs-change';
 
 export function readDensity(): DensityMode {
   try {
@@ -19,6 +20,7 @@ export function readDensity(): DensityMode {
 
 export function writeDensity(value: DensityMode): void {
   window.localStorage.setItem(DENSITY_KEY, value);
+  dispatchDisplayPrefsChange();
 }
 
 export function readSortMode(): SortMode {
@@ -33,6 +35,15 @@ export function readSortMode(): SortMode {
 
 export function writeSortMode(value: SortMode): void {
   window.localStorage.setItem(SORT_KEY, value);
+  dispatchDisplayPrefsChange();
+}
+
+function dispatchDisplayPrefsChange(): void {
+  try {
+    window.dispatchEvent(new Event(DISPLAY_PREFS_EVENT));
+  } catch {
+    // Ignore event dispatch failures in non-browser contexts.
+  }
 }
 
 export const DENSITY_GAP: Record<DensityMode, string> = {

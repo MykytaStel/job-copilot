@@ -1,7 +1,13 @@
 const TOKEN_KEY = 'engine_api_jwt_token';
 
 function canUseStorage() {
-  return typeof window !== 'undefined' && !!window.localStorage;
+  return (
+    typeof window !== 'undefined' &&
+    !!window.localStorage &&
+    typeof window.localStorage.getItem === 'function' &&
+    typeof window.localStorage.setItem === 'function' &&
+    typeof window.localStorage.removeItem === 'function'
+  );
 }
 
 export function readToken(): string | null {

@@ -93,11 +93,13 @@ export function FeedbackCenterContent({ state }: { state: FeedbackCenterPageStat
           }
           onRemoveWhitelist={(companyName) => state.removeWhitelistMutation.mutate(companyName)}
           onRemoveBlacklist={(companyName) => state.removeBlacklistMutation.mutate(companyName)}
+          onBulkHideCompany={(companyName) => state.bulkHideCompanyMutation.mutate(companyName)}
           isAddWhitelistPending={state.addWhitelistMutation.isPending}
           isAddBlacklistPending={state.addBlacklistMutation.isPending}
           isMovePending={state.moveCompanyMutation.isPending}
           isRemoveWhitelistPending={state.removeWhitelistMutation.isPending}
           isRemoveBlacklistPending={state.removeBlacklistMutation.isPending}
+          isBulkHidePending={state.bulkHideCompanyMutation.isPending}
         />
       ) : null}
     </Page>

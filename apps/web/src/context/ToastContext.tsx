@@ -18,12 +18,21 @@ export type ToastMessage = {
   type: ToastType;
   message: string;
   description?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 };
 
 type ShowToastInput = {
   type?: ToastType;
   message: string;
   description?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
+  durationMs?: number;
 };
 
 type ToastContextValue = {
@@ -48,15 +57,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const showToast = useCallback(
-    ({ type = 'info', message, description }: ShowToastInput) => {
+    ({ type = 'info', message, description, action, durationMs }: ShowToastInput) => {
       const id = createToastId();
 
       setToasts((current) => [
-        { id, type, message, description },
+        { id, type, message, description, action },
         ...current,
       ].slice(0, MAX_VISIBLE_TOASTS));
 
-      window.setTimeout(() => dismissToast(id), AUTO_DISMISS_MS);
+      window.setTimeout(() => dismissToast(id), durationMs ?? AUTO_DISMISS_MS);
     },
     [dismissToast],
   );

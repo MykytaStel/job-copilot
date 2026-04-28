@@ -9,10 +9,15 @@ export type EngineMarketOverview = {
 
 export type EngineMarketCompanyEntry = {
   company_name: string;
+  normalized_company_name?: string;
   active_jobs: number;
   this_week: number;
   prev_week: number;
   velocity: number;
+  sources?: string[];
+  top_role_groups?: string[];
+  latest_job_ids?: string[];
+  data_quality_flags?: string[];
 };
 
 export type EngineMarketCompaniesResponse = {
@@ -21,6 +26,7 @@ export type EngineMarketCompaniesResponse = {
 
 export type EngineMarketSalaryTrend = {
   seniority: string;
+  currency: string;
   p25: number;
   median: number;
   p75: number;

@@ -89,6 +89,7 @@ type EngineBehaviorSummaryResponse = {
   top_positive_role_families: EngineBehaviorSignalCountResponse[];
   top_negative_role_families: EngineBehaviorSignalCountResponse[];
   source_signal_counts: EngineBehaviorSignalCountResponse[];
+  company_signal_counts?: EngineBehaviorSignalCountResponse[];
   role_family_signal_counts: EngineBehaviorSignalCountResponse[];
 };
 
@@ -209,6 +210,7 @@ export type BehaviorSummary = {
   topPositiveRoleFamilies: BehaviorSignalCount[];
   topNegativeRoleFamilies: BehaviorSignalCount[];
   sourceSignalCounts: BehaviorSignalCount[];
+  companySignalCounts: BehaviorSignalCount[];
   roleFamilySignalCounts: BehaviorSignalCount[];
 };
 
@@ -407,6 +409,7 @@ export async function getBehaviorSummary(profileId: string): Promise<BehaviorSum
     topPositiveRoleFamilies: response.top_positive_role_families.map(mapBehaviorSignalCount),
     topNegativeRoleFamilies: response.top_negative_role_families.map(mapBehaviorSignalCount),
     sourceSignalCounts: response.source_signal_counts.map(mapBehaviorSignalCount),
+    companySignalCounts: (response.company_signal_counts ?? []).map(mapBehaviorSignalCount),
     roleFamilySignalCounts: response.role_family_signal_counts.map(mapBehaviorSignalCount),
   };
 }

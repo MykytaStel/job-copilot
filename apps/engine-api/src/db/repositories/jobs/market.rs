@@ -18,6 +18,28 @@ use market_role_heuristics::{
     MARKET_ROLE_GROUPS_VALUES_SQL,
 };
 
+fn has_usable_company_name(company_name: &str) -> bool {
+    let normalized = company_name
+        .trim()
+        .to_lowercase()
+        .replace([' ', '.', '_', '-'], "");
+
+    !normalized.is_empty()
+        && !matches!(
+            normalized.as_str(),
+            "unknown" | "uknonwn" | "unknonwn" | "na" | "n/a" | "none" | "null" | "—" | "-"
+        )
+}
+
+fn normalize_company_name(company_name: &str) -> String {
+    company_name
+        .trim()
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 impl JobsRepository {
     async fn fetch_fresh_snapshot(
         pool: &sqlx::PgPool,
@@ -50,7 +72,7 @@ impl JobsRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "market_overview").await? {
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "overview").await? {
             if let Ok(overview) = serde_json::from_value::<MarketOverview>(payload) {
                 return Ok((overview, MarketSource::Snapshot));
             }
@@ -72,7 +94,12 @@ impl JobsRepository {
                 COUNT(*) FILTER (
                     WHERE is_active AND first_seen_at >= NOW() - INTERVAL '7 days'
                 )::bigint AS new_jobs_this_week,
-                COUNT(DISTINCT company_name) FILTER (WHERE is_active)::bigint AS active_companies_count,
+                COUNT(DISTINCT company_name) FILTER (
+                    WHERE is_active
+                      AND company_name IS NOT NULL
+                      AND BTRIM(company_name) <> ''
+                      AND LOWER(BTRIM(company_name)) NOT IN ('unknown', 'uknonwn', 'unknonwn', 'n/a', 'na', 'none', 'null', '—', '-')
+                )::bigint AS active_companies_count,
                 COUNT(*) FILTER (WHERE is_active)::bigint AS active_jobs_count,
                 COUNT(*) FILTER (
                     WHERE is_active AND LOWER(remote_type) LIKE '%remote%'
@@ -108,8 +135,14 @@ impl JobsRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "market_companies").await? {
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "company_stats").await? {
             if let Ok(mut entries) = serde_json::from_value::<Vec<MarketCompanyEntry>>(payload) {
+                entries.retain(|entry| has_usable_company_name(&entry.company_name));
+                for entry in &mut entries {
+                    if entry.normalized_company_name.trim().is_empty() {
+                        entry.normalized_company_name = normalize_company_name(&entry.company_name);
+                    }
+                }
                 entries.truncate(limit as usize);
                 return Ok((entries, MarketSource::Snapshot));
             }
@@ -120,42 +153,87 @@ impl JobsRepository {
         #[derive(FromRow)]
         struct MarketCompanyRow {
             company_name: String,
+            normalized_company_name: String,
             active_jobs: i64,
             this_week: i64,
             prev_week: i64,
+            sources: Vec<String>,
+            top_role_groups: Vec<String>,
+            latest_job_ids: Vec<String>,
         }
 
-        let rows = sqlx::query_as::<_, MarketCompanyRow>(
+        let query = format!(
             r#"
+            WITH active_company_jobs AS (
+                SELECT
+                    jobs.id,
+                    jobs.title,
+                    jobs.company_name,
+                    LOWER(REGEXP_REPLACE(BTRIM(jobs.company_name), '\s+', ' ', 'g')) AS normalized_company_name,
+                    jobs.first_seen_at,
+                    jobs.last_seen_at,
+                    {role_group_classifier} AS role_group
+                FROM jobs
+                WHERE jobs.company_name IS NOT NULL
+                  AND BTRIM(jobs.company_name) <> ''
+                  AND LOWER(BTRIM(jobs.company_name)) NOT IN ('unknown', 'uknonwn', 'unknonwn', 'n/a', 'na', 'none', 'null', '—', '-')
+                  AND jobs.is_active
+            ),
+            company_stats AS (
+                SELECT
+                    company_name,
+                    normalized_company_name,
+                    COUNT(*)::bigint AS active_jobs,
+                    COUNT(*) FILTER (
+                        WHERE first_seen_at >= NOW() - INTERVAL '7 days'
+                    )::bigint AS this_week,
+                    COUNT(*) FILTER (
+                        WHERE first_seen_at >= NOW() - INTERVAL '14 days'
+                          AND first_seen_at < NOW() - INTERVAL '7 days'
+                    )::bigint AS prev_week,
+                    ARRAY_REMOVE(ARRAY_AGG(DISTINCT role_group), NULL)::text[] AS top_role_groups,
+                    (ARRAY_AGG(id ORDER BY last_seen_at DESC))[1:5]::text[] AS latest_job_ids
+                FROM active_company_jobs
+                GROUP BY company_name, normalized_company_name
+            )
             SELECT
-                company_name,
-                COUNT(*) FILTER (WHERE is_active)::bigint AS active_jobs,
-                COUNT(*) FILTER (
-                    WHERE is_active AND first_seen_at >= NOW() - INTERVAL '7 days'
-                )::bigint AS this_week,
-                COUNT(*) FILTER (
-                    WHERE is_active
-                      AND first_seen_at >= NOW() - INTERVAL '14 days'
-                      AND first_seen_at < NOW() - INTERVAL '7 days'
-                )::bigint AS prev_week
-            FROM jobs
-            GROUP BY company_name
-            HAVING COUNT(*) FILTER (WHERE is_active) > 0
-            ORDER BY active_jobs DESC
+                company_stats.company_name,
+                company_stats.normalized_company_name,
+                company_stats.active_jobs,
+                company_stats.this_week,
+                company_stats.prev_week,
+                COALESCE(sources.sources, ARRAY[]::text[]) AS sources,
+                company_stats.top_role_groups,
+                company_stats.latest_job_ids
+            FROM company_stats
+            LEFT JOIN LATERAL (
+                SELECT ARRAY_AGG(DISTINCT variants.source ORDER BY variants.source)::text[] AS sources
+                FROM job_variants variants
+                WHERE variants.job_id = ANY(company_stats.latest_job_ids)
+            ) sources ON TRUE
+            ORDER BY company_stats.active_jobs DESC, company_stats.company_name ASC
             LIMIT $1
             "#,
-        )
-        .bind(limit)
-        .fetch_all(pool)
-        .await?;
+            role_group_classifier = MARKET_ROLE_GROUP_CLASSIFIER_CASE_SQL,
+        );
+
+        let rows = sqlx::query_as::<_, MarketCompanyRow>(&query)
+            .bind(limit)
+            .fetch_all(pool)
+            .await?;
 
         Ok((
             rows.into_iter()
                 .map(|row| MarketCompanyEntry {
                     company_name: row.company_name,
+                    normalized_company_name: row.normalized_company_name,
                     active_jobs: row.active_jobs,
                     this_week: row.this_week,
                     prev_week: row.prev_week,
+                    sources: row.sources,
+                    top_role_groups: row.top_role_groups,
+                    latest_job_ids: row.latest_job_ids,
+                    data_quality_flags: Vec::new(),
                 })
                 .collect(),
             MarketSource::Live,
@@ -184,12 +262,15 @@ impl JobsRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "market_salary_trends").await? {
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "salary_trends").await? {
             if let Ok(mut trends) = serde_json::from_value::<Vec<MarketSalaryTrend>>(payload) {
                 if let Some(filter) = seniority {
                     trends.retain(|t| t.seniority == filter);
                 }
-                return Ok((trends, MarketSource::Snapshot));
+                trends.retain(|t| t.currency.trim().to_uppercase() != "UNKNOWN");
+                if !trends.is_empty() {
+                    return Ok((trends, MarketSource::Snapshot));
+                }
             }
         }
 
@@ -198,6 +279,7 @@ impl JobsRepository {
         #[derive(FromRow)]
         struct MarketSalaryTrendRow {
             seniority: String,
+            currency: String,
             p25: i32,
             median: i32,
             p75: i32,
@@ -210,10 +292,13 @@ impl JobsRepository {
                 SELECT
                     LOWER(TRIM(seniority)) AS seniority,
                     COALESCE(NULLIF(UPPER(TRIM(salary_currency)), ''), 'UNKNOWN') AS salary_currency,
-                    salary_min
+                    ROUND((salary_min + COALESCE(salary_max, salary_min))::numeric / 2.0)::integer AS salary_midpoint
                 FROM jobs
                 WHERE is_active
                   AND salary_min IS NOT NULL
+                  AND salary_min > 0
+                  AND (salary_max IS NULL OR salary_max >= salary_min)
+                  AND COALESCE(NULLIF(UPPER(TRIM(salary_currency)), ''), 'UNKNOWN') <> 'UNKNOWN'
                   AND seniority IS NOT NULL
                   AND last_seen_at >= NOW() - INTERVAL '30 days'
                   AND ($1::text IS NULL OR LOWER(TRIM(seniority)) = $1)
@@ -239,12 +324,13 @@ impl JobsRepository {
             )
             SELECT
                 seniority,
-                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY salary_min))::integer AS p25,
-                ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY salary_min))::integer AS median,
-                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY salary_min))::integer AS p75,
+                salary_currency AS currency,
+                ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY salary_midpoint))::integer AS p25,
+                ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY salary_midpoint))::integer AS median,
+                ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY salary_midpoint))::integer AS p75,
                 COUNT(*)::bigint AS sample_count
             FROM dominant_jobs
-            GROUP BY seniority
+            GROUP BY seniority, salary_currency
             ORDER BY
                 CASE seniority
                     WHEN 'intern' THEN 0
@@ -266,6 +352,7 @@ impl JobsRepository {
             rows.into_iter()
                 .map(|row| MarketSalaryTrend {
                     seniority: row.seniority,
+                    currency: row.currency,
                     p25: row.p25,
                     median: row.median,
                     p75: row.p75,
@@ -284,7 +371,7 @@ impl JobsRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "market_role_demand").await? {
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "role_demand").await? {
             if let Ok(entries) = serde_json::from_value::<Vec<MarketRoleDemandEntry>>(payload) {
                 return Ok((entries, MarketSource::Snapshot));
             }

@@ -258,15 +258,25 @@ mod tests {
             JobsServiceStub::default().with_market_companies(vec![
                 MarketCompanyEntry {
                     company_name: "Acme".to_string(),
+                    normalized_company_name: "acme".to_string(),
                     active_jobs: 9,
                     this_week: 5,
                     prev_week: 2,
+                    sources: vec!["djinni".to_string()],
+                    top_role_groups: vec!["Mobile".to_string()],
+                    latest_job_ids: vec!["job-1".to_string()],
+                    data_quality_flags: Vec::new(),
                 },
                 MarketCompanyEntry {
                     company_name: "Beta".to_string(),
+                    normalized_company_name: "beta".to_string(),
                     active_jobs: 4,
                     this_week: 1,
                     prev_week: 3,
+                    sources: vec!["work_ua".to_string()],
+                    top_role_groups: Vec::new(),
+                    latest_job_ids: vec!["job-2".to_string()],
+                    data_quality_flags: Vec::new(),
                 },
             ]),
         ));
@@ -286,17 +296,27 @@ mod tests {
             json!([
                 {
                     "company_name": "Acme",
+                    "normalized_company_name": "acme",
                     "active_jobs": 9,
                     "this_week": 5,
                     "prev_week": 2,
-                    "velocity": 3
+                    "velocity": 3,
+                    "sources": ["djinni"],
+                    "top_role_groups": ["Mobile"],
+                    "latest_job_ids": ["job-1"],
+                    "data_quality_flags": []
                 },
                 {
                     "company_name": "Beta",
+                    "normalized_company_name": "beta",
                     "active_jobs": 4,
                     "this_week": 1,
                     "prev_week": 3,
-                    "velocity": -2
+                    "velocity": -2,
+                    "sources": ["work_ua"],
+                    "top_role_groups": [],
+                    "latest_job_ids": ["job-2"],
+                    "data_quality_flags": []
                 }
             ])
         );
@@ -328,6 +348,7 @@ mod tests {
         let state = test_state(JobsService::for_tests(
             JobsServiceStub::default().with_market_salary_trend(MarketSalaryTrend {
                 seniority: "senior".to_string(),
+                currency: "USD".to_string(),
                 p25: 4200,
                 median: 5000,
                 p75: 6200,
@@ -351,6 +372,7 @@ mod tests {
             payload,
             json!({
                 "seniority": "senior",
+                "currency": "USD",
                 "p25": 4200,
                 "median": 5000,
                 "p75": 6200,
@@ -387,6 +409,7 @@ mod tests {
             JobsServiceStub::default()
                 .with_market_salary_trend(MarketSalaryTrend {
                     seniority: "senior".to_string(),
+                    currency: "USD".to_string(),
                     p25: 4200,
                     median: 5000,
                     p75: 6200,
@@ -394,6 +417,7 @@ mod tests {
                 })
                 .with_market_salary_trend(MarketSalaryTrend {
                     seniority: "junior".to_string(),
+                    currency: "USD".to_string(),
                     p25: 1200,
                     median: 1500,
                     p75: 1800,
@@ -413,6 +437,7 @@ mod tests {
             json!([
                 {
                     "seniority": "junior",
+                    "currency": "USD",
                     "p25": 1200,
                     "median": 1500,
                     "p75": 1800,
@@ -420,6 +445,7 @@ mod tests {
                 },
                 {
                     "seniority": "senior",
+                    "currency": "USD",
                     "p25": 4200,
                     "median": 5000,
                     "p75": 6200,

@@ -13,6 +13,11 @@ pub struct UpdateCompanyFeedbackRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct BulkHideJobsByCompanyRequest {
+    pub company_name: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct SetSalaryFeedbackRequest {
     pub signal: String,
 }
@@ -162,6 +167,11 @@ pub struct FeedbackOverviewResponse {
     pub summary: FeedbackSummary,
 }
 
+#[derive(Debug, Serialize)]
+pub struct BulkFeedbackActionResponse {
+    pub affected_count: u64,
+}
+
 impl UpdateCompanyFeedbackRequest {
     pub fn validate_company_name(self) -> Result<String, ApiError> {
         let company_name = self.company_name.trim();
@@ -175,6 +185,15 @@ impl UpdateCompanyFeedbackRequest {
         }
 
         Ok(company_name.to_string())
+    }
+}
+
+impl BulkHideJobsByCompanyRequest {
+    pub fn validate_company_name(self) -> Result<String, ApiError> {
+        UpdateCompanyFeedbackRequest {
+            company_name: self.company_name,
+        }
+        .validate_company_name()
     }
 }
 

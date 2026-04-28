@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import {
   addCompanyBlacklist,
   addCompanyWhitelist,
+  bulkHideJobsByCompany,
   getFeedback,
   removeCompanyBlacklist,
   removeCompanyWhitelist,
@@ -21,6 +22,10 @@ import {
   type FeedbackTab,
 } from './FeedbackCenterComponents';
 import { filterJobsBySearch } from './FeedbackCenterSections';
+
+function normalizeCompanyName(companyName: string) {
+  return companyName.trim().replace(/\s+/g, ' ').toLowerCase();
+}
 
 export function useFeedbackCenterPage() {
   const profileId = readProfileId();
@@ -165,6 +170,30 @@ export function useFeedbackCenterPage() {
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
   });
 
+  const bulkHideCompanyMutation = useMutation({
+    mutationFn: async (companyName: string) => {
+      const normalizedCompany = normalizeCompanyName(companyName);
+      const affectedInFeed = allJobs.filter(
+        (job) => normalizeCompanyName(job.company) === normalizedCompany && !job.feedback?.hidden,
+      ).length;
+
+      if (
+        affectedInFeed > 5 &&
+        !window.confirm(`Hide ${affectedInFeed} jobs from ${companyName}?`)
+      ) {
+        return null;
+      }
+
+      return bulkHideJobsByCompany(profileId!, companyName);
+    },
+    onSuccess: (result) => {
+      if (!result) return;
+      invalidateAfterAction();
+      toast.success(`Hidden ${result.affectedCount} jobs from this company`);
+    },
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+  });
+
   function submitCompany(status: 'whitelist' | 'blacklist') {
     const value = (status === 'whitelist' ? whitelistInput : blacklistInput).trim();
     if (!value) {
@@ -208,6 +237,7 @@ export function useFeedbackCenterPage() {
     addWhitelistMutation,
     addBlacklistMutation,
     moveCompanyMutation,
+    bulkHideCompanyMutation,
     submitCompany,
   };
 }

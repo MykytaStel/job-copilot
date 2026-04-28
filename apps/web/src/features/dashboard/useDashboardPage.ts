@@ -13,9 +13,12 @@ import type {
 
 import { createApplication, getApplications, getDashboardStats } from '../../api/applications';
 import {
+  bulkHideJobsByCompany,
   hideJobForProfile,
   markJobBadFit,
   markJobSaved,
+  undoJobBadFit,
+  undoJobHide,
   unmarkJobBadFit,
 } from '../../api/feedback';
 import type { RankedJob } from '../../api/jobs';
@@ -28,14 +31,13 @@ import {
 } from '../../lib/queryInvalidation';
 import { readProfileId } from '../../lib/profileSession';
 import {
-  readSortMode,
-  writeSortMode,
   type SortMode,
   readPersistedLifecycle,
   writePersistedLifecycle,
   readPersistedSource,
   writePersistedSource,
 } from '../../lib/displayPrefs';
+import { useDisplayPrefs } from '../../lib/useDisplayPrefs';
 import { queryKeys } from '../../queryKeys';
 
 export type LifecycleFilter = 'all' | 'active' | 'inactive' | 'reactivated';
@@ -65,6 +67,11 @@ const LIFECYCLE_TABS: { value: LifecycleFilter; label: string }[] = [
 
 const DEFAULT_LIFECYCLE_FILTER: LifecycleFilter = 'all';
 const DASHBOARD_RERANK_WINDOW = 60;
+const UNDO_TOAST_DURATION_MS = 30_000;
+
+function normalizeCompanyName(companyName: string) {
+  return companyName.trim().replace(/\s+/g, ' ').toLowerCase();
+}
 
 function readLifecycleFilter(searchParams: URLSearchParams): LifecycleFilter {
   const lifecycle = searchParams.get('lifecycle');
@@ -87,18 +94,29 @@ function readSourceFilter(searchParams: URLSearchParams): string | null {
   return readPersistedSource();
 }
 
+function readJobIdFilter(searchParams: URLSearchParams): string[] {
+  const raw = searchParams.get('job_ids')?.trim();
+  if (!raw) return [];
+  return Array.from(new Set(raw.split(',').map((value) => value.trim()).filter(Boolean)));
+}
+
+function readCompanyFilter(searchParams: URLSearchParams): string | null {
+  return searchParams.get('company')?.trim() || null;
+}
+
 export function useDashboardPage() {
   const profileId = readProfileId();
   const queryClient = useQueryClient(); const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [sortMode, setSortModeState] = useState<SortMode>(() => readSortMode());
+  const { sortMode, setSortMode: setDisplaySortMode } = useDisplayPrefs();
   const setSortMode = useCallback((next: SortMode) => {
-    writeSortMode(next);
-    setSortModeState(next);
-  }, []);
+    setDisplaySortMode(next);
+  }, [setDisplaySortMode]);
   const lifecycleFilter = readLifecycleFilter(searchParams);
   const sourceFilter = readSourceFilter(searchParams);
+  const notificationJobIds = readJobIdFilter(searchParams);
+  const companyFilter = readCompanyFilter(searchParams);
 
   const updateFilters = ({
     lifecycle,
@@ -131,6 +149,13 @@ export function useDashboardPage() {
 
     setSearchParams(nextSearchParams, { replace: true });
   };
+
+  const clearContextFilters = useCallback(() => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('job_ids');
+    nextSearchParams.delete('company');
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const {
     data: jobsFeed,
@@ -179,7 +204,7 @@ export function useDashboardPage() {
 
   const jobs = useMemo(() => {
     const normalized = search.trim().toLowerCase();
-    const filtered = normalized
+    let filtered = normalized
       ? allJobs.filter(
           (job) =>
             job.title.toLowerCase().includes(normalized) ||
@@ -187,6 +212,16 @@ export function useDashboardPage() {
             job.description.toLowerCase().includes(normalized),
         )
       : [...allJobs];
+
+    if (notificationJobIds.length > 0) {
+      const allowedIds = new Set(notificationJobIds);
+      filtered = filtered.filter((job) => allowedIds.has(job.id));
+    }
+
+    if (companyFilter) {
+      const normalizedCompany = normalizeCompanyName(companyFilter);
+      filtered = filtered.filter((job) => normalizeCompanyName(job.company) === normalizedCompany);
+    }
 
     if (sortMode === 'relevance' && scoreById.size > 0) {
       filtered.sort(
@@ -197,7 +232,7 @@ export function useDashboardPage() {
     }
 
     return filtered;
-  }, [allJobs, scoreById, search, sortMode]);
+  }, [allJobs, companyFilter, notificationJobIds, scoreById, search, sortMode]);
 
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: queryKeys.applications.all(),
@@ -231,6 +266,40 @@ export function useDashboardPage() {
     },
   });
 
+  const undoHideMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      await undoJobHide(profileId, jobId);
+    },
+    onSuccess: () => {
+      void invalidateFeedbackViewQueries(queryClient, profileId);
+      showToast({ type: 'success', message: 'Hide undone' });
+    },
+    onError: (value: unknown) => {
+      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
+    },
+  });
+
+  const undoBadFitMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      await undoJobBadFit(profileId, jobId);
+    },
+    onSuccess: () => {
+      void invalidateFeedbackViewQueries(queryClient, profileId);
+      showToast({ type: 'success', message: 'Bad-fit mark undone' });
+    },
+    onError: (value: unknown) => {
+      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
+    },
+  });
+
   const hideMutation = useMutation({
     mutationFn: async (jobId: string) => {
       if (!profileId) {
@@ -239,9 +308,50 @@ export function useDashboardPage() {
 
       await hideJobForProfile(profileId, jobId);
     },
-    onSuccess: () => {
+    onSuccess: (_result, jobId) => {
       void invalidateFeedbackViewQueries(queryClient, profileId);
-      showToast({ type: 'success', message: 'Job hidden' });
+      showToast({
+        type: 'success',
+        message: 'Job hidden',
+        action: {
+          label: 'Undo',
+          onClick: () => undoHideMutation.mutate(jobId),
+        },
+        durationMs: UNDO_TOAST_DURATION_MS,
+      });
+    },
+    onError: (value: unknown) => {
+      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
+    },
+  });
+
+  const bulkHideCompanyMutation = useMutation({
+    mutationFn: async (companyName: string) => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      const normalizedCompany = normalizeCompanyName(companyName);
+      const affectedInFeed = allJobs.filter(
+        (job) => normalizeCompanyName(job.company) === normalizedCompany && !job.feedback?.hidden,
+      ).length;
+
+      if (
+        affectedInFeed > 5 &&
+        !window.confirm(`Hide ${affectedInFeed} jobs from ${companyName}?`)
+      ) {
+        return null;
+      }
+
+      return bulkHideJobsByCompany(profileId, companyName);
+    },
+    onSuccess: (result) => {
+      if (!result) return;
+      void invalidateFeedbackViewQueries(queryClient, profileId);
+      showToast({
+        type: 'success',
+        message: `Hidden ${result.affectedCount} jobs from this company`,
+      });
     },
     onError: (value: unknown) => {
       showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
@@ -256,9 +366,17 @@ export function useDashboardPage() {
 
       await markJobBadFit(profileId, jobId);
     },
-    onSuccess: () => {
+    onSuccess: (_result, jobId) => {
       void invalidateFeedbackViewQueries(queryClient, profileId);
-      showToast({ type: 'success', message: 'Marked as bad fit' });
+      showToast({
+        type: 'success',
+        message: 'Marked as bad fit',
+        action: {
+          label: 'Undo',
+          onClick: () => undoBadFitMutation.mutate(jobId),
+        },
+        durationMs: UNDO_TOAST_DURATION_MS,
+      });
     },
     onError: (value: unknown) => {
       showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
@@ -354,6 +472,9 @@ export function useDashboardPage() {
     setSortMode,
     lifecycleFilter,
     sourceFilter,
+    notificationJobIds,
+    companyFilter,
+    clearContextFilters,
     updateFilters,
     jobsLoading,
     jobs,
@@ -377,7 +498,10 @@ export function useDashboardPage() {
     insights,
     saveMutation,
     hideMutation,
+    undoHideMutation,
+    bulkHideCompanyMutation,
     badFitMutation,
+    undoBadFitMutation,
     unmarkBadFitMutation,
   };
 }

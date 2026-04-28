@@ -5,7 +5,7 @@ use axum::response::IntoResponse;
 use axum::{Json, body};
 use serde_json::{Value, json};
 
-use crate::api::dto::feedback::UpdateCompanyFeedbackRequest;
+use crate::api::dto::feedback::{BulkHideJobsByCompanyRequest, UpdateCompanyFeedbackRequest};
 use crate::api::error::ApiJson;
 use crate::api::middleware::auth::AuthUser;
 use crate::domain::feedback::model::{
@@ -23,9 +23,10 @@ use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
 use crate::state::AppState;
 
 use super::{
-    RemoveCompanyBlacklistBySlugQuery, add_company_blacklist, clear_all_hidden_jobs, hide_job,
-    list_feedback, mark_job_bad_fit, remove_company_blacklist_by_slug, save_job, unhide_job,
-    unmark_job_bad_fit, unsave_job,
+    BulkHideJobsByCompanyQuery, JobFeedbackActionQuery, RemoveCompanyBlacklistBySlugQuery,
+    add_company_blacklist, bulk_hide_jobs_by_company, clear_all_hidden_jobs, hide_job,
+    list_feedback, mark_job_bad_fit, remove_company_blacklist_by_slug, save_job, undo_job_bad_fit,
+    undo_job_hide, unhide_job, unmark_job_bad_fit, unsave_job,
 };
 
 fn sample_profile() -> Profile {
@@ -355,6 +356,82 @@ async fn unmark_bad_fit_clears_bad_fit_flag() {
         !overview.jobs[0].bad_fit,
         "bad_fit should be cleared after unmark"
     );
+}
+
+#[tokio::test]
+async fn undo_job_hide_alias_clears_hidden_flag() {
+    let state = test_state().with_feedback_service(FeedbackService::for_tests(
+        FeedbackServiceStub::default().with_job_feedback(JobFeedbackRecord {
+            profile_id: "profile-1".to_string(),
+            job_id: "job-1".to_string(),
+            saved: false,
+            hidden: true,
+            bad_fit: false,
+            salary_signal: None,
+            interest_rating: None,
+            work_mode_signal: None,
+            legitimacy_signal: None,
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+        }),
+    ));
+
+    let status = undo_job_hide(
+        State(state.clone()),
+        None,
+        Path("job-1".to_string()),
+        Query(JobFeedbackActionQuery {
+            profile_id: Some("profile-1".to_string()),
+        }),
+    )
+    .await
+    .expect("undo hide should succeed");
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let Json(overview) = list_feedback(State(state), None, Path("profile-1".to_string()))
+        .await
+        .expect("listing feedback should succeed");
+
+    assert!(!overview.jobs[0].hidden);
+}
+
+#[tokio::test]
+async fn undo_job_bad_fit_alias_clears_bad_fit_flag() {
+    let state = test_state().with_feedback_service(FeedbackService::for_tests(
+        FeedbackServiceStub::default().with_job_feedback(JobFeedbackRecord {
+            profile_id: "profile-1".to_string(),
+            job_id: "job-1".to_string(),
+            saved: false,
+            hidden: false,
+            bad_fit: true,
+            salary_signal: None,
+            interest_rating: None,
+            work_mode_signal: None,
+            legitimacy_signal: None,
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+        }),
+    ));
+
+    let status = undo_job_bad_fit(
+        State(state.clone()),
+        None,
+        Path("job-1".to_string()),
+        Query(JobFeedbackActionQuery {
+            profile_id: Some("profile-1".to_string()),
+        }),
+    )
+    .await
+    .expect("undo bad fit should succeed");
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let Json(overview) = list_feedback(State(state), None, Path("profile-1".to_string()))
+        .await
+        .expect("listing feedback should succeed");
+
+    assert!(!overview.jobs[0].bad_fit);
 }
 
 #[tokio::test]
@@ -695,4 +772,61 @@ async fn clear_all_hidden_jobs_rejects_profile_mismatch() {
     .expect_err("profile mismatch should be rejected");
 
     assert_eq!(error.into_response().status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn bulk_hide_jobs_by_company_returns_affected_count() {
+    let feedback_stub = FeedbackServiceStub::default();
+
+    feedback_stub
+        .upsert_job_feedback("profile-1", "novaledger:job-1", JobFeedbackFlags::default())
+        .expect("seed visible feedback");
+    feedback_stub
+        .upsert_job_feedback(
+            "profile-1",
+            "novaledger:job-2",
+            JobFeedbackFlags {
+                hidden: true,
+                ..Default::default()
+            },
+        )
+        .expect("seed hidden feedback");
+    feedback_stub
+        .upsert_job_feedback("profile-2", "novaledger:job-3", JobFeedbackFlags::default())
+        .expect("seed other profile feedback");
+
+    let state = test_state_with_feedback(FeedbackService::for_tests(feedback_stub));
+
+    let Json(response) = bulk_hide_jobs_by_company(
+        State(state.clone()),
+        None,
+        Query(BulkHideJobsByCompanyQuery {
+            profile_id: Some("profile-1".to_string()),
+        }),
+        ApiJson(BulkHideJobsByCompanyRequest {
+            company_name: "  NovaLedger  ".to_string(),
+        }),
+    )
+    .await
+    .expect("bulk hide should succeed");
+
+    assert_eq!(response.affected_count, 1);
+
+    let profile_1_feedback = state
+        .feedback_service
+        .list_job_feedback("profile-1")
+        .await
+        .expect("profile feedback should be readable");
+    assert!(profile_1_feedback.iter().all(|record| record.hidden));
+
+    let profile_2_feedback = state
+        .feedback_service
+        .list_job_feedback("profile-2")
+        .await
+        .expect("other profile feedback should be readable");
+    assert!(
+        profile_2_feedback
+            .iter()
+            .any(|record| record.job_id == "novaledger:job-3" && !record.hidden)
+    );
 }

@@ -268,6 +268,37 @@ impl FeedbackServiceStub {
         Ok(cleared)
     }
 
+    pub fn bulk_hide_jobs_by_company(
+        &self,
+        profile_id: &str,
+        normalized_company_name: &str,
+    ) -> Result<u64, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let mut job_feedback = self
+            .job_feedback_by_key
+            .lock()
+            .expect("feedback stub mutex should not be poisoned");
+
+        let mut hidden = 0;
+        let company_prefix = format!("{normalized_company_name}:");
+
+        for record in job_feedback.values_mut() {
+            if record.profile_id == profile_id
+                && !record.hidden
+                && record.job_id.starts_with(&company_prefix)
+            {
+                record.hidden = true;
+                record.updated_at = "2026-04-14T00:00:01+00:00".to_string();
+                hidden += 1;
+            }
+        }
+
+        Ok(hidden)
+    }
+
     pub fn delete_all_for_profile(&self, profile_id: &str) -> Result<u64, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);

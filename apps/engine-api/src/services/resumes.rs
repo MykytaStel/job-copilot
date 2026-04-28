@@ -41,7 +41,16 @@ impl ResumesService {
 
     pub async fn upload(&self, input: UploadResume) -> Result<ResumeVersion, RepositoryError> {
         match &self.backend {
-            ResumesServiceBackend::Repository(repository) => repository.upload(&input).await,
+            ResumesServiceBackend::Repository(repository) => {
+                if let Some(active) = repository.get_active().await?
+                    && normalize_resume_text(&active.raw_text)
+                        == normalize_resume_text(&input.raw_text)
+                {
+                    return Ok(active);
+                }
+
+                repository.upload(&input).await
+            }
             #[cfg(test)]
             ResumesServiceBackend::Stub(stub) => stub.upload(input),
         }
@@ -69,6 +78,10 @@ impl ResumesService {
             backend: ResumesServiceBackend::Stub(Arc::new(stub)),
         }
     }
+}
+
+fn normalize_resume_text(value: &str) -> String {
+    value.replace("\r\n", "\n").trim().to_string()
 }
 
 #[cfg(test)]
@@ -115,6 +128,13 @@ impl ResumesServiceStub {
             .resumes
             .lock()
             .expect("resumes stub mutex should not be poisoned");
+        if let Some(active) = resumes.iter().find(|resume| {
+            resume.is_active
+                && normalize_resume_text(&resume.raw_text) == normalize_resume_text(&input.raw_text)
+        }) {
+            return Ok(active.clone());
+        }
+
         for resume in resumes.iter_mut() {
             resume.is_active = false;
         }
@@ -166,5 +186,34 @@ impl ResumesServiceStub {
         resumes.retain(|resume| resume.id != id);
 
         Ok(resumes.len() != original_len)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ResumesService, ResumesServiceStub};
+    use crate::domain::resume::model::UploadResume;
+
+    #[tokio::test]
+    async fn upload_returns_active_resume_when_text_is_unchanged() {
+        let service = ResumesService::for_tests(ResumesServiceStub::default());
+        let first = service
+            .upload(UploadResume {
+                filename: "profile.md".to_string(),
+                raw_text: "Senior mobile engineer\nReact Native".to_string(),
+            })
+            .await
+            .expect("first upload should create resume");
+
+        let second = service
+            .upload(UploadResume {
+                filename: "profile-copy.md".to_string(),
+                raw_text: " Senior mobile engineer\nReact Native ".to_string(),
+            })
+            .await
+            .expect("same upload should return active resume");
+
+        assert_eq!(second.id, first.id);
+        assert_eq!(service.list().await.expect("list").len(), 1);
     }
 }

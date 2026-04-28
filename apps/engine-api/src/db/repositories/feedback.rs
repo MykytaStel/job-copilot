@@ -582,6 +582,55 @@ impl FeedbackRepository {
         Ok(result.rows_affected())
     }
 
+    pub async fn bulk_hide_jobs_by_company(
+        &self,
+        profile_id: &str,
+        normalized_company_name: &str,
+    ) -> Result<u64, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let result = sqlx::query(
+            r#"
+            INSERT INTO profile_job_feedback (
+                profile_id,
+                job_id,
+                saved,
+                hidden,
+                bad_fit,
+                created_at,
+                updated_at
+            )
+            SELECT
+                $1,
+                jobs.id,
+                false,
+                true,
+                false,
+                NOW(),
+                NOW()
+            FROM jobs
+            LEFT JOIN profile_job_feedback existing_feedback
+              ON existing_feedback.profile_id = $1
+             AND existing_feedback.job_id = jobs.id
+            WHERE REGEXP_REPLACE(LOWER(TRIM(jobs.company_name)), '\s+', ' ', 'g') = $2
+              AND COALESCE(existing_feedback.hidden, false) = false
+            ON CONFLICT (profile_id, job_id)
+            DO UPDATE SET
+                hidden = true,
+                updated_at = NOW()
+            WHERE profile_job_feedback.hidden = false
+            "#,
+        )
+        .bind(profile_id)
+        .bind(normalized_company_name)
+        .execute(pool)
+        .await?;
+
+        Ok(result.rows_affected())
+    }
+
     pub async fn delete_all_for_profile(&self, profile_id: &str) -> Result<u64, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);

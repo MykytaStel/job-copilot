@@ -39,6 +39,18 @@ export function Toast({
         {toast.description ? (
           <p className="m-0 mt-1 text-xs opacity-80">{toast.description}</p>
         ) : null}
+        {toast.action ? (
+          <button
+            type="button"
+            onClick={() => {
+              toast.action?.onClick();
+              onDismiss(toast.id);
+            }}
+            className="mt-2 rounded-lg border border-current/30 px-2.5 py-1 text-xs font-semibold transition hover:bg-white/10"
+          >
+            {toast.action.label}
+          </button>
+        ) : null}
       </div>
 
       <button

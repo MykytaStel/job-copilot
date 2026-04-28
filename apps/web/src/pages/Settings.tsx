@@ -43,14 +43,8 @@ import { PageHeader } from '../components/ui/SectionHeader';
 import { SurfaceMetric } from '../components/ui/Surface';
 import { cn } from '../lib/cn';
 import { readProfileId } from '../lib/profileSession';
-import {
-  readDensity,
-  writeDensity,
-  readSortMode,
-  writeSortMode,
-  type DensityMode,
-  type SortMode,
-} from '../lib/displayPrefs';
+import type { DensityMode, SortMode } from '../lib/displayPrefs';
+import { useDisplayPrefs } from '../lib/useDisplayPrefs';
 import {
   INGESTION_FREQUENCY_OPTIONS,
   readIngestionFrequency,
@@ -152,8 +146,7 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const profileId = readProfileId();
   const [activeSection, setActiveSection] = useState<SectionId>('profile');
-  const [density, setDensityState] = useState<DensityMode>(() => readDensity());
-  const [sortPref, setSortPrefState] = useState<SortMode>(() => readSortMode());
+  const { density, sortMode: sortPref, setDensity, setSortMode: setSortPref } = useDisplayPrefs();
   const [ingestionFrequency, setIngestionFrequencyState] = useState(() => readIngestionFrequency());
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
   const [resetConfirmationInput, setResetConfirmationInput] = useState('');
@@ -267,19 +260,9 @@ export default function Settings() {
       });
     },
   });
-  function setDensity(value: DensityMode) {
-    writeDensity(value);
-    setDensityState(value);
-  }
-
   function setIngestionFrequency(value: IngestionFrequencyMinutes) {
     writeIngestionFrequency(value);
     setIngestionFrequencyState(value);
-  }
-
-  function setSortPref(value: SortMode) {
-    writeSortMode(value);
-    setSortPrefState(value);
   }
 
   function toggleNotificationPreference(
@@ -537,6 +520,7 @@ export default function Settings() {
                       <p className="text-sm font-semibold text-foreground">CV Management</p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         Review uploaded CV versions and choose which one powers matching flows.
+                        Profile edits reuse the active CV unless the CV text changes.
                       </p>
                     </div>
 

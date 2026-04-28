@@ -9,7 +9,7 @@ export function Page({
   return (
     <main
       className={cn(
-        'mx-auto w-full max-w-[1400px] min-w-0 overflow-x-hidden px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8',
+        'mx-auto w-full max-w-[1400px] min-w-0 space-y-6 overflow-x-hidden px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8',
         className,
       )}
       {...props}

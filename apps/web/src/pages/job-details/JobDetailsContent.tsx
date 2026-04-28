@@ -43,7 +43,7 @@ export function JobDetailsContent({ state }: { state: JobDetailsPageState }) {
             />
           ) : null}
 
-          {activeTab === 'match' ? <JobDetailsMatchTab fit={fit} /> : null}
+          {activeTab === 'match' ? <JobDetailsMatchTab fit={fit} job={job} /> : null}
 
           {activeTab === 'ai' ? (
             <JobDetailsAiTab

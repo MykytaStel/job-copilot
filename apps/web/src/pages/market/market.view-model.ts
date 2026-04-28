@@ -21,8 +21,11 @@ export function formatPercent(value: number) {
   return `${percentFormatter.format(value)}%`;
 }
 
-export function formatSalary(value: number) {
-  return numberFormatter.format(Math.round(value));
+export function formatSalary(value: number, currency?: string) {
+  const formatted = numberFormatter.format(Math.round(value));
+  const normalizedCurrency = currency?.trim().toUpperCase();
+
+  return normalizedCurrency ? `${formatted} ${normalizedCurrency}` : formatted;
 }
 
 export function titleCase(value: string) {
