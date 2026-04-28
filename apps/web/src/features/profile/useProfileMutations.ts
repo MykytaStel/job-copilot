@@ -28,6 +28,9 @@ export function useProfileMutations(clearDraft: () => void) {
       preferredLocations: string[];
       workModePreference: WorkModePreference;
       searchPreferences?: PersistedSearchPreferences;
+			portfolioUrl?: string;
+			githubUrl?: string;
+			linkedinUrl?: string;
     }) =>
       saveProfile({
         name: vars.name,
@@ -44,6 +47,9 @@ export function useProfileMutations(clearDraft: () => void) {
         searchPreferences: vars.searchPreferences,
         summary: undefined,
         skills: [],
+				portfolioUrl: vars.portfolioUrl,
+				githubUrl: vars.githubUrl,
+				linkedinUrl: vars.linkedinUrl,
       }),
     onSuccess: (updated, vars) => {
       queryClient.setQueryData(queryKeys.profile.root(), updated);

@@ -230,6 +230,9 @@ mod tests {
                 ]),
                 work_mode_preference: None,
                 search_preferences: None,
+                portfolio_url: None,
+                github_url: None,
+                linkedin_url: None,
             }),
         )
         .await
@@ -279,6 +282,9 @@ mod tests {
                 preferred_locations: None,
                 work_mode_preference: None,
                 search_preferences: None,
+                portfolio_url: None,
+                github_url: None,
+                linkedin_url: None,
             }),
         )
         .await
@@ -321,6 +327,9 @@ mod tests {
                 preferred_locations: None,
                 work_mode_preference: None,
                 search_preferences: None,
+                portfolio_url: None,
+                github_url: None,
+                linkedin_url: None,
             }),
         )
         .await
@@ -379,6 +388,9 @@ mod tests {
                 preferred_locations: None,
                 work_mode_preference: None,
                 search_preferences: None,
+                portfolio_url: None,
+                github_url: None,
+                linkedin_url: None,
             }),
         )
         .await
@@ -468,6 +480,9 @@ mod tests {
                 preferred_locations: None,
                 work_mode_preference: None,
                 search_preferences: None,
+                portfolio_url: None,
+                github_url: None,
+                linkedin_url: None,
             }),
         )
         .await
@@ -513,6 +528,9 @@ mod tests {
                 preferred_locations: None,
                 work_mode_preference: None,
                 search_preferences: None,
+                portfolio_url: None,
+                github_url: None,
+                linkedin_url: None,
             }),
         )
         .await

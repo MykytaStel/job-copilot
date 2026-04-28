@@ -24,6 +24,9 @@ export interface CandidateProfile {
   skills: string[];
   updatedAt: string;
   skillsUpdatedAt?: string;
+	portfolioUrl?: string;
+	githubUrl?: string;
+	linkedinUrl?: string;
 }
 
 export interface CandidateProfileInput {
@@ -39,6 +42,9 @@ export interface CandidateProfileInput {
   workModePreference?: WorkModePreference;
   summary?: string;
   skills: string[];
+	portfolioUrl?: string;
+	githubUrl?: string;
+	linkedinUrl?: string;
 }
 
 export interface ResumeVersion {

@@ -65,6 +65,9 @@ export type EngineProfile = {
   created_at: string;
   updated_at: string;
   skills_updated_at?: string | null;
+  portfolio_url?: string | null;
+  github_url?: string | null;
+  linkedin_url?: string | null;
 };
 
 export type EngineProfileScoringWeights = {

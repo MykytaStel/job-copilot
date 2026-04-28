@@ -39,6 +39,9 @@ pub struct Profile {
     pub created_at: String,
     pub updated_at: String,
     pub skills_updated_at: Option<String>,
+    pub portfolio_url: Option<String>,
+    pub github_url: Option<String>,
+    pub linkedin_url: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -64,6 +67,9 @@ pub struct CreateProfile {
     pub preferred_locations: Vec<String>,
     pub work_mode_preference: String,
     pub search_preferences: Option<SearchPreferences>,
+    pub portfolio_url: Option<String>,
+    pub github_url: Option<String>,
+    pub linkedin_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -82,4 +88,7 @@ pub struct UpdateProfile {
     pub work_mode_preference: Option<String>,
     pub preferred_language: Option<Option<String>>,
     pub search_preferences: Option<Option<SearchPreferences>>,
+    pub portfolio_url: Option<Option<String>>,
+    pub github_url: Option<Option<String>>,
+    pub linkedin_url: Option<Option<String>>,
 }

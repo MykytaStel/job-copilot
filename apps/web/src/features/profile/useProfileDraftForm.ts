@@ -18,6 +18,9 @@ export type ProfileFormState = {
   languages: LanguageProficiency[];
   preferredLocations: string[];
   workModePreference: WorkModePreference;
+	portfolioUrl: string;
+	githubUrl: string;
+	linkedinUrl: string;
 };
 
 function buildFormState(
@@ -36,6 +39,9 @@ function buildFormState(
     languages: profile?.languages ?? [],
     preferredLocations: profile?.preferredLocations ?? [],
     workModePreference: profile?.workModePreference ?? 'any',
+		portfolioUrl: profile?.portfolioUrl ?? '',
+		githubUrl: profile?.githubUrl ?? '',
+		linkedinUrl: profile?.linkedinUrl ?? '',
   };
 }
 
@@ -81,6 +87,9 @@ export function useProfileDraftForm(
       updateDraft({ languages: removeLanguage(form.languages, language) }),
     updateLanguageLevel: (language: string, level: LanguageLevel) =>
       updateDraft({ languages: updateLanguageLevel(form.languages, language, level) }),
+		setPortfolioUrl: (value: string) => updateDraft({ portfolioUrl: value }),
+		setGithubUrl: (value: string) => updateDraft({ githubUrl: value }),
+		setLinkedinUrl: (value: string) => updateDraft({ linkedinUrl: value }),
   };
 }
 
