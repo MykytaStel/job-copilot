@@ -223,6 +223,7 @@ pub fn protected_router() -> Router<AppState> {
             "/api/v1/resumes/{id}/activate",
             post(resumes::activate_resume),
         )
+        .route("/api/v1/resumes/{id}", delete(resumes::delete_resume))
         .route("/api/v1/resume/upload", post(resumes::upload_resume))
         .route("/api/v1/search", get(search::search))
         .route("/api/v1/search/run", post(search::run_search))
