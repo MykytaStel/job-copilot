@@ -37,6 +37,7 @@ impl ProfilesServiceStub {
             salary_currency: input.salary_currency,
             languages: input.languages,
             preferred_locations: input.preferred_locations,
+            experience: input.experience,
             work_mode_preference: input.work_mode_preference,
             preferred_language: None,
             search_preferences: input.search_preferences,
@@ -117,6 +118,9 @@ impl ProfilesServiceStub {
         }
         if let Some(preferred_locations) = input.preferred_locations {
             profile.preferred_locations = preferred_locations;
+        }
+        if let Some(experience) = input.experience {
+            profile.experience = experience;
         }
         if let Some(work_mode_preference) = input.work_mode_preference {
             profile.work_mode_preference = work_mode_preference;
