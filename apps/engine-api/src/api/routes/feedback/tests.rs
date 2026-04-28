@@ -9,7 +9,7 @@ use crate::api::dto::feedback::UpdateCompanyFeedbackRequest;
 use crate::api::error::ApiJson;
 use crate::api::middleware::auth::AuthUser;
 use crate::domain::feedback::model::{
-    CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackRecord,
+    CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackFlags, JobFeedbackRecord,
 };
 use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
 use crate::domain::profile::model::Profile;
@@ -23,8 +23,8 @@ use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
 use crate::state::AppState;
 
 use super::{
-    add_company_blacklist, hide_job, list_feedback, mark_job_bad_fit, save_job, unhide_job,
-    unmark_job_bad_fit, unsave_job,
+    add_company_blacklist, clear_all_hidden_jobs, hide_job, list_feedback, mark_job_bad_fit,
+    save_job, unhide_job, unmark_job_bad_fit, unsave_job,
 };
 
 fn sample_profile() -> Profile {
@@ -89,6 +89,10 @@ fn sample_job_view(job_id: &str, company_name: &str) -> JobView {
 }
 
 fn test_state() -> AppState {
+    test_state_with_feedback(FeedbackService::for_tests(FeedbackServiceStub::default()))
+}
+
+fn test_state_with_feedback(feedback_service: FeedbackService) -> AppState {
     AppState::for_services(
         ProfilesService::for_tests(ProfilesServiceStub::default().with_profile(sample_profile())),
         JobsService::for_tests(
@@ -99,6 +103,7 @@ fn test_state() -> AppState {
         ApplicationsService::for_tests(ApplicationsServiceStub::default()),
         ResumesService::for_tests(ResumesServiceStub::default()),
     )
+    .with_feedback_service(feedback_service)
 }
 
 #[tokio::test]
@@ -554,4 +559,100 @@ async fn missing_profile_returns_not_found_on_feedback_list() {
         .into_response();
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn clear_all_hidden_jobs_clears_only_current_profile_hidden_flags() {
+    let feedback_stub = FeedbackServiceStub::default();
+
+    feedback_stub
+        .upsert_job_feedback(
+            "profile-1",
+            "job-hidden-1",
+            JobFeedbackFlags {
+                hidden: true,
+                ..Default::default()
+            },
+        )
+        .expect("seed hidden feedback");
+
+    feedback_stub
+        .upsert_job_feedback(
+            "profile-1",
+            "job-saved",
+            JobFeedbackFlags {
+                saved: true,
+                hidden: true,
+                ..Default::default()
+            },
+        )
+        .expect("seed saved hidden feedback");
+
+    feedback_stub
+        .upsert_job_feedback(
+            "profile-2",
+            "job-other-profile",
+            JobFeedbackFlags {
+                hidden: true,
+                ..Default::default()
+            },
+        )
+        .expect("seed other profile feedback");
+
+    let state = test_state_with_feedback(FeedbackService::for_tests(feedback_stub));
+
+    let status = clear_all_hidden_jobs(
+        State(state.clone()),
+        Some(Extension(AuthUser {
+            profile_id: "profile-1".to_string(),
+        })),
+        Path("profile-1".to_string()),
+    )
+    .await
+    .expect("clear hidden jobs should succeed");
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let profile_1_feedback = state
+        .feedback_service
+        .list_job_feedback("profile-1")
+        .await
+        .expect("profile feedback should be readable");
+
+    assert!(profile_1_feedback.iter().all(|record| !record.hidden));
+    assert!(
+        profile_1_feedback
+            .iter()
+            .any(|record| record.job_id == "job-saved" && record.saved)
+    );
+
+    let profile_2_feedback = state
+        .feedback_service
+        .list_job_feedback("profile-2")
+        .await
+        .expect("other profile feedback should be readable");
+
+    assert!(
+        profile_2_feedback
+            .iter()
+            .any(|record| record.job_id == "job-other-profile" && record.hidden)
+    );
+}
+
+#[tokio::test]
+async fn clear_all_hidden_jobs_rejects_profile_mismatch() {
+    let state =
+        test_state_with_feedback(FeedbackService::for_tests(FeedbackServiceStub::default()));
+
+    let error = clear_all_hidden_jobs(
+        State(state),
+        Some(Extension(AuthUser {
+            profile_id: "profile-1".to_string(),
+        })),
+        Path("profile-2".to_string()),
+    )
+    .await
+    .expect_err("profile mismatch should be rejected");
+
+    assert_eq!(error.into_response().status(), StatusCode::FORBIDDEN);
 }

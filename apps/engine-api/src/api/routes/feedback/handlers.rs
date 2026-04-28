@@ -1,6 +1,8 @@
-use axum::Extension;
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::{
+    Extension,
+    extract::{Path, State},
+    http::StatusCode,
+};
 
 use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 
@@ -477,6 +479,22 @@ async fn remove_company_feedback(
         .remove_company_feedback(&profile_id, &normalized_company_name, status)
         .await
         .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn clear_all_hidden_jobs(
+    State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    ensure_profile_exists(&state, auth.as_deref(), &id).await?;
+
+    state
+        .feedback_service
+        .clear_all_hidden_jobs(&id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "hidden_feedback_clear_failed"))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -560,6 +560,28 @@ impl FeedbackRepository {
             .collect::<Result<Vec<_>, _>>()
     }
 
+    pub async fn clear_all_hidden_jobs(&self, profile_id: &str) -> Result<u64, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let result = sqlx::query(
+            r#"
+        UPDATE profile_job_feedback
+        SET
+            hidden = false,
+            updated_at = NOW()
+        WHERE profile_id = $1
+          AND hidden = true
+        "#,
+        )
+        .bind(profile_id)
+        .execute(pool)
+        .await?;
+
+        Ok(result.rows_affected())
+    }
+
     /// Clear specific job-level feedback flags. Only updates flags that are `true` in `flags`.
     pub async fn clear_job_feedback(
         &self,

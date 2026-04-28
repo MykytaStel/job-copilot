@@ -245,4 +245,26 @@ impl FeedbackServiceStub {
             .cloned()
             .collect())
     }
+
+    pub fn clear_all_hidden_jobs(&self, profile_id: &str) -> Result<u64, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let mut job_feedback = self
+            .job_feedback_by_key
+            .lock()
+            .expect("feedback stub mutex should not be poisoned");
+
+        let mut cleared = 0;
+
+        for record in job_feedback.values_mut() {
+            if record.profile_id == profile_id && record.hidden {
+                record.hidden = false;
+                cleared += 1;
+            }
+        }
+
+        Ok(cleared)
+    }
 }

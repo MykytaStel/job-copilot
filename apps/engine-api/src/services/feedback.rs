@@ -295,6 +295,16 @@ impl FeedbackService {
             .to_lowercase()
     }
 
+    pub async fn clear_all_hidden_jobs(&self, profile_id: &str) -> Result<u64, RepositoryError> {
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository.clear_all_hidden_jobs(profile_id).await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(stub) => stub.clear_all_hidden_jobs(profile_id),
+        }
+    }
+
     #[cfg(test)]
     pub fn for_tests(stub: FeedbackServiceStub) -> Self {
         Self {

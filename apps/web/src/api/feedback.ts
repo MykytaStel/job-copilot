@@ -164,10 +164,7 @@ export async function tagJobFeedback(
   jobId: string,
   tags: JobFeedbackReason[],
 ): Promise<void> {
-  await request<void>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/tags`,
-    json('PUT', { tags }),
-  );
+  await request<void>(`/api/v1/profiles/${profileId}/jobs/${jobId}/tags`, json('PUT', { tags }));
 }
 
 export async function setJobLegitimacySignal(
@@ -179,4 +176,11 @@ export async function setJobLegitimacySignal(
     `/api/v1/profiles/${profileId}/jobs/${jobId}/legitimacy-signal`,
     json('PUT', { signal }),
   );
+}
+
+export async function clearAllHiddenJobs(profileId: string): Promise<void> {
+  await request<void>(`/api/v1/profiles/${profileId}/feedback/hidden/all`, {
+    method: 'DELETE',
+  });
+  await bustRerankCache(profileId);
 }
