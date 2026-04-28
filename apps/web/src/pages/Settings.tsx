@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   Ban,
   Bell,
   Building2,
@@ -62,6 +63,7 @@ import { clearAllHiddenJobs, getFeedback, removeCompanyBlacklistBySlug } from '.
 import { exportUserData } from '../api/export';
 import { invalidateFeedbackViewQueries } from '../lib/queryInvalidation';
 import { formatOptionalDate } from '../lib/format';
+import { resetProfileData } from '../api/dataManagement';
 
 const NOTIFICATION_PREVIEW_LIMIT = 20;
 
@@ -153,6 +155,8 @@ export default function Settings() {
   const [density, setDensityState] = useState<DensityMode>(() => readDensity());
   const [sortPref, setSortPrefState] = useState<SortMode>(() => readSortMode());
   const [ingestionFrequency, setIngestionFrequencyState] = useState(() => readIngestionFrequency());
+  const [showResetConfirmation, setShowResetConfirmation] = useState(false);
+  const [resetConfirmationInput, setResetConfirmationInput] = useState('');
 
   const { data: notificationPreferences, isLoading: notificationPreferencesLoading } = useQuery({
     queryKey: queryKeys.notifications.preferences(profileId ?? 'none'),
@@ -323,6 +327,24 @@ export default function Settings() {
     },
   });
 
+  const resetDataMutation = useMutation({
+    mutationFn: () => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      return resetProfileData(profileId);
+    },
+    onSuccess: () => {
+      setResetConfirmationInput('');
+      setShowResetConfirmation(false);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.profile.root() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
+      void invalidateFeedbackViewQueries(queryClient, profileId);
+    },
+  });
+
   if (!profile) {
     return (
       <Page>
@@ -392,6 +414,17 @@ export default function Settings() {
 
     if (confirmed) {
       deleteResumeMutation.mutate(resume.id);
+    }
+  }
+
+  function beginResetDataConfirmation() {
+    const confirmed = window.confirm(
+      'This will delete all feedback and applications for this profile and reset search preferences. Continue?',
+    );
+
+    if (confirmed) {
+      setShowResetConfirmation(true);
+      setResetConfirmationInput('');
     }
   }
 
@@ -1010,6 +1043,70 @@ export default function Settings() {
                   {removeBlockedCompanyMutation.isError && (
                     <p className="mt-3 text-sm text-danger">
                       Could not remove blocked company. Please try again.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-[var(--radius-lg)] border border-danger/35 bg-danger/5 p-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-danger/25 bg-danger/10 text-danger">
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">Danger Zone</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Clear all feedback, applications, and saved search preferences for this
+                          profile. Profile details and CVs are preserved.
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={beginResetDataConfirmation}
+                      disabled={!profileId || resetDataMutation.isPending}
+                      className="shrink-0 border-danger/40 text-danger hover:bg-danger/10 hover:text-danger"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Clear all data
+                    </Button>
+                  </div>
+
+                  {showResetConfirmation && (
+                    <div className="mt-4 rounded-[var(--radius-md)] border border-danger/30 bg-surface p-3">
+                      <label className="block text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                        Type RESET to confirm
+                      </label>
+                      <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                        <input
+                          value={resetConfirmationInput}
+                          onChange={(event) => setResetConfirmationInput(event.currentTarget.value)}
+                          disabled={resetDataMutation.isPending}
+                          className="min-h-10 flex-1 rounded-[var(--radius-md)] border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-danger/60 focus:ring-2 focus:ring-danger/20"
+                          autoComplete="off"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => resetDataMutation.mutate()}
+                          disabled={
+                            resetConfirmationInput !== 'RESET' ||
+                            resetDataMutation.isPending ||
+                            !profileId
+                          }
+                          className="shrink-0 border-danger/40 text-danger hover:bg-danger/10 hover:text-danger"
+                        >
+                          {resetDataMutation.isPending ? 'Clearing data' : 'Confirm reset'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {resetDataMutation.isError && (
+                    <p className="mt-3 text-sm text-danger">
+                      Could not clear profile data. Please try again.
                     </p>
                   )}
                 </div>

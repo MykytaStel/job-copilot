@@ -582,6 +582,48 @@ impl FeedbackRepository {
         Ok(result.rows_affected())
     }
 
+    pub async fn delete_all_for_profile(&self, profile_id: &str) -> Result<u64, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let tag_result = sqlx::query(
+            r#"
+            DELETE FROM profile_job_feedback_tags
+            WHERE profile_id = $1
+            "#,
+        )
+        .bind(profile_id)
+        .execute(pool)
+        .await?;
+
+        let job_result = sqlx::query(
+            r#"
+            DELETE FROM profile_job_feedback
+            WHERE profile_id = $1
+            "#,
+        )
+        .bind(profile_id)
+        .execute(pool)
+        .await?;
+
+        let company_result = sqlx::query(
+            r#"
+            DELETE FROM profile_company_feedback
+            WHERE profile_id = $1
+            "#,
+        )
+        .bind(profile_id)
+        .execute(pool)
+        .await?;
+
+        Ok(
+            tag_result.rows_affected()
+                + job_result.rows_affected()
+                + company_result.rows_affected(),
+        )
+    }
+
     /// Clear specific job-level feedback flags. Only updates flags that are `true` in `flags`.
     pub async fn clear_job_feedback(
         &self,

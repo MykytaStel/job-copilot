@@ -305,6 +305,16 @@ impl FeedbackService {
         }
     }
 
+    pub async fn delete_all_for_profile(&self, profile_id: &str) -> Result<u64, RepositoryError> {
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository.delete_all_for_profile(profile_id).await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(stub) => stub.delete_all_for_profile(profile_id),
+        }
+    }
+
     #[cfg(test)]
     pub fn for_tests(stub: FeedbackServiceStub) -> Self {
         Self {

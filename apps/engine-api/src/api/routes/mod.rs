@@ -3,6 +3,7 @@ pub mod applications;
 pub mod auth;
 pub mod behavior;
 pub mod cv_tailoring;
+pub mod data_management;
 pub mod debug;
 pub mod events;
 pub mod export;
@@ -53,6 +54,10 @@ pub fn protected_router() -> Router<AppState> {
             post(applications::create_application),
         )
         .route("/api/v1/cv/tailor", post(cv_tailoring::tailor_cv))
+        .route(
+            "/api/v1/data/reset",
+            post(data_management::reset_profile_data),
+        )
         .route("/api/v1/export", get(export::export_user_data))
         .route(
             "/api/v1/applications/{id}",

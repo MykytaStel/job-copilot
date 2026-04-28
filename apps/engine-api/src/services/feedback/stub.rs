@@ -267,4 +267,30 @@ impl FeedbackServiceStub {
 
         Ok(cleared)
     }
+
+    pub fn delete_all_for_profile(&self, profile_id: &str) -> Result<u64, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let mut deleted = 0;
+
+        let mut job_feedback = self
+            .job_feedback_by_key
+            .lock()
+            .expect("feedback job stub mutex should not be poisoned");
+        let job_len = job_feedback.len();
+        job_feedback.retain(|(record_profile_id, _), _| record_profile_id != profile_id);
+        deleted += (job_len - job_feedback.len()) as u64;
+
+        let mut company_feedback = self
+            .company_feedback_by_key
+            .lock()
+            .expect("feedback company stub mutex should not be poisoned");
+        let company_len = company_feedback.len();
+        company_feedback.retain(|(record_profile_id, _), _| record_profile_id != profile_id);
+        deleted += (company_len - company_feedback.len()) as u64;
+
+        Ok(deleted)
+    }
 }

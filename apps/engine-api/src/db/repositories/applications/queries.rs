@@ -315,6 +315,24 @@ impl ApplicationsRepository {
         Ok(rows.into_iter().map(Application::from).collect())
     }
 
+    pub async fn delete_by_profile(&self, profile_id: &str) -> Result<u64, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let result = sqlx::query(
+            r#"
+            DELETE FROM applications
+            WHERE profile_id = $1
+            "#,
+        )
+        .bind(profile_id)
+        .execute(pool)
+        .await?;
+
+        Ok(result.rows_affected())
+    }
+
     pub async fn search_by_job_title(
         &self,
         query: &str,

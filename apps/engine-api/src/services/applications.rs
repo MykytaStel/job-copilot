@@ -99,6 +99,16 @@ impl ApplicationsService {
         }
     }
 
+    pub async fn delete_by_profile(&self, profile_id: &str) -> Result<u64, RepositoryError> {
+        match &self.backend {
+            ApplicationsServiceBackend::Repository(repository) => {
+                repository.delete_by_profile(profile_id).await
+            }
+            #[cfg(test)]
+            ApplicationsServiceBackend::Stub(stub) => stub.delete_by_profile(profile_id),
+        }
+    }
+
     pub async fn search_by_job_title(
         &self,
         query: &str,

@@ -12,6 +12,7 @@ use crate::domain::search::global::ApplicationSearchHit;
 #[derive(Default)]
 pub struct ApplicationsServiceStub {
     applications_by_id: Mutex<HashMap<String, Application>>,
+    profile_ids_by_application_id: Mutex<HashMap<String, String>>,
     recent_applications: Vec<Application>,
     search_applications: Vec<ApplicationSearchHit>,
     details_by_id: Mutex<HashMap<String, ApplicationDetail>>,
@@ -26,6 +27,14 @@ impl ApplicationsServiceStub {
             .expect("applications stub mutex should not be poisoned")
             .insert(application.id.clone(), application);
         self
+    }
+
+    pub fn with_profile_application(self, profile_id: &str, application: Application) -> Self {
+        self.profile_ids_by_application_id
+            .lock()
+            .expect("application profiles stub mutex should not be poisoned")
+            .insert(application.id.clone(), profile_id.to_string());
+        self.with_application(application)
     }
 
     pub fn with_contact(self, contact: Contact) -> Self {
@@ -66,6 +75,12 @@ impl ApplicationsServiceStub {
             .lock()
             .expect("applications stub mutex should not be poisoned")
             .insert(created.id.clone(), created.clone());
+        if let Some(profile_id) = application.profile_id {
+            self.profile_ids_by_application_id
+                .lock()
+                .expect("application profiles stub mutex should not be poisoned")
+                .insert(created.id.clone(), profile_id);
+        }
 
         Ok(created)
     }
@@ -118,19 +133,62 @@ impl ApplicationsServiceStub {
 
     pub(crate) fn list_by_profile(
         &self,
-        _profile_id: &str,
+        profile_id: &str,
     ) -> Result<Vec<Application>, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
         }
 
+        let profiles = self
+            .profile_ids_by_application_id
+            .lock()
+            .expect("application profiles stub mutex should not be poisoned");
+
         Ok(self
             .applications_by_id
             .lock()
             .expect("applications stub mutex should not be poisoned")
-            .values()
+            .iter()
+            .filter(|(id, _)| {
+                profiles
+                    .get(*id)
+                    .map_or(true, |record_profile_id| record_profile_id == profile_id)
+            })
+            .map(|(_, application)| application)
             .cloned()
             .collect())
+    }
+
+    pub(crate) fn delete_by_profile(&self, profile_id: &str) -> Result<u64, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let mut profiles = self
+            .profile_ids_by_application_id
+            .lock()
+            .expect("application profiles stub mutex should not be poisoned");
+        let ids_to_delete = profiles
+            .iter()
+            .filter_map(|(id, record_profile_id)| {
+                if record_profile_id == profile_id {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let mut applications = self
+            .applications_by_id
+            .lock()
+            .expect("applications stub mutex should not be poisoned");
+        for id in &ids_to_delete {
+            applications.remove(id);
+            profiles.remove(id);
+        }
+
+        Ok(ids_to_delete.len() as u64)
     }
 
     pub(crate) fn search_by_job_title(
