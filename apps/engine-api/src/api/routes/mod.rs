@@ -141,6 +141,10 @@ pub fn protected_router() -> Router<AppState> {
             "/api/v1/profiles/{id}/companies/blacklist",
             put(feedback::add_company_blacklist).delete(feedback::remove_company_blacklist),
         )
+        .route(
+            "/api/v1/feedback/companies/{company_slug}/blacklist",
+            delete(feedback::remove_company_blacklist_by_slug),
+        )
         .route("/api/v1/jobs/recent", get(jobs::get_recent_jobs))
         .route("/api/v1/jobs/{id}", get(jobs::get_job_by_id))
         .route(

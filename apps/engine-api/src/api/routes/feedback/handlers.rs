@@ -1,8 +1,9 @@
 use axum::{
     Extension,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
+use serde::Deserialize;
 
 use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 
@@ -19,6 +20,11 @@ use crate::domain::feedback::model::{CompanyFeedbackStatus, JobFeedbackFlags};
 use crate::domain::user_event::model::{CreateUserEvent, UserEventType};
 use crate::services::feedback::FeedbackService;
 use crate::state::AppState;
+
+#[derive(Debug, Deserialize)]
+pub struct RemoveCompanyBlacklistBySlugQuery {
+    pub profile_id: Option<String>,
+}
 
 pub async fn list_feedback(
     State(state): State<AppState>,
@@ -235,6 +241,34 @@ pub async fn remove_company_blacklist(
         auth.as_deref(),
         profile_id,
         payload,
+        CompanyFeedbackStatus::Blacklist,
+    )
+    .await
+}
+
+pub async fn remove_company_blacklist_by_slug(
+    State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
+    Path(company_slug): Path<String>,
+    Query(query): Query<RemoveCompanyBlacklistBySlugQuery>,
+) -> Result<StatusCode, ApiError> {
+    let profile_id = auth
+        .as_ref()
+        .map(|user| user.profile_id.clone())
+        .or(query.profile_id)
+        .ok_or_else(|| {
+            ApiError::bad_request_with_details(
+                "missing_profile_id",
+                "profile_id query parameter is required when authentication is disabled",
+                serde_json::json!({ "field": "profile_id" }),
+            )
+        })?;
+
+    remove_company_feedback_by_normalized_name(
+        state,
+        auth.as_deref(),
+        profile_id,
+        company_slug,
         CompanyFeedbackStatus::Blacklist,
     )
     .await
@@ -474,6 +508,33 @@ async fn remove_company_feedback(
 
     let company_name = payload.validate_company_name()?;
     let normalized_company_name = FeedbackService::normalize_company_name(&company_name);
+    state
+        .feedback_service
+        .remove_company_feedback(&profile_id, &normalized_company_name, status)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "feedback_write_failed"))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn remove_company_feedback_by_normalized_name(
+    state: AppState,
+    auth: Option<&AuthUser>,
+    profile_id: String,
+    company_slug: String,
+    status: CompanyFeedbackStatus,
+) -> Result<StatusCode, ApiError> {
+    ensure_profile_exists(&state, auth, &profile_id).await?;
+
+    let normalized_company_name = FeedbackService::normalize_company_name(&company_slug);
+    if normalized_company_name.is_empty() {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_company_slug",
+            "company_slug must not be empty",
+            serde_json::json!({ "field": "company_slug" }),
+        ));
+    }
+
     state
         .feedback_service
         .remove_company_feedback(&profile_id, &normalized_company_name, status)

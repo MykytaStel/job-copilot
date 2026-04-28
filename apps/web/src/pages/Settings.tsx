@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Ban,
   Bell,
+  Building2,
   Settings as SettingsIcon,
   ShieldCheck,
   SlidersHorizontal,
@@ -49,7 +51,7 @@ import {
 } from '../lib/ingestionFrequencyPrefs';
 import { queryKeys } from '../queryKeys';
 import { buildProfileCompletionState } from '../features/profile/profileCompletion';
-import { clearAllHiddenJobs, getFeedback } from '../api/feedback';
+import { clearAllHiddenJobs, getFeedback, removeCompanyBlacklistBySlug } from '../api/feedback';
 import { invalidateFeedbackViewQueries } from '../lib/queryInvalidation';
 
 const NOTIFICATION_PREVIEW_LIMIT = 20;
@@ -155,6 +157,9 @@ export default function Settings() {
   });
 
   const hiddenJobsCount = feedbackOverview?.summary.hiddenJobsCount ?? 0;
+  const blacklistedCompanies = (feedbackOverview?.companies ?? []).filter(
+    (company) => company.status === 'blacklist',
+  );
   const notificationPreferencesMutation = useMutation({
     mutationFn: patchNotificationPreferences,
     onMutate: async (patch) => {
@@ -195,6 +200,26 @@ export default function Settings() {
       }
 
       return clearAllHiddenJobs(profileId);
+    },
+    onSuccess: () => {
+      if (!profileId) return;
+
+      void invalidateFeedbackViewQueries(queryClient, profileId);
+    },
+  });
+
+  const removeBlockedCompanyMutation = useMutation({
+    mutationFn: ({
+      normalizedCompanyName,
+    }: {
+      companyName: string;
+      normalizedCompanyName: string;
+    }) => {
+      if (!profileId) {
+        throw new Error('Create a profile first');
+      }
+
+      return removeCompanyBlacklistBySlug(profileId, normalizedCompanyName);
     },
     onSuccess: () => {
       if (!profileId) return;
@@ -299,6 +324,19 @@ export default function Settings() {
 
     if (confirmed) {
       clearHiddenJobsMutation.mutate();
+    }
+  }
+
+  function confirmRemoveBlockedCompany(company: {
+    companyName: string;
+    normalizedCompanyName: string;
+  }) {
+    const confirmed = window.confirm(
+      `Are you sure? Remove ${company.companyName} from blocked companies?`,
+    );
+
+    if (confirmed) {
+      removeBlockedCompanyMutation.mutate(company);
     }
   }
 
@@ -696,6 +734,80 @@ export default function Settings() {
                   {clearHiddenJobsMutation.isError && (
                     <p className="mt-3 text-sm text-danger">
                       Could not clear hidden jobs. Please try again.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-[var(--radius-lg)] border border-border bg-surface-soft/40 p-4">
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Blocked companies</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Manage companies currently blacklisted for this profile.
+                      </p>
+                    </div>
+
+                    <Badge
+                      variant="danger"
+                      className="w-fit px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]"
+                    >
+                      {blacklistedCompanies.length}
+                    </Badge>
+                  </div>
+
+                  {blacklistedCompanies.length === 0 ? (
+                    <EmptyState
+                      icon={<Ban className="h-5 w-5" />}
+                      message="No blocked companies"
+                      description="Companies blocked from Feedback Center will appear here."
+                      className="bg-surface"
+                    />
+                  ) : (
+                    <div className="space-y-3">
+                      {blacklistedCompanies.map((company) => {
+                        const isRemoving =
+                          removeBlockedCompanyMutation.isPending &&
+                          removeBlockedCompanyMutation.variables?.normalizedCompanyName ===
+                            company.normalizedCompanyName;
+
+                        return (
+                          <div
+                            key={company.normalizedCompanyName}
+                            className="flex flex-col gap-3 rounded-[var(--radius-md)] border border-border bg-surface p-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-danger/25 bg-danger/10 text-danger">
+                                <Building2 className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {company.companyName}
+                                </p>
+                                <p className="mt-1 truncate text-xs text-muted-foreground">
+                                  {company.normalizedCompanyName}
+                                </p>
+                              </div>
+                            </div>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => confirmRemoveBlockedCompany(company)}
+                              disabled={isRemoving || !profileId}
+                              className="shrink-0"
+                            >
+                              {isRemoving ? 'Removing' : 'Remove'}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {removeBlockedCompanyMutation.isError && (
+                    <p className="mt-3 text-sm text-danger">
+                      Could not remove blocked company. Please try again.
                     </p>
                   )}
                 </div>

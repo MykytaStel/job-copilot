@@ -1,5 +1,5 @@
 use axum::Extension;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{Json, body};
@@ -23,8 +23,9 @@ use crate::services::user_events::{UserEventsService, UserEventsServiceStub};
 use crate::state::AppState;
 
 use super::{
-    add_company_blacklist, clear_all_hidden_jobs, hide_job, list_feedback, mark_job_bad_fit,
-    save_job, unhide_job, unmark_job_bad_fit, unsave_job,
+    RemoveCompanyBlacklistBySlugQuery, add_company_blacklist, clear_all_hidden_jobs, hide_job,
+    list_feedback, mark_job_bad_fit, remove_company_blacklist_by_slug, save_job, unhide_job,
+    unmark_job_bad_fit, unsave_job,
 };
 
 fn sample_profile() -> Profile {
@@ -167,6 +168,40 @@ async fn add_company_blacklist_is_visible_in_feedback_overview() {
 
     assert_eq!(payload["companies"].as_array().map(Vec::len), Some(1));
     assert_eq!(payload["companies"][0]["status"], json!("blacklist"));
+}
+
+#[tokio::test]
+async fn remove_company_blacklist_by_slug_removes_existing_blacklist_entry() {
+    let state = test_state().with_feedback_service(FeedbackService::for_tests(
+        FeedbackServiceStub::default().with_company_feedback(CompanyFeedbackRecord {
+            profile_id: "profile-1".to_string(),
+            company_name: "NovaLedger".to_string(),
+            normalized_company_name: "novaledger".to_string(),
+            status: CompanyFeedbackStatus::Blacklist,
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+        }),
+    ));
+
+    let status = remove_company_blacklist_by_slug(
+        State(state.clone()),
+        None,
+        Path("novaledger".to_string()),
+        Query(RemoveCompanyBlacklistBySlugQuery {
+            profile_id: Some("profile-1".to_string()),
+        }),
+    )
+    .await
+    .expect("blacklist removal should succeed");
+
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let Json(overview) = list_feedback(State(state), None, Path("profile-1".to_string()))
+        .await
+        .expect("listing feedback should succeed");
+
+    assert!(overview.companies.is_empty());
+    assert_eq!(overview.summary.blacklisted_companies_count, 0);
 }
 
 #[tokio::test]
