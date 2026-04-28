@@ -17,6 +17,7 @@ export {
   getStoredProfileRawText,
   saveProfile,
   saveProfileSearchPreferences,
+  updateProfileSkills,
   updateScoringWeights,
 } from './profile';
 

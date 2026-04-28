@@ -117,7 +117,10 @@ export async function getProfile(): Promise<PersistedCandidateProfile | undefine
 }
 
 export async function saveProfile(
-  payload: CandidateProfileInput & { rawText: string; searchPreferences?: PersistedSearchPreferences },
+  payload: CandidateProfileInput & {
+    rawText: string;
+    searchPreferences?: PersistedSearchPreferences;
+  },
 ): Promise<PersistedCandidateProfile> {
   const profileId = readStoredProfileId();
 
@@ -131,9 +134,11 @@ export async function saveProfile(
     salary_max: payload.salaryMax ?? null,
     salary_currency: payload.salaryCurrency ?? null,
     languages: payload.languages,
-   	search_preferences: payload.searchPreferences
-			? toEngineSearchPreferences(payload.searchPreferences)
-			: null,
+    preferred_locations: payload.preferredLocations,
+    work_mode_preference: payload.workModePreference ?? 'any',
+    search_preferences: payload.searchPreferences
+      ? toEngineSearchPreferences(payload.searchPreferences)
+      : null,
   };
 
   const profile = profileId
@@ -161,8 +166,19 @@ export async function saveProfile(
   return {
     ...mapPersistedProfile(profile),
     summary: analyzed.summary,
-    skills: analyzed.skills,
   };
+}
+
+export async function updateProfileSkills(
+  profileId: string,
+  skills: string[],
+): Promise<PersistedCandidateProfile> {
+  const profile = await request<EngineProfile>(
+    `/api/v1/profiles/${profileId}`,
+    json('PATCH', { skills }),
+  );
+
+  return mapPersistedProfile(profile);
 }
 
 export async function saveProfileSearchPreferences(

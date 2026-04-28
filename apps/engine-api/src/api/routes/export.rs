@@ -12,7 +12,7 @@ use crate::domain::application::model::{
 };
 use crate::domain::feedback::model::{CompanyFeedbackRecord, JobFeedbackRecord};
 use crate::domain::job::model::Job;
-use crate::domain::profile::model::Profile;
+use crate::domain::profile::model::{LanguageProficiency, Profile};
 use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
@@ -33,7 +33,8 @@ pub struct ExportProfileResponse {
     pub salary_min: Option<i32>,
     pub salary_max: Option<i32>,
     pub salary_currency: String,
-    pub languages: Vec<String>,
+    pub languages: Vec<LanguageProficiency>,
+    pub work_mode_preference: String,
     pub preferred_language: Option<String>,
     pub search_preferences: Option<SearchPreferencesResponse>,
     pub analysis: Option<PersistedProfileAnalysisResponse>,
@@ -328,6 +329,7 @@ impl From<Profile> for ExportProfileResponse {
             salary_max: profile.salary_max,
             salary_currency: profile.salary_currency,
             languages: profile.languages,
+            work_mode_preference: profile.work_mode_preference,
             preferred_language: profile.preferred_language,
             search_preferences: profile
                 .search_preferences
@@ -508,7 +510,7 @@ mod tests {
         CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackRecord,
     };
     use crate::domain::job::model::Job;
-    use crate::domain::profile::model::Profile;
+    use crate::domain::profile::model::{LanguageLevel, LanguageProficiency, Profile};
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::feedback::{FeedbackService, FeedbackServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
@@ -530,8 +532,12 @@ mod tests {
             salary_min: None,
             salary_max: None,
             salary_currency: "USD".to_string(),
-            languages: vec!["English".to_string()],
-            preferred_work_mode: None,
+            languages: vec![LanguageProficiency {
+                language: "English".to_string(),
+                level: LanguageLevel::C1,
+            }],
+            preferred_locations: vec![],
+            work_mode_preference: "any".to_string(),
             preferred_language: None,
             search_preferences: None,
             created_at: "2026-04-14T00:00:00Z".to_string(),

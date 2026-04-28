@@ -365,14 +365,15 @@ export default function Settings() {
   const completion = buildProfileCompletionState({
     name: profile.name,
     email: profile.email,
-    location: profile.location ?? '',
     rawText,
-    yearsOfExperience: profile.yearsOfExperience ? String(profile.yearsOfExperience) : '',
+    skills: profile.skills,
     salaryMin: profile.salaryMin ? String(profile.salaryMin) : '',
     salaryMax: profile.salaryMax ? String(profile.salaryMax) : '',
     salaryCurrency: profile.salaryCurrency ?? '',
     languages: profile.languages,
-    analysisReady: Boolean(profile.summary || profile.skills.length),
+    preferredLocations: profile.preferredLocations,
+    targetRegions: profile.searchPreferences?.targetRegions ?? [],
+    workModes: profile.searchPreferences?.workModes ?? [],
   });
 
   const unreadCount = notifications.filter((n) => !n.readAt).length;
@@ -474,6 +475,14 @@ export default function Settings() {
                   <SettingRow label="Email" value={profile.email} />
                   <SettingRow label="Location" value={profile.location ?? 'Not set'} />
                   <SettingRow
+                    label="Preferred locations"
+                    value={
+                      profile.preferredLocations.length > 0
+                        ? profile.preferredLocations.join(', ')
+                        : 'Not set'
+                    }
+                  />
+                  <SettingRow
                     label="Compensation"
                     value={
                       profile.salaryMin && profile.salaryMax
@@ -490,8 +499,8 @@ export default function Settings() {
                   <div className="flex flex-wrap gap-2">
                     {profile.languages.length > 0 ? (
                       profile.languages.map((lang) => (
-                        <Badge key={lang} variant="muted" className="px-2 py-0.5">
-                          {lang}
+                        <Badge key={lang.language} variant="muted" className="px-2 py-0.5">
+                          {lang.language} · {lang.level}
                         </Badge>
                       ))
                     ) : (

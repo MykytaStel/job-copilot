@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, FileText, Target } from 'lucide-react';
+import { BriefcaseBusiness, FileText, Plus, Target } from 'lucide-react';
 import {
   LatestAnalysisSection,
   ProfileFormSection,
@@ -10,6 +10,8 @@ import { Badge } from '../components/ui/Badge';
 import { AccentIconFrame } from '../components/ui/AccentIconFrame';
 import { Card, CardContent } from '../components/ui/Card';
 import { Page, PageGrid } from '../components/ui/Page';
+import { ProfileCompletion } from '../components/ProfileCompletion';
+import { Button } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { SurfaceMetric } from '../components/ui/Surface';
 import { useProfilePage } from '../features/profile/useProfilePage';
@@ -34,6 +36,8 @@ export default function Profile() {
     salaryMax,
     salaryCurrency,
     languages,
+    preferredLocations,
+    workModePreference,
     profileCompletion,
     targetRegions,
     workModes,
@@ -46,8 +50,10 @@ export default function Profile() {
     buildRestoredFromStorage,
     searchResult,
     searchError,
+    suggestedSkills,
     saveMutation,
     analyzeMutation,
+    updateSkillsMutation,
     buildMutation,
     runMutation,
     setName,
@@ -58,9 +64,14 @@ export default function Profile() {
     setSalaryMin,
     setSalaryMax,
     setSalaryCurrency,
+    setWorkModePreference,
+    addPreferredLocation,
+    removePreferredLocation,
     setIncludeKeywordsInput,
     setExcludeKeywordsInput,
-    toggleLanguage,
+    addLanguage,
+    removeLanguage,
+    updateLanguageLevel,
     toggleTargetRegion,
     toggleWorkMode,
     togglePreferredRole,
@@ -69,6 +80,8 @@ export default function Profile() {
     buildCurrentSearchProfile,
     runCurrentSearch,
     analyzeProfile,
+    addSuggestedSkill,
+    addAllSuggestedSkills,
     openFilePicker,
     handleFileChange,
   } = useProfilePage();
@@ -156,32 +169,7 @@ export default function Profile() {
                   </div>
                 </SurfaceMetric>
                 <SurfaceMetric className="sm:col-span-3">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                        Completion
-                      </p>
-                      <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">
-                        {profileCompletion.percent}% complete
-                      </p>
-                      <p className="m-0 mt-1 text-xs text-muted-foreground">
-                        {profileCompletion.completed}/{profileCompletion.total} checkpoints ready
-                      </p>
-                    </div>
-                    <div className="min-w-0 flex-1 lg:max-w-md">
-                      <div className="h-2 rounded-full bg-surface-soft">
-                        <div
-                          className="h-2 rounded-full bg-[image:var(--gradient-button)] transition-[width] duration-300"
-                          style={{ width: `${profileCompletion.percent}%` }}
-                        />
-                      </div>
-                      <p className="m-0 mt-2 truncate text-xs text-muted-foreground">
-                        {profileCompletion.missingLabels.length > 0
-                          ? `Missing: ${profileCompletion.missingLabels.join(', ')}`
-                          : 'Profile and analysis are ready for ranking and AI flows.'}
-                      </p>
-                    </div>
-                  </div>
+                  <ProfileCompletion completion={profileCompletion} />
                 </SurfaceMetric>
               </div>
             </div>
@@ -207,6 +195,8 @@ export default function Profile() {
             salaryMax={salaryMax}
             salaryCurrency={salaryCurrency}
             languages={languages}
+            preferredLocations={preferredLocations}
+            workModePreference={workModePreference}
             profileExists={Boolean(profile)}
             fileInputRef={fileInputRef}
             isSaving={saveMutation.isPending}
@@ -223,8 +213,59 @@ export default function Profile() {
             setSalaryMin={setSalaryMin}
             setSalaryMax={setSalaryMax}
             setSalaryCurrency={setSalaryCurrency}
-            onToggleLanguage={toggleLanguage}
+            setWorkModePreference={setWorkModePreference}
+            onAddPreferredLocation={addPreferredLocation}
+            onRemovePreferredLocation={removePreferredLocation}
+            onAddLanguage={addLanguage}
+            onRemoveLanguage={removeLanguage}
+            onUpdateLanguageLevel={updateLanguageLevel}
           />
+
+          {suggestedSkills.length > 0 && (
+            <Card className="border-border bg-card">
+              <CardContent className="space-y-4 p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="eyebrow">Suggested skills</p>
+                    <h3 className="m-0 text-base font-semibold text-card-foreground">
+                      Extracted from the latest analysis
+                    </h3>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addAllSuggestedSkills}
+                    disabled={updateSkillsMutation.isPending}
+                  >
+                    Add all
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {suggestedSkills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-muted px-3 py-1.5 text-xs font-medium text-card-foreground"
+                    >
+                      {skill}
+                      <Button
+                        type="button"
+                        variant="icon"
+                        size="icon"
+                        className="h-6 w-6 rounded-full"
+                        onClick={() => addSuggestedSkill(skill)}
+                        disabled={updateSkillsMutation.isPending}
+                        aria-label={`Add ${skill}`}
+                        title={`Add ${skill}`}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </span>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <SearchProfileBuilderSection
             profileExists={Boolean(profile)}

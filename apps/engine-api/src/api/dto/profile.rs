@@ -5,7 +5,8 @@ use crate::api::dto::search_profile::{SearchPreferencesRequest, SearchPreference
 use crate::api::error::ApiError;
 use crate::domain::candidate::profile::{CandidateProfile, RoleScore};
 use crate::domain::profile::model::{
-    CreateProfile, Profile, ProfileAnalysis as PersistedProfileAnalysis, UpdateProfile,
+    CreateProfile, LanguageProficiency, Profile, ProfileAnalysis as PersistedProfileAnalysis,
+    UpdateProfile,
 };
 
 #[derive(Deserialize)]
@@ -18,7 +19,9 @@ pub struct CreateProfileRequest {
     pub salary_min: Option<i32>,
     pub salary_max: Option<i32>,
     pub salary_currency: Option<String>,
-    pub languages: Option<Vec<String>>,
+    pub languages: Option<Vec<LanguageProficiency>>,
+    pub preferred_locations: Option<Vec<String>>,
+    pub work_mode_preference: Option<String>,
     pub search_preferences: Option<SearchPreferencesRequest>,
 }
 
@@ -32,7 +35,10 @@ pub struct UpdateProfileRequest {
     pub salary_min: Option<Option<i32>>,
     pub salary_max: Option<Option<i32>>,
     pub salary_currency: Option<String>,
-    pub languages: Option<Vec<String>>,
+    pub languages: Option<Vec<LanguageProficiency>>,
+    pub preferred_locations: Option<Vec<String>>,
+    pub skills: Option<Vec<String>>,
+    pub work_mode_preference: Option<String>,
     pub preferred_language: Option<Option<String>>,
     pub search_preferences: Option<Option<SearchPreferencesRequest>>,
 }
@@ -76,7 +82,9 @@ pub struct ProfileResponse {
     pub salary_min: Option<i32>,
     pub salary_max: Option<i32>,
     pub salary_currency: String,
-    pub languages: Vec<String>,
+    pub languages: Vec<LanguageProficiency>,
+    pub preferred_locations: Vec<String>,
+    pub work_mode_preference: String,
     pub preferred_language: Option<String>,
     pub search_preferences: Option<SearchPreferencesResponse>,
     pub analysis: Option<PersistedProfileAnalysisResponse>,
@@ -93,6 +101,8 @@ impl CreateProfileRequest {
         let salary_max = validate_optional_i32("salary_max", self.salary_max, 0, 10_000_000)?;
         let salary_currency = validate_salary_currency(self.salary_currency)?;
         let languages = validate_languages(self.languages)?;
+        let preferred_locations = validate_preferred_locations(self.preferred_locations)?;
+        let work_mode_preference = validate_work_mode_preference(self.work_mode_preference)?;
 
         validate_salary_bounds(salary_min, salary_max, "salary_min", "salary_max")?;
 
@@ -106,6 +116,8 @@ impl CreateProfileRequest {
             salary_max,
             salary_currency,
             languages,
+            preferred_locations,
+            work_mode_preference,
             search_preferences: self
                 .search_preferences
                 .map(|value| value.validate())
@@ -125,6 +137,9 @@ impl UpdateProfileRequest {
             && self.salary_max.is_none()
             && self.salary_currency.is_none()
             && self.languages.is_none()
+            && self.preferred_locations.is_none()
+            && self.skills.is_none()
+            && self.work_mode_preference.is_none()
             && self.preferred_language.is_none()
             && self.search_preferences.is_none()
         {
@@ -142,6 +157,9 @@ impl UpdateProfileRequest {
                         "salary_max",
                         "salary_currency",
                         "languages",
+                        "preferred_locations",
+                        "skills",
+                        "work_mode_preference",
                         "preferred_language",
                         "search_preferences"
                     ]
@@ -168,6 +186,15 @@ impl UpdateProfileRequest {
         let languages = self
             .languages
             .map(|value| validate_languages(Some(value)))
+            .transpose()?;
+        let preferred_locations = self
+            .preferred_locations
+            .map(|value| validate_preferred_locations(Some(value)))
+            .transpose()?;
+        let skills = self.skills.map(validate_skills).transpose()?;
+        let work_mode_preference = self
+            .work_mode_preference
+            .map(|value| validate_work_mode_preference(Some(value)))
             .transpose()?;
         let preferred_language = self
             .preferred_language
@@ -200,6 +227,9 @@ impl UpdateProfileRequest {
             salary_max,
             salary_currency,
             languages,
+            preferred_locations,
+            skills,
+            work_mode_preference,
             preferred_language,
             search_preferences: self
                 .search_preferences
@@ -272,6 +302,8 @@ impl From<Profile> for ProfileResponse {
             salary_max: profile.salary_max,
             salary_currency: profile.salary_currency,
             languages: profile.languages,
+            preferred_locations: profile.preferred_locations,
+            work_mode_preference: profile.work_mode_preference,
             preferred_language: profile.preferred_language,
             search_preferences: profile
                 .search_preferences
@@ -322,6 +354,34 @@ fn validate_optional_string(
     value
         .map(|value| validate_required_string(field, value, max_len))
         .transpose()
+}
+
+fn validate_skills(values: Vec<String>) -> Result<Vec<String>, ApiError> {
+    let mut result = Vec::new();
+
+    for value in values {
+        let skill = validate_required_string("skills", value, 120)?;
+        if !result
+            .iter()
+            .any(|existing: &String| existing.eq_ignore_ascii_case(&skill))
+        {
+            result.push(skill);
+        }
+    }
+
+    if result.len() > 100 {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_profile_input",
+            "Field 'skills' must contain at most 100 entries",
+            json!({
+                "field": "skills",
+                "max_items": 100,
+                "received_items": result.len(),
+            }),
+        ));
+    }
+
+    Ok(result)
 }
 
 fn validate_email(value: String) -> Result<String, ApiError> {
@@ -390,36 +450,88 @@ fn validate_salary_currency(value: Option<String>) -> Result<String, ApiError> {
     }
 }
 
-fn validate_languages(value: Option<Vec<String>>) -> Result<Vec<String>, ApiError> {
-    let allowed = ["Ukrainian", "English", "German", "Polish"];
+fn validate_languages(
+    value: Option<Vec<LanguageProficiency>>,
+) -> Result<Vec<LanguageProficiency>, ApiError> {
     let mut result = Vec::new();
 
     for entry in value.unwrap_or_default() {
-        let normalized = entry.trim().to_lowercase();
-        let canonical = match normalized.as_str() {
-            "ukrainian" => "Ukrainian",
-            "english" => "English",
-            "german" => "German",
-            "polish" => "Polish",
-            _ => {
-                return Err(ApiError::bad_request_with_details(
-                    "invalid_profile_input",
-                    "Field 'languages' contains an unsupported value",
-                    json!({
-                        "field": "languages",
-                        "allowed_values": allowed,
-                        "received": entry,
-                    }),
-                ));
-            }
-        };
+        let language = validate_required_string("languages.language", entry.language, 80)?;
 
-        if !result.iter().any(|existing| existing == canonical) {
-            result.push(canonical.to_string());
+        if !result
+            .iter()
+            .any(|existing: &LanguageProficiency| existing.language.eq_ignore_ascii_case(&language))
+        {
+            result.push(LanguageProficiency {
+                language,
+                level: entry.level,
+            });
         }
     }
 
+    if result.len() > 20 {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_profile_input",
+            "Field 'languages' must contain at most 20 entries",
+            json!({
+                "field": "languages",
+                "max_items": 20,
+                "received_items": result.len(),
+            }),
+        ));
+    }
+
     Ok(result)
+}
+
+fn validate_preferred_locations(value: Option<Vec<String>>) -> Result<Vec<String>, ApiError> {
+    let mut result = Vec::new();
+
+    for value in value.unwrap_or_default() {
+        let location = validate_required_string("preferred_locations", value, 120)?;
+        if !result
+            .iter()
+            .any(|existing: &String| existing.eq_ignore_ascii_case(&location))
+        {
+            result.push(location);
+        }
+    }
+
+    if result.len() > 50 {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_profile_input",
+            "Field 'preferred_locations' must contain at most 50 entries",
+            json!({
+                "field": "preferred_locations",
+                "max_items": 50,
+                "received_items": result.len(),
+            }),
+        ));
+    }
+
+    Ok(result)
+}
+
+fn validate_work_mode_preference(value: Option<String>) -> Result<String, ApiError> {
+    let normalized = value
+        .unwrap_or_else(|| "any".to_string())
+        .trim()
+        .to_lowercase();
+
+    match normalized.as_str() {
+        "remote_only" => Ok("remote_only".to_string()),
+        "hybrid" => Ok("hybrid".to_string()),
+        "onsite" => Ok("onsite".to_string()),
+        "any" => Ok("any".to_string()),
+        _ => Err(ApiError::bad_request_with_details(
+            "invalid_profile_input",
+            "Field 'work_mode_preference' must be one of remote_only, hybrid, onsite, any",
+            json!({
+                "field": "work_mode_preference",
+                "allowed_values": ["remote_only", "hybrid", "onsite", "any"],
+            }),
+        )),
+    }
 }
 
 fn validate_preferred_language(value: Option<String>) -> Result<Option<String>, ApiError> {
@@ -475,6 +587,7 @@ mod tests {
     use serde_json::json;
 
     use crate::domain::candidate::profile::{CandidateProfile, RoleScore};
+    use crate::domain::profile::model::{LanguageLevel, LanguageProficiency};
     use crate::domain::role::RoleId;
 
     use super::{AnalyzeProfileResponse, CreateProfileRequest, UpdateProfileRequest};
@@ -512,6 +625,8 @@ mod tests {
             salary_max: None,
             salary_currency: None,
             languages: None,
+            preferred_locations: None,
+            work_mode_preference: None,
             search_preferences: None,
         }
         .validate()
@@ -563,7 +678,21 @@ mod tests {
             salary_min: Some(Some(3000)),
             salary_max: Some(Some(4500)),
             salary_currency: Some("eur".to_string()),
-            languages: Some(vec!["english".to_string(), "Polish".to_string()]),
+            languages: Some(vec![
+                LanguageProficiency {
+                    language: "english".to_string(),
+                    level: LanguageLevel::C1,
+                },
+                LanguageProficiency {
+                    language: "Polish".to_string(),
+                    level: LanguageLevel::B2,
+                },
+            ]),
+            preferred_locations: Some(vec![
+                " Kyiv ".to_string(),
+                "Remote".to_string(),
+                "kyiv".to_string(),
+            ]),
             ..Default::default()
         }
         .validate()
@@ -573,7 +702,20 @@ mod tests {
         assert_eq!(validated.salary_currency.as_deref(), Some("EUR"));
         assert_eq!(
             validated.languages,
-            Some(vec!["English".to_string(), "Polish".to_string()])
+            Some(vec![
+                LanguageProficiency {
+                    language: "english".to_string(),
+                    level: LanguageLevel::C1,
+                },
+                LanguageProficiency {
+                    language: "Polish".to_string(),
+                    level: LanguageLevel::B2,
+                },
+            ])
+        );
+        assert_eq!(
+            validated.preferred_locations,
+            Some(vec!["Kyiv".to_string(), "Remote".to_string()])
         );
     }
 }

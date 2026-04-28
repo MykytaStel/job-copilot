@@ -4,7 +4,9 @@ use uuid::Uuid;
 
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
-use crate::domain::profile::model::{CreateProfile, Profile, ProfileAnalysis, UpdateProfile};
+use crate::domain::profile::model::{
+    CreateProfile, LanguageLevel, LanguageProficiency, Profile, ProfileAnalysis, UpdateProfile,
+};
 use crate::domain::role::RoleId;
 use crate::domain::search::profile::SearchPreferences;
 
@@ -30,7 +32,8 @@ struct ProfileRow {
     salary_max: Option<i32>,
     salary_currency: Option<String>,
     languages_json: String,
-    preferred_work_mode: Option<String>,
+    preferred_locations_json: String,
+    work_mode_preference: String,
     preferred_language: Option<String>,
     search_preferences: Option<Json<SearchPreferences>>,
     created_at: String,
@@ -61,11 +64,13 @@ impl ProfilesRepository {
                 salary_max,
                 salary_currency,
                 languages,
+                preferred_locations,
+                work_mode_preference,
                 search_preferences,
                 created_at,
                 updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
             RETURNING
                 id,
                 name,
@@ -82,7 +87,8 @@ impl ProfilesRepository {
                 salary_max,
                 salary_currency,
                 languages::text AS languages_json,
-                preferred_work_mode,
+                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
@@ -100,6 +106,8 @@ impl ProfilesRepository {
         .bind(input.salary_max)
         .bind(&input.salary_currency)
         .bind(Json(input.languages.clone()))
+        .bind(Json(input.preferred_locations.clone()))
+        .bind(&input.work_mode_preference)
         .bind(
             input
                 .search_preferences
@@ -135,7 +143,8 @@ impl ProfilesRepository {
                 salary_max,
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
-                preferred_work_mode,
+                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
@@ -175,7 +184,8 @@ impl ProfilesRepository {
                 salary_max,
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
-                preferred_work_mode,
+                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
@@ -217,7 +227,8 @@ impl ProfilesRepository {
                 salary_max,
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
-                preferred_work_mode,
+                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
@@ -271,12 +282,17 @@ impl ProfilesRepository {
                     WHEN $14 THEN $15
                     ELSE languages
                 END,
-                preferred_language = CASE
+                preferred_locations = CASE
                     WHEN $16 THEN $17
+                    ELSE preferred_locations
+                END,
+                work_mode_preference = COALESCE($18, work_mode_preference, 'any'),
+                preferred_language = CASE
+                    WHEN $19 THEN $20
                     ELSE preferred_language
                 END,
                 search_preferences = CASE
-                    WHEN $18 THEN $19
+                    WHEN $21 THEN $22
                     ELSE search_preferences
                 END,
                 summary = CASE
@@ -292,6 +308,7 @@ impl ProfilesRepository {
                     ELSE NULL
                 END,
                 skills = CASE
+                    WHEN $23 THEN $24
                     WHEN $6 IS NULL THEN skills
                     ELSE '[]'::jsonb
                 END,
@@ -300,6 +317,7 @@ impl ProfilesRepository {
                     ELSE '[]'::jsonb
                 END,
                 skills_updated_at = CASE
+                    WHEN $23 THEN NOW()
                     WHEN $6 IS NULL THEN skills_updated_at
                     ELSE NULL
                 END,
@@ -321,7 +339,8 @@ impl ProfilesRepository {
                 salary_max,
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
-                preferred_work_mode,
+                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
@@ -344,6 +363,14 @@ impl ProfilesRepository {
         .bind(&input.salary_currency)
         .bind(input.languages.is_some())
         .bind(input.languages.as_ref().map(|value| Json(value.clone())))
+        .bind(input.preferred_locations.is_some())
+        .bind(
+            input
+                .preferred_locations
+                .as_ref()
+                .map(|value| Json(value.clone())),
+        )
+        .bind(&input.work_mode_preference)
         .bind(input.preferred_language.is_some())
         .bind(
             input
@@ -358,6 +385,8 @@ impl ProfilesRepository {
                 .as_ref()
                 .and_then(|value| value.as_ref().map(|prefs| Json(prefs.clone()))),
         )
+        .bind(input.skills.is_some())
+        .bind(input.skills.as_ref().map(|value| Json(value.clone())))
         .fetch_optional(pool)
         .await?;
 
@@ -401,7 +430,8 @@ impl ProfilesRepository {
                 salary_max,
                 COALESCE(salary_currency, 'USD') AS salary_currency,
                 COALESCE(languages, '[]'::jsonb)::text AS languages_json,
-                preferred_work_mode,
+                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
                 preferred_language,
                 search_preferences,
                 created_at::text AS created_at,
@@ -452,8 +482,9 @@ impl TryFrom<ProfileRow> for Profile {
             salary_min: row.salary_min,
             salary_max: row.salary_max,
             salary_currency: row.salary_currency.unwrap_or_else(|| "USD".to_string()),
-            languages: serde_json::from_str(&row.languages_json)?,
-            preferred_work_mode: row.preferred_work_mode,
+            languages: parse_languages_json(&row.languages_json)?,
+            preferred_locations: parse_string_array_json(&row.preferred_locations_json)?,
+            work_mode_preference: row.work_mode_preference,
             preferred_language: row.preferred_language,
             search_preferences: row.search_preferences.map(|value| value.0),
             created_at: row.created_at,
@@ -461,6 +492,40 @@ impl TryFrom<ProfileRow> for Profile {
             skills_updated_at: row.skills_updated_at,
         })
     }
+}
+
+fn parse_languages_json(value: &str) -> Result<Vec<LanguageProficiency>, RepositoryError> {
+    let parsed: serde_json::Value = serde_json::from_str(value)?;
+    let Some(entries) = parsed.as_array() else {
+        return Ok(Vec::new());
+    };
+
+    let mut result = Vec::new();
+    for entry in entries {
+        if let Some(language) = entry.as_str() {
+            result.push(LanguageProficiency {
+                language: language.to_string(),
+                level: LanguageLevel::Native,
+            });
+            continue;
+        }
+
+        result.push(serde_json::from_value(entry.clone())?);
+    }
+
+    Ok(result)
+}
+
+fn parse_string_array_json(value: &str) -> Result<Vec<String>, RepositoryError> {
+    let parsed: serde_json::Value = serde_json::from_str(value)?;
+    let Some(entries) = parsed.as_array() else {
+        return Ok(Vec::new());
+    };
+
+    Ok(entries
+        .iter()
+        .filter_map(|entry| entry.as_str().map(str::to_string))
+        .collect())
 }
 
 #[cfg(test)]
@@ -496,6 +561,8 @@ mod tests {
                 salary_max: None,
                 salary_currency: "USD".to_string(),
                 languages: vec![],
+                preferred_locations: vec![],
+                work_mode_preference: "any".to_string(),
                 search_preferences: None,
             })
             .await
