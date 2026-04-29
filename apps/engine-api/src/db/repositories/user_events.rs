@@ -27,20 +27,6 @@ struct UserEventRow {
 }
 
 #[derive(FromRow)]
-struct UserEventPageRow {
-    id: String,
-    profile_id: String,
-    event_type: String,
-    job_id: Option<String>,
-    company_name: Option<String>,
-    source: Option<String>,
-    role_family: Option<String>,
-    payload_json: Option<Value>,
-    created_at: String,
-    total_count: i64,
-}
-
-#[derive(FromRow)]
 struct UserEventSummaryRow {
     save_count: i64,
     hide_count: i64,
@@ -149,7 +135,26 @@ impl UserEventsRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        let rows = sqlx::query_as::<_, UserEventPageRow>(
+        let total_count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM user_events
+            WHERE profile_id = $1
+              AND event_type IN (
+                'job_saved',
+                'job_unsaved',
+                'job_hidden',
+                'job_unhidden',
+                'job_bad_fit',
+                'job_bad_fit_removed'
+              )
+            "#,
+        )
+        .bind(profile_id)
+        .fetch_one(pool)
+        .await?;
+
+        let rows = sqlx::query_as::<_, UserEventRow>(
             r#"
             SELECT
                 id,
@@ -160,8 +165,7 @@ impl UserEventsRepository {
                 source,
                 role_family,
                 payload_json,
-                created_at::text AS created_at,
-                COUNT(*) OVER()::bigint AS total_count
+                created_at::text AS created_at
             FROM user_events
             WHERE profile_id = $1
               AND event_type IN (
@@ -183,10 +187,6 @@ impl UserEventsRepository {
         .fetch_all(pool)
         .await?;
 
-        let total_count = rows
-            .first()
-            .map(|row| row.total_count as usize)
-            .unwrap_or(0);
         let records = rows
             .into_iter()
             .map(UserEventRecord::try_from)
@@ -194,7 +194,7 @@ impl UserEventsRepository {
 
         Ok(UserEventPage {
             records,
-            total_count,
+            total_count: total_count as usize,
         })
     }
 
@@ -293,24 +293,6 @@ impl TryFrom<UserEventRow> for UserEventRecord {
             id: row.id,
             profile_id: row.profile_id,
             event_type,
-            job_id: row.job_id,
-            company_name: row.company_name,
-            source: row.source,
-            role_family: row.role_family,
-            payload_json: row.payload_json,
-            created_at: row.created_at,
-        })
-    }
-}
-
-impl TryFrom<UserEventPageRow> for UserEventRecord {
-    type Error = RepositoryError;
-
-    fn try_from(row: UserEventPageRow) -> Result<Self, Self::Error> {
-        UserEventRecord::try_from(UserEventRow {
-            id: row.id,
-            profile_id: row.profile_id,
-            event_type: row.event_type,
             job_id: row.job_id,
             company_name: row.company_name,
             source: row.source,
