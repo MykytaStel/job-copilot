@@ -146,9 +146,16 @@ services:
       OPENAI_BASE_URL: "${OPENAI_BASE_URL:-}"
       ML_LLM_REQUEST_TIMEOUT_SECONDS: "${ML_LLM_REQUEST_TIMEOUT_SECONDS:-90}"
       ML_BOOTSTRAP_MAX_CONCURRENT_JOBS: "${ML_BOOTSTRAP_MAX_CONCURRENT_JOBS:-2}"
+      ML_ARTIFACTS_DIR: /app/models/profiles
+      ML_BOOTSTRAP_TASKS_DIR: /app/.runtime/bootstrap-tasks
+      ML_INTERNAL_TOKEN: "${ML_INTERNAL_TOKEN:-}"
+      ENGINE_API_INTERNAL_TOKEN: "${ENGINE_API_INTERNAL_TOKEN:-}"
       # host.docker.internal resolves to the host machine where Ollama Desktop runs
       OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
       OLLAMA_MODEL: "${OLLAMA_MODEL:-llama3.1:8b}"
+    volumes:
+      - ../apps/ml/models:/app/models
+      - ml-runtime:/app/.runtime
     ports:
       - "8000:8000"
     healthcheck:
@@ -197,3 +204,4 @@ volumes:
   postgres-data:
   prometheus-data:
   grafana-data:
+  ml-runtime:

@@ -10,7 +10,7 @@ use crate::services::behavior::BehaviorService;
 use crate::services::funnel::FunnelService;
 use crate::services::search_ranking::SearchRankingService;
 
-use super::{OutcomeDatasetService, OutcomeLabel, outcome_job_ids};
+use super::{OutcomeDatasetBuildInput, OutcomeDatasetService, OutcomeLabel, outcome_job_ids};
 
 fn profile() -> Profile {
     Profile {
@@ -108,10 +108,10 @@ fn label_assignment_is_deterministic_and_prioritized() {
     let behavior = BehaviorService::new().build_aggregates(events.iter());
     let funnel = FunnelService::new().build_aggregates(events.iter());
     let dataset = OutcomeDatasetService::new()
-        .build(
-            &profile(),
-            &events,
-            vec![
+        .build(OutcomeDatasetBuildInput {
+            profile: &profile(),
+            events: &events,
+            jobs: vec![
                 (
                     job_view("job-positive", "Senior Backend Engineer", "djinni"),
                     JobFeedbackState::default(),
@@ -129,12 +129,12 @@ fn label_assignment_is_deterministic_and_prioritized() {
                     JobFeedbackState::default(),
                 ),
             ],
-            &BTreeMap::new(),
-            &BTreeMap::new(),
-            &SearchRankingService::new(),
-            &behavior,
-            &funnel,
-        )
+            applications_by_job_id: &BTreeMap::new(),
+            feedback_updated_at_by_job_id: &BTreeMap::new(),
+            search_ranking_service: &SearchRankingService::new(),
+            behavior: &behavior,
+            funnel: &funnel,
+        })
         .expect("dataset should build");
 
     let labels = dataset
@@ -174,10 +174,10 @@ fn reversal_events_clear_saved_and_dismissed_states_before_labeling() {
     let behavior = BehaviorService::new().build_aggregates(events.iter());
     let funnel = FunnelService::new().build_aggregates(events.iter());
     let dataset = OutcomeDatasetService::new()
-        .build(
-            &profile(),
-            &events,
-            vec![
+        .build(OutcomeDatasetBuildInput {
+            profile: &profile(),
+            events: &events,
+            jobs: vec![
                 (
                     job_view("job-viewed", "Senior Backend Engineer", "djinni"),
                     JobFeedbackState::default(),
@@ -187,12 +187,12 @@ fn reversal_events_clear_saved_and_dismissed_states_before_labeling() {
                     JobFeedbackState::default(),
                 ),
             ],
-            &BTreeMap::new(),
-            &BTreeMap::new(),
-            &SearchRankingService::new(),
-            &behavior,
-            &funnel,
-        )
+            applications_by_job_id: &BTreeMap::new(),
+            feedback_updated_at_by_job_id: &BTreeMap::new(),
+            search_ranking_service: &SearchRankingService::new(),
+            behavior: &behavior,
+            funnel: &funnel,
+        })
         .expect("dataset should build");
 
     assert_eq!(dataset.examples.len(), 1);
@@ -210,10 +210,10 @@ fn explicit_feedback_flags_drive_labels_without_matching_events() {
     let behavior = BehaviorService::new().build_aggregates(events.iter());
     let funnel = FunnelService::new().build_aggregates(events.iter());
     let dataset = OutcomeDatasetService::new()
-        .build(
-            &profile(),
-            &events,
-            vec![(
+        .build(OutcomeDatasetBuildInput {
+            profile: &profile(),
+            events: &events,
+            jobs: vec![(
                 job_view("job-explicit", "Senior Backend Engineer", "djinni"),
                 JobFeedbackState {
                     saved: false,
@@ -227,12 +227,12 @@ fn explicit_feedback_flags_drive_labels_without_matching_events() {
                     tags: Vec::new(),
                 },
             )],
-            &BTreeMap::new(),
-            &BTreeMap::new(),
-            &SearchRankingService::new(),
-            &behavior,
-            &funnel,
-        )
+            applications_by_job_id: &BTreeMap::new(),
+            feedback_updated_at_by_job_id: &BTreeMap::new(),
+            search_ranking_service: &SearchRankingService::new(),
+            behavior: &behavior,
+            funnel: &funnel,
+        })
         .expect("dataset should build");
 
     assert_eq!(dataset.examples.len(), 1);
@@ -268,16 +268,16 @@ fn empty_labelable_inputs_return_empty_dataset() {
     let behavior = BehaviorService::new().build_aggregates(events.iter());
     let funnel = FunnelService::new().build_aggregates(events.iter());
     let dataset = OutcomeDatasetService::new()
-        .build(
-            &profile(),
-            &events,
-            Vec::new(),
-            &BTreeMap::new(),
-            &BTreeMap::new(),
-            &SearchRankingService::new(),
-            &behavior,
-            &funnel,
-        )
+        .build(OutcomeDatasetBuildInput {
+            profile: &profile(),
+            events: &events,
+            jobs: Vec::new(),
+            applications_by_job_id: &BTreeMap::new(),
+            feedback_updated_at_by_job_id: &BTreeMap::new(),
+            search_ranking_service: &SearchRankingService::new(),
+            behavior: &behavior,
+            funnel: &funnel,
+        })
         .expect("empty dataset should build");
 
     assert!(dataset.examples.is_empty());
@@ -302,14 +302,14 @@ fn application_outcomes_enrich_signals_and_label_timestamp() {
     let behavior = BehaviorService::new().build_aggregates(events.iter());
     let funnel = FunnelService::new().build_aggregates(events.iter());
     let dataset = OutcomeDatasetService::new()
-        .build(
-            &profile(),
-            &events,
-            vec![(
+        .build(OutcomeDatasetBuildInput {
+            profile: &profile(),
+            events: &events,
+            jobs: vec![(
                 job_view("job-positive", "Senior Backend Engineer", "djinni"),
                 JobFeedbackState::default(),
             )],
-            &BTreeMap::from([(
+            applications_by_job_id: &BTreeMap::from([(
                 "job-positive".to_string(),
                 Application {
                     id: "app-1".to_string(),
@@ -324,11 +324,11 @@ fn application_outcomes_enrich_signals_and_label_timestamp() {
                     updated_at: "2026-04-20T00:00:00Z".to_string(),
                 },
             )]),
-            &BTreeMap::new(),
-            &SearchRankingService::new(),
-            &behavior,
-            &funnel,
-        )
+            feedback_updated_at_by_job_id: &BTreeMap::new(),
+            search_ranking_service: &SearchRankingService::new(),
+            behavior: &behavior,
+            funnel: &funnel,
+        })
         .expect("dataset should build");
 
     assert_eq!(dataset.examples.len(), 1);

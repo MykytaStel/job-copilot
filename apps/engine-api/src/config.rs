@@ -24,6 +24,10 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn is_production(&self) -> bool {
+        self.app_env == "production"
+    }
+
     pub fn from_env() -> Self {
         let port = std::env::var("PORT")
             .ok()

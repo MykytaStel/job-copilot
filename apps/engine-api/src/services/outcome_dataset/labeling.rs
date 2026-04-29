@@ -16,13 +16,13 @@ pub(super) fn resolve_label_observed_at(
     application: Option<&Application>,
     feedback_updated_at: Option<&str>,
 ) -> Option<String> {
-    if signals.applied {
-        if let Some(record) = application {
-            if let Some(outcome_date) = record.outcome_date.as_ref() {
-                return Some(outcome_date.clone());
-            }
-            return Some(record.updated_at.clone());
+    if signals.applied
+        && let Some(record) = application
+    {
+        if let Some(outcome_date) = record.outcome_date.as_ref() {
+            return Some(outcome_date.clone());
         }
+        return Some(record.updated_at.clone());
     }
 
     if let Some(created_at) = event_signals.latest_event_at.as_ref() {

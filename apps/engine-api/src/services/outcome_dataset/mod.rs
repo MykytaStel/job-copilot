@@ -33,6 +33,17 @@ pub const OUTCOME_LABEL_POLICY_VERSION: &str = "outcome_label_v3";
 #[derive(Clone, Default)]
 pub struct OutcomeDatasetService;
 
+pub struct OutcomeDatasetBuildInput<'a> {
+    pub profile: &'a crate::domain::profile::model::Profile,
+    pub events: &'a [crate::domain::user_event::model::UserEventRecord],
+    pub jobs: Vec<(JobView, JobFeedbackState)>,
+    pub applications_by_job_id: &'a BTreeMap<String, Application>,
+    pub feedback_updated_at_by_job_id: &'a BTreeMap<String, String>,
+    pub search_ranking_service: &'a SearchRankingService,
+    pub behavior: &'a ProfileBehaviorAggregates,
+    pub funnel: &'a ProfileFunnelAggregates,
+}
+
 impl OutcomeDatasetService {
     pub fn new() -> Self {
         Self
@@ -40,15 +51,19 @@ impl OutcomeDatasetService {
 
     pub fn build(
         &self,
-        profile: &crate::domain::profile::model::Profile,
-        events: &[crate::domain::user_event::model::UserEventRecord],
-        jobs: Vec<(JobView, JobFeedbackState)>,
-        applications_by_job_id: &BTreeMap<String, Application>,
-        feedback_updated_at_by_job_id: &BTreeMap<String, String>,
-        search_ranking_service: &SearchRankingService,
-        behavior: &ProfileBehaviorAggregates,
-        funnel: &ProfileFunnelAggregates,
+        input: OutcomeDatasetBuildInput<'_>,
     ) -> Result<OutcomeDataset, OutcomeDatasetError> {
+        let OutcomeDatasetBuildInput {
+            profile,
+            events,
+            jobs,
+            applications_by_job_id,
+            feedback_updated_at_by_job_id,
+            search_ranking_service,
+            behavior,
+            funnel,
+        } = input;
+
         let Some(analysis) = profile.analysis.as_ref() else {
             return Err(OutcomeDatasetError::ProfileAnalysisRequired);
         };
