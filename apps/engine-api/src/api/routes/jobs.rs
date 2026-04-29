@@ -17,6 +17,7 @@ pub(crate) use helpers::load_feedback_state;
 #[derive(Debug, Deserialize)]
 pub struct RecentJobsQuery {
     pub limit: Option<i64>,
+    pub quality_min: Option<i32>,
     /// Filter by lifecycle stage: "active" | "inactive" | "reactivated"
     pub lifecycle: Option<String>,
     /// Filter by source name: "djinni" | "work_ua" | "robota_ua"

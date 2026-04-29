@@ -8,9 +8,10 @@ use tracing::{info, warn};
 
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
-    DetailSnapshot, ScraperConfig, cleanup_description_text, collect_text,
-    headers::build_default_headers, infer_remote_type, infer_seniority, merge_detail_into_result,
-    normalize_company_name, normalized_non_empty, parse_salary_range, polite_delay,
+    DetailSnapshot, ScraperConfig, cleanup_description_text, collect_text, extract_skills,
+    headers::build_default_headers, infer_company_meta, infer_remote_type,
+    infer_seniority_from_title_and_description, merge_detail_into_result, normalize_company_name,
+    normalized_non_empty, parse_salary_range_with_usd_monthly, polite_delay,
 };
 
 const SOURCE: &str = "dou_ua";
@@ -165,10 +166,10 @@ fn normalize_feed_item(item: FeedItem, fetched_at: &str) -> Option<Normalization
         .unwrap_or_else(|| title.clone());
     let location = extract_location_from_meta(&meta);
     let salary_source = normalized_non_empty(Some(&meta));
-    let (salary_min, salary_max, salary_currency) = salary_source
+    let (salary_min, salary_max, salary_currency, salary_usd_min, salary_usd_max) = salary_source
         .as_deref()
-        .map(parse_salary_range)
-        .unwrap_or((None, None, None));
+        .map(parse_salary_range_with_usd_monthly)
+        .unwrap_or((None, None, None, None, None));
     let posted_at = item.pub_date.as_deref().and_then(parse_pub_date);
 
     let signal_text = [
@@ -180,7 +181,9 @@ fn normalize_feed_item(item: FeedItem, fetched_at: &str) -> Option<Normalization
     .join(" ");
 
     let remote_type = infer_remote_type(&signal_text);
-    let seniority = infer_seniority(&signal_text);
+    let seniority = infer_seniority_from_title_and_description(&title, Some(&description_text));
+    let extracted_skills = extract_skills(&description_text);
+    let company_meta = infer_company_meta(&description_text, None);
 
     let raw_payload = json!({
         "rss_title": item.title,
@@ -188,13 +191,17 @@ fn normalize_feed_item(item: FeedItem, fetched_at: &str) -> Option<Normalization
         "source_url": item.link,
         "title": title,
         "company_name": company_name,
+        "company_meta": company_meta,
         "location": location,
         "remote_type": remote_type,
         "seniority": seniority,
         "description_text": description_text,
+        "extracted_skills": extracted_skills.clone(),
         "salary_min": salary_min,
         "salary_max": salary_max,
         "salary_currency": salary_currency,
+        "salary_usd_min": salary_usd_min,
+        "salary_usd_max": salary_usd_max,
         "posted_at": posted_at,
         "rss_pub_date": item.pub_date,
         "fetched_at": fetched_at,
@@ -203,15 +210,21 @@ fn normalize_feed_item(item: FeedItem, fetched_at: &str) -> Option<Normalization
     Some(NormalizationResult {
         job: NormalizedJob {
             id: format!("job_{SOURCE}_{source_job_id}"),
+            duplicate_of: None,
             title,
             company_name,
+            company_meta,
             location,
             remote_type,
             seniority,
             description_text,
+            extracted_skills,
             salary_min,
             salary_max,
             salary_currency,
+            salary_usd_min,
+            salary_usd_max,
+            quality_score: None,
             posted_at,
             last_seen_at: fetched_at.to_string(),
             is_active: true,
@@ -250,10 +263,10 @@ fn parse_detail_page(
         &document,
         &[".l-vacancy .sh-info .salary", ".sh-info .salary"],
     );
-    let (salary_min, salary_max, salary_currency) = salary_source
+    let (salary_min, salary_max, salary_currency, salary_usd_min, salary_usd_max) = salary_source
         .as_deref()
-        .map(parse_salary_range)
-        .unwrap_or((None, None, None));
+        .map(parse_salary_range_with_usd_monthly)
+        .unwrap_or((None, None, None, None, None));
     let description_text = extract_rich_text(
         &document,
         &[
@@ -290,17 +303,24 @@ fn parse_detail_page(
         description_text.clone().unwrap_or_default(),
     ]
     .join(" ");
+    let seniority = infer_seniority_from_title_and_description(
+        title.as_deref().unwrap_or(&fallback.job.title),
+        description_text.as_deref(),
+    );
 
     DetailSnapshot {
         title,
         company_name,
+        company_url: None,
         location,
         remote_type: infer_remote_type(&signal_text),
-        seniority: infer_seniority(&signal_text),
+        seniority,
         description_text,
         salary_min,
         salary_max,
         salary_currency,
+        salary_usd_min,
+        salary_usd_max,
         posted_at: fallback.job.posted_at.clone(),
         raw_payload: json!({
             "detail_title": extract_first_text(&document, &["h1.g-h2", "h1"]),
@@ -582,15 +602,21 @@ mod tests {
         let fallback = NormalizationResult {
             job: NormalizedJob {
                 id: "job_dou_ua_354587".to_string(),
+                duplicate_of: None,
                 title: "Backend Developer (Laravel)".to_string(),
                 company_name: "GetCode".to_string(),
+                company_meta: None,
                 location: Some("віддалено".to_string()),
                 remote_type: Some("remote".to_string()),
                 seniority: Some("middle".to_string()),
                 description_text: "Short snippet".to_string(),
+                extracted_skills: Vec::new(),
                 salary_min: Some(2500),
                 salary_max: None,
                 salary_currency: Some("USD".to_string()),
+                salary_usd_min: Some(2500),
+                salary_usd_max: None,
+                quality_score: None,
                 posted_at: Some("2026-04-18T07:00:00Z".to_string()),
                 last_seen_at: "2026-04-18T10:00:00Z".to_string(),
                 is_active: true,
@@ -625,15 +651,21 @@ mod tests {
         let fallback = NormalizationResult {
             job: NormalizedJob {
                 id: "job_dou_ua_999".to_string(),
+                duplicate_of: None,
                 title: "Front-end React Developer".to_string(),
                 company_name: "SignalHire".to_string(),
+                company_meta: None,
                 location: Some("віддалено".to_string()),
                 remote_type: Some("remote".to_string()),
                 seniority: Some("senior".to_string()),
                 description_text: "Short listing snippet".to_string(),
+                extracted_skills: Vec::new(),
                 salary_min: None,
                 salary_max: None,
                 salary_currency: None,
+                salary_usd_min: None,
+                salary_usd_max: None,
+                quality_score: None,
                 posted_at: Some("2026-04-18T07:00:00Z".to_string()),
                 last_seen_at: "2026-04-18T10:00:00Z".to_string(),
                 is_active: true,

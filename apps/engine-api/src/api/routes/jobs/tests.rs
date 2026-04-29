@@ -176,6 +176,7 @@ async fn rejects_invalid_recent_jobs_limit() {
         State(AppState::without_database()),
         Query(RecentJobsQuery {
             limit: Some(0),
+            quality_min: None,
             lifecycle: None,
             source: None,
             profile_id: None,
@@ -196,6 +197,35 @@ async fn rejects_invalid_recent_jobs_limit() {
     let payload: Value = serde_json::from_slice(&body).expect("response body should be valid json");
 
     assert_eq!(payload["code"], json!("invalid_limit"));
+}
+
+#[tokio::test]
+async fn rejects_invalid_recent_jobs_quality_min() {
+    let result = get_recent_jobs(
+        State(AppState::without_database()),
+        Query(RecentJobsQuery {
+            limit: Some(20),
+            quality_min: Some(101),
+            lifecycle: None,
+            source: None,
+            profile_id: None,
+        }),
+    )
+    .await;
+
+    let response = match result {
+        Ok(Json(_)) => panic!("handler should reject invalid quality_min"),
+        Err(error) => error.into_response(),
+    };
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("response body should be readable");
+    let payload: Value = serde_json::from_slice(&body).expect("response body should be valid json");
+
+    assert_eq!(payload["code"], json!("invalid_quality_min"));
 }
 
 #[tokio::test]
@@ -439,6 +469,7 @@ async fn returns_job_feed_summary_and_lifecycle_fields() {
         State(state),
         Query(RecentJobsQuery {
             limit: Some(20),
+            quality_min: None,
             lifecycle: None,
             source: None,
             profile_id: None,
@@ -509,6 +540,7 @@ async fn recent_jobs_payload_for(job_view: JobView) -> Value {
         State(state),
         Query(RecentJobsQuery {
             limit: Some(20),
+            quality_min: None,
             lifecycle: None,
             source: None,
             profile_id: None,

@@ -1,4 +1,4 @@
-import { Menu, Settings } from 'lucide-react';
+import { AlertTriangle, Menu, Settings } from 'lucide-react';
 import type { Location } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,12 +14,14 @@ export function AppShellTopHeader({
   sidebarCollapsed,
   setMobileNavOpen,
   unreadCount,
+  degradedSourceCount,
 }: {
   location: Location;
   activeNavItem: NavItem | null;
   sidebarCollapsed: boolean;
   setMobileNavOpen: (value: boolean) => void;
   unreadCount: number;
+  degradedSourceCount: number;
 }) {
   const navigate = useNavigate();
 
@@ -45,7 +47,10 @@ export function AppShellTopHeader({
           </p>
         </div>
 
-        <NotificationIconButton unreadCount={unreadCount} mobile />
+        <div className="flex items-center gap-2">
+          {degradedSourceCount > 0 && <SourceHealthBadge count={degradedSourceCount} mobile />}
+          <NotificationIconButton unreadCount={unreadCount} mobile />
+        </div>
       </header>
 
       <header
@@ -75,6 +80,7 @@ export function AppShellTopHeader({
         </div>
 
         <div className="flex items-center gap-2">
+          {degradedSourceCount > 0 && <SourceHealthBadge count={degradedSourceCount} />}
           <NotificationIconButton unreadCount={unreadCount} />
           <Button
             variant="icon"
@@ -97,5 +103,20 @@ export function AppShellTopHeader({
         </div>
       </header>
     </>
+  );
+}
+
+function SourceHealthBadge({ count, mobile = false }: { count: number; mobile?: boolean }) {
+  return (
+    <span
+      title={`${count} source${count === 1 ? '' : 's'} degraded`}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] font-semibold text-warning',
+        mobile && 'px-1.5',
+      )}
+    >
+      <AlertTriangle className="h-3.5 w-3.5" />
+      <span>{count}</span>
+    </span>
   );
 }

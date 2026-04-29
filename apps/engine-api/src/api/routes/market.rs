@@ -5,8 +5,8 @@ use axum::response::IntoResponse;
 use serde::Deserialize;
 
 use crate::api::dto::market::{
-    MarketCompaniesResponse, MarketCompanyEntryResponse, MarketOverviewResponse,
-    MarketRoleDemandEntryResponse, MarketSalaryTrendResponse,
+    MarketCompaniesResponse, MarketCompanyEntryResponse, MarketCompanyVelocityEntryResponse,
+    MarketOverviewResponse, MarketRoleDemandEntryResponse, MarketSalaryTrendResponse,
 };
 use crate::api::error::ApiError;
 use crate::domain::market::model::MarketSource;
@@ -124,6 +124,32 @@ pub async fn get_market_salary_trend(
     Ok((headers, Json(MarketSalaryTrendResponse::from(trend))))
 }
 
+pub async fn get_market_company_velocity(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let (entries, source) = state
+        .jobs_service
+        .market_company_velocity()
+        .await
+        .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
+
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((
+        headers,
+        Json(
+            entries
+                .into_iter()
+                .map(MarketCompanyVelocityEntryResponse::from)
+                .collect::<Vec<_>>(),
+        ),
+    ))
+}
+
 pub async fn get_market_salary_trends(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -192,12 +218,12 @@ mod tests {
 
     use super::{
         MarketCompaniesQuery, MarketRolesQuery, MarketSalaryQuery, get_market_companies,
-        get_market_overview, get_market_role_demand, get_market_salary_trend,
-        get_market_salary_trends,
+        get_market_company_velocity, get_market_overview, get_market_role_demand,
+        get_market_salary_trend, get_market_salary_trends,
     };
     use crate::domain::market::model::{
-        MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend,
-        MarketTrendDirection,
+        MarketCompanyEntry, MarketCompanyVelocityEntry, MarketCompanyVelocityTrend, MarketOverview,
+        MarketRoleDemandEntry, MarketSalaryTrend, MarketTrendDirection,
     };
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
@@ -401,6 +427,57 @@ mod tests {
 
         assert_eq!(payload["code"], json!("invalid_seniority"));
         assert_eq!(payload["details"]["field"], json!("seniority"));
+    }
+
+    #[tokio::test]
+    async fn market_company_velocity_returns_top_recent_hiring_companies() {
+        let state = test_state(JobsService::for_tests(
+            JobsServiceStub::default().with_market_company_velocity(vec![
+                MarketCompanyVelocityEntry {
+                    company: "Acme".to_string(),
+                    job_count: 8,
+                    trend: MarketCompanyVelocityTrend::Growing,
+                },
+                MarketCompanyVelocityEntry {
+                    company: "Beta".to_string(),
+                    job_count: 3,
+                    trend: MarketCompanyVelocityTrend::Declining,
+                },
+                MarketCompanyVelocityEntry {
+                    company: "Core".to_string(),
+                    job_count: 3,
+                    trend: MarketCompanyVelocityTrend::Stable,
+                },
+            ]),
+        ));
+
+        let payload = parse_json_response(
+            get_market_company_velocity(State(state))
+                .await
+                .expect("market company velocity should succeed"),
+        )
+        .await;
+
+        assert_eq!(
+            payload,
+            json!([
+                {
+                    "company": "Acme",
+                    "job_count": 8,
+                    "trend": "growing"
+                },
+                {
+                    "company": "Beta",
+                    "job_count": 3,
+                    "trend": "declining"
+                },
+                {
+                    "company": "Core",
+                    "job_count": 3,
+                    "trend": "stable"
+                }
+            ])
+        );
     }
 
     #[tokio::test]

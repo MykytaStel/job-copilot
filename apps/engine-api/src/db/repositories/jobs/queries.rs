@@ -157,6 +157,7 @@ impl JobsRepository {
         limit: i64,
         lifecycle: Option<&str>,
         source: Option<&str>,
+        quality_min: Option<i32>,
     ) -> Result<Vec<JobView>, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);
@@ -174,12 +175,12 @@ impl JobsRepository {
         };
 
         let mut builder = QueryBuilder::<Postgres>::new(JOB_VIEW_BASE_SELECT);
-        let mut has_where = false;
+        builder.push("\nWHERE jobs.duplicate_of IS NULL");
+        let mut has_where = true;
 
         if let Some(cond) = lifecycle_cond {
-            builder.push("\nWHERE ");
+            builder.push("\nAND ");
             builder.push(cond);
-            has_where = true;
         }
 
         if let Some(src) = source {
@@ -187,6 +188,13 @@ impl JobsRepository {
             builder.push("EXISTS (SELECT 1 FROM job_variants WHERE job_id = jobs.id AND source = ");
             builder.push_bind(src);
             builder.push(")");
+            has_where = true;
+        }
+
+        if let Some(min_score) = quality_min {
+            builder.push(if has_where { "\nAND " } else { "\nWHERE " });
+            builder.push("jobs.quality_score >= ");
+            builder.push_bind(min_score);
         }
 
         builder.push("\nORDER BY jobs.last_seen_at DESC, jobs.posted_at DESC NULLS LAST\nLIMIT ");
@@ -218,6 +226,7 @@ impl JobsRepository {
                 )::bigint AS reactivated_jobs,
                 MAX(last_seen_at)::text AS last_ingested_at
             FROM jobs
+            WHERE duplicate_of IS NULL
             "#,
         )
         .fetch_one(pool)

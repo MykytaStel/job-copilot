@@ -69,7 +69,7 @@ pub async fn run_search(
     let candidate_fetch_started_at = Instant::now();
     let candidate_jobs = state
         .jobs_service
-        .list_filtered_views(fetch_limit, Some("active"), None)
+        .list_filtered_views(fetch_limit, Some("active"), None, None)
         .await
         .map_err(|error| ApiError::from_repository(error, "search_run_failed"))?;
     let candidate_fetch_duration_ms = candidate_fetch_started_at.elapsed().as_millis();

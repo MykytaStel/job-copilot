@@ -24,6 +24,14 @@ export type EngineMarketCompaniesResponse = {
   companies: EngineMarketCompanyEntry[];
 };
 
+export type EngineMarketCompanyVelocityTrend = 'growing' | 'stable' | 'declining';
+
+export type EngineMarketCompanyVelocityEntry = {
+  company: string;
+  job_count: number;
+  trend: EngineMarketCompanyVelocityTrend;
+};
+
 export type EngineMarketSalaryTrend = {
   seniority: string;
   currency: string;

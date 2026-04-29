@@ -213,6 +213,10 @@ pub fn protected_router() -> Router<AppState> {
             get(market::get_market_companies),
         )
         .route(
+            "/api/v1/market/company-velocity",
+            get(market::get_market_company_velocity),
+        )
+        .route(
             "/api/v1/notifications",
             get(notifications::list_notifications),
         )
@@ -251,6 +255,7 @@ pub fn protected_router() -> Router<AppState> {
             get(analytics::get_llm_context),
         )
         .route("/api/v1/roles", get(roles::list_roles))
+        .route("/api/v1/sources/health", get(sources::get_source_health))
         .route("/api/v1/sources", get(sources::list_sources))
         .route("/api/v1/resumes", get(resumes::list_resumes))
         .route("/api/v1/resumes/active", get(resumes::get_active_resume))

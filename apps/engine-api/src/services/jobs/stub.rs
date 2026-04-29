@@ -4,7 +4,8 @@ use crate::db::repositories::RepositoryError;
 use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend, MarketSource,
+    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketOverview, MarketRoleDemandEntry,
+    MarketSalaryTrend, MarketSource,
 };
 
 pub struct JobsServiceStub {
@@ -16,6 +17,7 @@ pub struct JobsServiceStub {
     source_counts: Vec<JobSourceCount>,
     market_overview: MarketOverview,
     market_companies: Vec<MarketCompanyEntry>,
+    market_company_velocity: Vec<MarketCompanyVelocityEntry>,
     market_salary_trends: HashMap<String, MarketSalaryTrend>,
     market_role_demand: Vec<MarketRoleDemandEntry>,
     database_disabled: bool,
@@ -55,6 +57,14 @@ impl JobsServiceStub {
         self
     }
 
+    pub fn with_market_company_velocity(
+        mut self,
+        entries: Vec<MarketCompanyVelocityEntry>,
+    ) -> Self {
+        self.market_company_velocity = entries;
+        self
+    }
+
     pub fn with_market_salary_trend(mut self, trend: MarketSalaryTrend) -> Self {
         self.market_salary_trends
             .insert(trend.seniority.clone(), trend);
@@ -87,6 +97,7 @@ impl JobsServiceStub {
         limit: i64,
         lifecycle: Option<&str>,
         source: Option<&str>,
+        _quality_min: Option<i32>,
     ) -> Result<Vec<JobView>, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
@@ -198,6 +209,16 @@ impl JobsServiceStub {
         ))
     }
 
+    pub(crate) fn market_company_velocity(
+        &self,
+    ) -> Result<(Vec<MarketCompanyVelocityEntry>, MarketSource), RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok((self.market_company_velocity.clone(), MarketSource::Snapshot))
+    }
+
     pub(crate) fn market_salary_trends(
         &self,
     ) -> Result<(Vec<MarketSalaryTrend>, MarketSource), RepositoryError> {
@@ -256,6 +277,7 @@ impl Default for JobsServiceStub {
                 remote_percentage: 0.0,
             },
             market_companies: Vec::new(),
+            market_company_velocity: Vec::new(),
             market_salary_trends: HashMap::new(),
             market_role_demand: Vec::new(),
             database_disabled: false,
