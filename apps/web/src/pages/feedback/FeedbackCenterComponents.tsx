@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { JobPosting } from '@job-copilot/shared';
 import {
   Ban,
@@ -318,7 +318,12 @@ export function CompanyRow({
   isBulkHidePending: boolean;
   isUpdateNotesPending: boolean;
 }) {
-  const [draftNotes, setDraftNotes] = useState(notes);
+  const [draftNotesState, setDraftNotesState] = useState(() => ({
+    sourceNotes: notes,
+    draftNotes: notes,
+  }));
+  const draftNotes =
+    draftNotesState.sourceNotes === notes ? draftNotesState.draftNotes : notes;
   const iconClass =
     accent === 'success'
       ? semanticIconFrameClass.success
@@ -327,10 +332,6 @@ export function CompanyRow({
     accent === 'success'
       ? semanticPanelClass.success
       : semanticPanelClass.danger;
-
-  useEffect(() => {
-    setDraftNotes(notes);
-  }, [notes]);
 
   function handleNotesBlur() {
     if (draftNotes !== notes) {
@@ -400,7 +401,12 @@ export function CompanyRow({
         </div>
         <textarea
           value={draftNotes}
-          onChange={(event) => setDraftNotes(event.target.value)}
+          onChange={(event) =>
+            setDraftNotesState({
+              sourceNotes: notes,
+              draftNotes: event.target.value,
+            })
+          }
           onBlur={handleNotesBlur}
           maxLength={500}
           rows={2}
