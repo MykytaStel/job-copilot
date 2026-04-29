@@ -4,12 +4,13 @@ mod headers;
 pub mod robota_ua;
 pub mod work_ua;
 
-use std::time::Duration;
+use std::{sync::OnceLock, time::Duration};
 
+use regex::Regex;
 use serde_json::{Value, json};
 use tokio::time::sleep;
 
-use crate::models::NormalizationResult;
+use crate::models::{CompanyMeta, NormalizationResult, NormalizedJob};
 
 pub struct ScraperConfig {
     pub pages: u32,
@@ -35,6 +36,7 @@ pub async fn polite_delay(ms: u64) {
 pub struct DetailSnapshot {
     pub title: Option<String>,
     pub company_name: Option<String>,
+    pub company_url: Option<String>,
     pub location: Option<String>,
     pub remote_type: Option<String>,
     pub seniority: Option<String>,
@@ -42,6 +44,8 @@ pub struct DetailSnapshot {
     pub salary_min: Option<i32>,
     pub salary_max: Option<i32>,
     pub salary_currency: Option<String>,
+    pub salary_usd_min: Option<i32>,
+    pub salary_usd_max: Option<i32>,
     pub posted_at: Option<String>,
     pub raw_payload: Value,
 }
@@ -51,6 +55,7 @@ impl Default for DetailSnapshot {
         Self {
             title: None,
             company_name: None,
+            company_url: None,
             location: None,
             remote_type: None,
             seniority: None,
@@ -58,6 +63,8 @@ impl Default for DetailSnapshot {
             salary_min: None,
             salary_max: None,
             salary_currency: None,
+            salary_usd_min: None,
+            salary_usd_max: None,
             posted_at: None,
             raw_payload: json!({}),
         }
@@ -97,18 +104,31 @@ pub fn merge_detail_into_result(
         .and_then(|value| normalized_non_empty(Some(value)))
         .or_else(|| result.job.seniority.clone());
     let posted_at = detail.posted_at.or(result.job.posted_at.clone());
+    let company_url = detail.company_url.or_else(|| {
+        result
+            .job
+            .company_meta
+            .as_ref()
+            .and_then(|meta| meta.url.clone())
+    });
+    let company_meta = infer_company_meta(&description_text, company_url.as_deref());
 
     result.job.title = title.clone();
     result.job.company_name = company_name.clone();
+    result.job.company_meta = company_meta.clone();
     result.job.location = location.clone();
     result.job.remote_type = remote_type.clone();
     result.job.seniority = seniority.clone();
     result.job.description_text = description_text.clone();
+    result.job.extracted_skills = extract_skills(&description_text);
     result.job.salary_min = detail.salary_min.or(result.job.salary_min);
     result.job.salary_max = detail.salary_max.or(result.job.salary_max);
     result.job.salary_currency = detail
         .salary_currency
         .or(result.job.salary_currency.clone());
+    result.job.salary_usd_min = detail.salary_usd_min.or(result.job.salary_usd_min);
+    result.job.salary_usd_max = detail.salary_usd_max.or(result.job.salary_usd_max);
+    result.job.quality_score = Some(compute_job_quality_score(&result.job));
     result.job.posted_at = posted_at.clone();
 
     result.snapshot.raw_payload = json!({
@@ -116,13 +136,18 @@ pub fn merge_detail_into_result(
         "source_url": result.snapshot.source_url,
         "title": title,
         "company_name": company_name,
+        "company_meta": company_meta,
         "location": location,
         "remote_type": remote_type,
         "seniority": seniority,
         "description_text": description_text,
+        "extracted_skills": result.job.extracted_skills.clone(),
         "salary_min": result.job.salary_min,
         "salary_max": result.job.salary_max,
         "salary_currency": result.job.salary_currency,
+        "salary_usd_min": result.job.salary_usd_min,
+        "salary_usd_max": result.job.salary_usd_max,
+        "quality_score": result.job.quality_score,
         "posted_at": posted_at,
         "fetched_at": result.snapshot.fetched_at,
         "listing_snapshot": result.snapshot.raw_payload,
@@ -130,6 +155,51 @@ pub fn merge_detail_into_result(
     });
 
     Some(result)
+}
+
+pub fn infer_company_meta(description: &str, company_url: Option<&str>) -> Option<CompanyMeta> {
+    let size_hint = infer_company_size_hint(description);
+    let industry_hint = infer_company_industry_hint(description);
+    let url = company_url.and_then(|value| normalized_non_empty(Some(value)));
+
+    if size_hint.is_none() && industry_hint.is_none() && url.is_none() {
+        None
+    } else {
+        Some(CompanyMeta {
+            size_hint,
+            industry_hint,
+            url,
+        })
+    }
+}
+
+pub fn infer_company_size_hint(description: &str) -> Option<String> {
+    if let Some(captures) = company_employee_range_re().captures(description) {
+        let start = captures.get(1)?.as_str().replace([' ', ','], "");
+        let end = captures.get(2)?.as_str().replace([' ', ','], "");
+        return Some(format!("{start}-{end} employees"));
+    }
+
+    if company_startup_re().is_match(description) {
+        Some("startup".to_string())
+    } else if company_enterprise_re().is_match(description) {
+        Some("enterprise".to_string())
+    } else {
+        None
+    }
+}
+
+pub fn infer_company_industry_hint(description: &str) -> Option<String> {
+    for (label, aliases) in COMPANY_INDUSTRY_DICTIONARY {
+        if aliases
+            .iter()
+            .any(|alias| company_alias_re(alias).is_match(description))
+        {
+            return Some((*label).to_string());
+        }
+    }
+
+    None
 }
 
 pub fn normalized_non_empty(value: Option<&str>) -> Option<String> {
@@ -156,6 +226,43 @@ pub fn normalize_company_name(value: &str) -> Option<String> {
     }
 
     Some(cleaned)
+}
+
+pub fn compute_job_quality_score(job: &NormalizedJob) -> i32 {
+    let mut score = 0;
+
+    if normalize_text(&job.description_text).chars().count() >= 200 {
+        score += 30;
+    }
+
+    if has_salary_info(job) {
+        score += 20;
+    }
+
+    if job.extracted_skills.len() >= 3 {
+        score += 20;
+    }
+
+    if normalized_non_empty(job.seniority.as_deref()).is_some() {
+        score += 10;
+    }
+
+    if normalized_non_empty(job.remote_type.as_deref()).is_some() {
+        score += 10;
+    }
+
+    if normalize_company_name(&job.company_name).is_some() {
+        score += 10;
+    }
+
+    score
+}
+
+fn has_salary_info(job: &NormalizedJob) -> bool {
+    job.salary_min.is_some()
+        || job.salary_max.is_some()
+        || job.salary_usd_min.is_some()
+        || job.salary_usd_max.is_some()
 }
 
 pub fn normalize_text(value: &str) -> String {
@@ -301,6 +408,162 @@ const DESCRIPTION_CUT_MARKERS: &[&str] = &[
     "правила відгуків",
 ];
 
+const COMPANY_INDUSTRY_DICTIONARY: &[(&str, &[&str])] = &[
+    (
+        "fintech",
+        &["fintech", "financial technology", "payments", "banking"],
+    ),
+    (
+        "edtech",
+        &["edtech", "education technology", "e-learning", "elearning"],
+    ),
+    (
+        "e-commerce",
+        &[
+            "e-commerce",
+            "ecommerce",
+            "e commerce",
+            "marketplace",
+            "retail tech",
+        ],
+    ),
+    (
+        "outsourcing",
+        &[
+            "outsourcing",
+            "outstaffing",
+            "software development company",
+            "service company",
+        ],
+    ),
+    (
+        "healthtech",
+        &["healthtech", "healthcare", "medical technology"],
+    ),
+    ("gamedev", &["gamedev", "game development", "gaming studio"]),
+];
+
+fn company_employee_range_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"(?iu)\b(\d[\d\s,]{0,8})\s*[-–—]\s*(\d[\d\s,]{0,8})\s*(?:employees|people|specialists|engineers|фахівц(?:ів|і)|співробітник(?:ів|и)|працівник(?:ів|и))\b",
+        )
+        .expect("valid company employee range regex")
+    })
+}
+
+fn company_startup_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)(^|[^\p{L}\p{N}])(?:startup|start-up|стартап)($|[^\p{L}\p{N}])")
+            .expect("valid startup regex")
+    })
+}
+
+fn company_enterprise_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)(^|[^\p{L}\p{N}])(?:enterprise|корпорац(?:ія|ії)|міжнародна компанія|large company|global company)($|[^\p{L}\p{N}])")
+            .expect("valid enterprise regex")
+    })
+}
+
+fn company_alias_re(alias: &str) -> Regex {
+    let escaped = regex::escape(alias);
+    Regex::new(&format!(
+        r"(?iu)(^|[^\p{{L}}\p{{N}}]){escaped}($|[^\p{{L}}\p{{N}}])"
+    ))
+    .expect("valid company alias regex")
+}
+
+pub const SKILL_DICTIONARY: &[(&str, &[&str])] = &[
+    ("React", &["react", "react.js", "reactjs"]),
+    ("Vue", &["vue", "vue.js", "vuejs"]),
+    ("TypeScript", &["typescript", "type script"]),
+    ("Node.js", &["node.js", "nodejs", "node js"]),
+    ("Python", &["python"]),
+    ("Rust", &["rust"]),
+    ("Go", &["go", "golang"]),
+    ("Java", &["java"]),
+    ("Kotlin", &["kotlin"]),
+    ("PostgreSQL", &["postgresql", "postgres"]),
+    ("MongoDB", &["mongodb", "mongo db"]),
+    ("Redis", &["redis"]),
+    ("Docker", &["docker"]),
+    ("Kubernetes", &["kubernetes", "k8s"]),
+    ("AWS", &["aws", "amazon web services"]),
+    ("GCP", &["gcp", "google cloud platform"]),
+    ("Azure", &["azure"]),
+    ("Git", &["git"]),
+    ("CI/CD", &["ci/cd", "cicd", "ci cd"]),
+    ("GraphQL", &["graphql", "graph ql"]),
+    ("REST", &["rest", "restful"]),
+    ("FastAPI", &["fastapi", "fast api"]),
+    ("Django", &["django"]),
+    ("Spring Boot", &["spring boot"]),
+    ("Terraform", &["terraform"]),
+    ("Linux", &["linux"]),
+];
+
+pub fn extract_skills(description: &str) -> Vec<String> {
+    let searchable = skill_searchable_text(description);
+    let mut extracted = Vec::new();
+
+    for (skill, aliases) in SKILL_DICTIONARY {
+        if aliases
+            .iter()
+            .any(|alias| skill_alias_re(alias).is_match(&searchable))
+        {
+            extracted.push((*skill).to_string());
+        }
+    }
+
+    extracted
+}
+
+fn skill_searchable_text(description: &str) -> String {
+    let mut parts = vec![description.to_string()];
+    parts.extend(explicit_skill_segments(description));
+    normalize_text(&parts.join(" "))
+}
+
+fn explicit_skill_segments(description: &str) -> Vec<String> {
+    description
+        .lines()
+        .map(str::trim)
+        .filter_map(|line| {
+            let (_, value) = line.split_once(':')?;
+            if explicit_skill_prefix_re().is_match(line) {
+                Some(value.trim().to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn explicit_skill_prefix_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)^\s*(?:required|skills|вимоги|технології)\s*:")
+            .expect("valid explicit skill prefix regex")
+    })
+}
+
+fn skill_alias_re(alias: &str) -> Regex {
+    let escaped = regex::escape(alias);
+    Regex::new(&format!(
+        r"(?iu)(^|[^\p{{L}}\p{{N}}]){escaped}($|[^\p{{L}}\p{{N}}])"
+    ))
+    .expect("valid skill alias regex")
+}
+
+pub const EUR_TO_USD_RATE: f64 = 1.10;
+pub const UAH_TO_USD_RATE: f64 = 0.024;
+pub const HOURLY_TO_MONTHLY_HOURS: f64 = 160.0;
+pub const ANNUAL_TO_MONTHLY_DIVISOR: f64 = 12.0;
+
 /// Parse a salary string into (min, max, currency).
 /// Handles Ukrainian notation ("40 000 грн"), USD ("$3000-5000"), EUR ("€2000").
 pub fn parse_salary_range(text: &str) -> (Option<i32>, Option<i32>, Option<String>) {
@@ -329,21 +592,237 @@ pub fn parse_salary_range(text: &str) -> (Option<i32>, Option<i32>, Option<Strin
     }
 }
 
-pub fn infer_seniority(title: &str) -> Option<String> {
-    let t = title.to_lowercase();
-    if t.contains("junior") || t.contains("jr.") || t.contains("intern") || t.contains("trainee") {
-        Some("junior".to_string())
-    } else if t.contains("middle") || t.contains(" mid ") || t.contains("mid-level") {
-        Some("middle".to_string())
-    } else if t.contains("senior") || t.contains("sr.") {
-        Some("senior".to_string())
-    } else if t.contains("staff") || t.contains("principal") {
-        Some("senior".to_string())
-    } else if t.contains(" lead") || t.starts_with("lead ") || t.contains("tech lead") {
-        Some("lead".to_string())
-    } else {
-        None
+pub fn normalize_salary_to_usd_monthly(
+    salary_min: Option<i32>,
+    salary_max: Option<i32>,
+    salary_currency: Option<&str>,
+    source_text: &str,
+) -> (Option<i32>, Option<i32>) {
+    let Some(currency) = salary_currency else {
+        return (None, None);
+    };
+
+    let Some(exchange_rate) = usd_exchange_rate(currency) else {
+        return (None, None);
+    };
+    let period_multiplier = salary_period_multiplier(source_text);
+
+    (
+        normalize_salary_amount(salary_min, exchange_rate, period_multiplier),
+        normalize_salary_amount(salary_max, exchange_rate, period_multiplier),
+    )
+}
+
+pub fn parse_salary_range_with_usd_monthly(
+    text: &str,
+) -> (
+    Option<i32>,
+    Option<i32>,
+    Option<String>,
+    Option<i32>,
+    Option<i32>,
+) {
+    let (salary_min, salary_max, salary_currency) = parse_salary_range(text);
+    let (salary_usd_min, salary_usd_max) =
+        normalize_salary_to_usd_monthly(salary_min, salary_max, salary_currency.as_deref(), text);
+
+    (
+        salary_min,
+        salary_max,
+        salary_currency,
+        salary_usd_min,
+        salary_usd_max,
+    )
+}
+
+fn normalize_salary_amount(
+    amount: Option<i32>,
+    exchange_rate: f64,
+    period_multiplier: f64,
+) -> Option<i32> {
+    amount.map(|value| (value as f64 * exchange_rate * period_multiplier).round() as i32)
+}
+
+fn usd_exchange_rate(currency: &str) -> Option<f64> {
+    match currency.trim().to_uppercase().as_str() {
+        "USD" => Some(1.0),
+        "EUR" => Some(EUR_TO_USD_RATE),
+        "UAH" => Some(UAH_TO_USD_RATE),
+        _ => None,
     }
+}
+
+fn salary_period_multiplier(text: &str) -> f64 {
+    let normalized = text.to_lowercase();
+
+    if hourly_salary_re().is_match(&normalized) {
+        HOURLY_TO_MONTHLY_HOURS
+    } else if annual_salary_re().is_match(&normalized) {
+        1.0 / ANNUAL_TO_MONTHLY_DIVISOR
+    } else {
+        1.0
+    }
+}
+
+fn hourly_salary_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"(?iu)(?:/|\bper\s+|\bза\s+|\bна\s+)(?:hour|hr|годину|год\b)|\b(?:hourly|погодинно)\b",
+        )
+        .expect("valid hourly salary regex")
+    })
+}
+
+fn annual_salary_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)(?:/|\bper\s+|\bза\s+|\bна\s+|\bin\s+|\bв\s+)(?:year|yr|annum|рік)|\b(?:annual|annually|yearly|річна)\b")
+            .expect("valid annual salary regex")
+    })
+}
+
+pub fn infer_seniority(title: &str) -> Option<String> {
+    infer_seniority_from_title_and_description(title, None)
+}
+
+pub fn infer_seniority_from_title_and_description(
+    title: &str,
+    description: Option<&str>,
+) -> Option<String> {
+    infer_seniority_from_title(title)
+        .or_else(|| description.and_then(infer_seniority_from_description))
+}
+
+fn infer_seniority_from_title(title: &str) -> Option<String> {
+    if title_lead_re().is_match(title) {
+        Some("lead".to_string())
+    } else if title_junior_re().is_match(title) {
+        Some("junior".to_string())
+    } else if title_middle_re().is_match(title) {
+        Some("middle".to_string())
+    } else if title_senior_re().is_match(title) {
+        Some("senior".to_string())
+    } else {
+        infer_seniority_from_years(title)
+    }
+}
+
+fn infer_seniority_from_description(description: &str) -> Option<String> {
+    if description_junior_re().is_match(description) {
+        Some("junior".to_string())
+    } else if description_middle_re().is_match(description) {
+        Some("middle".to_string())
+    } else if description_lead_re().is_match(description) {
+        Some("lead".to_string())
+    } else if description_senior_re().is_match(description) {
+        Some("senior".to_string())
+    } else {
+        infer_seniority_from_years(description)
+    }
+}
+
+fn infer_seniority_from_years(text: &str) -> Option<String> {
+    if let Some(captures) = years_range_re().captures(text) {
+        let start = captures.get(1)?.as_str().parse::<u8>().ok()?;
+        let end = captures.get(2)?.as_str().parse::<u8>().ok()?;
+        return seniority_from_year_range(start, end);
+    }
+
+    let captures = years_plus_re().captures(text)?;
+    let years = captures.get(1)?.as_str().parse::<u8>().ok()?;
+    seniority_from_years(years)
+}
+
+fn seniority_from_year_range(start: u8, end: u8) -> Option<String> {
+    if start == 2 && end == 4 {
+        Some("middle".to_string())
+    } else {
+        seniority_from_years(end)
+    }
+}
+
+fn seniority_from_years(years: u8) -> Option<String> {
+    match years {
+        0..=1 => Some("junior".to_string()),
+        2..=3 => Some("middle".to_string()),
+        4..=6 => Some("senior".to_string()),
+        _ => Some("lead".to_string()),
+    }
+}
+
+fn title_junior_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)(?:\bjunior\b|\bjr(?:\.|\b)|\bentry[-\s]?level\b|\bintern\b|\btrainee\b|\bпочатківець\b|\bмолодший\b)")
+            .expect("valid junior seniority regex")
+    })
+}
+
+fn title_middle_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)\b(?:middle|mid[-\s]?level|mid|regular|intermediate|середній)\b")
+            .expect("valid middle seniority regex")
+    })
+}
+
+fn title_senior_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)(?:\bsenior\b|\bsr(?:\.|\b)|\bдосвідчений\b)")
+            .expect("valid senior seniority regex")
+    })
+}
+
+fn title_lead_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)\b(?:tech\s+lead|team\s+lead|head\s+of|principal|staff|lead)\b")
+            .expect("valid lead seniority regex")
+    })
+}
+
+fn description_junior_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| title_junior_re().clone())
+}
+
+fn description_middle_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| title_middle_re().clone())
+}
+
+fn description_senior_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)(?:\bsenior\b|\bsr(?:\.|\b)|\bдосвідчений\b|\blead\b)")
+            .expect("valid description seniority regex")
+    })
+}
+
+fn description_lead_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)\b(?:tech\s+lead|team\s+lead|head\s+of|principal|staff)\b")
+            .expect("valid lead description seniority regex")
+    })
+}
+
+fn years_plus_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)\b(\d{1,2})\s*\+\s*(?:years?|yrs?|рок(?:и|ів)?)\b")
+            .expect("valid plus years regex")
+    })
+}
+
+fn years_range_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r"(?iu)\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*(?:years?|yrs?|рок(?:и|ів)?)\b")
+            .expect("valid range years regex")
+    })
 }
 
 pub fn infer_remote_type(text: &str) -> Option<String> {
@@ -378,22 +857,316 @@ mod tests {
 
     use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 
-    use super::{DetailSnapshot, cleanup_description_text, merge_detail_into_result};
+    use super::{
+        DetailSnapshot, cleanup_description_text, compute_job_quality_score, extract_skills,
+        infer_company_industry_hint, infer_company_meta, infer_company_size_hint, infer_seniority,
+        infer_seniority_from_title_and_description, merge_detail_into_result,
+        normalize_salary_to_usd_monthly,
+    };
+
+    #[test]
+    fn computes_job_quality_score_from_ingestion_signals() {
+        let job = NormalizedJob {
+            id: "job-1".to_string(),
+            duplicate_of: None,
+            title: "Senior Rust Engineer".to_string(),
+            company_name: "SignalHire".to_string(),
+            company_meta: None,
+            location: Some("Kyiv".to_string()),
+            remote_type: Some("remote".to_string()),
+            seniority: Some("senior".to_string()),
+            description_text: "Build reliable Rust APIs with PostgreSQL, Docker, and Kubernetes. "
+                .repeat(4),
+            extracted_skills: vec![
+                "Rust".to_string(),
+                "PostgreSQL".to_string(),
+                "Docker".to_string(),
+            ],
+            salary_min: Some(4000),
+            salary_max: Some(5500),
+            salary_currency: Some("USD".to_string()),
+            salary_usd_min: Some(4000),
+            salary_usd_max: Some(5500),
+            quality_score: None,
+            posted_at: None,
+            last_seen_at: "2026-04-18T10:00:00Z".to_string(),
+            is_active: true,
+        };
+
+        assert_eq!(compute_job_quality_score(&job), 100);
+    }
+
+    #[test]
+    fn quality_score_rejects_generic_company_and_missing_signals() {
+        let job = NormalizedJob {
+            id: "job-2".to_string(),
+            duplicate_of: None,
+            title: "Engineer".to_string(),
+            company_name: "Unknown".to_string(),
+            company_meta: None,
+            location: None,
+            remote_type: None,
+            seniority: None,
+            description_text: "Short snippet".to_string(),
+            extracted_skills: vec!["Rust".to_string(), "Docker".to_string()],
+            salary_min: None,
+            salary_max: None,
+            salary_currency: None,
+            salary_usd_min: None,
+            salary_usd_max: None,
+            quality_score: None,
+            posted_at: None,
+            last_seen_at: "2026-04-18T10:00:00Z".to_string(),
+            is_active: true,
+        };
+
+        assert_eq!(compute_job_quality_score(&job), 0);
+    }
+
+    #[test]
+    fn infers_seniority_from_english_title_patterns() {
+        let cases = [
+            ("Junior Rust Developer", Some("junior")),
+            ("Backend Jr. Engineer", Some("junior")),
+            ("Entry level QA Engineer", Some("junior")),
+            ("Frontend Intern", Some("junior")),
+            ("Data Trainee", Some("junior")),
+            ("Middle Rust Developer", Some("middle")),
+            ("Mid-level Frontend Engineer", Some("middle")),
+            ("Regular PHP Developer", Some("middle")),
+            ("Intermediate QA Engineer", Some("middle")),
+            ("Senior Backend Engineer", Some("senior")),
+            ("Sr. Data Engineer", Some("senior")),
+            ("Lead Software Engineer", Some("lead")),
+            ("Tech Lead Rust", Some("lead")),
+            ("Team Lead Backend", Some("lead")),
+            ("Principal Engineer", Some("lead")),
+            ("Staff Software Engineer", Some("lead")),
+            ("Head of Engineering", Some("lead")),
+        ];
+
+        for (title, expected) in cases {
+            assert_eq!(infer_seniority(title).as_deref(), expected, "{title}");
+        }
+    }
+
+    #[test]
+    fn infers_seniority_from_ukrainian_title_patterns() {
+        let cases = [
+            ("Початківець Python Developer", Some("junior")),
+            ("Молодший QA Engineer", Some("junior")),
+            ("Середній Java Developer", Some("middle")),
+            ("Досвідчений Rust Developer", Some("senior")),
+        ];
+
+        for (title, expected) in cases {
+            assert_eq!(infer_seniority(title).as_deref(), expected, "{title}");
+        }
+    }
+
+    #[test]
+    fn infers_seniority_from_year_patterns() {
+        let cases = [
+            (
+                "Developer",
+                "Requires 0+ years of commercial experience",
+                Some("junior"),
+            ),
+            (
+                "Developer",
+                "Requires 1+ year of commercial experience",
+                Some("junior"),
+            ),
+            (
+                "Developer",
+                "Requires 2+ years of commercial experience",
+                Some("middle"),
+            ),
+            (
+                "Developer",
+                "Requires 3+ years of commercial experience",
+                Some("middle"),
+            ),
+            (
+                "Developer",
+                "Requires 4+ years of commercial experience",
+                Some("senior"),
+            ),
+            (
+                "Developer",
+                "Requires 6+ years of commercial experience",
+                Some("senior"),
+            ),
+            (
+                "Developer",
+                "Requires 7+ years of commercial experience",
+                Some("lead"),
+            ),
+            (
+                "Developer",
+                "Experience: 2-4 years with React",
+                Some("middle"),
+            ),
+            (
+                "Developer",
+                "Experience: 5+ років with Rust",
+                Some("senior"),
+            ),
+            (
+                "Developer",
+                "You will lead backend delivery for the product team",
+                Some("senior"),
+            ),
+            (
+                "Developer",
+                "Work as a Tech Lead for a distributed engineering team",
+                Some("lead"),
+            ),
+        ];
+
+        for (title, description, expected) in cases {
+            assert_eq!(
+                infer_seniority_from_title_and_description(title, Some(description)).as_deref(),
+                expected,
+                "{description}"
+            );
+        }
+    }
+
+    #[test]
+    fn title_seniority_takes_precedence_over_description() {
+        assert_eq!(
+            infer_seniority_from_title_and_description(
+                "Junior Backend Engineer",
+                Some("Requirements: 7+ years of production experience")
+            )
+            .as_deref(),
+            Some("junior")
+        );
+    }
+
+    #[test]
+    fn infers_company_size_hints_from_description_patterns() {
+        assert_eq!(
+            infer_company_size_hint("We are a product startup building developer tooling.")
+                .as_deref(),
+            Some("startup")
+        );
+        assert_eq!(
+            infer_company_size_hint("Join an enterprise platform team serving global customers.")
+                .as_deref(),
+            Some("enterprise")
+        );
+        assert_eq!(
+            infer_company_size_hint("Our team has 50-200 employees across Europe.").as_deref(),
+            Some("50-200 employees")
+        );
+    }
+
+    #[test]
+    fn infers_company_industry_hints_from_common_sectors() {
+        assert_eq!(
+            infer_company_industry_hint("FinTech platform for card payments").as_deref(),
+            Some("fintech")
+        );
+        assert_eq!(
+            infer_company_industry_hint("We build edtech products for online learning").as_deref(),
+            Some("edtech")
+        );
+        assert_eq!(
+            infer_company_industry_hint("E-commerce marketplace and retail tech").as_deref(),
+            Some("e-commerce")
+        );
+        assert_eq!(
+            infer_company_industry_hint("Outsourcing software development company").as_deref(),
+            Some("outsourcing")
+        );
+    }
+
+    #[test]
+    fn builds_nullable_company_meta_with_optional_url() {
+        let meta = infer_company_meta(
+            "Startup in fintech hiring backend engineers",
+            Some("https://example.com/company/acme"),
+        )
+        .expect("company meta should be inferred");
+
+        assert_eq!(meta.size_hint.as_deref(), Some("startup"));
+        assert_eq!(meta.industry_hint.as_deref(), Some("fintech"));
+        assert_eq!(
+            meta.url.as_deref(),
+            Some("https://example.com/company/acme")
+        );
+        assert!(infer_company_meta("No company hints here", None).is_none());
+    }
+
+    #[test]
+    fn extracts_skills_case_insensitively_without_duplicates() {
+        let skills = extract_skills(
+            "We use React, react.js, TypeScript, nodejs, PostgreSQL, Docker and AWS.",
+        );
+
+        assert_eq!(
+            skills,
+            vec![
+                "React".to_string(),
+                "TypeScript".to_string(),
+                "Node.js".to_string(),
+                "PostgreSQL".to_string(),
+                "Docker".to_string(),
+                "AWS".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn extracts_skills_from_explicit_english_and_ukrainian_lists() {
+        let skills = extract_skills(
+            "Required: Python, FastAPI, Redis\nТехнології: Kubernetes, GCP, CI/CD\nВимоги: Git, Linux",
+        );
+
+        assert_eq!(
+            skills,
+            vec![
+                "Python".to_string(),
+                "Redis".to_string(),
+                "Kubernetes".to_string(),
+                "GCP".to_string(),
+                "Git".to_string(),
+                "CI/CD".to_string(),
+                "FastAPI".to_string(),
+                "Linux".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn skill_extraction_avoids_common_substring_false_positives() {
+        let skills = extract_skills("Interest in JavaScript and ongoing collaboration is useful.");
+
+        assert!(skills.is_empty());
+    }
 
     #[test]
     fn rejects_results_with_placeholder_company_after_detail_merge() {
         let result = NormalizationResult {
             job: NormalizedJob {
                 id: "job-1".to_string(),
+                duplicate_of: None,
                 title: "Rust Engineer".to_string(),
                 company_name: "Unknown".to_string(),
+                company_meta: None,
                 location: None,
                 remote_type: None,
                 seniority: None,
                 description_text: "Short snippet".to_string(),
+                extracted_skills: Vec::new(),
                 salary_min: None,
                 salary_max: None,
                 salary_currency: None,
+                salary_usd_min: None,
+                salary_usd_max: None,
+                quality_score: None,
                 posted_at: None,
                 last_seen_at: "2026-04-18T10:00:00Z".to_string(),
                 is_active: true,
@@ -423,15 +1196,21 @@ mod tests {
         let result = NormalizationResult {
             job: NormalizedJob {
                 id: "job-2".to_string(),
+                duplicate_of: None,
                 title: "Front-end React Developer".to_string(),
                 company_name: "SignalHire".to_string(),
+                company_meta: None,
                 location: None,
                 remote_type: Some("remote".to_string()),
                 seniority: Some("senior".to_string()),
                 description_text: "React product team".to_string(),
+                extracted_skills: vec!["React".to_string()],
                 salary_min: None,
                 salary_max: None,
                 salary_currency: None,
+                salary_usd_min: None,
+                salary_usd_max: None,
+                quality_score: None,
                 posted_at: None,
                 last_seen_at: "2026-04-18T10:00:00Z".to_string(),
                 is_active: true,
@@ -482,6 +1261,35 @@ mod tests {
         assert_eq!(
             cleaned,
             "Ship accessible frontend features with React and TypeScript."
+        );
+    }
+
+    #[test]
+    fn normalizes_monthly_eur_salary_to_usd() {
+        assert_eq!(
+            normalize_salary_to_usd_monthly(Some(2000), Some(3000), Some("EUR"), "€2000-3000"),
+            (Some(2200), Some(3300))
+        );
+    }
+
+    #[test]
+    fn normalizes_hourly_uah_salary_to_usd_monthly() {
+        assert_eq!(
+            normalize_salary_to_usd_monthly(Some(500), Some(700), Some("UAH"), "500-700 грн/год"),
+            (Some(1920), Some(2688))
+        );
+    }
+
+    #[test]
+    fn normalizes_annual_usd_salary_to_monthly() {
+        assert_eq!(
+            normalize_salary_to_usd_monthly(
+                Some(120000),
+                Some(150000),
+                Some("USD"),
+                "$120000-$150000 per year"
+            ),
+            (Some(10000), Some(12500))
         );
     }
 }

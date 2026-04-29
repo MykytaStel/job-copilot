@@ -49,6 +49,33 @@ pub struct MarketSnapshotSummary {
     pub snapshots_written: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IngestionRunStatus {
+    Ok,
+    Partial,
+    Failed,
+}
+
+impl IngestionRunStatus {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Partial => "partial",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IngestionRunMetrics<'a> {
+    pub source: &'a str,
+    pub jobs_fetched: u32,
+    pub jobs_upserted: u32,
+    pub errors: u32,
+    pub duration_ms: u64,
+    pub status: IngestionRunStatus,
+}
+
 pub async fn upsert_batch(pool: &PgPool, batch: &IngestionBatch) -> Result<UpsertSummary, String> {
     batch.validate()?;
 
@@ -120,6 +147,64 @@ pub async fn refresh_market_snapshots(pool: &PgPool) -> Result<MarketSnapshotSum
     snapshots::run_refresh(pool).await
 }
 
+pub async fn record_ingestion_run(
+    pool: &PgPool,
+    metrics: &IngestionRunMetrics<'_>,
+) -> Result<(), String> {
+    let jobs_fetched = i32::try_from(metrics.jobs_fetched)
+        .map_err(|_| "jobs_fetched exceeds database integer range".to_string())?;
+    let jobs_upserted = i32::try_from(metrics.jobs_upserted)
+        .map_err(|_| "jobs_upserted exceeds database integer range".to_string())?;
+    let errors = i32::try_from(metrics.errors)
+        .map_err(|_| "errors exceeds database integer range".to_string())?;
+    let duration_ms = i64::try_from(metrics.duration_ms)
+        .map_err(|_| "duration_ms exceeds database bigint range".to_string())?;
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| format!("failed to begin ingestion run transaction: {error}"))?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO ingestion_runs (
+            source,
+            jobs_fetched,
+            jobs_upserted,
+            errors,
+            duration_ms,
+            status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        "#,
+    )
+    .bind(metrics.source)
+    .bind(jobs_fetched)
+    .bind(jobs_upserted)
+    .bind(errors)
+    .bind(duration_ms)
+    .bind(metrics.status.as_str())
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| {
+        format!(
+            "failed to record ingestion run for source '{}': {error}",
+            metrics.source
+        )
+    })?;
+
+    sqlx::query("DELETE FROM ingestion_runs WHERE run_at < NOW() - INTERVAL '7 days'")
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| format!("failed to prune old ingestion runs: {error}"))?;
+
+    tx.commit()
+        .await
+        .map_err(|error| format!("failed to commit ingestion run transaction: {error}"))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::env;
@@ -129,6 +214,7 @@ mod tests {
 
     use sqlx::PgPool;
     use sqlx::postgres::PgPoolOptions;
+    use sqlx::types::Json;
 
     use crate::adapters::SourceAdapter;
     use crate::adapters::mock_source::MockSourceAdapter;
@@ -189,30 +275,42 @@ mod tests {
     fn merge_job_keeps_earliest_posted_at_and_latest_last_seen_at() {
         let mut current = NormalizedJob {
             id: "job_1".to_string(),
+            duplicate_of: None,
             title: "Platform Engineer".to_string(),
             company_name: "SignalHire".to_string(),
+            company_meta: None,
             location: Some("Kyiv".to_string()),
             remote_type: Some("remote".to_string()),
             seniority: Some("senior".to_string()),
             description_text: "Older".to_string(),
+            extracted_skills: Vec::new(),
             salary_min: Some(4000),
             salary_max: Some(5000),
             salary_currency: Some("USD".to_string()),
+            salary_usd_min: Some(4000),
+            salary_usd_max: Some(5000),
+            quality_score: None,
             posted_at: Some("2026-04-15T10:00:00Z".to_string()),
             last_seen_at: "2026-04-15T10:00:00Z".to_string(),
             is_active: false,
         };
         let incoming = NormalizedJob {
             id: "job_1".to_string(),
+            duplicate_of: None,
             title: "Platform Engineer".to_string(),
             company_name: "SignalHire".to_string(),
+            company_meta: None,
             location: None,
             remote_type: Some("remote".to_string()),
             seniority: Some("senior".to_string()),
             description_text: "Newer".to_string(),
+            extracted_skills: vec!["Rust".to_string()],
             salary_min: Some(4200),
             salary_max: Some(5200),
             salary_currency: Some("USD".to_string()),
+            salary_usd_min: Some(4200),
+            salary_usd_max: Some(5200),
+            quality_score: None,
             posted_at: Some("2026-04-14T08:00:00Z".to_string()),
             last_seen_at: "2026-04-16T09:00:00Z".to_string(),
             is_active: true,
@@ -475,6 +573,35 @@ mod tests {
         .unwrap_or_else(|error| panic!("failed to fetch job state for '{job_id}': {error}"))
     }
 
+    async fn fetch_job_extracted_skills(pool: &PgPool, job_id: &str) -> Vec<String> {
+        sqlx::query_scalar::<_, Json<Vec<String>>>(
+            r#"
+            SELECT extracted_skills
+            FROM jobs
+            WHERE id = $1
+            "#,
+        )
+        .bind(job_id)
+        .fetch_one(pool)
+        .await
+        .unwrap_or_else(|error| panic!("failed to fetch extracted skills for '{job_id}': {error}"))
+        .0
+    }
+
+    async fn fetch_job_duplicate_of(pool: &PgPool, job_id: &str) -> Option<String> {
+        sqlx::query_scalar::<_, Option<String>>(
+            r#"
+            SELECT duplicate_of
+            FROM jobs
+            WHERE id = $1
+            "#,
+        )
+        .bind(job_id)
+        .fetch_one(pool)
+        .await
+        .unwrap_or_else(|error| panic!("failed to fetch duplicate_of for '{job_id}': {error}"))
+    }
+
     async fn count_active_variants(pool: &PgPool) -> i64 {
         sqlx::query_scalar::<_, i64>(
             r#"
@@ -525,6 +652,53 @@ mod tests {
         assert_eq!(second_summary.jobs_inactivated, 0);
         assert_eq!(second_summary.jobs_reactivated, 0);
         assert_eq!(count_active_variants(&test_db.pool).await, 2);
+        assert_eq!(
+            fetch_job_extracted_skills(&test_db.pool, &initial_batch.jobs[0].id).await,
+            vec!["PostgreSQL".to_string()]
+        );
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn cross_source_fuzzy_duplicate_is_flagged_without_merging_job_rows() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        let initial_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("initial batch should upsert");
+
+        let mut duplicate_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        duplicate_batch.jobs.truncate(1);
+        duplicate_batch.job_variants.truncate(1);
+
+        let duplicate_job = &mut duplicate_batch.jobs[0];
+        duplicate_job.title = "Platform Ingestion Eng".to_string();
+        duplicate_job.id = canonical_job_id(&compute_dedupe_key(duplicate_job));
+
+        let duplicate_variant = &mut duplicate_batch.job_variants[0];
+        duplicate_variant.id = "variant_other_source_platform-777".to_string();
+        duplicate_variant.source = "other_source".to_string();
+        duplicate_variant.source_job_id = "platform-777".to_string();
+        duplicate_variant.source_url = "https://other-source.example/jobs/platform-777".to_string();
+        duplicate_variant.dedupe_key = compute_dedupe_key(duplicate_job);
+        duplicate_variant.job_id = duplicate_job.id.clone();
+        let duplicate_job_id = duplicate_job.id.clone();
+
+        let summary = upsert_batch(&test_db.pool, &duplicate_batch)
+            .await
+            .expect("cross-source duplicate batch should upsert");
+
+        assert_eq!(summary.jobs_written, 1);
+        assert_eq!(summary.variants_created, 1);
+        assert_ne!(duplicate_job_id, initial_batch.jobs[0].id);
+        assert_eq!(
+            fetch_job_duplicate_of(&test_db.pool, &duplicate_job_id).await,
+            Some(initial_batch.jobs[0].id.clone())
+        );
 
         test_db.cleanup().await;
     }

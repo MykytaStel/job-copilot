@@ -87,6 +87,7 @@ impl JobsServiceStub {
         limit: i64,
         lifecycle: Option<&str>,
         source: Option<&str>,
+        _quality_min: Option<i32>,
     ) -> Result<Vec<JobView>, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);

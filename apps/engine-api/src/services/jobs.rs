@@ -58,15 +58,18 @@ impl JobsService {
         limit: i64,
         lifecycle: Option<&str>,
         source: Option<&str>,
+        quality_min: Option<i32>,
     ) -> Result<Vec<JobView>, RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => {
                 repository
-                    .list_filtered_views(limit, lifecycle, source)
+                    .list_filtered_views(limit, lifecycle, source, quality_min)
                     .await
             }
             #[cfg(test)]
-            JobsServiceBackend::Stub(stub) => stub.list_filtered_views(limit, lifecycle, source),
+            JobsServiceBackend::Stub(stub) => {
+                stub.list_filtered_views(limit, lifecycle, source, quality_min)
+            }
         }
     }
 

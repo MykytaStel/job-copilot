@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getMlReady, isMlDegraded } from '../api/ml-health';
 import { getUnreadCount } from '../api/notifications';
 import { getProfile } from '../api/profiles';
+import { getSourceHealth } from '../api/source-health';
 import { hasToken } from '../lib/authSession';
 import { queryKeys } from '../queryKeys';
 import { navigation } from './navigation';
@@ -57,6 +58,15 @@ export function useAppShell() {
 
   const mlDegraded = mlReady ? isMlDegraded(mlReady) : false;
 
+  const { data: sourceHealth = [] } = useQuery({
+    queryKey: queryKeys.sources.health(),
+    queryFn: getSourceHealth,
+    refetchInterval: 60_000,
+    retry: false,
+    staleTime: 30_000,
+  });
+  const degradedSourceCount = sourceHealth.filter((source) => source.degraded).length;
+
   const { data: unreadCount = 0 } = useQuery({
     queryKey: queryKeys.notifications.unreadCount(profile?.id ?? 'none'),
     queryFn: () => getUnreadCount(),
@@ -85,6 +95,7 @@ export function useAppShell() {
     profile,
     profileLoading,
     unreadCount,
+    degradedSourceCount,
     activeNavItem,
     mlDegraded: mlDegraded && !mlBannerDismissed,
     dismissMlBanner: () => setMlBannerDismissed(true),

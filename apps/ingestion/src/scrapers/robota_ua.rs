@@ -16,13 +16,16 @@ use tracing::{info, warn};
 
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
-    DetailSnapshot, ScraperConfig, cleanup_description_text, headers::build_default_headers,
-    infer_remote_type, infer_seniority, merge_detail_into_result, normalize_company_name,
-    normalized_non_empty, parse_salary_range, polite_delay,
+    DetailSnapshot, ScraperConfig, cleanup_description_text, extract_skills,
+    headers::build_default_headers, infer_company_meta, infer_remote_type,
+    infer_seniority_from_title_and_description, merge_detail_into_result, normalize_company_name,
+    normalize_salary_to_usd_monthly, normalized_non_empty, parse_salary_range_with_usd_monthly,
+    polite_delay,
 };
 
 const SOURCE: &str = "robota_ua";
 const API_BASE: &str = "https://api.robota.ua";
+const WEB_BASE: &str = "https://robota.ua";
 const PAGE_SIZE: u32 = 20;
 
 pub struct RobotaUaScraper {
@@ -286,18 +289,50 @@ fn normalize_vacancy(v: Vacancy, fetched_at: &str) -> Option<NormalizationResult
 
     let location = v.city_name.filter(|s| !s.is_empty());
 
-    let (salary_min, salary_max, salary_currency) = match (v.salary_from, v.salary_to) {
-        (Some(from), Some(to)) if from > 0 || to > 0 => (
-            Some(from).filter(|&n| n > 0),
-            Some(to).filter(|&n| n > 0),
-            Some("UAH".into()),
-        ),
-        (Some(from), None) if from > 0 => (Some(from), None, Some("UAH".into())),
-        _ => parse_salary_range(&description_text),
-    };
+    let (salary_min, salary_max, salary_currency, salary_usd_min, salary_usd_max) =
+        match (v.salary_from, v.salary_to) {
+            (Some(from), Some(to)) if from > 0 || to > 0 => {
+                let salary_min = Some(from).filter(|&n| n > 0);
+                let salary_max = Some(to).filter(|&n| n > 0);
+                let salary_currency = Some("UAH".to_string());
+                let (salary_usd_min, salary_usd_max) = normalize_salary_to_usd_monthly(
+                    salary_min,
+                    salary_max,
+                    salary_currency.as_deref(),
+                    "",
+                );
+                (
+                    salary_min,
+                    salary_max,
+                    salary_currency,
+                    salary_usd_min,
+                    salary_usd_max,
+                )
+            }
+            (Some(from), None) if from > 0 => {
+                let salary_min = Some(from);
+                let salary_currency = Some("UAH".to_string());
+                let (salary_usd_min, salary_usd_max) = normalize_salary_to_usd_monthly(
+                    salary_min,
+                    None,
+                    salary_currency.as_deref(),
+                    "",
+                );
+                (
+                    salary_min,
+                    None,
+                    salary_currency,
+                    salary_usd_min,
+                    salary_usd_max,
+                )
+            }
+            _ => parse_salary_range_with_usd_monthly(&description_text),
+        };
 
     let remote_type = infer_remote_type(&description_text);
-    let seniority = infer_seniority(&title);
+    let seniority = infer_seniority_from_title_and_description(&title, Some(&description_text));
+    let extracted_skills = extract_skills(&description_text);
+    let company_meta = infer_company_meta(&description_text, None);
 
     // Keep only the date portion of the ISO timestamp
     let posted_at = v
@@ -311,13 +346,17 @@ fn normalize_vacancy(v: Vacancy, fetched_at: &str) -> Option<NormalizationResult
         "source_url": source_url,
         "title": title,
         "company_name": company_name,
+        "company_meta": company_meta,
         "location": location,
         "remote_type": remote_type,
         "seniority": seniority,
         "description_text": description_text,
+        "extracted_skills": extracted_skills.clone(),
         "salary_min": salary_min,
         "salary_max": salary_max,
         "salary_currency": salary_currency,
+        "salary_usd_min": salary_usd_min,
+        "salary_usd_max": salary_usd_max,
         "posted_at": posted_at,
         "fetched_at": fetched_at,
     });
@@ -325,15 +364,21 @@ fn normalize_vacancy(v: Vacancy, fetched_at: &str) -> Option<NormalizationResult
     Some(NormalizationResult {
         job: NormalizedJob {
             id: format!("job_{SOURCE}_{source_job_id}"),
+            duplicate_of: None,
             title,
             company_name,
+            company_meta,
             location,
             remote_type,
             seniority,
             description_text,
+            extracted_skills,
             salary_min,
             salary_max,
             salary_currency,
+            salary_usd_min,
+            salary_usd_max,
+            quality_score: None,
             posted_at,
             last_seen_at: fetched_at.to_string(),
             is_active: true,
@@ -357,6 +402,8 @@ fn parse_detail_page(
     let title = extract_first_text(&document, &["h1"]);
     let company_name = extract_first_text(&document, &["a[href*='/company']", "main"])
         .and_then(|value| normalize_company_name(&value));
+    let company_url = extract_first_href(&document, &["a[href*='/company']"])
+        .and_then(|value| normalize_absolute_url(&value));
     let location = extract_first_text(&document, &["main"]).and_then(|value| {
         extract_metadata_value(&value, &[&fallback.job.company_name, &fallback.job.title])
     });
@@ -377,10 +424,10 @@ fn parse_detail_page(
         )
     });
     let salary_source = extract_first_text(&document, &["main"]);
-    let (salary_min, salary_max, salary_currency) = salary_source
+    let (salary_min, salary_max, salary_currency, salary_usd_min, salary_usd_max) = salary_source
         .as_deref()
-        .map(parse_salary_range)
-        .unwrap_or((None, None, None));
+        .map(parse_salary_range_with_usd_monthly)
+        .unwrap_or((None, None, None, None, None));
 
     let signal_text = [
         title.clone().unwrap_or_default(),
@@ -389,21 +436,29 @@ fn parse_detail_page(
         description_text.clone().unwrap_or_default(),
     ]
     .join(" ");
+    let seniority = infer_seniority_from_title_and_description(
+        title.as_deref().unwrap_or(&fallback.job.title),
+        description_text.as_deref(),
+    );
 
     DetailSnapshot {
         title,
         company_name,
+        company_url: company_url.clone(),
         location,
         remote_type: infer_remote_type(&signal_text),
-        seniority: infer_seniority(&signal_text),
+        seniority,
         description_text,
         salary_min,
         salary_max,
         salary_currency,
+        salary_usd_min,
+        salary_usd_max,
         posted_at: None,
         raw_payload: json!({
             "detail_title": extract_first_text(&document, &["h1"]),
             "detail_company_name": extract_first_text(&document, &["a[href*='/company']", "main"]),
+            "detail_company_url": company_url,
             "detail_description_text": extract_rich_text(&document, &["main", "article"]),
             "detail_salary_text": salary_source,
             "detail_fetched_at": fetched_at,
@@ -427,6 +482,37 @@ fn extract_first_text(document: &Html, selectors: &[&str]) -> Option<String> {
     }
 
     None
+}
+
+fn extract_first_href(document: &Html, selectors: &[&str]) -> Option<String> {
+    for raw_selector in selectors {
+        let Ok(selector) = Selector::parse(raw_selector) else {
+            continue;
+        };
+        if let Some(value) = document
+            .select(&selector)
+            .filter_map(|element| element.value().attr("href"))
+            .map(str::trim)
+            .find(|value| !value.is_empty())
+        {
+            return Some(value.to_string());
+        }
+    }
+
+    None
+}
+
+fn normalize_absolute_url(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        None
+    } else if value.starts_with("http://") || value.starts_with("https://") {
+        Some(value.to_string())
+    } else if value.starts_with('/') {
+        Some(format!("{WEB_BASE}{value}"))
+    } else {
+        Some(format!("{WEB_BASE}/{value}"))
+    }
 }
 
 fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
@@ -544,15 +630,21 @@ mod tests {
         let fallback = NormalizationResult {
             job: NormalizedJob {
                 id: "job_robota_ua_123".to_string(),
+                duplicate_of: None,
                 title: "Senior Rust Engineer".to_string(),
                 company_name: "SignalHire".to_string(),
+                company_meta: None,
                 location: Some("Kyiv".to_string()),
                 remote_type: Some("hybrid".to_string()),
                 seniority: Some("senior".to_string()),
                 description_text: "Short snippet".to_string(),
+                extracted_skills: Vec::new(),
                 salary_min: None,
                 salary_max: None,
                 salary_currency: None,
+                salary_usd_min: None,
+                salary_usd_max: None,
+                quality_score: None,
                 posted_at: None,
                 last_seen_at: "2026-04-18T10:00:00Z".to_string(),
                 is_active: true,

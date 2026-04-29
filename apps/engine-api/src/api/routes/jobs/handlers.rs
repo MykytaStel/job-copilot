@@ -109,6 +109,15 @@ pub async fn get_recent_jobs(
     if !(1..=200).contains(&limit) {
         return Err(ApiError::invalid_limit(limit));
     }
+    let quality_min = query.quality_min;
+    if let Some(quality_min) = quality_min
+        && !(0..=100).contains(&quality_min)
+    {
+        return Err(ApiError::bad_request(
+            "invalid_quality_min",
+            "quality_min must be between 0 and 100",
+        ));
+    }
 
     let lifecycle = query.lifecycle.as_deref();
     let source = query
@@ -119,7 +128,7 @@ pub async fn get_recent_jobs(
     let fetch_started_at = Instant::now();
     let jobs = state
         .jobs_service
-        .list_filtered_views(limit, lifecycle, source)
+        .list_filtered_views(limit, lifecycle, source, quality_min)
         .await
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
     let fetch_duration_ms = fetch_started_at.elapsed().as_millis();
@@ -145,6 +154,7 @@ pub async fn get_recent_jobs(
         limit,
         lifecycle = lifecycle.unwrap_or("all"),
         source = source.unwrap_or("all"),
+        quality_min = quality_min.unwrap_or(-1),
         profile_id = profile_id.unwrap_or(""),
         fetched_jobs,
         returned_jobs,

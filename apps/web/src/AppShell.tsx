@@ -33,6 +33,7 @@ export default function AppShell() {
         sidebarCollapsed={state.sidebarCollapsed}
         setMobileNavOpen={state.setMobileNavOpen}
         unreadCount={state.unreadCount}
+        degradedSourceCount={state.degradedSourceCount}
       />
 
       <main

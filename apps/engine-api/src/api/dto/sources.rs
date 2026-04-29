@@ -13,6 +13,30 @@ pub struct SourceCatalogResponse {
     pub sources: Vec<SourceCatalogItemResponse>,
 }
 
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct SourceHealthRunResponse {
+    pub run_at: String,
+    pub jobs_fetched: u32,
+    pub jobs_upserted: u32,
+    pub errors: u32,
+    pub duration_ms: u64,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct SourceHealthItemResponse {
+    pub source: String,
+    pub display_name: String,
+    pub status: String,
+    pub degraded: bool,
+    pub last_run: Option<SourceHealthRunResponse>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct SourceHealthResponse {
+    pub sources: Vec<SourceHealthItemResponse>,
+}
+
 impl From<&SourceMetadata> for SourceCatalogItemResponse {
     fn from(source: &SourceMetadata) -> Self {
         Self {

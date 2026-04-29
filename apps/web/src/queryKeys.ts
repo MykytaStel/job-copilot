@@ -7,6 +7,7 @@ export const queryKeys = {
   },
   sources: {
     all: () => ['sources'] as const,
+    health: () => ['sources', 'health'] as const,
   },
   roles: {
     all: () => ['roles'] as const,
