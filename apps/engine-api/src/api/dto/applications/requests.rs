@@ -153,18 +153,18 @@ impl CreateNoteRequest {
 
 impl UpsertOfferRequest {
     pub fn validate(self, application_id: &str) -> Result<UpsertOffer, ApiError> {
-        if let (Some(min), Some(max)) = (self.compensation_min, self.compensation_max) {
-            if min > max {
-                return Err(ApiError::bad_request_with_details(
-                    "invalid_offer_input",
-                    "Field 'compensation_min' must be less than or equal to 'compensation_max'",
-                    json!({
-                        "field": "compensation_min",
-                        "compensation_min": min,
-                        "compensation_max": max,
-                    }),
-                ));
-            }
+        if let (Some(min), Some(max)) = (self.compensation_min, self.compensation_max)
+            && min > max
+        {
+            return Err(ApiError::bad_request_with_details(
+                "invalid_offer_input",
+                "Field 'compensation_min' must be less than or equal to 'compensation_max'",
+                json!({
+                    "field": "compensation_min",
+                    "compensation_min": min,
+                    "compensation_max": max,
+                }),
+            ));
         }
 
         Ok(UpsertOffer {

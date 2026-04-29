@@ -58,6 +58,7 @@ impl JobScoreBreakdown {
         breakdown
     }
 
+    #[cfg(test)]
     pub fn deterministic(total_score: u8) -> Self {
         Self {
             total_score,

@@ -7,6 +7,7 @@ mod reranking;
 
 use crate::services::search_ranking::RankedJob;
 
+pub(super) use comparison::RerankerComparisonContext;
 use comparison::{build_reranker_comparison, mark_reranker_fallback};
 #[cfg(test)]
 pub use handlers::SearchQuery;

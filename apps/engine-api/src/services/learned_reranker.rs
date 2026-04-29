@@ -36,6 +36,7 @@ pub struct LearnedRerankScore {
     pub reasons: Vec<String>,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LearnedRerankCandidate {
     pub job_id: String,
@@ -45,6 +46,7 @@ pub struct LearnedRerankCandidate {
     pub feedback: JobFeedbackState,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LearnedRerankCandidateEvaluation {
     pub job_id: String,
@@ -54,6 +56,7 @@ pub struct LearnedRerankCandidateEvaluation {
     pub reasons: Vec<String>,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LearnedRerankEvaluation {
     pub deterministic_order: Vec<String>,
@@ -190,6 +193,7 @@ impl LearnedRerankerService {
         self.score_features(&features)
     }
 
+    #[cfg(test)]
     pub fn evaluate(
         &self,
         candidates: Vec<LearnedRerankCandidate>,

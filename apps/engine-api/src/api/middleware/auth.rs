@@ -15,13 +15,13 @@ pub(crate) fn check_profile_ownership(
     auth: Option<&AuthUser>,
     profile_id: &str,
 ) -> Result<(), ApiError> {
-    if let Some(user) = auth {
-        if user.profile_id != profile_id {
-            return Err(ApiError::forbidden(
-                "profile_access_denied",
-                "You do not have access to this profile",
-            ));
-        }
+    if let Some(user) = auth
+        && user.profile_id != profile_id
+    {
+        return Err(ApiError::forbidden(
+            "profile_access_denied",
+            "You do not have access to this profile",
+        ));
     }
     Ok(())
 }

@@ -18,6 +18,11 @@ async fn main() {
     init_tracing();
 
     let config = Config::from_env();
+    info!(
+        app_env = config.app_env,
+        production = config.is_production(),
+        "loaded engine-api configuration"
+    );
     let database = Database::from_config(&config)
         .await
         .expect("Failed to initialize Postgres foundation");

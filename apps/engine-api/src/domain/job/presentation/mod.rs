@@ -99,17 +99,17 @@ fn build_presentation(
     );
     let freshness_label = lifecycle_primary_label.clone();
     let description_quality = assess_description_quality(&job.description_text);
-    let (summary, summary_quality, summary_fallback) = build_summary(
+    let (summary, summary_quality, summary_fallback) = build_summary(SummaryInput {
         source_id,
-        &title,
-        &company,
+        title: &title,
+        company: &company,
         primary_variant,
-        &job.description_text,
-        location_label.as_deref(),
-        work_mode_label.as_deref(),
-        salary_label.as_deref(),
-        job.seniority.as_deref(),
-    );
+        description_text: &job.description_text,
+        location_label: location_label.as_deref(),
+        work_mode_label: work_mode_label.as_deref(),
+        salary_label: salary_label.as_deref(),
+        seniority: job.seniority.as_deref(),
+    });
     let badges = build_badges(
         work_mode_label.as_deref(),
         job.seniority.as_deref(),
@@ -135,25 +135,30 @@ fn build_presentation(
     }
 }
 
-fn build_summary(
+struct SummaryInput<'a> {
     source_id: Option<SourceId>,
-    title: &str,
-    company: &str,
-    primary_variant: Option<&JobSourceVariant>,
-    description_text: &str,
-    location_label: Option<&str>,
-    work_mode_label: Option<&str>,
-    salary_label: Option<&str>,
-    seniority: Option<&str>,
-) -> (Option<String>, Option<JobTextQuality>, bool) {
-    let raw_description = raw_string(primary_variant, "description_text")
-        .unwrap_or_else(|| description_text.to_string());
-    let cleaned_description = clean_summary_text(&raw_description);
-    let description_quality = assess_description_quality(description_text);
+    title: &'a str,
+    company: &'a str,
+    primary_variant: Option<&'a JobSourceVariant>,
+    description_text: &'a str,
+    location_label: Option<&'a str>,
+    work_mode_label: Option<&'a str>,
+    salary_label: Option<&'a str>,
+    seniority: Option<&'a str>,
+}
 
-    if let Some(summary) =
-        extract_description_summary(source_id, &cleaned_description, title, company)
-    {
+fn build_summary(input: SummaryInput<'_>) -> (Option<String>, Option<JobTextQuality>, bool) {
+    let raw_description = raw_string(input.primary_variant, "description_text")
+        .unwrap_or_else(|| input.description_text.to_string());
+    let cleaned_description = clean_summary_text(&raw_description);
+    let description_quality = assess_description_quality(input.description_text);
+
+    if let Some(summary) = extract_description_summary(
+        input.source_id,
+        &cleaned_description,
+        input.title,
+        input.company,
+    ) {
         let summary_quality = match description_quality {
             JobTextQuality::Strong => JobTextQuality::Strong,
             JobTextQuality::Mixed => JobTextQuality::Mixed,
@@ -163,7 +168,12 @@ fn build_summary(
         return (Some(summary), Some(summary_quality), false);
     }
 
-    let summary = build_metadata_summary(location_label, work_mode_label, salary_label, seniority);
+    let summary = build_metadata_summary(
+        input.location_label,
+        input.work_mode_label,
+        input.salary_label,
+        input.seniority,
+    );
     let summary_quality = summary.as_ref().map(|_| JobTextQuality::Weak);
 
     (summary, summary_quality, true)
@@ -225,22 +235,13 @@ fn extract_description_summary(
         return Some(primary);
     }
 
-    for candidate in description
+    description
         .split(['\n', '.', ';'])
         .map(trim_summary)
         .filter(|value| !value.is_empty())
-    {
-        if is_meaningful_summary(
-            &candidate,
-            &title_normalized,
-            &company_normalized,
-            source_id,
-        ) {
-            return Some(candidate);
-        }
-    }
-
-    None
+        .find(|candidate| {
+            is_meaningful_summary(candidate, &title_normalized, &company_normalized, source_id)
+        })
 }
 
 fn is_meaningful_summary(

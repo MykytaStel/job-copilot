@@ -80,18 +80,18 @@ pub(super) async fn load_profile_ranked_jobs(
         &state.trained_reranker_availability,
     );
 
-    if reranker_runtime.apply_learned {
-        if let Some(aggregates) = learning_aggregates.as_ref() {
-            let (reranked_jobs, _adjusted_count) = apply_learned_reranking(
-                state,
-                adjusted_jobs,
-                &aggregates.behavior,
-                &aggregates.funnel,
-                &feedback_by_job_id,
-                &deterministic_score_by_job_id,
-            );
-            adjusted_jobs = reranked_jobs;
-        }
+    if reranker_runtime.apply_learned
+        && let Some(aggregates) = learning_aggregates.as_ref()
+    {
+        let (reranked_jobs, _adjusted_count) = apply_learned_reranking(
+            state,
+            adjusted_jobs,
+            &aggregates.behavior,
+            &aggregates.funnel,
+            &feedback_by_job_id,
+            &deterministic_score_by_job_id,
+        );
+        adjusted_jobs = reranked_jobs;
     }
 
     if reranker_runtime.apply_trained {
@@ -112,10 +112,9 @@ pub(super) async fn load_profile_ranked_jobs(
     if matches!(
         reranker_runtime.active_mode,
         crate::services::search_ranking::runtime::RerankerRuntimeMode::Deterministic
-    ) {
-        if let Some(reason) = reranker_runtime.fallback_reason.as_deref() {
-            mark_reranker_fallback(&mut adjusted_jobs, reason);
-        }
+    ) && let Some(reason) = reranker_runtime.fallback_reason.as_deref()
+    {
+        mark_reranker_fallback(&mut adjusted_jobs, reason);
     }
 
     info!(

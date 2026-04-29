@@ -125,11 +125,11 @@ impl ProfilesServiceStub {
         if let Some(work_mode_preference) = input.work_mode_preference {
             profile.work_mode_preference = work_mode_preference;
         }
-        if let Some(skills) = input.skills {
-            if let Some(analysis) = profile.analysis.as_mut() {
-                analysis.skills = skills;
-                profile.skills_updated_at = Some("2026-04-11T00:00:02+00:00".to_string());
-            }
+        if let Some(skills) = input.skills
+            && let Some(analysis) = profile.analysis.as_mut()
+        {
+            analysis.skills = skills;
+            profile.skills_updated_at = Some("2026-04-11T00:00:02+00:00".to_string());
         }
         if let Some(search_preferences) = input.search_preferences {
             profile.search_preferences = search_preferences;

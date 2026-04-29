@@ -63,8 +63,16 @@ services:
     environment:
       # Production logs should be machine-readable.
       LOG_FORMAT: json
+      ML_ENV: production
+      ML_INTERNAL_TOKEN: "${ML_INTERNAL_TOKEN:?Set ML_INTERNAL_TOKEN before starting prod compose}"
+      ENGINE_API_INTERNAL_TOKEN: "${ENGINE_API_INTERNAL_TOKEN:-}"
       # Default to the free deterministic provider; set ML_LLM_PROVIDER=ollama when Ollama is configured.
       ML_LLM_PROVIDER: "${ML_LLM_PROVIDER:-template}"
+      ML_ARTIFACTS_DIR: /app/models/profiles
+      ML_BOOTSTRAP_TASKS_DIR: /app/.runtime/bootstrap-tasks
+    volumes:
+      - ml-models:/app/models
+      - ml-runtime:/app/.runtime
 
   prometheus:
     # Monitoring is optional for production and is disabled unless the monitoring profile is enabled.
@@ -85,3 +93,7 @@ services:
     environment:
       # Keep service log settings consistent when optional monitoring is enabled.
       LOG_FORMAT: json
+
+volumes:
+  ml-models:
+  ml-runtime:

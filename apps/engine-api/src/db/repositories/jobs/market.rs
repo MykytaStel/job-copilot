@@ -72,10 +72,10 @@ impl JobsRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "overview").await? {
-            if let Ok(overview) = serde_json::from_value::<MarketOverview>(payload) {
-                return Ok((overview, MarketSource::Snapshot));
-            }
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "overview").await?
+            && let Ok(overview) = serde_json::from_value::<MarketOverview>(payload)
+        {
+            return Ok((overview, MarketSource::Snapshot));
         }
 
         tracing::warn!("market_overview: no fresh snapshot, falling back to live jobs query");
@@ -135,17 +135,17 @@ impl JobsRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "company_stats").await? {
-            if let Ok(mut entries) = serde_json::from_value::<Vec<MarketCompanyEntry>>(payload) {
-                entries.retain(|entry| has_usable_company_name(&entry.company_name));
-                for entry in &mut entries {
-                    if entry.normalized_company_name.trim().is_empty() {
-                        entry.normalized_company_name = normalize_company_name(&entry.company_name);
-                    }
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "company_stats").await?
+            && let Ok(mut entries) = serde_json::from_value::<Vec<MarketCompanyEntry>>(payload)
+        {
+            entries.retain(|entry| has_usable_company_name(&entry.company_name));
+            for entry in &mut entries {
+                if entry.normalized_company_name.trim().is_empty() {
+                    entry.normalized_company_name = normalize_company_name(&entry.company_name);
                 }
-                entries.truncate(limit as usize);
-                return Ok((entries, MarketSource::Snapshot));
             }
+            entries.truncate(limit as usize);
+            return Ok((entries, MarketSource::Snapshot));
         }
 
         tracing::warn!("market_companies: no fresh snapshot, falling back to live jobs query");
@@ -262,15 +262,15 @@ impl JobsRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "salary_trends").await? {
-            if let Ok(mut trends) = serde_json::from_value::<Vec<MarketSalaryTrend>>(payload) {
-                if let Some(filter) = seniority {
-                    trends.retain(|t| t.seniority == filter);
-                }
-                trends.retain(|t| t.currency.trim().to_uppercase() != "UNKNOWN");
-                if !trends.is_empty() {
-                    return Ok((trends, MarketSource::Snapshot));
-                }
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "salary_trends").await?
+            && let Ok(mut trends) = serde_json::from_value::<Vec<MarketSalaryTrend>>(payload)
+        {
+            if let Some(filter) = seniority {
+                trends.retain(|t| t.seniority == filter);
+            }
+            trends.retain(|t| t.currency.trim().to_uppercase() != "UNKNOWN");
+            if !trends.is_empty() {
+                return Ok((trends, MarketSource::Snapshot));
             }
         }
 
@@ -371,10 +371,10 @@ impl JobsRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "role_demand").await? {
-            if let Ok(entries) = serde_json::from_value::<Vec<MarketRoleDemandEntry>>(payload) {
-                return Ok((entries, MarketSource::Snapshot));
-            }
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "role_demand").await?
+            && let Ok(entries) = serde_json::from_value::<Vec<MarketRoleDemandEntry>>(payload)
+        {
+            return Ok((entries, MarketSource::Snapshot));
         }
 
         tracing::warn!("market_role_demand: no fresh snapshot, falling back to live jobs query");

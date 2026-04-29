@@ -229,7 +229,7 @@ impl UpdateProfileRequest {
             .transpose()?;
         let preferred_language = self
             .preferred_language
-            .map(|value| validate_preferred_language(value))
+            .map(validate_preferred_language)
             .transpose()?;
         let portfolio_url = self
             .portfolio_url

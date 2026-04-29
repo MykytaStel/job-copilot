@@ -99,6 +99,7 @@ impl UserEventType {
         Self::ALL.into_iter().map(Self::as_str).collect()
     }
 
+    #[cfg(test)]
     pub fn is_job_feedback_action(self) -> bool {
         matches!(
             self,
@@ -155,6 +156,7 @@ pub struct UserEventSummary {
 }
 
 impl UserEventSummary {
+    #[cfg(test)]
     pub fn from_events<'a>(events: impl IntoIterator<Item = &'a UserEventRecord>) -> Self {
         let mut summary = Self::default();
 
@@ -203,7 +205,7 @@ mod tests {
 
     #[test]
     fn summary_counts_only_requested_learning_signals() {
-        let events = vec![
+        let events = [
             UserEventRecord {
                 id: "evt-1".to_string(),
                 profile_id: "profile-1".to_string(),

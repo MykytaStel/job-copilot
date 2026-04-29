@@ -67,10 +67,10 @@ impl SkillSections {
                     .any(|t| prepared.matches_signal(t))
         };
 
-        if self.required_text.as_ref().is_some_and(|t| matches_in(t)) {
+        if self.required_text.as_ref().is_some_and(&matches_in) {
             return REQUIRED_SKILL_WEIGHT;
         }
-        if self.preferred_text.as_ref().is_some_and(|t| matches_in(t)) {
+        if self.preferred_text.as_ref().is_some_and(matches_in) {
             return PREFERRED_SKILL_WEIGHT;
         }
         1.0

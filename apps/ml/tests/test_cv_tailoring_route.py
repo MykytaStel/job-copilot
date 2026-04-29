@@ -166,3 +166,18 @@ def test_cv_tailoring_endpoint_returns_401_without_internal_token(monkeypatch) -
 
     assert response.status_code == 401
     assert response.json()["detail"] == "unauthorized"
+
+
+def test_metrics_endpoint_remains_available_with_internal_token(monkeypatch) -> None:
+    monkeypatch.setenv("ML_INTERNAL_TOKEN", "test-internal-token")
+    get_runtime_settings.cache_clear()
+
+    application = create_app()
+
+    with TestClient(application) as client:
+        response = client.get("/metrics")
+
+    get_runtime_settings.cache_clear()
+
+    assert response.status_code == 200
+    assert "job_copilot_ml_info" in response.text

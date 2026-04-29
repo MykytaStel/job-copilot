@@ -169,7 +169,7 @@ pub async fn get_profile_job_match(
     let ranked_jobs = load_profile_ranked_jobs(
         &state,
         &profile_id,
-        &[job_id.clone()],
+        std::slice::from_ref(&job_id),
         "get_profile_job_match",
     )
     .await?

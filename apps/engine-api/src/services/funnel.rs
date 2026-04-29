@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn conversion_rates_are_zero_when_funnel_denominators_are_empty() {
         let service = FunnelService::new();
-        let events = vec![event("evt-1", UserEventType::JobSaved, Some("djinni"))];
+        let events = [event("evt-1", UserEventType::JobSaved, Some("djinni"))];
 
         let aggregates = service.build_aggregates(events.iter());
         let summary = service.summarize(&aggregates);

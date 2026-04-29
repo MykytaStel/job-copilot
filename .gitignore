@@ -28,6 +28,7 @@ apps/ml/reranker-dataset.json
 apps/ml/models/
 apps/ml/reports/
 apps/ml/.runtime/
+apps/ml/.bootstrap-locks/
 
 .DS_Store
 __MACOSX/

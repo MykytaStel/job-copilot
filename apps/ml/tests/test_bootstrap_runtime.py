@@ -99,7 +99,7 @@ def test_ready_route_reports_not_ready_when_engine_api_unavailable():
         raise RuntimeError("boom")
 
     with TestClient(app) as client:
-        client.app.state.services._http_client.get = failing_get
+        client.app.state.services.http_client.get = failing_get
         response = client.get("/ready")
 
     assert response.status_code == 503
@@ -124,7 +124,7 @@ def test_ready_route_returns_component_status_from_engine_api():
         )
 
     with TestClient(app) as client:
-        client.app.state.services._http_client.get = ready_get
+        client.app.state.services.http_client.get = ready_get
         response = client.get("/ready")
 
     body = response.json()
@@ -133,3 +133,15 @@ def test_ready_route_returns_component_status_from_engine_api():
     assert body["components"]["database"] == {"status": "ok", "latency_ms": 4}
     assert body["components"]["ml_sidecar"] == {"status": "ok"}
     assert body["components"]["ingestion"]["status"] == "stale"
+
+
+def test_metrics_route_exposes_ml_status_metrics():
+    with TestClient(app) as client:
+        response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    body = response.text
+    assert "job_copilot_ml_info" in body
+    assert "job_copilot_ml_enrichment_provider_available" in body
+    assert 'job_copilot_ml_bootstrap_tasks{status="accepted"}' in body
