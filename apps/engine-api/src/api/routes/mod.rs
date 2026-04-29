@@ -213,6 +213,10 @@ pub fn protected_router() -> Router<AppState> {
             get(market::get_market_companies),
         )
         .route(
+            "/api/v1/market/company-velocity",
+            get(market::get_market_company_velocity),
+        )
+        .route(
             "/api/v1/notifications",
             get(notifications::list_notifications),
         )

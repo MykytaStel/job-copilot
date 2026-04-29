@@ -32,6 +32,7 @@ export const queryKeys = {
     insights: () => ['market', 'insights'] as const,
     overview: () => ['market', 'overview'] as const,
     companies: () => ['market', 'companies'] as const,
+    companyVelocity: () => ['market', 'companyVelocity'] as const,
     salaries: () => ['market', 'salaries'] as const,
     roles: () => ['market', 'roles'] as const,
   },

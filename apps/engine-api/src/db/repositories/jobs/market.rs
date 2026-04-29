@@ -1,7 +1,7 @@
 use crate::db::repositories::RepositoryError;
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend, MarketSource,
-    MarketTrendDirection,
+    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketCompanyVelocityTrend, MarketOverview,
+    MarketRoleDemandEntry, MarketSalaryTrend, MarketSource, MarketTrendDirection,
 };
 use sqlx::FromRow;
 
@@ -248,6 +248,66 @@ impl JobsRepository {
         Ok((trends.into_iter().next(), source))
     }
 
+    pub async fn market_company_velocity(
+        &self,
+    ) -> Result<(Vec<MarketCompanyVelocityEntry>, MarketSource), RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(FromRow)]
+        struct MarketCompanyVelocityRow {
+            company: String,
+            job_count: i64,
+            this_week: i64,
+            prev_week: i64,
+        }
+
+        let rows = sqlx::query_as::<_, MarketCompanyVelocityRow>(
+            r#"
+            WITH recent_company_jobs AS (
+                SELECT
+                    BTRIM(company_name) AS company,
+                    LOWER(REGEXP_REPLACE(BTRIM(company_name), '\s+', ' ', 'g')) AS normalized_company,
+                    first_seen_at
+                FROM jobs
+                WHERE company_name IS NOT NULL
+                  AND BTRIM(company_name) <> ''
+                  AND LOWER(BTRIM(company_name)) NOT IN ('unknown', 'uknonwn', 'unknonwn', 'n/a', 'na', 'none', 'null', '—', '-')
+                  AND first_seen_at >= NOW() - INTERVAL '30 days'
+            )
+            SELECT
+                MIN(company) AS company,
+                COUNT(*)::bigint AS job_count,
+                COUNT(*) FILTER (
+                    WHERE first_seen_at >= NOW() - INTERVAL '7 days'
+                )::bigint AS this_week,
+                COUNT(*) FILTER (
+                    WHERE first_seen_at >= NOW() - INTERVAL '14 days'
+                      AND first_seen_at < NOW() - INTERVAL '7 days'
+                )::bigint AS prev_week
+            FROM recent_company_jobs
+            GROUP BY normalized_company
+            HAVING COUNT(*) >= 3
+            ORDER BY job_count DESC, company ASC
+            LIMIT 10
+            "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok((
+            rows.into_iter()
+                .map(|row| MarketCompanyVelocityEntry {
+                    company: row.company,
+                    job_count: row.job_count,
+                    trend: compare_company_velocity(row.this_week, row.prev_week),
+                })
+                .collect(),
+            MarketSource::Live,
+        ))
+    }
+
     pub async fn market_salary_trends(
         &self,
     ) -> Result<(Vec<MarketSalaryTrend>, MarketSource), RepositoryError> {
@@ -453,5 +513,13 @@ fn compare_market_counts(this_period: i64, prev_period: i64) -> MarketTrendDirec
         std::cmp::Ordering::Greater => MarketTrendDirection::Up,
         std::cmp::Ordering::Less => MarketTrendDirection::Down,
         std::cmp::Ordering::Equal => MarketTrendDirection::Stable,
+    }
+}
+
+fn compare_company_velocity(this_week: i64, prev_week: i64) -> MarketCompanyVelocityTrend {
+    match this_week.cmp(&prev_week) {
+        std::cmp::Ordering::Greater => MarketCompanyVelocityTrend::Growing,
+        std::cmp::Ordering::Less => MarketCompanyVelocityTrend::Declining,
+        std::cmp::Ordering::Equal => MarketCompanyVelocityTrend::Stable,
     }
 }
