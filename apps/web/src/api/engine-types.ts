@@ -14,6 +14,9 @@ export type {
   EngineJobFeedbackRecord,
   EngineCompanyFeedbackRecord,
   EngineFeedbackOverviewResponse,
+  EngineFeedbackStatsResponse,
+  EngineFeedbackTimelineItem,
+  EngineFeedbackTimelineResponse,
 } from './engine-types/feedback';
 
 export type {

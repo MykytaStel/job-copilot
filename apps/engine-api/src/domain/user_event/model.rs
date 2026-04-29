@@ -98,6 +98,18 @@ impl UserEventType {
     pub fn allowed_values() -> Vec<&'static str> {
         Self::ALL.into_iter().map(Self::as_str).collect()
     }
+
+    pub fn is_job_feedback_action(self) -> bool {
+        matches!(
+            self,
+            Self::JobSaved
+                | Self::JobUnsaved
+                | Self::JobHidden
+                | Self::JobUnhidden
+                | Self::JobBadFit
+                | Self::JobBadFitRemoved
+        )
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -122,6 +134,12 @@ pub struct UserEventRecord {
     pub role_family: Option<String>,
     pub payload_json: Option<Value>,
     pub created_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UserEventPage {
+    pub records: Vec<UserEventRecord>,
+    pub total_count: usize,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

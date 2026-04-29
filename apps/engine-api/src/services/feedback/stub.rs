@@ -129,6 +129,7 @@ impl FeedbackServiceStub {
             company_name: company_name.to_string(),
             normalized_company_name: normalized_company_name.to_string(),
             status,
+            notes: String::new(),
             created_at: "2026-04-14T00:00:00+00:00".to_string(),
             updated_at: "2026-04-14T00:00:01+00:00".to_string(),
         };
@@ -142,6 +143,32 @@ impl FeedbackServiceStub {
             );
 
         Ok(record)
+    }
+
+    pub(crate) fn update_company_feedback_notes(
+        &self,
+        profile_id: &str,
+        normalized_company_name: &str,
+        notes: &str,
+    ) -> Result<Option<CompanyFeedbackRecord>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let mut feedback = self
+            .company_feedback_by_key
+            .lock()
+            .expect("feedback company stub mutex should not be poisoned");
+
+        let key = (profile_id.to_string(), normalized_company_name.to_string());
+        let Some(record) = feedback.get_mut(&key) else {
+            return Ok(None);
+        };
+
+        record.notes = notes.to_string();
+        record.updated_at = "2026-04-14T00:00:02+00:00".to_string();
+
+        Ok(Some(record.clone()))
     }
 
     pub(crate) fn remove_company_feedback(

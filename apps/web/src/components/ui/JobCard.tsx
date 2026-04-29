@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Bookmark,
   BookmarkCheck,
   Building2,
+  Check,
   Clock,
   DollarSign,
   EyeOff,
@@ -10,6 +12,7 @@ import {
   MapPin,
   Sparkles,
   ThumbsDown,
+  X,
 } from 'lucide-react';
 import type { Application, JobPosting } from '@job-copilot/shared';
 import { cn } from '../../lib/cn';
@@ -46,6 +49,15 @@ const FIT_BAND_LABELS: Record<string, string> = {
   fair: 'Fair',
   poor: 'Weak',
 };
+
+const BAD_FIT_REASONS = [
+  'Salary too low',
+  'Wrong location',
+  'Wrong tech stack',
+  'Too senior/junior',
+  'Bad company reputation',
+  'Other',
+];
 
 function JobFitBadge({ score }: { score: number }) {
   const band = getFitBand(score);
@@ -126,7 +138,7 @@ interface JobCardProps {
   onSave?: () => void;
   onHide?: () => void;
   onHideCompany?: () => void;
-  onBadFit?: () => void;
+  onBadFit?: (reason?: string) => void;
   onUnmarkBadFit?: () => void;
 }
 
@@ -152,13 +164,27 @@ export function JobCard({
   const summary = p?.summary;
   const showSummary = Boolean(summary && !p?.summaryFallback && p?.summaryQuality !== 'weak');
   const metaLabels = getJobMetaLabels(job);
+  const [badFitReasonOpen, setBadFitReasonOpen] = useState(false);
+  const [selectedBadFitReason, setSelectedBadFitReason] = useState(BAD_FIT_REASONS[0]);
+  const [badFitOtherReason, setBadFitOtherReason] = useState('');
 
   const applicationStatus = application?.status;
+  const isOtherBadFitReason = selectedBadFitReason === 'Other';
+  const resolvedBadFitReason = isOtherBadFitReason
+    ? badFitOtherReason.trim()
+    : selectedBadFitReason;
+
+  function confirmBadFitReason() {
+    if (!onBadFit || !resolvedBadFitReason) return;
+    onBadFit(resolvedBadFitReason);
+    setBadFitReasonOpen(false);
+  }
 
   return (
     <Card
       className={cn(
         'group relative overflow-hidden border-border bg-card transition-colors hover:bg-surface-elevated',
+        badFitReasonOpen && 'overflow-visible',
         isBadFit && 'border-destructive/30',
         job.feedback?.hidden && 'opacity-50',
       )}
@@ -303,15 +329,71 @@ export function JobCard({
                     <ThumbsDown className="h-4 w-4" />
                   </button>
                 ) : onBadFit ? (
-                  <button
-                    type="button"
-                    title="Mark bad fit"
-                    disabled={isPending}
-                    onClick={onBadFit}
-                    className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-surface-hover transition-colors disabled:opacity-40"
-                  >
-                    <ThumbsDown className="h-4 w-4" />
-                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      title="Mark bad fit"
+                      disabled={isPending}
+                      onClick={() => setBadFitReasonOpen((isOpen) => !isOpen)}
+                      className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-surface-hover transition-colors disabled:opacity-40"
+                    >
+                      <ThumbsDown className="h-4 w-4" />
+                    </button>
+                    {badFitReasonOpen && (
+                      <div className="absolute bottom-9 right-0 z-20 w-72 rounded-lg border border-border bg-card p-3 text-card-foreground shadow-lg">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="m-0 text-xs font-semibold text-card-foreground">
+                            Bad-fit reason
+                          </p>
+                          <button
+                            type="button"
+                            title="Close"
+                            onClick={() => setBadFitReasonOpen(false)}
+                            className="h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {BAD_FIT_REASONS.map((reason) => (
+                            <button
+                              key={reason}
+                              type="button"
+                              onClick={() => setSelectedBadFitReason(reason)}
+                              className={cn(
+                                'rounded-md border px-2 py-1 text-xs transition-colors',
+                                selectedBadFitReason === reason
+                                  ? 'border-destructive bg-destructive/10 text-destructive'
+                                  : 'border-border text-muted-foreground hover:bg-surface-hover hover:text-foreground',
+                              )}
+                            >
+                              {reason}
+                            </button>
+                          ))}
+                        </div>
+                        {isOtherBadFitReason && (
+                          <input
+                            type="text"
+                            value={badFitOtherReason}
+                            onChange={(event) => setBadFitOtherReason(event.target.value)}
+                            placeholder="Reason"
+                            className="mt-2 h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-primary"
+                          />
+                        )}
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            type="button"
+                            disabled={isPending || !resolvedBadFitReason}
+                            onClick={confirmBadFitReason}
+                            className="inline-flex h-8 items-center gap-1 rounded-md bg-destructive px-3 text-xs font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-40"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            Confirm
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : null}
                 <Link
                   to={`/jobs/${job.id}`}

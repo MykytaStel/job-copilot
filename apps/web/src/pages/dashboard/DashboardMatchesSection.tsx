@@ -275,7 +275,11 @@ export function DashboardMatchesSection({
                 onHideCompany={
                   profileId ? () => bulkHideCompanyMutation.mutate(job.company) : undefined
                 }
-                onBadFit={profileId && !isBadFit ? () => badFitMutation.mutate(job.id) : undefined}
+                onBadFit={
+                  profileId && !isBadFit
+                    ? (reason) => badFitMutation.mutate({ jobId: job.id, reason })
+                    : undefined
+                }
                 onUnmarkBadFit={
                   profileId && isBadFit ? () => unmarkBadFitMutation.mutate(job.id) : undefined
                 }

@@ -131,6 +131,25 @@ impl FeedbackService {
         }
     }
 
+    pub async fn update_company_feedback_notes(
+        &self,
+        profile_id: &str,
+        normalized_company_name: &str,
+        notes: &str,
+    ) -> Result<Option<CompanyFeedbackRecord>, RepositoryError> {
+        match &self.backend {
+            FeedbackServiceBackend::Repository(repository) => {
+                repository
+                    .update_company_feedback_notes(profile_id, normalized_company_name, notes)
+                    .await
+            }
+            #[cfg(test)]
+            FeedbackServiceBackend::Stub(stub) => {
+                stub.update_company_feedback_notes(profile_id, normalized_company_name, notes)
+            }
+        }
+    }
+
     pub async fn list_company_feedback(
         &self,
         profile_id: &str,

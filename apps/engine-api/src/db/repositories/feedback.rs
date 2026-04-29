@@ -43,6 +43,7 @@ struct CompanyFeedbackRow {
     company_name: String,
     normalized_company_name: String,
     status: String,
+    notes: String,
     created_at: String,
     updated_at: String,
 }
@@ -70,15 +71,20 @@ impl FeedbackRepository {
                 saved,
                 hidden,
                 bad_fit,
+                bad_fit_reason,
                 created_at,
                 updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
             ON CONFLICT (profile_id, job_id)
             DO UPDATE SET
                 saved = profile_job_feedback.saved OR EXCLUDED.saved,
                 hidden = profile_job_feedback.hidden OR EXCLUDED.hidden,
                 bad_fit = profile_job_feedback.bad_fit OR EXCLUDED.bad_fit,
+                bad_fit_reason = CASE
+                    WHEN EXCLUDED.bad_fit THEN COALESCE(EXCLUDED.bad_fit_reason, profile_job_feedback.bad_fit_reason)
+                    ELSE profile_job_feedback.bad_fit_reason
+                END,
                 updated_at = NOW()
             RETURNING
                 profile_id,
@@ -99,6 +105,7 @@ impl FeedbackRepository {
         .bind(flags.saved)
         .bind(flags.hidden)
         .bind(flags.bad_fit)
+        .bind(flags.reason.as_deref())
         .fetch_one(pool)
         .await?;
 
@@ -487,6 +494,7 @@ impl FeedbackRepository {
                 company_name,
                 normalized_company_name,
                 status,
+                notes,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             "#,
@@ -529,6 +537,42 @@ impl FeedbackRepository {
         Ok(deleted > 0)
     }
 
+    pub async fn update_company_feedback_notes(
+        &self,
+        profile_id: &str,
+        normalized_company_name: &str,
+        notes: &str,
+    ) -> Result<Option<CompanyFeedbackRecord>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, CompanyFeedbackRow>(
+            r#"
+            UPDATE profile_company_feedback
+            SET notes = $3,
+                updated_at = NOW()
+            WHERE profile_id = $1
+              AND normalized_company_name = $2
+            RETURNING
+                profile_id,
+                company_name,
+                normalized_company_name,
+                status,
+                notes,
+                created_at::text AS created_at,
+                updated_at::text AS updated_at
+            "#,
+        )
+        .bind(profile_id)
+        .bind(normalized_company_name)
+        .bind(notes)
+        .fetch_optional(pool)
+        .await?;
+
+        row.map(CompanyFeedbackRecord::try_from).transpose()
+    }
+
     pub async fn list_company_feedback(
         &self,
         profile_id: &str,
@@ -544,6 +588,7 @@ impl FeedbackRepository {
                 company_name,
                 normalized_company_name,
                 status,
+                notes,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             FROM profile_company_feedback
@@ -691,6 +736,7 @@ impl FeedbackRepository {
                 saved    = CASE WHEN $3 THEN false ELSE saved    END,
                 hidden   = CASE WHEN $4 THEN false ELSE hidden   END,
                 bad_fit  = CASE WHEN $5 THEN false ELSE bad_fit  END,
+                bad_fit_reason = CASE WHEN $5 THEN NULL ELSE bad_fit_reason END,
                 updated_at = NOW()
             WHERE profile_id = $1 AND job_id = $2
             RETURNING
@@ -738,6 +784,7 @@ impl FeedbackRepository {
                 company_name,
                 normalized_company_name,
                 status,
+                notes,
                 created_at::text AS created_at,
                 updated_at::text AS updated_at
             FROM profile_company_feedback
@@ -817,6 +864,7 @@ impl TryFrom<CompanyFeedbackRow> for CompanyFeedbackRecord {
             company_name: row.company_name,
             normalized_company_name: row.normalized_company_name,
             status,
+            notes: row.notes,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })

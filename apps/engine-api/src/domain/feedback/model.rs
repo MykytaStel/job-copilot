@@ -3,6 +3,7 @@ pub struct JobFeedbackFlags {
     pub saved: bool,
     pub hidden: bool,
     pub bad_fit: bool,
+    pub reason: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -217,6 +218,7 @@ pub struct CompanyFeedbackRecord {
     pub company_name: String,
     pub normalized_company_name: String,
     pub status: CompanyFeedbackStatus,
+    pub notes: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -444,6 +446,7 @@ mod tests {
             company_name: "Acme".to_string(),
             normalized_company_name: "acme".to_string(),
             status: CompanyFeedbackStatus::Blacklist,
+            notes: String::new(),
             created_at: "2026-04-14T00:00:00Z".to_string(),
             updated_at: "2026-04-14T00:00:00Z".to_string(),
         };

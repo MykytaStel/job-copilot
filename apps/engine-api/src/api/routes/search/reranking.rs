@@ -320,7 +320,7 @@ pub(crate) fn apply_trained_reranking(
             .unwrap_or(&default_event_signals);
         let signals =
             normalize_signals(&feedback, event_signals, applications_by_job_id.get(job_id));
-        let rating = signals.interest_rating.unwrap_or(0);
+        let rating = signals.interest_rating.unwrap_or(3);
         let quick_apply = signals.time_to_apply_days.is_some_and(|days| days <= 3);
         let delayed_apply = signals.time_to_apply_days.is_some_and(|days| days > 14);
         let features = TrainedRerankerFeatures {
@@ -341,8 +341,8 @@ pub(crate) fn apply_trained_reranking(
             has_salary_rejection: signals.has_salary_rejection,
             has_remote_rejection: signals.has_remote_rejection,
             has_tech_rejection: signals.has_tech_rejection,
-            interest_rating_positive: f64::from(rating.max(0).clamp(0, 2)) / 2.0,
-            interest_rating_negative: f64::from((-rating).max(0).clamp(0, 2)) / 2.0,
+            interest_rating_positive: f64::from((rating - 3).max(0).clamp(0, 2)) / 2.0,
+            interest_rating_negative: f64::from((3 - rating).max(0).clamp(0, 2)) / 2.0,
             work_mode_deal_breaker: signals.work_mode_deal_breaker,
             scrolled_to_bottom: signals.scrolled_to_bottom,
             returned_count: signals.returned_count,

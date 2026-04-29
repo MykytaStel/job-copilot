@@ -151,6 +151,7 @@ fn with_feedback(state: AppState) -> AppState {
                 company_name: "GoodCorp".to_string(),
                 normalized_company_name: "goodcorp".to_string(),
                 status: CompanyFeedbackStatus::Whitelist,
+                notes: String::new(),
                 created_at: "2026-04-14T00:00:00Z".to_string(),
                 updated_at: "2026-04-14T00:00:00Z".to_string(),
             })
@@ -159,6 +160,7 @@ fn with_feedback(state: AppState) -> AppState {
                 company_name: "BadCorp".to_string(),
                 normalized_company_name: "badcorp".to_string(),
                 status: CompanyFeedbackStatus::Blacklist,
+                notes: String::new(),
                 created_at: "2026-04-14T00:00:00Z".to_string(),
                 updated_at: "2026-04-14T00:00:00Z".to_string(),
             }),

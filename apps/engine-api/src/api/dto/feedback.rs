@@ -13,8 +13,18 @@ pub struct UpdateCompanyFeedbackRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct UpdateCompanyFeedbackNotesRequest {
+    pub notes: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct BulkHideJobsByCompanyRequest {
     pub company_name: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct MarkJobBadFitRequest {
+    pub reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -24,7 +34,8 @@ pub struct SetSalaryFeedbackRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct SetInterestRatingRequest {
-    pub rating: i8,
+    pub interest_rating: Option<i8>,
+    pub rating: Option<i8>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,14 +71,22 @@ impl SetSalaryFeedbackRequest {
 
 impl SetInterestRatingRequest {
     pub fn validate(self) -> Result<i8, ApiError> {
-        if !(-2..=2).contains(&self.rating) {
+        let rating = self.interest_rating.or(self.rating).ok_or_else(|| {
+            ApiError::bad_request_with_details(
+                "missing_interest_rating",
+                "interest_rating is required",
+                json!({ "field": "interest_rating" }),
+            )
+        })?;
+
+        if !(1..=5).contains(&rating) {
             return Err(ApiError::bad_request_with_details(
                 "invalid_interest_rating",
-                "Interest rating must be between -2 and 2",
-                json!({ "field": "rating", "received": self.rating }),
+                "Interest rating must be between 1 and 5",
+                json!({ "field": "interest_rating", "received": rating }),
             ));
         }
-        Ok(self.rating)
+        Ok(rating)
     }
 }
 
@@ -134,6 +153,7 @@ pub struct CompanyFeedbackResponse {
     pub company_name: String,
     pub normalized_company_name: String,
     pub status: String,
+    pub notes: String,
     pub updated_at: String,
 }
 
@@ -157,6 +177,36 @@ pub struct FeedbackSummary {
     pub bad_fit_jobs_count: usize,
     pub whitelisted_companies_count: usize,
     pub blacklisted_companies_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FeedbackStatsResponse {
+    pub saved_this_week_count: usize,
+    pub hidden_this_week_count: usize,
+    pub bad_fit_this_week_count: usize,
+    pub whitelisted_companies_count: usize,
+    pub blacklisted_companies_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FeedbackTimelineItemResponse {
+    pub id: String,
+    pub event_type: String,
+    pub job_id: Option<String>,
+    pub job_title: String,
+    pub company_name: String,
+    pub reason: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FeedbackTimelineResponse {
+    pub profile_id: String,
+    pub items: Vec<FeedbackTimelineItemResponse>,
+    pub limit: usize,
+    pub offset: usize,
+    pub total_count: usize,
+    pub next_offset: Option<usize>,
 }
 
 #[derive(Debug, Serialize)]
@@ -188,12 +238,34 @@ impl UpdateCompanyFeedbackRequest {
     }
 }
 
+impl UpdateCompanyFeedbackNotesRequest {
+    pub fn validate_notes(self) -> Result<String, ApiError> {
+        if self.notes.chars().count() > 500 {
+            return Err(ApiError::bad_request_with_details(
+                "invalid_company_feedback_notes",
+                "notes must be 500 characters or fewer",
+                json!({ "field": "notes", "max_length": 500 }),
+            ));
+        }
+
+        Ok(self.notes)
+    }
+}
+
 impl BulkHideJobsByCompanyRequest {
     pub fn validate_company_name(self) -> Result<String, ApiError> {
         UpdateCompanyFeedbackRequest {
             company_name: self.company_name,
         }
         .validate_company_name()
+    }
+}
+
+impl MarkJobBadFitRequest {
+    pub fn validate_reason(self) -> Option<String> {
+        self.reason
+            .map(|reason| reason.trim().to_string())
+            .filter(|reason| !reason.is_empty())
     }
 }
 
@@ -215,6 +287,7 @@ impl From<CompanyFeedbackRecord> for CompanyFeedbackResponse {
             company_name: value.company_name,
             normalized_company_name: value.normalized_company_name,
             status: value.status.as_str().to_string(),
+            notes: value.notes,
             updated_at: value.updated_at,
         }
     }

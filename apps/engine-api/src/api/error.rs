@@ -1,10 +1,12 @@
 use axum::Json;
+use axum::body::Bytes;
 use axum::extract::FromRequest;
 use axum::extract::Request;
 use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use tracing::error;
 
@@ -25,6 +27,8 @@ pub struct ApiError {
 }
 
 pub struct ApiJson<T>(pub T);
+
+pub struct OptionalApiJson<T>(pub T);
 
 impl ApiError {
     pub fn bad_request(code: &'static str, message: impl Into<String>) -> Self {
@@ -207,6 +211,29 @@ where
             Ok(Json(value)) => Ok(Self(value)),
             Err(rejection) => Err(ApiError::bad_request("invalid_json", rejection.body_text())),
         }
+    }
+}
+
+impl<S, T> FromRequest<S> for OptionalApiJson<T>
+where
+    Bytes: FromRequest<S>,
+    S: Send + Sync,
+    T: DeserializeOwned + Default,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let bytes = Bytes::from_request(req, state)
+            .await
+            .map_err(|_| ApiError::bad_request("invalid_body", "Request body is invalid"))?;
+
+        if bytes.is_empty() {
+            return Ok(Self(T::default()));
+        }
+
+        serde_json::from_slice(&bytes)
+            .map(Self)
+            .map_err(|error| ApiError::bad_request("invalid_json", error.to_string()))
     }
 }
 

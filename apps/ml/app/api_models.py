@@ -17,10 +17,29 @@ class ReadyCheck(BaseModel):
     detail: str | None = None
 
 
+class DatabaseComponent(BaseModel):
+    status: str
+    latency_ms: int = 0
+
+
+class MlSidecarComponent(BaseModel):
+    status: str
+
+
+class IngestionComponent(BaseModel):
+    status: str
+    last_run_at: str | None = None
+
+
+class ReadyComponents(BaseModel):
+    database: DatabaseComponent
+    ml_sidecar: MlSidecarComponent
+    ingestion: IngestionComponent
+
+
 class ReadyResponse(BaseModel):
     status: str
-    service: str
-    checks: list[ReadyCheck]
+    components: ReadyComponents
 
 
 class FitAnalyzeRequest(BaseModel):

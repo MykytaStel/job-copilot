@@ -6,7 +6,7 @@ pub mod routes;
 use crate::state::AppState;
 use axum::Router;
 use axum::http::{HeaderValue, Method, Request};
-use axum_prometheus::PrometheusMetricLayer;
+use axum_prometheus::{EndpointLabel, PrometheusMetricLayerBuilder};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::request_id::{
     MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer,
@@ -30,7 +30,10 @@ impl MakeRequestId for MakeUuidV7 {
 
 pub fn build_routers(state: AppState) -> BuiltRouters {
     let x_request_id = axum::http::header::HeaderName::from_static("x-request-id");
-    let (prometheus_layer, metrics_handle) = PrometheusMetricLayer::pair();
+    let (prometheus_layer, metrics_handle) = PrometheusMetricLayerBuilder::new()
+        .with_endpoint_label_type(EndpointLabel::MatchedPath)
+        .with_default_metrics()
+        .build_pair();
 
     if state.jwt_secret.is_none() {
         warn!("JWT_SECRET is not set; all /api/v1/ routes are unauthenticated");

@@ -117,6 +117,7 @@ mod tests {
                     saved: true,
                     hidden: true,
                     bad_fit: true,
+                    reason: None,
                 },
             )
             .await
@@ -254,6 +255,7 @@ mod tests {
                 company_name: "Other Co".to_string(),
                 normalized_company_name: "other co".to_string(),
                 status: CompanyFeedbackStatus::Blacklist,
+                notes: String::new(),
                 created_at: "2026-04-14T00:00:00Z".to_string(),
                 updated_at: "2026-04-14T00:00:00Z".to_string(),
             }),

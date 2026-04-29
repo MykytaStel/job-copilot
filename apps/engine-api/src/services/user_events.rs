@@ -1,8 +1,13 @@
 #[cfg(test)]
 use std::sync::{Arc, Mutex};
 
+#[cfg(test)]
+use chrono::{DateTime, Duration, Utc};
+
 use crate::db::repositories::{RepositoryError, UserEventsRepository};
-use crate::domain::user_event::model::{CreateUserEvent, UserEventRecord, UserEventSummary};
+use crate::domain::user_event::model::{
+    CreateUserEvent, UserEventPage, UserEventRecord, UserEventSummary,
+};
 
 #[derive(Clone)]
 enum UserEventsServiceBackend {
@@ -47,6 +52,25 @@ impl UserEventsService {
         }
     }
 
+    pub async fn list_feedback_history_by_profile(
+        &self,
+        profile_id: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Result<UserEventPage, RepositoryError> {
+        match &self.backend {
+            UserEventsServiceBackend::Repository(repository) => {
+                repository
+                    .list_feedback_history_by_profile(profile_id, limit, offset)
+                    .await
+            }
+            #[cfg(test)]
+            UserEventsServiceBackend::Stub(stub) => {
+                stub.list_feedback_history_by_profile(profile_id, limit, offset)
+            }
+        }
+    }
+
     pub async fn summary_by_profile(
         &self,
         profile_id: &str,
@@ -57,6 +81,24 @@ impl UserEventsService {
             }
             #[cfg(test)]
             UserEventsServiceBackend::Stub(stub) => stub.summary_by_profile(profile_id),
+        }
+    }
+
+    pub async fn summary_by_profile_since_days(
+        &self,
+        profile_id: &str,
+        days: i32,
+    ) -> Result<UserEventSummary, RepositoryError> {
+        match &self.backend {
+            UserEventsServiceBackend::Repository(repository) => {
+                repository
+                    .summary_by_profile_since_days(profile_id, days)
+                    .await
+            }
+            #[cfg(test)]
+            UserEventsServiceBackend::Stub(stub) => {
+                stub.summary_by_profile_since_days(profile_id, days)
+            }
         }
     }
 
@@ -130,6 +172,41 @@ impl UserEventsServiceStub {
             .collect())
     }
 
+    fn list_feedback_history_by_profile(
+        &self,
+        profile_id: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Result<UserEventPage, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let mut records: Vec<UserEventRecord> = self
+            .records
+            .lock()
+            .expect("user events stub mutex should not be poisoned")
+            .iter()
+            .filter(|record| {
+                record.profile_id == profile_id && record.event_type.is_job_feedback_action()
+            })
+            .cloned()
+            .collect();
+        records.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+
+        let total_count = records.len();
+        let records = records.into_iter().skip(offset).take(limit).collect();
+
+        Ok(UserEventPage {
+            records,
+            total_count,
+        })
+    }
+
     fn summary_by_profile(&self, profile_id: &str) -> Result<UserEventSummary, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
@@ -145,5 +222,30 @@ impl UserEventsServiceStub {
                 .iter()
                 .filter(|record| record.profile_id == profile_id),
         ))
+    }
+
+    fn summary_by_profile_since_days(
+        &self,
+        profile_id: &str,
+        days: i32,
+    ) -> Result<UserEventSummary, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        let cutoff = Utc::now() - Duration::days(i64::from(days));
+        let records = self
+            .records
+            .lock()
+            .expect("user events stub mutex should not be poisoned");
+
+        Ok(UserEventSummary::from_events(records.iter().filter(
+            |record| {
+                record.profile_id == profile_id
+                    && DateTime::parse_from_rfc3339(&record.created_at)
+                        .map(|created_at| created_at.with_timezone(&Utc) >= cutoff)
+                        .unwrap_or(false)
+            },
+        )))
     }
 }

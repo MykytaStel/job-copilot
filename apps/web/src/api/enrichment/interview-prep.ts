@@ -60,7 +60,7 @@ export async function getInterviewPrep(
     },
   });
 
-  const response = await mlRequest<MlInterviewPrepResponse>('/v1/enrichment/interview-prep', {
+  const response = await mlRequest<MlInterviewPrepResponse>('/api/v1/enrichment/interview-prep', {
     method: 'POST',
     body: JSON.stringify(buildInterviewPrepPayload(payload)),
   });

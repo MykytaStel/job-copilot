@@ -73,6 +73,8 @@ export const queryKeys = {
   },
   feedback: {
     profile: (profileId: string) => ['feedback', profileId] as const,
+    stats: (profileId: string) => ['feedback', 'stats', profileId] as const,
+    timeline: (profileId: string) => ['feedback', 'timeline', profileId] as const,
   },
   ml: {
     all: () => ['ml'] as const,

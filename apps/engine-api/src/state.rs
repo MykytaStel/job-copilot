@@ -36,6 +36,7 @@ pub struct AppState {
     pub app_name: String,
     pub version: String,
     pub database: Database,
+    pub ml_sidecar_base_url: String,
     pub profile_records: ProfileRecordsService,
     pub profile_ml_state: ProfileMlStateService,
     pub profile_ml_metrics: ProfileMlMetricsService,
@@ -95,6 +96,7 @@ impl AppState {
             trained_reranker_model,
             reranker_bootstrap,
             cv_tailoring,
+            config.ml_sidecar_base_url.clone(),
         );
         state.jwt_secret = config.jwt_secret.clone();
         state.cors_allowed_origins = config.cors_allowed_origins.clone();
@@ -110,6 +112,7 @@ impl AppState {
         trained_reranker_model: Option<TrainedRerankerModel>,
         reranker_bootstrap: RerankerBootstrapService,
         cv_tailoring: CvTailoringService,
+        ml_sidecar_base_url: String,
     ) -> Self {
         let profiles_repository = ProfilesRepository::new(database.clone());
         let profile_ml_state_repository = ProfileMlStateRepository::new(database.clone());
@@ -133,6 +136,7 @@ impl AppState {
             app_name: "engine-api".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             database,
+            ml_sidecar_base_url: ml_sidecar_base_url.trim_end_matches('/').to_string(),
             profile_records,
             profile_ml_state: ProfileMlStateService::new(profile_ml_state_repository),
             profile_ml_metrics: ProfileMlMetricsService::new(profile_ml_metrics_repository),

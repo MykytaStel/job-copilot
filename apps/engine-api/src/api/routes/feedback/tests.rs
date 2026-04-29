@@ -1,19 +1,23 @@
 use axum::Extension;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header};
 use axum::response::IntoResponse;
 use axum::{Json, body};
+use chrono::{Duration, Utc};
 use serde_json::{Value, json};
 
-use crate::api::dto::feedback::{BulkHideJobsByCompanyRequest, UpdateCompanyFeedbackRequest};
-use crate::api::error::ApiJson;
+use crate::api::dto::feedback::{
+    BulkHideJobsByCompanyRequest, MarkJobBadFitRequest, UpdateCompanyFeedbackNotesRequest,
+    UpdateCompanyFeedbackRequest,
+};
+use crate::api::error::{ApiJson, OptionalApiJson};
 use crate::api::middleware::auth::AuthUser;
 use crate::domain::feedback::model::{
     CompanyFeedbackRecord, CompanyFeedbackStatus, JobFeedbackFlags, JobFeedbackRecord,
 };
 use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
 use crate::domain::profile::model::Profile;
-use crate::domain::user_event::model::UserEventType;
+use crate::domain::user_event::model::{UserEventRecord, UserEventType};
 use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
 use crate::services::feedback::{FeedbackService, FeedbackServiceStub};
 use crate::services::jobs::{JobsService, JobsServiceStub};
@@ -24,9 +28,11 @@ use crate::state::AppState;
 
 use super::{
     BulkHideJobsByCompanyQuery, JobFeedbackActionQuery, RemoveCompanyBlacklistBySlugQuery,
-    add_company_blacklist, bulk_hide_jobs_by_company, clear_all_hidden_jobs, hide_job,
-    list_feedback, mark_job_bad_fit, remove_company_blacklist_by_slug, save_job, undo_job_bad_fit,
-    undo_job_hide, unhide_job, unmark_job_bad_fit, unsave_job,
+    UpdateCompanyFeedbackBySlugQuery, add_company_blacklist, bulk_hide_jobs_by_company,
+    clear_all_hidden_jobs, export_feedback_csv, get_feedback_stats, hide_job, list_feedback,
+    list_feedback_timeline, mark_job_bad_fit, remove_company_blacklist_by_slug, save_job,
+    undo_job_bad_fit, undo_job_hide, unhide_job, unmark_job_bad_fit, unsave_job,
+    update_company_feedback_notes_by_slug,
 };
 
 fn sample_profile() -> Profile {
@@ -113,6 +119,24 @@ fn test_state_with_feedback(feedback_service: FeedbackService) -> AppState {
     .with_feedback_service(feedback_service)
 }
 
+fn event_with_created_at(
+    id: &str,
+    event_type: UserEventType,
+    created_at: String,
+) -> UserEventRecord {
+    UserEventRecord {
+        id: id.to_string(),
+        profile_id: "profile-1".to_string(),
+        event_type,
+        job_id: Some(format!("job-{id}")),
+        company_name: Some("NovaLedger".to_string()),
+        source: Some("djinni".to_string()),
+        role_family: Some("engineering".to_string()),
+        payload_json: None,
+        created_at,
+    }
+}
+
 #[tokio::test]
 async fn save_and_bad_fit_persist_in_feedback_overview() {
     let state = test_state();
@@ -128,6 +152,7 @@ async fn save_and_bad_fit_persist_in_feedback_overview() {
         State(state.clone()),
         None,
         Path(("profile-1".to_string(), "job-1".to_string())),
+        OptionalApiJson(MarkJobBadFitRequest::default()),
     )
     .await
     .expect("bad fit should succeed");
@@ -184,6 +209,7 @@ async fn remove_company_blacklist_by_slug_removes_existing_blacklist_entry() {
             company_name: "NovaLedger".to_string(),
             normalized_company_name: "novaledger".to_string(),
             status: CompanyFeedbackStatus::Blacklist,
+            notes: String::new(),
             created_at: "2026-04-14T00:00:00Z".to_string(),
             updated_at: "2026-04-14T00:00:00Z".to_string(),
         }),
@@ -211,6 +237,74 @@ async fn remove_company_blacklist_by_slug_removes_existing_blacklist_entry() {
 }
 
 #[tokio::test]
+async fn update_company_feedback_notes_by_slug_persists_notes() {
+    let state = test_state().with_feedback_service(FeedbackService::for_tests(
+        FeedbackServiceStub::default().with_company_feedback(CompanyFeedbackRecord {
+            profile_id: "profile-1".to_string(),
+            company_name: "NovaLedger".to_string(),
+            normalized_company_name: "novaledger".to_string(),
+            status: CompanyFeedbackStatus::Blacklist,
+            notes: String::new(),
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+        }),
+    ));
+
+    let Json(response) = update_company_feedback_notes_by_slug(
+        State(state.clone()),
+        None,
+        Path("novaledger".to_string()),
+        Query(UpdateCompanyFeedbackBySlugQuery {
+            profile_id: Some("profile-1".to_string()),
+        }),
+        ApiJson(UpdateCompanyFeedbackNotesRequest {
+            notes: "Interviewed here, bad culture".to_string(),
+        }),
+    )
+    .await
+    .expect("notes update should succeed");
+
+    assert_eq!(response.notes, "Interviewed here, bad culture");
+
+    let Json(overview) = list_feedback(State(state), None, Path("profile-1".to_string()))
+        .await
+        .expect("listing feedback should succeed");
+
+    assert_eq!(overview.companies[0].notes, "Interviewed here, bad culture");
+}
+
+#[tokio::test]
+async fn update_company_feedback_notes_rejects_over_500_characters() {
+    let state = test_state().with_feedback_service(FeedbackService::for_tests(
+        FeedbackServiceStub::default().with_company_feedback(CompanyFeedbackRecord {
+            profile_id: "profile-1".to_string(),
+            company_name: "NovaLedger".to_string(),
+            normalized_company_name: "novaledger".to_string(),
+            status: CompanyFeedbackStatus::Blacklist,
+            notes: String::new(),
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+        }),
+    ));
+
+    let error = update_company_feedback_notes_by_slug(
+        State(state),
+        None,
+        Path("novaledger".to_string()),
+        Query(UpdateCompanyFeedbackBySlugQuery {
+            profile_id: Some("profile-1".to_string()),
+        }),
+        ApiJson(UpdateCompanyFeedbackNotesRequest {
+            notes: "x".repeat(501),
+        }),
+    )
+    .await
+    .expect_err("overlong notes should be rejected");
+
+    assert_eq!(error.into_response().status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn list_feedback_uses_existing_stub_records() {
     let state = test_state().with_feedback_service(FeedbackService::for_tests(
         FeedbackServiceStub::default()
@@ -232,6 +326,7 @@ async fn list_feedback_uses_existing_stub_records() {
                 company_name: "NovaLedger".to_string(),
                 normalized_company_name: "novaledger".to_string(),
                 status: CompanyFeedbackStatus::Blacklist,
+                notes: String::new(),
                 created_at: "2026-04-14T00:00:00Z".to_string(),
                 updated_at: "2026-04-14T00:00:00Z".to_string(),
             }),
@@ -245,6 +340,238 @@ async fn list_feedback_uses_existing_stub_records() {
     assert_eq!(response.companies.len(), 1);
     assert!(response.jobs[0].saved);
     assert_eq!(response.companies[0].status, "blacklist");
+}
+
+#[tokio::test]
+async fn feedback_stats_counts_weekly_events_and_company_totals() {
+    let recent = Utc::now().to_rfc3339();
+    let old = (Utc::now() - Duration::days(8)).to_rfc3339();
+    let state = test_state()
+        .with_feedback_service(FeedbackService::for_tests(
+            FeedbackServiceStub::default()
+                .with_company_feedback(CompanyFeedbackRecord {
+                    profile_id: "profile-1".to_string(),
+                    company_name: "NovaLedger".to_string(),
+                    normalized_company_name: "novaledger".to_string(),
+                    status: CompanyFeedbackStatus::Whitelist,
+                    notes: String::new(),
+                    created_at: recent.clone(),
+                    updated_at: recent.clone(),
+                })
+                .with_company_feedback(CompanyFeedbackRecord {
+                    profile_id: "profile-1".to_string(),
+                    company_name: "OldSoft".to_string(),
+                    normalized_company_name: "oldsoft".to_string(),
+                    status: CompanyFeedbackStatus::Blacklist,
+                    notes: String::new(),
+                    created_at: recent.clone(),
+                    updated_at: recent.clone(),
+                }),
+        ))
+        .with_user_events_service(UserEventsService::for_tests(
+            UserEventsServiceStub::default()
+                .with_event(event_with_created_at(
+                    "saved-recent",
+                    UserEventType::JobSaved,
+                    recent.clone(),
+                ))
+                .with_event(event_with_created_at(
+                    "hidden-recent",
+                    UserEventType::JobHidden,
+                    recent.clone(),
+                ))
+                .with_event(event_with_created_at(
+                    "bad-fit-recent",
+                    UserEventType::JobBadFit,
+                    recent,
+                ))
+                .with_event(event_with_created_at(
+                    "saved-old",
+                    UserEventType::JobSaved,
+                    old,
+                )),
+        ));
+
+    let Json(stats) = get_feedback_stats(
+        State(state),
+        None,
+        Query(super::FeedbackStatsQuery {
+            profile_id: Some("profile-1".to_string()),
+        }),
+    )
+    .await
+    .expect("feedback stats should succeed");
+
+    assert_eq!(stats.saved_this_week_count, 1);
+    assert_eq!(stats.hidden_this_week_count, 1);
+    assert_eq!(stats.bad_fit_this_week_count, 1);
+    assert_eq!(stats.whitelisted_companies_count, 1);
+    assert_eq!(stats.blacklisted_companies_count, 1);
+}
+
+#[tokio::test]
+async fn feedback_timeline_returns_job_actions_newest_first_with_pagination() {
+    let state = test_state().with_user_events_service(UserEventsService::for_tests(
+        UserEventsServiceStub::default()
+            .with_event(UserEventRecord {
+                id: "evt-old".to_string(),
+                profile_id: "profile-1".to_string(),
+                event_type: UserEventType::JobSaved,
+                job_id: Some("job-1".to_string()),
+                company_name: Some("NovaLedger".to_string()),
+                source: Some("djinni".to_string()),
+                role_family: Some("engineering".to_string()),
+                payload_json: None,
+                created_at: "2026-04-21T00:00:00Z".to_string(),
+            })
+            .with_event(UserEventRecord {
+                id: "evt-search".to_string(),
+                profile_id: "profile-1".to_string(),
+                event_type: UserEventType::SearchRun,
+                job_id: None,
+                company_name: None,
+                source: None,
+                role_family: Some("engineering".to_string()),
+                payload_json: None,
+                created_at: "2026-04-23T00:00:00Z".to_string(),
+            })
+            .with_event(UserEventRecord {
+                id: "evt-new".to_string(),
+                profile_id: "profile-1".to_string(),
+                event_type: UserEventType::JobBadFit,
+                job_id: Some("job-1".to_string()),
+                company_name: Some("NovaLedger".to_string()),
+                source: Some("djinni".to_string()),
+                role_family: Some("engineering".to_string()),
+                payload_json: Some(json!({ "reason": "Salary too low" })),
+                created_at: "2026-04-24T00:00:00Z".to_string(),
+            }),
+    ));
+
+    let Json(response) = list_feedback_timeline(
+        State(state),
+        None,
+        Path("profile-1".to_string()),
+        Query(super::FeedbackTimelineQuery {
+            limit: Some(1),
+            offset: Some(0),
+        }),
+    )
+    .await
+    .expect("timeline should load");
+
+    assert_eq!(response.total_count, 2);
+    assert_eq!(response.next_offset, Some(1));
+    assert_eq!(response.items.len(), 1);
+    assert_eq!(response.items[0].event_type, "job_bad_fit");
+    assert_eq!(response.items[0].job_title, "Senior Backend Developer");
+    assert_eq!(response.items[0].company_name, "NovaLedger");
+    assert_eq!(response.items[0].reason.as_deref(), Some("Salary too low"));
+}
+
+#[tokio::test]
+async fn export_feedback_csv_returns_saved_jobs_with_attachment_headers() {
+    let state = test_state().with_feedback_service(FeedbackService::for_tests(
+        FeedbackServiceStub::default().with_job_feedback(JobFeedbackRecord {
+            profile_id: "profile-1".to_string(),
+            job_id: "job-1".to_string(),
+            saved: true,
+            hidden: false,
+            bad_fit: false,
+            salary_signal: None,
+            interest_rating: None,
+            work_mode_signal: None,
+            legitimacy_signal: None,
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-14T00:00:00Z".to_string(),
+        }),
+    ));
+
+    let response = export_feedback_csv(
+        State(state),
+        Some(Extension(AuthUser {
+            profile_id: "profile-1".to_string(),
+        })),
+        Query(super::ExportFeedbackQuery {
+            export_type: "saved".to_string(),
+        }),
+    )
+    .await
+    .expect("CSV export should succeed");
+
+    assert_eq!(
+        response.headers().get(header::CONTENT_TYPE).unwrap(),
+        "text/csv; charset=utf-8"
+    );
+    let disposition = response
+        .headers()
+        .get(header::CONTENT_DISPOSITION)
+        .and_then(|value| value.to_str().ok())
+        .expect("content disposition should be present");
+    assert!(disposition.starts_with("attachment; filename=\"feedback-saved-"));
+    assert!(disposition.ends_with(".csv\""));
+
+    let body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("CSV body should be readable");
+    let csv = String::from_utf8(body.to_vec()).expect("CSV body should be utf-8");
+
+    assert_eq!(
+        csv,
+        "job_title,company,source,saved_at,url\nSenior Backend Developer,NovaLedger,djinni,2026-04-14T00:00:00Z,https://djinni.co/jobs/job-1\n"
+    );
+}
+
+#[tokio::test]
+async fn export_feedback_csv_escapes_company_notes_and_commas() {
+    let state = test_state().with_feedback_service(FeedbackService::for_tests(
+        FeedbackServiceStub::default().with_company_feedback(CompanyFeedbackRecord {
+            profile_id: "profile-1".to_string(),
+            company_name: "NovaLedger, Inc".to_string(),
+            normalized_company_name: "novaledger inc".to_string(),
+            status: CompanyFeedbackStatus::Blacklist,
+            notes: "Said \"remote\", then onsite".to_string(),
+            created_at: "2026-04-14T00:00:00Z".to_string(),
+            updated_at: "2026-04-15T00:00:00Z".to_string(),
+        }),
+    ));
+
+    let response = export_feedback_csv(
+        State(state),
+        Some(Extension(AuthUser {
+            profile_id: "profile-1".to_string(),
+        })),
+        Query(super::ExportFeedbackQuery {
+            export_type: "companies".to_string(),
+        }),
+    )
+    .await
+    .expect("CSV export should succeed");
+
+    let body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("CSV body should be readable");
+    let csv = String::from_utf8(body.to_vec()).expect("CSV body should be utf-8");
+
+    assert_eq!(
+        csv,
+        "company,status,notes,date\n\"NovaLedger, Inc\",blacklist,\"Said \"\"remote\"\", then onsite\",2026-04-15T00:00:00Z\n"
+    );
+}
+
+#[tokio::test]
+async fn export_feedback_csv_requires_auth() {
+    let error = export_feedback_csv(
+        State(test_state()),
+        None,
+        Query(super::ExportFeedbackQuery {
+            export_type: "saved".to_string(),
+        }),
+    )
+    .await
+    .expect_err("CSV export should require auth");
+
+    assert_eq!(error.into_response().status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
@@ -508,6 +835,7 @@ async fn feedback_overview_summary_counts_are_correct() {
                 company_name: "GoodCorp".to_string(),
                 normalized_company_name: "goodcorp".to_string(),
                 status: CompanyFeedbackStatus::Whitelist,
+                notes: String::new(),
                 created_at: "2026-04-14T00:00:00Z".to_string(),
                 updated_at: "2026-04-14T00:00:00Z".to_string(),
             })
@@ -516,6 +844,7 @@ async fn feedback_overview_summary_counts_are_correct() {
                 company_name: "BadCorp".to_string(),
                 normalized_company_name: "badcorp".to_string(),
                 status: CompanyFeedbackStatus::Blacklist,
+                notes: String::new(),
                 created_at: "2026-04-14T00:00:00Z".to_string(),
                 updated_at: "2026-04-14T00:00:00Z".to_string(),
             }),
@@ -568,6 +897,7 @@ async fn feedback_actions_create_expected_user_events() {
         State(state.clone()),
         None,
         Path(("profile-1".to_string(), "job-1".to_string())),
+        OptionalApiJson(MarkJobBadFitRequest::default()),
     )
     .await
     .expect("bad fit should succeed");

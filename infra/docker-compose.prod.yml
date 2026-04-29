@@ -1,0 +1,87 @@
+# Production override.
+#
+# Usage:
+#   POSTGRES_PASSWORD=change-me \
+#     docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d
+#
+# Prometheus and Grafana are optional in production. Enable them explicitly with:
+#   docker compose --profile monitoring -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    # Keep Postgres running across host restarts in production.
+    restart: unless-stopped
+    # Bound database memory usage for small production hosts.
+    mem_limit: 1g
+    environment:
+      # Keep service log settings consistent across the prod stack.
+      LOG_FORMAT: json
+      # Production password must come from the host environment, never from this file.
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting prod compose}"
+
+  engine-api:
+    # Keep the API running across host restarts in production.
+    restart: unless-stopped
+    # Bound API memory usage; Rust service should fit comfortably in this limit.
+    mem_limit: 512m
+    # Remove the dev/local model bind mount so the service runs from the built image.
+    volumes: !reset []
+    environment:
+      # Production logs should be machine-readable.
+      LOG_FORMAT: json
+      # Match the production database password supplied by the host environment.
+      DATABASE_URL: "postgres://jobcopilot:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting prod compose}@postgres:5432/jobcopilot"
+
+  web:
+    # Keep the web container running across host restarts in production.
+    restart: unless-stopped
+    environment:
+      # Keep service log settings consistent across the prod stack.
+      LOG_FORMAT: json
+
+  nginx:
+    # Keep the gateway running across host restarts in production.
+    restart: unless-stopped
+    environment:
+      # Keep service log settings consistent across the prod stack.
+      LOG_FORMAT: json
+
+  scraper:
+    # Keep the scraper daemon running across host restarts in production.
+    restart: unless-stopped
+    environment:
+      # Keep service log settings consistent across the prod stack.
+      LOG_FORMAT: json
+      # Match the production database password supplied by the host environment.
+      DATABASE_URL: "postgres://jobcopilot:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting prod compose}@postgres:5432/jobcopilot"
+
+  ml:
+    # Keep the ML sidecar running across host restarts in production.
+    restart: unless-stopped
+    # Bound ML memory usage for enrichment/reranking workloads.
+    mem_limit: 1g
+    environment:
+      # Production logs should be machine-readable.
+      LOG_FORMAT: json
+      # Default to the free deterministic provider; set ML_LLM_PROVIDER=ollama when Ollama is configured.
+      ML_LLM_PROVIDER: "${ML_LLM_PROVIDER:-template}"
+
+  prometheus:
+    # Monitoring is optional for production and is disabled unless the monitoring profile is enabled.
+    profiles:
+      - monitoring
+    # Keep Prometheus running when the optional monitoring profile is enabled.
+    restart: unless-stopped
+    environment:
+      # Keep service log settings consistent when optional monitoring is enabled.
+      LOG_FORMAT: json
+
+  grafana:
+    # Monitoring is optional for production and is disabled unless the monitoring profile is enabled.
+    profiles:
+      - monitoring
+    # Keep Grafana running when the optional monitoring profile is enabled.
+    restart: unless-stopped
+    environment:
+      # Keep service log settings consistent when optional monitoring is enabled.
+      LOG_FORMAT: json

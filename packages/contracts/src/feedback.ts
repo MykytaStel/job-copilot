@@ -62,6 +62,7 @@ export interface CompanyFeedbackRecord {
   companyName: string;
   normalizedCompanyName: string;
   status: CompanyFeedbackStatus;
+  notes: string;
   updatedAt: string;
 }
 

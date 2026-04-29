@@ -85,36 +85,51 @@ def test_profile_bootstrap_lock_rejects_second_holder(tmp_path):
         first.release()
 
 
-def test_ready_route_reports_degraded_engine_api(monkeypatch):
-    async def failing_probe(self):
+class _ReadyResponse:
+    def __init__(self, payload):
+        self.content = b"{}"
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+def test_ready_route_reports_not_ready_when_engine_api_unavailable():
+    async def failing_get(*args, **kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("app.api.EngineApiClient.probe_health", failing_probe)
-
     with TestClient(app) as client:
+        client.app.state.services._http_client.get = failing_get
         response = client.get("/ready")
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
-    assert body["status"] == "degraded"
-    checks = {item["name"]: item for item in body["checks"]}
-    assert checks["engine_api"]["status"] == "degraded"
+    assert body["status"] == "not_ready"
+    assert body["components"]["database"]["status"] == "error"
+    assert body["components"]["ml_sidecar"]["status"] == "ok"
+    assert body["components"]["ingestion"]["status"] == "stale"
 
 
-def test_ready_route_reports_bootstrap_runtime_saturation():
-    with TestClient(app) as client:
-        services = client.app.state.services
-        services.task_store.create(task_id="accepted-1", profile_id="profile-1")
-        services.task_store.create(task_id="accepted-2", profile_id="profile-2")
-        services.reranker_bootstrap_service._active_jobs = (
-            services.reranker_bootstrap_service._max_concurrent_jobs
+def test_ready_route_returns_component_status_from_engine_api():
+    async def ready_get(*args, **kwargs):
+        return _ReadyResponse(
+            {
+                "status": "degraded",
+                "components": {
+                    "database": {"status": "ok", "latency_ms": 4},
+                    "ml_sidecar": {"status": "ok"},
+                    "ingestion": {"status": "stale", "last_run_at": "2026-04-29 10:00:00+00"},
+                },
+            }
         )
 
+    with TestClient(app) as client:
+        client.app.state.services._http_client.get = ready_get
         response = client.get("/ready")
 
     body = response.json()
-    checks = {item["name"]: item for item in body["checks"]}
-    assert checks["bootstrap_runtime"]["status"] == "degraded"
-    assert "active=" in (checks["bootstrap_runtime"]["detail"] or "")
-    assert "queued=2" in (checks["bootstrap_runtime"]["detail"] or "")
-    assert "accepted=2" in (checks["bootstrap_runtime"]["detail"] or "")
+    assert response.status_code == 200
+    assert body["status"] == "degraded"
+    assert body["components"]["database"] == {"status": "ok", "latency_ms": 4}
+    assert body["components"]["ml_sidecar"] == {"status": "ok"}
+    assert body["components"]["ingestion"]["status"] == "stale"
