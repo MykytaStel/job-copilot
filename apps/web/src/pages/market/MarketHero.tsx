@@ -1,17 +1,8 @@
-import {
-  BriefcaseBusiness,
-  Building2,
-  CircleDollarSign,
-  Wifi,
-} from 'lucide-react';
+import { BriefcaseBusiness, Building2, CircleDollarSign, Wifi } from 'lucide-react';
 
 import { StatCard } from '../../components/ui/StatCard';
 import type { MarketPageState } from '../../features/market/useMarketPage';
-import {
-  formatCount,
-  formatPercent,
-  formatSalary,
-} from './market.view-model';
+import { formatCount, formatPercent, formatSalary } from './market.view-model';
 import { StatCardSkeleton } from './MarketSkeletons';
 
 export function MarketHero({ state }: { state: MarketPageState }) {
@@ -27,7 +18,9 @@ export function MarketHero({ state }: { state: MarketPageState }) {
         <>
           <StatCard
             title="New jobs this week"
-            value={state.overviewQuery.data ? formatCount(state.overviewQuery.data.newJobsThisWeek) : '—'}
+            value={
+              state.overviewQuery.data ? formatCount(state.overviewQuery.data.newJobsThisWeek) : '—'
+            }
             description={
               state.overviewQuery.data
                 ? `${formatCount(state.overviewQuery.data.activeJobsCount)} active jobs tracked right now`
@@ -63,7 +56,7 @@ export function MarketHero({ state }: { state: MarketPageState }) {
       ) : (
         <StatCard
           title="Median salary"
-          value={state.marketMedian !== null ? formatSalary(state.marketMedian) : '—'}
+          value={state.marketMedian !== null ? formatSalary(state.marketMedian, 'USD') : '—'}
           description={
             state.salarySampleCount > 0
               ? `Derived from ${formatCount(state.salarySampleCount)} salary-tagged postings`

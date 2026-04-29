@@ -33,15 +33,18 @@ export const queryKeys = {
     overview: () => ['market', 'overview'] as const,
     companies: () => ['market', 'companies'] as const,
     companyVelocity: () => ['market', 'companyVelocity'] as const,
+    freezeSignals: () => ['market', 'freezeSignals'] as const,
     salaries: () => ['market', 'salaries'] as const,
     roles: () => ['market', 'roles'] as const,
+    regionBreakdown: () => ['market', 'regionBreakdown'] as const,
+    techDemand: () => ['market', 'techDemand'] as const,
   },
   notifications: {
     all: () => ['notifications'] as const,
     list: (profileId: string, limit: number) =>
       ['notifications', 'list', profileId, limit] as const,
     unreadCount: (profileId: string) => ['notifications', 'unreadCount', profileId] as const,
-		preferences: (profileId: string) => ['notifications', 'preferences', profileId] as const,
+    preferences: (profileId: string) => ['notifications', 'preferences', profileId] as const,
   },
   alerts: {
     all: () => ['alerts'] as const,

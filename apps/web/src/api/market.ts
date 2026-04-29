@@ -3,9 +3,13 @@ import type {
   EngineMarketCompaniesResponse,
   EngineMarketCompanyVelocityEntry,
   EngineMarketCompanyVelocityTrend,
+  EngineMarketFreezeSignalEntry,
   EngineMarketOverview,
+  EngineMarketRegionDemandEntry,
   EngineMarketRoleDemandEntry,
+  EngineMarketSalaryBySeniorityEntry,
   EngineMarketSalaryTrend,
+  EngineMarketTechDemandEntry,
 } from './engine-types';
 
 export interface SkillStat {
@@ -52,6 +56,13 @@ export type MarketCompanyVelocity = {
   trend: MarketCompanyVelocityTrend;
 };
 
+export type MarketFreezeSignal = {
+  company: string;
+  lastPostedAt: string;
+  daysSinceLastPost: number;
+  historicalCount: number;
+};
+
 export type MarketSalaryTrend = {
   seniority: string;
   currency: string;
@@ -61,11 +72,30 @@ export type MarketSalaryTrend = {
   sampleCount: number;
 };
 
+export type MarketSalaryBySeniority = {
+  seniority: string;
+  medianMin: number;
+  medianMax: number;
+  sampleSize: number;
+};
+
 export type MarketRoleDemand = {
   roleGroup: string;
   thisPeriod: number;
   prevPeriod: number;
   trend: MarketTrend;
+};
+
+export type MarketRegionDemand = {
+  region: string;
+  jobCount: number;
+  topRoles: string[];
+};
+
+export type MarketTechDemand = {
+  skill: string;
+  jobCount: number;
+  percentage: number;
 };
 
 const DEFAULT_SENIORITY_BUCKETS = ['junior', 'middle', 'senior', 'lead'] as const;
@@ -88,7 +118,8 @@ export async function getMarketCompanies(limit = 10): Promise<MarketCompany[]> {
 
   return response.companies.map((company) => ({
     companyName: company.company_name,
-    normalizedCompanyName: company.normalized_company_name ?? company.company_name.trim().toLowerCase(),
+    normalizedCompanyName:
+      company.normalized_company_name ?? company.company_name.trim().toLowerCase(),
     activeJobs: company.active_jobs,
     thisWeek: company.this_week,
     prevWeek: company.prev_week,
@@ -109,6 +140,17 @@ export async function getMarketCompanyVelocity(): Promise<MarketCompanyVelocity[
     company: entry.company,
     jobCount: entry.job_count,
     trend: entry.trend,
+  }));
+}
+
+export async function getMarketFreezeSignals(): Promise<MarketFreezeSignal[]> {
+  const response = await request<EngineMarketFreezeSignalEntry[]>('/api/v1/market/freeze-signals');
+
+  return response.map((entry) => ({
+    company: entry.company,
+    lastPostedAt: entry.last_posted_at,
+    daysSinceLastPost: entry.days_since_last_post,
+    historicalCount: entry.historical_count,
   }));
 }
 
@@ -140,6 +182,19 @@ export async function getMarketSalaries(
     .filter((result): result is MarketSalaryTrend => result !== undefined);
 }
 
+export async function getMarketSalaryBySeniority(): Promise<MarketSalaryBySeniority[]> {
+  const response = await request<EngineMarketSalaryBySeniorityEntry[]>(
+    '/api/v1/market/salary-by-seniority',
+  );
+
+  return response.map((entry) => ({
+    seniority: entry.seniority,
+    medianMin: entry.median_min,
+    medianMax: entry.median_max,
+    sampleSize: entry.sample_size,
+  }));
+}
+
 export async function getMarketRoles(period = 30): Promise<MarketRoleDemand[]> {
   const response = await request<EngineMarketRoleDemandEntry[]>(
     `/api/v1/market/roles?period=${encodeURIComponent(String(period))}`,
@@ -150,5 +205,27 @@ export async function getMarketRoles(period = 30): Promise<MarketRoleDemand[]> {
     thisPeriod: entry.this_period,
     prevPeriod: entry.prev_period,
     trend: entry.trend,
+  }));
+}
+
+export async function getMarketRegionBreakdown(): Promise<MarketRegionDemand[]> {
+  const response = await request<EngineMarketRegionDemandEntry[]>(
+    '/api/v1/market/region-breakdown',
+  );
+
+  return response.map((entry) => ({
+    region: entry.region,
+    jobCount: entry.job_count,
+    topRoles: entry.top_roles ?? [],
+  }));
+}
+
+export async function getMarketTechDemand(): Promise<MarketTechDemand[]> {
+  const response = await request<EngineMarketTechDemandEntry[]>('/api/v1/market/tech-demand');
+
+  return response.map((entry) => ({
+    skill: entry.skill,
+    jobCount: entry.job_count,
+    percentage: entry.percentage,
   }));
 }

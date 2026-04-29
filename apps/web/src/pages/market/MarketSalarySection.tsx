@@ -1,50 +1,59 @@
 import { CircleDollarSign } from 'lucide-react';
 
-import type { MarketSalaryTrend } from '../../api/market';
+import type { MarketSalaryBySeniority } from '../../api/market';
 import { EmptyState } from '../../components/ui/EmptyState';
 import type { MarketPageState } from '../../features/market/useMarketPage';
-import {
-  formatCount,
-  formatSalary,
-  titleCase,
-} from './market.view-model';
+import { formatCount, formatSalary } from './market.view-model';
 import { ListSkeleton } from './MarketSkeletons';
 import { MarketSection } from './MarketSection';
+
+function seniorityLabel(seniority: string) {
+  switch (seniority) {
+    case 'junior':
+      return 'Junior';
+    case 'mid':
+      return 'Mid';
+    case 'senior':
+      return 'Senior';
+    case 'lead_staff':
+      return 'Lead/Staff';
+    default:
+      return seniority.charAt(0).toUpperCase() + seniority.slice(1);
+  }
+}
 
 function SalaryRow({
   salary,
   minValue,
   maxValue,
 }: {
-  salary: MarketSalaryTrend;
+  salary: MarketSalaryBySeniority;
   minValue: number;
   maxValue: number;
 }) {
   const domain = Math.max(maxValue - minValue, 1);
-  const rangeStart = ((salary.p25 - minValue) / domain) * 100;
-  const rangeWidth = ((salary.p75 - salary.p25) / domain) * 100;
-  const medianPosition = ((salary.median - minValue) / domain) * 100;
+  const rangeStart = ((salary.medianMin - minValue) / domain) * 100;
+  const rangeWidth = ((salary.medianMax - salary.medianMin) / domain) * 100;
   const boundedRangeStart = Math.min(100, Math.max(0, rangeStart));
-  const boundedRangeWidth = Math.min(100 - boundedRangeStart, Math.max(rangeWidth, 3));
-  const boundedMedianPosition = Math.min(100, Math.max(0, medianPosition));
+  const boundedRangeWidth = Math.min(100 - boundedRangeStart, Math.max(rangeWidth, 4));
 
   return (
     <div className="rounded-2xl border border-border/70 bg-surface-muted px-4 py-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="m-0 text-sm font-semibold text-card-foreground">
-            {titleCase(salary.seniority)}
+            {seniorityLabel(salary.seniority)}
           </p>
           <p className="m-0 mt-1 text-xs leading-5 text-muted-foreground">
-            Based on {formatCount(salary.sampleCount)} active {salary.currency} postings with salary data
+            Based on {formatCount(salary.sampleSize)} recent postings with salary and seniority data
           </p>
         </div>
         <div className="text-left sm:text-right">
           <p className="m-0 text-sm font-semibold text-card-foreground">
-            Median {formatSalary(salary.median, salary.currency)}
+            {formatSalary(salary.medianMin, 'USD')} - {formatSalary(salary.medianMax, 'USD')}
           </p>
           <p className="m-0 mt-1 text-xs leading-5 text-muted-foreground">
-            {formatSalary(salary.p25, salary.currency)} - {formatSalary(salary.p75, salary.currency)} middle 50% range
+            Median posted salary range, normalized to USD/month
           </p>
         </div>
       </div>
@@ -54,14 +63,10 @@ function SalaryRow({
             className="absolute top-0 h-full rounded-full bg-primary/25"
             style={{ left: `${boundedRangeStart}%`, width: `${boundedRangeWidth}%` }}
           />
-          <div
-            className="absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-primary shadow-[0_0_0_4px_rgba(90,132,255,0.18)]"
-            style={{ left: `${boundedMedianPosition}%` }}
-          />
         </div>
         <div className="mt-2 flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-          <span>{formatSalary(minValue, salary.currency)}</span>
-          <span>{formatSalary(maxValue, salary.currency)}</span>
+          <span>{formatSalary(minValue, 'USD')}</span>
+          <span>{formatSalary(maxValue, 'USD')}</span>
         </div>
       </div>
     </div>
@@ -72,7 +77,7 @@ export function MarketSalarySection({ state }: { state: MarketPageState }) {
   return (
     <MarketSection
       title="Salary by Seniority"
-      description="Median compensation and the middle 50% range from recent active postings. This is market distribution data, not a personal salary recommendation."
+      description="Median posted salary ranges from recent active postings with inferred seniority. Amounts are normalized to USD/month."
       icon={CircleDollarSign}
     >
       {state.salariesQuery.isPending ? (
@@ -82,9 +87,9 @@ export function MarketSalarySection({ state }: { state: MarketPageState }) {
           message="Unable to load salary ranges."
           description="The salary analytics endpoint returned an error."
         />
-      ) : state.salaryTrends.length > 0 ? (
+      ) : state.salaryBySeniority.length > 0 ? (
         <div className="space-y-3">
-          {state.salaryTrends.map((salary) => (
+          {state.salaryBySeniority.map((salary) => (
             <SalaryRow
               key={salary.seniority}
               salary={salary}
@@ -96,7 +101,7 @@ export function MarketSalarySection({ state }: { state: MarketPageState }) {
       ) : (
         <EmptyState
           message="No recent salary distribution data."
-          description="Salary ranges appear here when active postings include structured compensation."
+          description="Salary ranges appear here when at least 10 recent postings share a seniority bucket and structured compensation."
         />
       )}
     </MarketSection>

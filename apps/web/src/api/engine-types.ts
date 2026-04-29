@@ -5,8 +5,8 @@ export type {
   EngineNotification,
   EngineNotificationsResponse,
   EngineUnreadNotificationsCountResponse,
-	EngineNotificationPreferences,
-	EngineUpdateNotificationPreferencesRequest,
+  EngineNotificationPreferences,
+  EngineUpdateNotificationPreferencesRequest,
 } from './engine-types/notifications';
 
 export type {
@@ -26,8 +26,12 @@ export type {
   EngineMarketCompaniesResponse,
   EngineMarketCompanyVelocityEntry,
   EngineMarketCompanyVelocityTrend,
+  EngineMarketFreezeSignalEntry,
+  EngineMarketSalaryBySeniorityEntry,
   EngineMarketSalaryTrend,
   EngineMarketRoleDemandEntry,
+  EngineMarketRegionDemandEntry,
+  EngineMarketTechDemandEntry,
 } from './engine-types/market';
 
 export type { EngineContact, EngineContactsResponse } from './engine-types/contacts';

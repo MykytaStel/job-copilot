@@ -40,6 +40,14 @@ pub struct MarketCompanyVelocityEntry {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarketFreezeSignalEntry {
+    pub company: String,
+    pub last_posted_at: String,
+    pub days_since_last_post: u32,
+    pub historical_count: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum MarketCompanyVelocityTrend {
     Growing,
@@ -66,6 +74,14 @@ pub struct MarketSalaryTrend {
     pub median: i32,
     pub p75: i32,
     pub sample_count: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarketSalaryBySeniorityEntry {
+    pub seniority: String,
+    pub median_min: u32,
+    pub median_max: u32,
+    pub sample_size: u32,
 }
 
 fn default_salary_currency() -> String {
@@ -96,4 +112,18 @@ pub struct MarketRoleDemandEntry {
     pub this_period: i64,
     pub prev_period: i64,
     pub trend: MarketTrendDirection,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarketRegionDemandEntry {
+    pub region: String,
+    pub job_count: u32,
+    pub top_roles: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MarketTechDemandEntry {
+    pub skill: String,
+    pub job_count: u32,
+    pub percentage: f32,
 }

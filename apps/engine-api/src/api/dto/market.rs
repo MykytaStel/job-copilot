@@ -1,8 +1,9 @@
 use serde::Serialize;
 
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketOverview, MarketRoleDemandEntry,
-    MarketSalaryTrend,
+    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketFreezeSignalEntry, MarketOverview,
+    MarketRegionDemandEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
+    MarketSalaryTrend, MarketTechDemandEntry,
 };
 
 #[derive(Debug, Serialize)]
@@ -78,6 +79,25 @@ impl From<MarketCompanyVelocityEntry> for MarketCompanyVelocityEntryResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct MarketFreezeSignalEntryResponse {
+    pub company: String,
+    pub last_posted_at: String,
+    pub days_since_last_post: u32,
+    pub historical_count: u32,
+}
+
+impl From<MarketFreezeSignalEntry> for MarketFreezeSignalEntryResponse {
+    fn from(value: MarketFreezeSignalEntry) -> Self {
+        Self {
+            company: value.company,
+            last_posted_at: value.last_posted_at,
+            days_since_last_post: value.days_since_last_post,
+            historical_count: value.historical_count,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 pub struct MarketSalaryTrendResponse {
     pub seniority: String,
     pub currency: String,
@@ -101,6 +121,25 @@ impl From<MarketSalaryTrend> for MarketSalaryTrendResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct MarketSalaryBySeniorityEntryResponse {
+    pub seniority: String,
+    pub median_min: u32,
+    pub median_max: u32,
+    pub sample_size: u32,
+}
+
+impl From<MarketSalaryBySeniorityEntry> for MarketSalaryBySeniorityEntryResponse {
+    fn from(value: MarketSalaryBySeniorityEntry) -> Self {
+        Self {
+            seniority: value.seniority,
+            median_min: value.median_min,
+            median_max: value.median_max,
+            sample_size: value.sample_size,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 pub struct MarketRoleDemandEntryResponse {
     pub role_group: String,
     pub this_period: i64,
@@ -115,6 +154,40 @@ impl From<MarketRoleDemandEntry> for MarketRoleDemandEntryResponse {
             this_period: value.this_period,
             prev_period: value.prev_period,
             trend: value.trend.as_str().to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct MarketRegionDemandEntryResponse {
+    pub region: String,
+    pub job_count: u32,
+    pub top_roles: Vec<String>,
+}
+
+impl From<MarketRegionDemandEntry> for MarketRegionDemandEntryResponse {
+    fn from(value: MarketRegionDemandEntry) -> Self {
+        Self {
+            region: value.region,
+            job_count: value.job_count,
+            top_roles: value.top_roles,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct MarketTechDemandEntryResponse {
+    pub skill: String,
+    pub job_count: u32,
+    pub percentage: f32,
+}
+
+impl From<MarketTechDemandEntry> for MarketTechDemandEntryResponse {
+    fn from(value: MarketTechDemandEntry) -> Self {
+        Self {
+            skill: value.skill,
+            job_count: value.job_count,
+            percentage: value.percentage,
         }
     }
 }

@@ -12,8 +12,9 @@ use crate::db::repositories::{JobsRepository, RepositoryError};
 use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketOverview, MarketRoleDemandEntry,
-    MarketSalaryTrend, MarketSource,
+    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketFreezeSignalEntry, MarketOverview,
+    MarketRegionDemandEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
+    MarketSalaryTrend, MarketSource, MarketTechDemandEntry,
 };
 
 #[cfg(test)]
@@ -148,6 +149,16 @@ impl JobsService {
         }
     }
 
+    pub async fn market_freeze_signals(
+        &self,
+    ) -> Result<(Vec<MarketFreezeSignalEntry>, MarketSource), RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => repository.market_freeze_signals().await,
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_freeze_signals(),
+        }
+    }
+
     pub async fn market_salary_trends(
         &self,
     ) -> Result<(Vec<MarketSalaryTrend>, MarketSource), RepositoryError> {
@@ -155,6 +166,18 @@ impl JobsService {
             JobsServiceBackend::Repository(repository) => repository.market_salary_trends().await,
             #[cfg(test)]
             JobsServiceBackend::Stub(stub) => stub.market_salary_trends(),
+        }
+    }
+
+    pub async fn market_salary_by_seniority(
+        &self,
+    ) -> Result<(Vec<MarketSalaryBySeniorityEntry>, MarketSource), RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => {
+                repository.market_salary_by_seniority().await
+            }
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_salary_by_seniority(),
         }
     }
 
@@ -168,6 +191,28 @@ impl JobsService {
             }
             #[cfg(test)]
             JobsServiceBackend::Stub(stub) => stub.market_role_demand(period_days),
+        }
+    }
+
+    pub async fn market_region_breakdown(
+        &self,
+    ) -> Result<(Vec<MarketRegionDemandEntry>, MarketSource), RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => {
+                repository.market_region_breakdown().await
+            }
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_region_breakdown(),
+        }
+    }
+
+    pub async fn market_tech_demand(
+        &self,
+    ) -> Result<(Vec<MarketTechDemandEntry>, MarketSource), RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => repository.market_tech_demand().await,
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_tech_demand(),
         }
     }
 

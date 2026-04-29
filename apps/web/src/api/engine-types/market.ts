@@ -32,6 +32,13 @@ export type EngineMarketCompanyVelocityEntry = {
   trend: EngineMarketCompanyVelocityTrend;
 };
 
+export type EngineMarketFreezeSignalEntry = {
+  company: string;
+  last_posted_at: string;
+  days_since_last_post: number;
+  historical_count: number;
+};
+
 export type EngineMarketSalaryTrend = {
   seniority: string;
   currency: string;
@@ -41,9 +48,28 @@ export type EngineMarketSalaryTrend = {
   sample_count: number;
 };
 
+export type EngineMarketSalaryBySeniorityEntry = {
+  seniority: string;
+  median_min: number;
+  median_max: number;
+  sample_size: number;
+};
+
 export type EngineMarketRoleDemandEntry = {
   role_group: string;
   this_period: number;
   prev_period: number;
   trend: InternalMarketTrend;
+};
+
+export type EngineMarketRegionDemandEntry = {
+  region: string;
+  job_count: number;
+  top_roles: string[];
+};
+
+export type EngineMarketTechDemandEntry = {
+  skill: string;
+  job_count: number;
+  percentage: number;
 };

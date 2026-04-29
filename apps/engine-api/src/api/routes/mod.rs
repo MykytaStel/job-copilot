@@ -217,6 +217,10 @@ pub fn protected_router() -> Router<AppState> {
             get(market::get_market_company_velocity),
         )
         .route(
+            "/api/v1/market/freeze-signals",
+            get(market::get_market_freeze_signals),
+        )
+        .route(
             "/api/v1/notifications",
             get(notifications::list_notifications),
         )
@@ -241,7 +245,19 @@ pub fn protected_router() -> Router<AppState> {
             "/api/v1/market/salary-trends",
             get(market::get_market_salary_trends),
         )
+        .route(
+            "/api/v1/market/salary-by-seniority",
+            get(market::get_market_salary_by_seniority),
+        )
         .route("/api/v1/market/roles", get(market::get_market_role_demand))
+        .route(
+            "/api/v1/market/region-breakdown",
+            get(market::get_market_region_breakdown),
+        )
+        .route(
+            "/api/v1/market/tech-demand",
+            get(market::get_market_tech_demand),
+        )
         .route(
             "/api/v1/profiles/{id}/analytics/summary",
             get(analytics::get_analytics_summary),

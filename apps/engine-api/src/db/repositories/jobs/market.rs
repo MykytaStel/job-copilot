@@ -1,7 +1,9 @@
 use crate::db::repositories::RepositoryError;
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketCompanyVelocityTrend, MarketOverview,
-    MarketRoleDemandEntry, MarketSalaryTrend, MarketSource, MarketTrendDirection,
+    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketCompanyVelocityTrend,
+    MarketFreezeSignalEntry, MarketOverview, MarketRegionDemandEntry, MarketRoleDemandEntry,
+    MarketSalaryBySeniorityEntry, MarketSalaryTrend, MarketSource, MarketTechDemandEntry,
+    MarketTrendDirection,
 };
 use sqlx::FromRow;
 
@@ -308,10 +310,173 @@ impl JobsRepository {
         ))
     }
 
+    pub async fn market_freeze_signals(
+        &self,
+    ) -> Result<(Vec<MarketFreezeSignalEntry>, MarketSource), RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(FromRow)]
+        struct MarketFreezeSignalRow {
+            company: String,
+            last_posted_at: String,
+            days_since_last_post: i32,
+            historical_count: i64,
+        }
+
+        let rows = sqlx::query_as::<_, MarketFreezeSignalRow>(
+            r#"
+            WITH recent_company_jobs AS (
+                SELECT
+                    BTRIM(company_name) AS company,
+                    LOWER(REGEXP_REPLACE(BTRIM(company_name), '\s+', ' ', 'g')) AS normalized_company,
+                    first_seen_at
+                FROM jobs
+                WHERE company_name IS NOT NULL
+                  AND BTRIM(company_name) <> ''
+                  AND LOWER(BTRIM(company_name)) NOT IN ('unknown', 'uknonwn', 'unknonwn', 'n/a', 'na', 'none', 'null', '—', '-')
+                  AND first_seen_at >= NOW() - INTERVAL '60 days'
+            ),
+            company_stats AS (
+                SELECT
+                    MIN(company) AS company,
+                    MAX(first_seen_at) AS last_posted_at,
+                    COUNT(*)::bigint AS historical_count,
+                    COUNT(*) FILTER (
+                        WHERE first_seen_at >= NOW() - INTERVAL '14 days'
+                    )::bigint AS recent_count
+                FROM recent_company_jobs
+                GROUP BY normalized_company
+            )
+            SELECT
+                company,
+                TO_CHAR(last_posted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_posted_at,
+                GREATEST(
+                    0,
+                    FLOOR(EXTRACT(EPOCH FROM (NOW() - last_posted_at)) / 86400)
+                )::integer AS days_since_last_post,
+                historical_count
+            FROM company_stats
+            WHERE historical_count >= 5
+              AND recent_count = 0
+            ORDER BY days_since_last_post DESC, company ASC
+            LIMIT 10
+            "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok((
+            rows.into_iter()
+                .map(|row| MarketFreezeSignalEntry {
+                    company: row.company,
+                    last_posted_at: row.last_posted_at,
+                    days_since_last_post: row.days_since_last_post.max(0) as u32,
+                    historical_count: row.historical_count.max(0) as u32,
+                })
+                .collect(),
+            MarketSource::Live,
+        ))
+    }
+
     pub async fn market_salary_trends(
         &self,
     ) -> Result<(Vec<MarketSalaryTrend>, MarketSource), RepositoryError> {
         self.fetch_market_salary_trends(None).await
+    }
+
+    pub async fn market_salary_by_seniority(
+        &self,
+    ) -> Result<(Vec<MarketSalaryBySeniorityEntry>, MarketSource), RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(FromRow)]
+        struct MarketSalaryBySeniorityRow {
+            seniority: String,
+            median_min: i32,
+            median_max: i32,
+            sample_size: i64,
+        }
+
+        let rows = sqlx::query_as::<_, MarketSalaryBySeniorityRow>(
+            r#"
+            WITH normalized_jobs AS (
+                SELECT
+                    CASE
+                        WHEN LOWER(TRIM(seniority)) IN ('junior', 'jr', 'junior/middle', 'junior-middle')
+                            THEN 'junior'
+                        WHEN LOWER(TRIM(seniority)) IN ('middle', 'mid', 'regular', 'intermediate')
+                            THEN 'mid'
+                        WHEN LOWER(TRIM(seniority)) IN ('senior', 'sr')
+                            THEN 'senior'
+                        WHEN LOWER(TRIM(seniority)) IN ('lead', 'staff', 'lead/staff', 'principal', 'architect')
+                            THEN 'lead_staff'
+                        ELSE NULL
+                    END AS seniority,
+                    CASE UPPER(TRIM(salary_currency))
+                        WHEN 'USD' THEN salary_min::numeric
+                        WHEN 'EUR' THEN salary_min::numeric * 1.1
+                        WHEN 'UAH' THEN salary_min::numeric * 0.024
+                        ELSE NULL
+                    END AS salary_usd_min,
+                    CASE UPPER(TRIM(salary_currency))
+                        WHEN 'USD' THEN salary_max::numeric
+                        WHEN 'EUR' THEN salary_max::numeric * 1.1
+                        WHEN 'UAH' THEN salary_max::numeric * 0.024
+                        ELSE NULL
+                    END AS salary_usd_max
+                FROM jobs
+                WHERE is_active
+                  AND last_seen_at >= NOW() - INTERVAL '60 days'
+                  AND seniority IS NOT NULL
+                  AND BTRIM(seniority) <> ''
+                  AND salary_min IS NOT NULL
+                  AND salary_max IS NOT NULL
+                  AND salary_min > 0
+                  AND salary_max > 0
+                  AND salary_max >= salary_min
+                  AND salary_currency IS NOT NULL
+                  AND UPPER(TRIM(salary_currency)) IN ('USD', 'EUR', 'UAH')
+            )
+            SELECT
+                seniority,
+                ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY salary_usd_min))::integer AS median_min,
+                ROUND(PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY salary_usd_max))::integer AS median_max,
+                COUNT(*)::bigint AS sample_size
+            FROM normalized_jobs
+            WHERE seniority IS NOT NULL
+              AND salary_usd_min IS NOT NULL
+              AND salary_usd_max IS NOT NULL
+            GROUP BY seniority
+            HAVING COUNT(*) >= 10
+            ORDER BY
+                CASE seniority
+                    WHEN 'junior' THEN 1
+                    WHEN 'mid' THEN 2
+                    WHEN 'senior' THEN 3
+                    WHEN 'lead_staff' THEN 4
+                    ELSE 5
+                END,
+                seniority ASC
+            "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok((
+            rows.into_iter()
+                .map(|row| MarketSalaryBySeniorityEntry {
+                    seniority: row.seniority,
+                    median_min: row.median_min.max(0) as u32,
+                    median_max: row.median_max.max(0) as u32,
+                    sample_size: row.sample_size.max(0) as u32,
+                })
+                .collect(),
+            MarketSource::Live,
+        ))
     }
 
     async fn fetch_market_salary_trends(
@@ -501,6 +666,196 @@ impl JobsRepository {
                     role_group: row.role_group,
                     this_period: row.this_period,
                     prev_period: row.prev_period,
+                })
+                .collect(),
+            MarketSource::Live,
+        ))
+    }
+
+    pub async fn market_region_breakdown(
+        &self,
+    ) -> Result<(Vec<MarketRegionDemandEntry>, MarketSource), RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(FromRow)]
+        struct MarketRegionDemandRow {
+            region: String,
+            job_count: i64,
+            top_roles: Vec<String>,
+        }
+
+        let query = format!(
+            r#"
+            WITH region_groups(region_rank, region) AS (
+                VALUES
+                    (1, 'Remote'),
+                    (2, 'Kyiv'),
+                    (3, 'Lviv'),
+                    (4, 'Other Ukraine'),
+                    (5, 'Abroad/Relocation')
+            ),
+            classified_jobs AS (
+                SELECT
+                    CASE
+                        WHEN LOWER(BTRIM(COALESCE(remote_type, ''))) = 'remote'
+                        THEN 'Remote'
+                        WHEN COALESCE(location, '') ILIKE '%kyiv%'
+                          OR COALESCE(location, '') ILIKE '%київ%'
+                        THEN 'Kyiv'
+                        WHEN COALESCE(location, '') ILIKE '%lviv%'
+                          OR COALESCE(location, '') ILIKE '%львів%'
+                        THEN 'Lviv'
+                        WHEN COALESCE(location, '') ~* '(poland|warsaw|krakow|germany|berlin|munich|spain|barcelona|madrid|portugal|lisbon|netherlands|amsterdam|uk|united kingdom|london|ireland|dublin|czech|prague|romania|bucharest|bulgaria|sofia|estonia|tallinn|latvia|riga|lithuania|vilnius|usa|united states|canada|relocation|relocate|abroad|польща|німеччина|германія|іспанія|португалія|чехія|румунія|болгарія|естонія|латвія|литва|сша|канада|релокац)'
+                        THEN 'Abroad/Relocation'
+                        ELSE 'Other Ukraine'
+                    END AS region,
+                    {role_group_classifier} AS role_group
+                FROM jobs
+                WHERE is_active
+            ),
+            counts AS (
+                SELECT
+                    region,
+                    COUNT(*)::bigint AS job_count
+                FROM classified_jobs
+                GROUP BY region
+            ),
+            role_counts AS (
+                SELECT
+                    region,
+                    role_group,
+                    COUNT(*)::bigint AS role_count
+                FROM classified_jobs
+                WHERE role_group IS NOT NULL
+                GROUP BY region, role_group
+            ),
+            ranked_roles AS (
+                SELECT
+                    region,
+                    role_group,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY region
+                        ORDER BY role_count DESC, role_group ASC
+                    ) AS role_rank
+                FROM role_counts
+            ),
+            top_roles AS (
+                SELECT
+                    region,
+                    ARRAY_AGG(role_group ORDER BY role_rank)::text[] AS top_roles
+                FROM ranked_roles
+                WHERE role_rank <= 3
+                GROUP BY region
+            )
+            SELECT
+                region_groups.region,
+                COALESCE(counts.job_count, 0)::bigint AS job_count,
+                COALESCE(top_roles.top_roles, ARRAY[]::text[]) AS top_roles
+            FROM region_groups
+            LEFT JOIN counts USING (region)
+            LEFT JOIN top_roles USING (region)
+            ORDER BY region_groups.region_rank ASC
+            "#,
+            role_group_classifier = MARKET_ROLE_GROUP_CLASSIFIER_CASE_SQL,
+        );
+
+        let rows = sqlx::query_as::<_, MarketRegionDemandRow>(&query)
+            .fetch_all(pool)
+            .await?;
+
+        Ok((
+            rows.into_iter()
+                .map(|row| MarketRegionDemandEntry {
+                    region: row.region,
+                    job_count: row.job_count.max(0) as u32,
+                    top_roles: row.top_roles,
+                })
+                .collect(),
+            MarketSource::Live,
+        ))
+    }
+
+    pub async fn market_tech_demand(
+        &self,
+    ) -> Result<(Vec<MarketTechDemandEntry>, MarketSource), RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        #[derive(FromRow)]
+        struct MarketTechDemandRow {
+            skill: String,
+            job_count: i64,
+            percentage: f64,
+        }
+
+        let rows = sqlx::query_as::<_, MarketTechDemandRow>(
+            r#"
+            WITH tech_skills(skill, pattern) AS (
+                VALUES
+                    ('React', '\mreact\M'),
+                    ('Vue', '\mvue\M'),
+                    ('Angular', '\mangular\M'),
+                    ('TypeScript', '\mtypescript\M|\mts\M'),
+                    ('JavaScript', '\mjavascript\M|\mjs\M'),
+                    ('Node.js', '\mnode[.]?js\M'),
+                    ('Python', '\mpython\M'),
+                    ('Rust', '\mrust\M'),
+                    ('Go', '\mgo\M|\mgolang\M'),
+                    ('Java', '\mjava\M'),
+                    ('Kotlin', '\mkotlin\M'),
+                    ('PostgreSQL', '\mpostgresql\M|\mpostgres\M'),
+                    ('Redis', '\mredis\M'),
+                    ('Docker', '\mdocker\M'),
+                    ('Kubernetes', '\mkubernetes\M|\mk8s\M'),
+                    ('AWS', '\maws\M|amazon web services'),
+                    ('GCP', '\mgcp\M|google cloud'),
+                    ('Next.js', '\mnext[.]?js\M'),
+                    ('GraphQL', '\mgraphql\M'),
+                    ('FastAPI', '\mfastapi\M'),
+                    ('Django', '\mdjango\M'),
+                    ('Spring Boot', '\mspring[[:space:]]+boot\M')
+            ),
+            active_period_jobs AS (
+                SELECT
+                    title || ' ' || description_text AS searchable_text
+                FROM jobs
+                WHERE is_active
+                  AND last_seen_at >= NOW() - INTERVAL '30 days'
+            ),
+            total AS (
+                SELECT COUNT(*)::bigint AS active_jobs
+                FROM active_period_jobs
+            )
+            SELECT
+                tech_skills.skill,
+                COUNT(active_period_jobs.searchable_text)::bigint AS job_count,
+                CASE
+                    WHEN total.active_jobs > 0 THEN
+                        COUNT(active_period_jobs.searchable_text)::double precision / total.active_jobs::double precision * 100.0
+                    ELSE 0.0
+                END AS percentage
+            FROM tech_skills
+            CROSS JOIN total
+            LEFT JOIN active_period_jobs
+                ON active_period_jobs.searchable_text ~* tech_skills.pattern
+            GROUP BY tech_skills.skill, total.active_jobs
+            HAVING COUNT(active_period_jobs.searchable_text) > 0
+            ORDER BY job_count DESC, tech_skills.skill ASC
+            LIMIT 20
+            "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok((
+            rows.into_iter()
+                .map(|row| MarketTechDemandEntry {
+                    skill: row.skill,
+                    job_count: row.job_count.max(0) as u32,
+                    percentage: row.percentage as f32,
                 })
                 .collect(),
             MarketSource::Live,
