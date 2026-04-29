@@ -31,7 +31,7 @@ pub struct TrainedRerankerFeatures {
     pub has_salary_rejection: bool,
     pub has_remote_rejection: bool,
     pub has_tech_rejection: bool,
-    // Slice 4: interest rating (-2..+2)
+    // Slice 4: interest rating (1..5, normalized around neutral 3)
     pub interest_rating_positive: f64,
     pub interest_rating_negative: f64,
     // Slice 5: work mode

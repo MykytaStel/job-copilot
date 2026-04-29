@@ -101,6 +101,7 @@ export type {
 
 export {
   getFeedback,
+  getFeedbackStats,
   markJobSaved,
   hideJobForProfile,
   markJobBadFit,

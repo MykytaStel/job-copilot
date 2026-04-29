@@ -1,11 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { JobPosting } from '@job-copilot/shared';
 import {
   Ban,
   Bookmark,
   Building2,
+  Clock3,
   EyeOff,
   Plus,
   ShieldCheck,
@@ -24,8 +25,8 @@ import { semanticIconFrameClass, semanticPanelClass } from '../../components/ui/
 import { cn } from '../../lib/cn';
 import { getJobMetaLabels } from '../../lib/jobPresentation';
 
-export type FeedbackTab = 'saved' | 'hidden' | 'bad-fit' | 'companies';
-export type FeedbackListTone = Exclude<FeedbackTab, 'companies'>;
+export type FeedbackTab = 'saved' | 'hidden' | 'bad-fit' | 'companies' | 'timeline';
+export type FeedbackListTone = Exclude<FeedbackTab, 'companies' | 'timeline'>;
 
 export const FEEDBACK_TAB_META: Array<{
   id: FeedbackTab;
@@ -56,6 +57,12 @@ export const FEEDBACK_TAB_META: Array<{
     label: 'Companies',
     description: 'Allow and block lists that steer future ranking toward preferred employers.',
     icon: Building2,
+  },
+  {
+    id: 'timeline',
+    label: 'Timeline',
+    description: 'Chronological feedback actions from newest to oldest.',
+    icon: Clock3,
   },
 ];
 
@@ -282,6 +289,7 @@ export function CompanyPanel({
 
 export function CompanyRow({
   companyName,
+  notes,
   accent,
   badgeLabel,
   description,
@@ -289,11 +297,14 @@ export function CompanyRow({
   onMove,
   onRemove,
   onBulkHide,
+  onNotesBlur,
   isMovePending,
   isRemovePending,
   isBulkHidePending,
+  isUpdateNotesPending,
 }: {
   companyName: string;
+  notes: string;
   accent: 'success' | 'danger';
   badgeLabel: string;
   description: string;
@@ -301,10 +312,18 @@ export function CompanyRow({
   onMove: () => void;
   onRemove: () => void;
   onBulkHide: () => void;
+  onNotesBlur: (notes: string) => void;
   isMovePending: boolean;
   isRemovePending: boolean;
   isBulkHidePending: boolean;
+  isUpdateNotesPending: boolean;
 }) {
+  const [draftNotesState, setDraftNotesState] = useState(() => ({
+    sourceNotes: notes,
+    draftNotes: notes,
+  }));
+  const draftNotes =
+    draftNotesState.sourceNotes === notes ? draftNotesState.draftNotes : notes;
   const iconClass =
     accent === 'success'
       ? semanticIconFrameClass.success
@@ -314,64 +333,87 @@ export function CompanyRow({
       ? semanticPanelClass.success
       : semanticPanelClass.danger;
 
+  function handleNotesBlur() {
+    if (draftNotes !== notes) {
+      onNotesBlur(draftNotes);
+    }
+  }
+
   return (
     <Card className={cn('border', rowClass)}>
-      <CardContent className="flex items-start justify-between gap-4 px-4 py-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <div
-            className={cn(
-              'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border',
-              iconClass,
-            )}
-          >
-            <Building2 className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="m-0 text-sm font-semibold text-foreground">{companyName}</p>
-              <Badge
-                variant={accent}
-                className="px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]"
-              >
-                {badgeLabel}
-              </Badge>
+      <CardContent className="flex flex-col gap-4 px-4 py-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div
+              className={cn(
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border',
+                iconClass,
+              )}
+            >
+              <Building2 className="h-4 w-4" />
             </div>
-            <p className="mt-1 mb-0 text-xs leading-6 text-muted-foreground">{description}</p>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="m-0 text-sm font-semibold text-foreground">{companyName}</p>
+                <Badge
+                  variant={accent}
+                  className="px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]"
+                >
+                  {badgeLabel}
+                </Badge>
+              </div>
+              <p className="mt-1 mb-0 text-xs leading-6 text-muted-foreground">{description}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onBulkHide}
+              disabled={isBulkHidePending}
+              title={`Hide all from ${companyName}`}
+            >
+              <EyeOff className="h-4 w-4" />
+              Hide all
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground"
+              onClick={onMove}
+              disabled={isMovePending}
+              title={moveTitle}
+            >
+              {accent === 'success' ? <Ban className="h-4 w-4" /> : <Star className="h-4 w-4" />}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onRemove}
+              disabled={isRemovePending}
+            >
+              Remove
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onBulkHide}
-            disabled={isBulkHidePending}
-            title={`Hide all from ${companyName}`}
-          >
-            <EyeOff className="h-4 w-4" />
-            Hide all
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground"
-            onClick={onMove}
-            disabled={isMovePending}
-            title={moveTitle}
-          >
-            {accent === 'success' ? <Ban className="h-4 w-4" /> : <Star className="h-4 w-4" />}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onRemove}
-            disabled={isRemovePending}
-          >
-            Remove
-          </Button>
-        </div>
+        <textarea
+          value={draftNotes}
+          onChange={(event) =>
+            setDraftNotesState({
+              sourceNotes: notes,
+              draftNotes: event.target.value,
+            })
+          }
+          onBlur={handleNotesBlur}
+          maxLength={500}
+          rows={2}
+          placeholder="Add a short note..."
+          disabled={isUpdateNotesPending}
+          className="min-h-16 w-full resize-y rounded-xl border border-border bg-background/70 px-3 py-2 text-sm leading-5 text-foreground placeholder:text-muted-foreground"
+        />
       </CardContent>
     </Card>
   );

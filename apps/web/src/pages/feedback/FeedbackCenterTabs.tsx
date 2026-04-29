@@ -1,5 +1,6 @@
-import { Search } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 
+import { Button } from '../../components/ui/Button';
 import { Card, CardContent } from '../../components/ui/Card';
 import { cn } from '../../lib/cn';
 import { FEEDBACK_TAB_META } from './FeedbackCenterComponents';
@@ -12,10 +13,17 @@ export function FeedbackCenterTabs({
   activeTabMeta,
   searchQuery,
   setSearchQuery,
+  onExport,
+  isExporting,
 }: Pick<
   FeedbackCenterPageState,
   'activeTab' | 'setActiveTab' | 'tabCounts' | 'activeTabMeta' | 'searchQuery' | 'setSearchQuery'
->) {
+> & {
+  onExport: () => void;
+  isExporting: boolean;
+}) {
+  const canExport = activeTab !== 'timeline';
+
   return (
     <Card className="border-border bg-card">
       <CardContent className="space-y-6 px-6 py-6">
@@ -52,6 +60,18 @@ export function FeedbackCenterTabs({
             <p className="m-0 max-w-3xl text-sm leading-6 text-muted-foreground">
               {activeTabMeta.description}
             </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-10 rounded-xl"
+              onClick={onExport}
+              aria-disabled={!canExport || isExporting || tabCounts[activeTab] === 0}
+              disabled={!canExport || isExporting || tabCounts[activeTab] === 0}
+            >
+              <Download size={14} />
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
           </div>
 
           <div className="space-y-3 rounded-2xl border border-border/70 bg-surface-muted p-4">
@@ -69,11 +89,13 @@ export function FeedbackCenterTabs({
                 <p className="m-0 mt-1 text-xs text-muted-foreground">
                   {activeTab === 'companies'
                     ? `${tabCounts.companies} companies tracked`
+                    : activeTab === 'timeline'
+                      ? `${tabCounts.timeline} feedback actions`
                     : `${searchQuery ? 'Filtered' : 'All'} jobs in this list`}
                 </p>
               </div>
             </div>
-            {activeTab !== 'companies' ? (
+            {activeTab !== 'companies' && activeTab !== 'timeline' ? (
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input

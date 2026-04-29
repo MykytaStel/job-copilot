@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::db::Database;
 use crate::db::repositories::RepositoryError;
 use crate::domain::user_event::model::{
-    CreateUserEvent, UserEventRecord, UserEventSummary, UserEventType,
+    CreateUserEvent, UserEventPage, UserEventRecord, UserEventSummary, UserEventType,
 };
 
 #[derive(Clone)]
@@ -125,6 +125,79 @@ impl UserEventsRepository {
             .collect::<Result<Vec<_>, _>>()
     }
 
+    pub async fn list_feedback_history_by_profile(
+        &self,
+        profile_id: &str,
+        limit: usize,
+        offset: usize,
+    ) -> Result<UserEventPage, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let total_count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM user_events
+            WHERE profile_id = $1
+              AND event_type IN (
+                'job_saved',
+                'job_unsaved',
+                'job_hidden',
+                'job_unhidden',
+                'job_bad_fit',
+                'job_bad_fit_removed'
+              )
+            "#,
+        )
+        .bind(profile_id)
+        .fetch_one(pool)
+        .await?;
+
+        let rows = sqlx::query_as::<_, UserEventRow>(
+            r#"
+            SELECT
+                id,
+                profile_id,
+                event_type,
+                job_id,
+                company_name,
+                source,
+                role_family,
+                payload_json,
+                created_at::text AS created_at
+            FROM user_events
+            WHERE profile_id = $1
+              AND event_type IN (
+                'job_saved',
+                'job_unsaved',
+                'job_hidden',
+                'job_unhidden',
+                'job_bad_fit',
+                'job_bad_fit_removed'
+              )
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2
+            OFFSET $3
+            "#,
+        )
+        .bind(profile_id)
+        .bind(limit as i64)
+        .bind(offset as i64)
+        .fetch_all(pool)
+        .await?;
+
+        let records = rows
+            .into_iter()
+            .map(UserEventRecord::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(UserEventPage {
+            records,
+            total_count: total_count as usize,
+        })
+    }
+
     pub async fn summary_by_profile(
         &self,
         profile_id: &str,
@@ -149,6 +222,48 @@ impl UserEventsRepository {
             "#,
         )
         .bind(profile_id)
+        .fetch_one(pool)
+        .await?;
+
+        Ok(UserEventSummary {
+            save_count: row.save_count as usize,
+            hide_count: row.hide_count as usize,
+            bad_fit_count: row.bad_fit_count as usize,
+            search_run_count: row.search_run_count as usize,
+            fit_explanation_requested_count: row.fit_explanation_requested_count as usize,
+            application_coach_requested_count: row.application_coach_requested_count as usize,
+            cover_letter_draft_requested_count: row.cover_letter_draft_requested_count as usize,
+            interview_prep_requested_count: row.interview_prep_requested_count as usize,
+        })
+    }
+
+    pub async fn summary_by_profile_since_days(
+        &self,
+        profile_id: &str,
+        days: i32,
+    ) -> Result<UserEventSummary, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let row = sqlx::query_as::<_, UserEventSummaryRow>(
+            r#"
+            SELECT
+                COUNT(*) FILTER (WHERE event_type = 'job_saved')::bigint AS save_count,
+                COUNT(*) FILTER (WHERE event_type = 'job_hidden')::bigint AS hide_count,
+                COUNT(*) FILTER (WHERE event_type = 'job_bad_fit')::bigint AS bad_fit_count,
+                COUNT(*) FILTER (WHERE event_type = 'search_run')::bigint AS search_run_count,
+                COUNT(*) FILTER (WHERE event_type = 'fit_explanation_requested')::bigint AS fit_explanation_requested_count,
+                COUNT(*) FILTER (WHERE event_type = 'application_coach_requested')::bigint AS application_coach_requested_count,
+                COUNT(*) FILTER (WHERE event_type = 'cover_letter_draft_requested')::bigint AS cover_letter_draft_requested_count,
+                COUNT(*) FILTER (WHERE event_type = 'interview_prep_requested')::bigint AS interview_prep_requested_count
+            FROM user_events
+            WHERE profile_id = $1
+              AND created_at >= NOW() - ($2::int * INTERVAL '1 day')
+            "#,
+        )
+        .bind(profile_id)
+        .bind(days)
         .fetch_one(pool)
         .await?;
 

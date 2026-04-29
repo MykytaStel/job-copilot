@@ -137,6 +137,7 @@ export function mapCompanyFeedbackRecord(
     companyName: record.company_name,
     normalizedCompanyName: record.normalized_company_name,
     status: record.status,
+    notes: record.notes,
     updatedAt: record.updated_at,
   };
 }

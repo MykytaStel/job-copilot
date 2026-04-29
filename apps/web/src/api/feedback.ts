@@ -7,13 +7,44 @@ import type {
   SalaryFeedbackSignal,
   WorkModeFeedbackSignal,
 } from '@job-copilot/shared/feedback';
-import { json, mlRequest, request } from './client';
+import { json, mlRequest, request, requestBlob } from './client';
 import type {
   EngineCompanyFeedbackRecord,
   EngineFeedbackOverviewResponse,
+  EngineFeedbackStatsResponse,
+  EngineFeedbackTimelineResponse,
   EngineJobFeedbackRecord,
 } from './engine-types';
 import { mapCompanyFeedbackRecord, mapJobFeedbackRecord } from './mappers';
+
+export type FeedbackStats = {
+  savedThisWeekCount: number;
+  hiddenThisWeekCount: number;
+  badFitThisWeekCount: number;
+  whitelistedCompaniesCount: number;
+  blacklistedCompaniesCount: number;
+};
+
+export type FeedbackExportType = 'saved' | 'hidden' | 'bad_fit' | 'companies';
+
+export type FeedbackTimelineItem = {
+  id: string;
+  eventType: string;
+  jobId?: string | null;
+  jobTitle: string;
+  companyName: string;
+  reason?: string | null;
+  createdAt: string;
+};
+
+export type FeedbackTimelinePage = {
+  profileId: string;
+  items: FeedbackTimelineItem[];
+  limit: number;
+  offset: number;
+  totalCount: number;
+  nextOffset?: number | null;
+};
 
 async function bustRerankCache(profileId: string): Promise<void> {
   await mlRequest<void>('/api/v1/rerank/invalidate', json('POST', { profile_id: profileId })).catch(
@@ -38,6 +69,56 @@ export async function getFeedback(profileId: string): Promise<FeedbackOverview> 
       blacklistedCompaniesCount: response.summary.blacklisted_companies_count,
     },
   };
+}
+
+export async function getFeedbackStats(profileId: string): Promise<FeedbackStats> {
+  const response = await request<EngineFeedbackStatsResponse>(
+    `/api/v1/feedback/stats?profile_id=${encodeURIComponent(profileId)}`,
+  );
+
+  return {
+    savedThisWeekCount: response.saved_this_week_count,
+    hiddenThisWeekCount: response.hidden_this_week_count,
+    badFitThisWeekCount: response.bad_fit_this_week_count,
+    whitelistedCompaniesCount: response.whitelisted_companies_count,
+    blacklistedCompaniesCount: response.blacklisted_companies_count,
+  };
+}
+
+export async function getFeedbackTimeline(
+  profileId: string,
+  options: { limit?: number; offset?: number } = {},
+): Promise<FeedbackTimelinePage> {
+  const params = new URLSearchParams();
+  if (options.limit) params.set('limit', String(options.limit));
+  if (options.offset) params.set('offset', String(options.offset));
+  const query = params.toString();
+  const response = await request<EngineFeedbackTimelineResponse>(
+    `/api/v1/profiles/${profileId}/feedback/timeline${query ? `?${query}` : ''}`,
+  );
+
+  return {
+    profileId: response.profile_id,
+    items: response.items.map((item) => ({
+      id: item.id,
+      eventType: item.event_type,
+      jobId: item.job_id,
+      jobTitle: item.job_title,
+      companyName: item.company_name,
+      reason: item.reason,
+      createdAt: item.created_at,
+    })),
+    limit: response.limit,
+    offset: response.offset,
+    totalCount: response.total_count,
+    nextOffset: response.next_offset,
+  };
+}
+
+export async function exportFeedback(
+  exportType: FeedbackExportType,
+): Promise<{ blob: Blob; filename?: string }> {
+  return requestBlob(`/api/v1/feedback/export?type=${encodeURIComponent(exportType)}`);
 }
 
 export async function markJobSaved(profileId: string, jobId: string): Promise<JobFeedbackRecord> {
@@ -73,10 +154,16 @@ export async function bulkHideJobsByCompany(
   return { affectedCount: response.affected_count };
 }
 
-export async function markJobBadFit(profileId: string, jobId: string): Promise<JobFeedbackRecord> {
+export async function markJobBadFit(
+  profileId: string,
+  jobId: string,
+  reason?: string,
+): Promise<JobFeedbackRecord> {
   const record = await request<EngineJobFeedbackRecord>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/bad-fit`,
-    json('PUT', {}),
+    `/api/v1/feedback/jobs/${encodeURIComponent(jobId)}/bad-fit?profile_id=${encodeURIComponent(
+      profileId,
+    )}`,
+    json('POST', reason ? { reason } : {}),
   );
   await bustRerankCache(profileId);
   return mapJobFeedbackRecord(record);
@@ -169,6 +256,19 @@ export async function removeCompanyBlacklistBySlug(
   await request<void>(path, { method: 'DELETE' });
 }
 
+export async function updateCompanyFeedbackNotes(
+  profileId: string,
+  companySlug: string,
+  notes: string,
+): Promise<CompanyFeedbackRecord> {
+  const path = `/api/v1/feedback/companies/${encodeURIComponent(
+    companySlug,
+  )}?profile_id=${encodeURIComponent(profileId)}`;
+  const record = await request<EngineCompanyFeedbackRecord>(path, json('PATCH', { notes }));
+
+  return mapCompanyFeedbackRecord(record);
+}
+
 export async function setJobSalarySignal(
   profileId: string,
   jobId: string,
@@ -186,8 +286,8 @@ export async function setJobInterestRating(
   rating: number,
 ): Promise<void> {
   await request<void>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/interest-rating`,
-    json('PUT', { rating }),
+    `/api/v1/feedback/jobs/${encodeURIComponent(jobId)}?profile_id=${encodeURIComponent(profileId)}`,
+    json('PATCH', { interest_rating: rating }),
   );
 }
 

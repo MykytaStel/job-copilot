@@ -27,6 +27,8 @@ def reset_runtime_settings_cache():
 def test_runtime_settings_defaults_to_local_dev_cors_origins(monkeypatch):
     monkeypatch.delenv("ML_CORS_ALLOWED_ORIGINS", raising=False)
     monkeypatch.delenv("ML_LOG_LEVEL", raising=False)
+    monkeypatch.delenv("LOG_FORMAT", raising=False)
+    monkeypatch.delenv("ML_LOG_FORMAT", raising=False)
     monkeypatch.delenv("ENGINE_API_BASE_URL", raising=False)
     monkeypatch.delenv("ENGINE_API_TIMEOUT_SECONDS", raising=False)
     monkeypatch.delenv("ML_LLM_PROVIDER", raising=False)
@@ -38,6 +40,7 @@ def test_runtime_settings_defaults_to_local_dev_cors_origins(monkeypatch):
 
     assert settings.cors_allowed_origins == DEFAULT_CORS_ALLOWED_ORIGINS
     assert settings.log_level == "INFO"
+    assert settings.log_format == "plain"
     assert settings.engine_api_base_url == DEFAULT_ENGINE_API_BASE_URL
     assert settings.engine_api_timeout_seconds == DEFAULT_ENGINE_API_TIMEOUT_SECONDS
     assert settings.llm_provider == DEFAULT_LLM_PROVIDER
@@ -62,6 +65,15 @@ def test_runtime_settings_reads_explicit_cors_origin_list(monkeypatch):
         "https://ops.example.com",
     )
     assert settings.log_level == "DEBUG"
+
+
+def test_runtime_settings_reads_log_format_from_shared_env(monkeypatch):
+    monkeypatch.setenv("LOG_FORMAT", "json")
+    monkeypatch.setenv("ML_LOG_FORMAT", "plain")
+
+    settings = get_runtime_settings()
+
+    assert settings.log_format == "json"
 
 
 def test_build_profile_insights_provider_defaults_to_template(monkeypatch):

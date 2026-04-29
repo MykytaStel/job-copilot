@@ -15,14 +15,7 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
-    let env_filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("info"))
-        .expect("valid tracing filter");
-
-    tracing_subscriber::fmt()
-        .json()
-        .with_env_filter(env_filter)
-        .init();
+    init_tracing();
 
     let config = Config::from_env();
     let database = Database::from_config(&config)
@@ -57,4 +50,20 @@ async fn main() {
     axum::serve(listener, routers.app)
         .await
         .expect("Server failed");
+}
+
+fn init_tracing() {
+    let env_filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .expect("valid tracing filter");
+    let subscriber = tracing_subscriber::fmt().with_env_filter(env_filter);
+
+    if std::env::var("LOG_FORMAT")
+        .map(|value| value.eq_ignore_ascii_case("json"))
+        .unwrap_or(false)
+    {
+        subscriber.json().init();
+    } else {
+        subscriber.init();
+    }
 }

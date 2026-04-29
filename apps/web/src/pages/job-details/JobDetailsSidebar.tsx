@@ -16,6 +16,7 @@ import {
 import type { JobFeedbackReason, LegitimacySignal, SalaryFeedbackSignal, WorkModeFeedbackSignal } from '@job-copilot/shared/feedback';
 import type { JobDetailsPageState } from '../../features/job-details/useJobDetailsPage';
 
+import { StarRating } from '../../components/StarRating';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { FitScoreBox } from '../../components/ui/FitScoreBox';
 import { cn } from '../../lib/cn';
@@ -78,14 +79,6 @@ const WORK_MODE_LABELS: Record<WorkModeFeedbackSignal, string> = {
   would_accept: 'Would accept',
   deal_breaker: 'Deal-breaker',
 };
-
-const INTEREST_CONFIG = [
-  { rating: 2, label: '❤', title: 'Love it' },
-  { rating: 1, label: '+', title: 'Interested' },
-  { rating: 0, label: '~', title: 'Neutral' },
-  { rating: -1, label: '-', title: 'Not really' },
-  { rating: -2, label: '✗', title: 'Definitely not' },
-] as const;
 
 export function JobDetailsSidebar({ state }: { state: JobDetailsPageState }) {
   const {
@@ -181,29 +174,16 @@ export function JobDetailsSidebar({ state }: { state: JobDetailsPageState }) {
           description="How much do you want this role? Helps the model learn your preferences."
           icon={Star}
         >
-          <div className="flex gap-1.5">
-            {INTEREST_CONFIG.map(({ rating, label, title }) => (
-              <button
-                key={rating}
-                title={title}
-                disabled={interestRatingMutation.isPending}
-                onClick={() => interestRatingMutation.mutate(rating)}
-                className={cn(
-                  'flex h-9 flex-1 items-center justify-center rounded-xl border text-sm font-medium transition-colors',
-                  currentInterest === rating
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-surface-muted text-muted-foreground hover:border-primary/50 hover:text-foreground',
-                )}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex items-center justify-between gap-3">
+            <StarRating
+              value={currentInterest}
+              disabled={interestRatingMutation.isPending}
+              onChange={(rating) => interestRatingMutation.mutate(rating)}
+            />
+            <span className="text-xs text-muted-foreground">
+              {currentInterest ? `${currentInterest}/5` : 'Not rated'}
+            </span>
           </div>
-          {currentInterest !== undefined && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Current: {INTEREST_CONFIG.find((c) => c.rating === currentInterest)?.title ?? currentInterest}
-            </p>
-          )}
         </Section>
       ) : null}
 

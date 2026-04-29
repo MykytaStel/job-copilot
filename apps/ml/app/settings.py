@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -41,7 +41,10 @@ class RuntimeSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
     environment: str = Field(default="development", validation_alias="ML_ENV")
     log_level: str = Field(default="INFO", validation_alias="ML_LOG_LEVEL")
-    log_format: str = Field(default="json", validation_alias="ML_LOG_FORMAT")
+    log_format: str = Field(
+        default="plain",
+        validation_alias=AliasChoices("LOG_FORMAT", "ML_LOG_FORMAT"),
+    )
     cors_allowed_origins: Annotated[tuple[str, ...], NoDecode] = Field(
         default=DEFAULT_CORS_ALLOWED_ORIGINS,
         validation_alias="ML_CORS_ALLOWED_ORIGINS",
@@ -102,9 +105,9 @@ class RuntimeSettings(BaseSettings):
     @classmethod
     def normalize_log_format(cls, value: Any) -> str:
         if not isinstance(value, str):
-            return "json"
+            return "plain"
         cleaned = value.strip().lower()
-        return cleaned if cleaned in {"plain", "json"} else "json"
+        return cleaned if cleaned in {"plain", "json"} else "plain"
 
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
@@ -224,21 +227,29 @@ def get_runtime_settings() -> RuntimeSettings:
 def configure_logging() -> None:
     settings = get_runtime_settings()
     level = getattr(logging, settings.log_level, logging.INFO)
-    handlers: dict[str, Any] = {"level": level}
-    if settings.log_format == "json":
-        try:
-            from pythonjsonlogger.json import JsonFormatter
+    handler = logging.StreamHandler()
 
-            handler = logging.StreamHandler()
-            handler.setFormatter(
-                JsonFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    if settings.log_format == "json":
+        from pythonjsonlogger.json import JsonFormatter
+
+        handler.setFormatter(
+            JsonFormatter(
+                "%(asctime)s %(levelname)s %(name)s %(message)s "
+                "%(method)s %(path)s %(status_code)s %(duration_ms)s %(request_id)s"
             )
-            handlers["handlers"] = [handler]
-        except ImportError:
-            handlers["format"] = "%(asctime)s %(levelname)s %(name)s %(message)s"
+        )
     else:
-        handlers["format"] = "%(asctime)s %(levelname)s %(name)s %(message)s"
-    logging.basicConfig(**handlers)
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        )
+
+    logging.basicConfig(level=level, handlers=[handler], force=True)
+
+    for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        uvicorn_logger = logging.getLogger(logger_name)
+        uvicorn_logger.handlers = [handler]
+        uvicorn_logger.setLevel(level)
+        uvicorn_logger.propagate = False
 
 
 # Reranker promotion thresholds.

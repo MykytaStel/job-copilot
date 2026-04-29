@@ -53,12 +53,39 @@ export async function requestOptional<T>(path: string, init?: RequestInit): Prom
   return res.json();
 }
 
+export async function requestBlob(
+  path: string,
+  init?: RequestInit,
+): Promise<{ blob: Blob; filename?: string }> {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: { ...buildAuthHeaders(), ...(init?.headers as Record<string, string>) },
+  });
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as EngineApiError;
+    throw new Error(body.message ?? body.code ?? `HTTP ${res.status}`);
+  }
+
+  return {
+    blob: await res.blob(),
+    filename: parseContentDispositionFilename(res.headers.get('Content-Disposition')),
+  };
+}
+
 export function json(method: string, body: unknown): RequestInit {
   return {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   };
+}
+
+function parseContentDispositionFilename(value: string | null): string | undefined {
+  if (!value) return undefined;
+
+  const match = /filename="([^"]+)"/i.exec(value) ?? /filename=([^;]+)/i.exec(value);
+  return match?.[1]?.trim();
 }
 
 export function unsupported(feature: string): never {

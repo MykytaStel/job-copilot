@@ -621,6 +621,7 @@ mod tests {
                     company_name: "NovaLedger".to_string(),
                     normalized_company_name: "novaledger".to_string(),
                     status: CompanyFeedbackStatus::Blacklist,
+                    notes: String::new(),
                     created_at: "2026-04-14T00:00:00Z".to_string(),
                     updated_at: "2026-04-14T00:00:00Z".to_string(),
                 }),
