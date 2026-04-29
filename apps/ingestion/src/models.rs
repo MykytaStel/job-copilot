@@ -1,27 +1,44 @@
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
-#[cfg(any(feature = "mock", test))]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct NormalizedJob {
     pub id: String,
+    #[serde(default)]
+    pub duplicate_of: Option<String>,
     pub title: String,
     pub company_name: String,
+    #[serde(default)]
+    pub company_meta: Option<CompanyMeta>,
     pub location: Option<String>,
     pub remote_type: Option<String>,
     pub seniority: Option<String>,
     pub description_text: String,
+    #[serde(default)]
+    pub extracted_skills: Vec<String>,
     pub salary_min: Option<i32>,
     pub salary_max: Option<i32>,
     pub salary_currency: Option<String>,
+    #[serde(default)]
+    pub salary_usd_min: Option<i32>,
+    #[serde(default)]
+    pub salary_usd_max: Option<i32>,
+    #[serde(default)]
+    pub quality_score: Option<i32>,
     pub posted_at: Option<String>,
     pub last_seen_at: String,
     #[serde(default = "default_true")]
     pub is_active: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CompanyMeta {
+    pub size_hint: Option<String>,
+    pub industry_hint: Option<String>,
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -340,30 +357,42 @@ mod tests {
     fn computes_stable_dedupe_key_from_canonical_fields() {
         let left = NormalizedJob {
             id: "left".to_string(),
+            duplicate_of: None,
             title: " Senior Platform Engineer ".to_string(),
             company_name: " SignalHire ".to_string(),
+            company_meta: None,
             location: Some(" Kyiv ".to_string()),
             remote_type: Some(" Remote ".to_string()),
             seniority: Some(" Senior ".to_string()),
             description_text: "One".to_string(),
+            extracted_skills: Vec::new(),
             salary_min: None,
             salary_max: None,
             salary_currency: None,
+            salary_usd_min: None,
+            salary_usd_max: None,
+            quality_score: None,
             posted_at: Some("2026-04-14T09:15:00Z".to_string()),
             last_seen_at: "2026-04-14T10:00:00Z".to_string(),
             is_active: true,
         };
         let right = NormalizedJob {
             id: "right".to_string(),
+            duplicate_of: None,
             title: "Senior   Platform Engineer".to_string(),
             company_name: "signalhire".to_string(),
+            company_meta: None,
             location: Some("kyiv".to_string()),
             remote_type: Some("remote".to_string()),
             seniority: Some("senior".to_string()),
             description_text: "Two".to_string(),
+            extracted_skills: Vec::new(),
             salary_min: Some(1),
             salary_max: Some(2),
             salary_currency: Some("USD".to_string()),
+            salary_usd_min: Some(1),
+            salary_usd_max: Some(2),
+            quality_score: None,
             posted_at: Some("2026-04-14T18:00:00Z".to_string()),
             last_seen_at: "2026-04-14T19:00:00Z".to_string(),
             is_active: false,
@@ -379,30 +408,42 @@ mod tests {
             jobs: vec![
                 NormalizedJob {
                     id: canonical_job_id(&dedupe_key),
+                    duplicate_of: None,
                     title: "Platform Engineer".to_string(),
                     company_name: "SignalHire".to_string(),
+                    company_meta: None,
                     location: Some("Kyiv".to_string()),
                     remote_type: Some("remote".to_string()),
                     seniority: Some("senior".to_string()),
                     description_text: "One".to_string(),
+                    extracted_skills: Vec::new(),
                     salary_min: None,
                     salary_max: None,
                     salary_currency: None,
+                    salary_usd_min: None,
+                    salary_usd_max: None,
+                    quality_score: None,
                     posted_at: Some("2026-04-14T09:00:00Z".to_string()),
                     last_seen_at: "2026-04-14T10:00:00Z".to_string(),
                     is_active: true,
                 },
                 NormalizedJob {
                     id: canonical_job_id(&dedupe_key),
+                    duplicate_of: None,
                     title: "Platform Engineer".to_string(),
                     company_name: "SignalHire".to_string(),
+                    company_meta: None,
                     location: Some("Kyiv".to_string()),
                     remote_type: Some("remote".to_string()),
                     seniority: Some("senior".to_string()),
                     description_text: "Two".to_string(),
+                    extracted_skills: Vec::new(),
                     salary_min: None,
                     salary_max: None,
                     salary_currency: None,
+                    salary_usd_min: None,
+                    salary_usd_max: None,
+                    quality_score: None,
                     posted_at: Some("2026-04-14T09:00:00Z".to_string()),
                     last_seen_at: "2026-04-14T10:00:00Z".to_string(),
                     is_active: true,
@@ -451,15 +492,21 @@ mod tests {
         let batch = IngestionBatch {
             jobs: vec![NormalizedJob {
                 id: "job_1".to_string(),
+                duplicate_of: None,
                 title: "Platform Engineer".to_string(),
                 company_name: "SignalHire".to_string(),
+                company_meta: None,
                 location: Some("Kyiv".to_string()),
                 remote_type: Some("remote".to_string()),
                 seniority: Some("senior".to_string()),
                 description_text: "One".to_string(),
+                extracted_skills: Vec::new(),
                 salary_min: None,
                 salary_max: None,
                 salary_currency: None,
+                salary_usd_min: None,
+                salary_usd_max: None,
+                quality_score: None,
                 posted_at: Some("2026-04-14T09:00:00Z".to_string()),
                 last_seen_at: "2026-04-14T10:00:00Z".to_string(),
                 is_active: true,

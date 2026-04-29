@@ -1,6 +1,8 @@
 import { request } from './client';
 import type {
   EngineMarketCompaniesResponse,
+  EngineMarketCompanyVelocityEntry,
+  EngineMarketCompanyVelocityTrend,
   EngineMarketOverview,
   EngineMarketRoleDemandEntry,
   EngineMarketSalaryTrend,
@@ -22,6 +24,7 @@ export interface MarketInsights {
 }
 
 export type MarketTrend = 'up' | 'down' | 'stable';
+export type MarketCompanyVelocityTrend = EngineMarketCompanyVelocityTrend;
 
 export type MarketOverview = {
   newJobsThisWeek: number;
@@ -41,6 +44,12 @@ export type MarketCompany = {
   topRoleGroups: string[];
   latestJobIds: string[];
   dataQualityFlags: string[];
+};
+
+export type MarketCompanyVelocity = {
+  company: string;
+  jobCount: number;
+  trend: MarketCompanyVelocityTrend;
 };
 
 export type MarketSalaryTrend = {
@@ -88,6 +97,18 @@ export async function getMarketCompanies(limit = 10): Promise<MarketCompany[]> {
     topRoleGroups: company.top_role_groups ?? [],
     latestJobIds: company.latest_job_ids ?? [],
     dataQualityFlags: company.data_quality_flags ?? [],
+  }));
+}
+
+export async function getMarketCompanyVelocity(): Promise<MarketCompanyVelocity[]> {
+  const response = await request<EngineMarketCompanyVelocityEntry[]>(
+    '/api/v1/market/company-velocity',
+  );
+
+  return response.map((entry) => ({
+    company: entry.company,
+    jobCount: entry.job_count,
+    trend: entry.trend,
   }));
 }
 

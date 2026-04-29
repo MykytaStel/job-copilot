@@ -1,7 +1,8 @@
 use serde::Serialize;
 
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend,
+    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketOverview, MarketRoleDemandEntry,
+    MarketSalaryTrend,
 };
 
 #[derive(Debug, Serialize)]
@@ -57,6 +58,23 @@ impl From<MarketCompanyEntry> for MarketCompanyEntryResponse {
 #[derive(Debug, Serialize)]
 pub struct MarketCompaniesResponse {
     pub companies: Vec<MarketCompanyEntryResponse>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MarketCompanyVelocityEntryResponse {
+    pub company: String,
+    pub job_count: i64,
+    pub trend: String,
+}
+
+impl From<MarketCompanyVelocityEntry> for MarketCompanyVelocityEntryResponse {
+    fn from(value: MarketCompanyVelocityEntry) -> Self {
+        Self {
+            company: value.company,
+            job_count: value.job_count,
+            trend: value.trend.as_str().to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]

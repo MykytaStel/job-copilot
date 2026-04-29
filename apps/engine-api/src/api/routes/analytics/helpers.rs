@@ -34,7 +34,7 @@ pub(super) async fn build_search_quality_summary(
         .build(&analyzed_profile, &SearchPreferences::default());
     let jobs = state
         .jobs_service
-        .list_filtered_views(200, Some("active"), None)
+        .list_filtered_views(200, Some("active"), None, None)
         .await
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
     let ranked_jobs = state.search_ranking.run(&search_profile, jobs).ranked_jobs;

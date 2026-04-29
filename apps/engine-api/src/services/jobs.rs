@@ -12,7 +12,8 @@ use crate::db::repositories::{JobsRepository, RepositoryError};
 use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketOverview, MarketRoleDemandEntry, MarketSalaryTrend, MarketSource,
+    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketOverview, MarketRoleDemandEntry,
+    MarketSalaryTrend, MarketSource,
 };
 
 #[cfg(test)]
@@ -58,15 +59,18 @@ impl JobsService {
         limit: i64,
         lifecycle: Option<&str>,
         source: Option<&str>,
+        quality_min: Option<i32>,
     ) -> Result<Vec<JobView>, RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => {
                 repository
-                    .list_filtered_views(limit, lifecycle, source)
+                    .list_filtered_views(limit, lifecycle, source, quality_min)
                     .await
             }
             #[cfg(test)]
-            JobsServiceBackend::Stub(stub) => stub.list_filtered_views(limit, lifecycle, source),
+            JobsServiceBackend::Stub(stub) => {
+                stub.list_filtered_views(limit, lifecycle, source, quality_min)
+            }
         }
     }
 
@@ -129,6 +133,18 @@ impl JobsService {
             }
             #[cfg(test)]
             JobsServiceBackend::Stub(stub) => stub.market_salary_trend(seniority),
+        }
+    }
+
+    pub async fn market_company_velocity(
+        &self,
+    ) -> Result<(Vec<MarketCompanyVelocityEntry>, MarketSource), RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => {
+                repository.market_company_velocity().await
+            }
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_company_velocity(),
         }
     }
 

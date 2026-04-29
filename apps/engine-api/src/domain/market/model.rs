@@ -32,6 +32,31 @@ pub struct MarketCompanyEntry {
     pub data_quality_flags: Vec<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarketCompanyVelocityEntry {
+    pub company: String,
+    pub job_count: i64,
+    pub trend: MarketCompanyVelocityTrend,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarketCompanyVelocityTrend {
+    Growing,
+    Stable,
+    Declining,
+}
+
+impl MarketCompanyVelocityTrend {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Growing => "growing",
+            Self::Stable => "stable",
+            Self::Declining => "declining",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MarketSalaryTrend {
     pub seniority: String,

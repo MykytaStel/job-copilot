@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tracing::{error, info, warn};
 
@@ -21,21 +21,24 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
 
     loop {
         for &source in &mode.sources {
+            let started = Instant::now();
             let scrape_mode = ScrapeMode {
                 source,
                 pages: mode.pages,
                 keyword: mode.keyword.clone(),
             };
 
-            let scrape_result = {
+            let (scrape_result, scrape_errors) = {
                 let mut result;
                 let mut attempt = 0u8;
+                let mut errors = 0u32;
                 loop {
                     result = run_scraper(&scrape_mode).await;
                     attempt += 1;
                     match &result {
                         Ok(_) => break,
                         Err(error) if attempt < MAX_SCRAPE_ATTEMPTS => {
+                            errors += 1;
                             let delay = SCRAPE_BACKOFF_SECS[usize::from(attempt - 1)];
                             warn!(
                                 source = source.name(),
@@ -46,10 +49,13 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                             );
                             tokio::time::sleep(Duration::from_secs(delay)).await;
                         }
-                        Err(_) => break,
+                        Err(_) => {
+                            errors += 1;
+                            break;
+                        }
                     }
                 }
-                result
+                (result, errors)
             };
 
             match scrape_result {
@@ -68,6 +74,37 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                             }
                         };
 
+                        let run_errors = scrape_errors
+                            + if market_snapshot_summary.is_none() {
+                                1
+                            } else {
+                                0
+                            };
+                        let status = if run_errors > 0 {
+                            db::IngestionRunStatus::Partial
+                        } else {
+                            db::IngestionRunStatus::Ok
+                        };
+                        if let Err(error) = db::record_ingestion_run(
+                            pool,
+                            &db::IngestionRunMetrics {
+                                source: source.name(),
+                                jobs_fetched: batch.jobs.len() as u32,
+                                jobs_upserted: summary.jobs_written as u32,
+                                errors: run_errors,
+                                duration_ms: started.elapsed().as_millis() as u64,
+                                status,
+                            },
+                        )
+                        .await
+                        {
+                            warn!(
+                                source = source.name(),
+                                error = %error,
+                                "failed to record ingestion run metrics"
+                            );
+                        }
+
                         info!(
                             source = source.name(),
                             jobs_written = summary.jobs_written,
@@ -83,10 +120,48 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                         )
                     }
                     Err(error) => {
+                        if let Err(metrics_error) = db::record_ingestion_run(
+                            pool,
+                            &db::IngestionRunMetrics {
+                                source: source.name(),
+                                jobs_fetched: batch.jobs.len() as u32,
+                                jobs_upserted: 0,
+                                errors: scrape_errors + 1,
+                                duration_ms: started.elapsed().as_millis() as u64,
+                                status: db::IngestionRunStatus::Failed,
+                            },
+                        )
+                        .await
+                        {
+                            warn!(
+                                source = source.name(),
+                                error = %metrics_error,
+                                "failed to record ingestion run metrics"
+                            );
+                        }
                         error!(source = source.name(), error = %error, "db upsert failed")
                     }
                 },
                 Err(error) => {
+                    if let Err(metrics_error) = db::record_ingestion_run(
+                        pool,
+                        &db::IngestionRunMetrics {
+                            source: source.name(),
+                            jobs_fetched: 0,
+                            jobs_upserted: 0,
+                            errors: scrape_errors,
+                            duration_ms: started.elapsed().as_millis() as u64,
+                            status: db::IngestionRunStatus::Failed,
+                        },
+                    )
+                    .await
+                    {
+                        warn!(
+                            source = source.name(),
+                            error = %metrics_error,
+                            "failed to record ingestion run metrics"
+                        );
+                    }
                     error!(
                         source = source.name(),
                         attempts = MAX_SCRAPE_ATTEMPTS,

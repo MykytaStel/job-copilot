@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import {
   getMarketCompanies,
+  getMarketCompanyVelocity,
   getMarketOverview,
   getMarketRoles,
   getMarketSalaries,
@@ -66,6 +67,11 @@ export function useMarketPage() {
     queryFn: () => getMarketCompanies(12),
     staleTime: MARKET_STALE_TIME_MS,
   });
+  const companyVelocityQuery = useQuery({
+    queryKey: queryKeys.market.companyVelocity(),
+    queryFn: getMarketCompanyVelocity,
+    staleTime: MARKET_STALE_TIME_MS,
+  });
   const salariesQuery = useQuery({
     queryKey: queryKeys.market.salaries(),
     queryFn: () => getMarketSalaries(),
@@ -95,6 +101,7 @@ export function useMarketPage() {
   return {
     overviewQuery,
     companiesQuery,
+    companyVelocityQuery,
     salariesQuery,
     rolesQuery,
     salaryTrends,

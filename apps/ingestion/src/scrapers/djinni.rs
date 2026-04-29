@@ -3,14 +3,15 @@ use std::time::Duration;
 use chrono::Utc;
 use reqwest::Client;
 use scraper::{ElementRef, Html, Selector};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tracing::{info, warn};
 
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
-    DetailSnapshot, ScraperConfig, cleanup_description_text, collect_text,
-    headers::build_default_headers, infer_remote_type, infer_seniority, merge_detail_into_result,
-    normalize_company_name, normalized_non_empty, parse_salary_range, polite_delay,
+    DetailSnapshot, ScraperConfig, cleanup_description_text, collect_text, extract_skills,
+    headers::build_default_headers, infer_company_meta, infer_remote_type, infer_seniority,
+    infer_seniority_from_title_and_description, merge_detail_into_result, normalize_company_name,
+    normalized_non_empty, parse_salary_range_with_usd_monthly, polite_delay,
 };
 
 const SOURCE: &str = "djinni";
@@ -260,14 +261,15 @@ fn parse_page(html: &str, fetched_at: &str) -> Vec<NormalizationResult> {
         }
     }
 
-		if results.is_empty() {
-   		results.extend(parse_json_ld_jobs(&document, fetched_at));
-		}
+    if results.is_empty() {
+        results.extend(parse_json_ld_jobs(&document, fetched_at));
+    }
 
     results
 }
 fn parse_json_ld_jobs(document: &Html, fetched_at: &str) -> Vec<NormalizationResult> {
-    let selector = Selector::parse(r#"script[type="application/ld+json"]"#).expect("valid selector");
+    let selector =
+        Selector::parse(r#"script[type="application/ld+json"]"#).expect("valid selector");
 
     let mut results = Vec::new();
 
@@ -359,7 +361,7 @@ fn build_from_json_ld_job(value: &Value, fetched_at: &str) -> Option<Normalizati
     .join(" ");
 
     let remote_type = infer_remote_type(&signal_text);
-    let seniority = infer_seniority(&signal_text);
+    let seniority = infer_seniority_from_title_and_description(&title, Some(&description_text));
 
     build_result(
         source_job_id,
@@ -368,6 +370,8 @@ fn build_from_json_ld_job(value: &Value, fetched_at: &str) -> Option<Normalizati
         Some(company_name),
         description_text,
         location,
+        None,
+        None,
         None,
         None,
         None,
@@ -412,7 +416,12 @@ fn extract_json_ld_location(value: &Value) -> Option<String> {
     json_string(value, &["jobLocation", "address", "addressLocality"])
         .or_else(|| json_string(value, &["jobLocation", "address", "addressRegion"]))
         .or_else(|| json_string(value, &["jobLocation", "address", "addressCountry"]))
-        .or_else(|| json_string(value, &["applicantLocationRequirements", "address", "addressCountry"]))
+        .or_else(|| {
+            json_string(
+                value,
+                &["applicantLocationRequirements", "address", "addressCountry"],
+            )
+        })
 }
 
 fn parse_item(
@@ -459,10 +468,10 @@ fn parse_item(
         .filter(|s| !s.is_empty());
 
     let salary_text = item.select(&sel.salary).next().map(|el| collect_text(&el));
-    let (salary_min, salary_max, salary_currency) = salary_text
+    let (salary_min, salary_max, salary_currency, salary_usd_min, salary_usd_max) = salary_text
         .as_deref()
-        .map(parse_salary_range)
-        .unwrap_or((None, None, None));
+        .map(parse_salary_range_with_usd_monthly)
+        .unwrap_or((None, None, None, None, None));
 
     let posted_at = item
         .select(&sel.time)
@@ -473,7 +482,7 @@ fn parse_item(
 
     let full_text = collect_text(item);
     let remote_type = infer_remote_type(&full_text);
-    let seniority = infer_seniority(&title);
+    let seniority = infer_seniority_from_title_and_description(&title, Some(&description_text));
 
     build_result(
         source_job_id,
@@ -485,6 +494,8 @@ fn parse_item(
         salary_min,
         salary_max,
         salary_currency,
+        salary_usd_min,
+        salary_usd_max,
         remote_type,
         seniority,
         posted_at,
@@ -506,6 +517,7 @@ fn build_from_link(
         return None;
     }
     let source_url = format!("{BASE_URL}{href}");
+    let seniority = infer_seniority(&title);
 
     build_result(
         source_job_id,
@@ -519,6 +531,8 @@ fn build_from_link(
         None,
         None,
         None,
+        None,
+        seniority,
         None,
         fetched_at,
     )
@@ -535,23 +549,32 @@ fn build_result(
     salary_min: Option<i32>,
     salary_max: Option<i32>,
     salary_currency: Option<String>,
+    salary_usd_min: Option<i32>,
+    salary_usd_max: Option<i32>,
     remote_type: Option<String>,
     seniority: Option<String>,
     posted_at: Option<String>,
     fetched_at: &str,
 ) -> Option<NormalizationResult> {
+    let extracted_skills = extract_skills(&description_text);
+    let company_meta = infer_company_meta(&description_text, None);
+
     let raw_payload = json!({
         "source_job_id": source_job_id,
         "source_url": source_url,
         "title": title,
         "company_name": company_name,
+        "company_meta": company_meta,
         "location": location,
         "remote_type": remote_type,
         "seniority": seniority,
         "description_text": description_text,
+        "extracted_skills": extracted_skills.clone(),
         "salary_min": salary_min,
         "salary_max": salary_max,
         "salary_currency": salary_currency,
+        "salary_usd_min": salary_usd_min,
+        "salary_usd_max": salary_usd_max,
         "posted_at": posted_at,
         "fetched_at": fetched_at,
     });
@@ -559,15 +582,21 @@ fn build_result(
     Some(NormalizationResult {
         job: NormalizedJob {
             id: format!("job_{SOURCE}_{source_job_id}"),
+            duplicate_of: None,
             title,
             company_name: company_name?,
+            company_meta,
             location,
             remote_type,
             seniority,
             description_text,
+            extracted_skills,
             salary_min,
             salary_max,
             salary_currency,
+            salary_usd_min,
+            salary_usd_max,
+            quality_score: None,
             posted_at,
             last_seen_at: fetched_at.to_string(),
             is_active: true,
@@ -598,6 +627,15 @@ fn parse_detail_page(
         ],
     )
     .and_then(|value| normalize_company_name(&value));
+    let company_url = extract_first_href(
+        &document,
+        &[
+            "a[href*='/company/']",
+            ".job-details--title a",
+            ".profile-page__title a",
+        ],
+    )
+    .and_then(|value| normalize_absolute_url(&value));
     let description_text = extract_rich_text(
         &document,
         &[
@@ -637,10 +675,10 @@ fn parse_detail_page(
         &document,
         &[".public-salary-item", ".job-details--salary", "main"],
     );
-    let (salary_min, salary_max, salary_currency) = salary_source
+    let (salary_min, salary_max, salary_currency, salary_usd_min, salary_usd_max) = salary_source
         .as_deref()
-        .map(parse_salary_range)
-        .unwrap_or((None, None, None));
+        .map(parse_salary_range_with_usd_monthly)
+        .unwrap_or((None, None, None, None, None));
     let posted_at = extract_datetime(&document);
 
     let signal_text = [
@@ -650,17 +688,24 @@ fn parse_detail_page(
         description_text.clone().unwrap_or_default(),
     ]
     .join(" ");
+    let seniority = infer_seniority_from_title_and_description(
+        title.as_deref().unwrap_or(&fallback.job.title),
+        description_text.as_deref(),
+    );
 
     DetailSnapshot {
         title,
         company_name,
+        company_url: company_url.clone(),
         location,
         remote_type: infer_remote_type(&signal_text),
-        seniority: infer_seniority(&signal_text),
+        seniority,
         description_text,
         salary_min,
         salary_max,
         salary_currency,
+        salary_usd_min,
+        salary_usd_max,
         posted_at,
         raw_payload: json!({
             "detail_title": extract_first_text(&document, &["h1"]),
@@ -668,6 +713,7 @@ fn parse_detail_page(
                 &document,
                 &["a[href*='/company/']", ".job-details--title a", ".profile-page__title a"]
             ),
+            "detail_company_url": company_url,
             "detail_location": extract_first_text(
                 &document,
                 &[".location-text", ".job-details--location", "header"]
@@ -708,6 +754,37 @@ fn extract_first_text(document: &Html, selectors: &[&str]) -> Option<String> {
     }
 
     None
+}
+
+fn extract_first_href(document: &Html, selectors: &[&str]) -> Option<String> {
+    for raw_selector in selectors {
+        let Ok(selector) = Selector::parse(raw_selector) else {
+            continue;
+        };
+        if let Some(value) = document
+            .select(&selector)
+            .filter_map(|element| element.value().attr("href"))
+            .map(str::trim)
+            .find(|value| !value.is_empty())
+        {
+            return Some(value.to_string());
+        }
+    }
+
+    None
+}
+
+fn normalize_absolute_url(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        None
+    } else if value.starts_with("http://") || value.starts_with("https://") {
+        Some(value.to_string())
+    } else if value.starts_with('/') {
+        Some(format!("{BASE_URL}{value}"))
+    } else {
+        Some(format!("{BASE_URL}/{value}"))
+    }
 }
 
 fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
@@ -819,15 +896,21 @@ mod tests {
         let fallback = NormalizationResult {
             job: NormalizedJob {
                 id: "job_djinni_123".to_string(),
+                duplicate_of: None,
                 title: "Senior Rust Engineer".to_string(),
                 company_name: "SignalHire".to_string(),
+                company_meta: None,
                 location: Some("Remote".to_string()),
                 remote_type: Some("remote".to_string()),
                 seniority: Some("senior".to_string()),
                 description_text: "Short snippet".to_string(),
+                extracted_skills: Vec::new(),
                 salary_min: None,
                 salary_max: None,
                 salary_currency: None,
+                salary_usd_min: None,
+                salary_usd_max: None,
+                quality_score: None,
                 posted_at: None,
                 last_seen_at: "2026-04-18T10:00:00Z".to_string(),
                 is_active: true,
@@ -859,15 +942,21 @@ mod tests {
         let fallback = NormalizationResult {
             job: NormalizedJob {
                 id: "job_djinni_321".to_string(),
+                duplicate_of: None,
                 title: "Front-end React Developer".to_string(),
                 company_name: "SignalHire".to_string(),
+                company_meta: None,
                 location: Some("Remote, Europe".to_string()),
                 remote_type: Some("remote".to_string()),
                 seniority: Some("senior".to_string()),
                 description_text: "React product team".to_string(),
+                extracted_skills: vec!["React".to_string()],
                 salary_min: None,
                 salary_max: None,
                 salary_currency: None,
+                salary_usd_min: None,
+                salary_usd_max: None,
+                quality_score: None,
                 posted_at: None,
                 last_seen_at: "2026-04-18T10:00:00Z".to_string(),
                 is_active: true,
@@ -890,11 +979,11 @@ mod tests {
         assert!(description.contains("Improve performance budgets"));
         assert!(!description.contains("How to apply"));
     }
-		#[test]
-		fn parses_djinni_json_ld_listing_fallback() {
-    use crate::scrapers::djinni::parse_page;
+    #[test]
+    fn parses_djinni_json_ld_listing_fallback() {
+        use crate::scrapers::djinni::parse_page;
 
-    let html = r#"
+        let html = r#"
         <!doctype html>
         <html>
           <head>
@@ -925,13 +1014,16 @@ mod tests {
         </html>
     "#;
 
-    let results = parse_page(html, "2026-04-25T00:00:00Z");
+        let results = parse_page(html, "2026-04-25T00:00:00Z");
 
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].job.id, "job_djinni_12345");
-    assert_eq!(results[0].job.title, "Senior Software Engineer");
-    assert_eq!(results[0].job.company_name, "Test Company");
-    assert_eq!(results[0].job.location.as_deref(), Some("Kyiv"));
-    assert_eq!(results[0].job.posted_at.as_deref(), Some("2026-04-25T00:00:00Z"));
-	}
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].job.id, "job_djinni_12345");
+        assert_eq!(results[0].job.title, "Senior Software Engineer");
+        assert_eq!(results[0].job.company_name, "Test Company");
+        assert_eq!(results[0].job.location.as_deref(), Some("Kyiv"));
+        assert_eq!(
+            results[0].job.posted_at.as_deref(),
+            Some("2026-04-25T00:00:00Z")
+        );
+    }
 }

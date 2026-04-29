@@ -8,7 +8,7 @@ async fn returns_disabled_error_without_database() {
     let repository = JobsRepository::new(Database::disabled());
 
     let error = repository
-        .list_filtered_views(10, None, None)
+        .list_filtered_views(10, None, None, None)
         .await
         .expect_err("repository should fail without configured database");
 

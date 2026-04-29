@@ -4,6 +4,7 @@ use crate::adapters::SourceAdapter;
 use crate::models::{
     MockSourceInput, MockSourceJob, NormalizationResult, NormalizedJob, RawSnapshot,
 };
+use crate::scrapers::{extract_skills, infer_company_meta, normalize_salary_to_usd_monthly};
 
 #[derive(Default)]
 pub struct MockSourceAdapter;
@@ -47,6 +48,20 @@ impl MockSourceAdapter {
         let source_url = trim_required("source_url", job.source_url)?;
         let description_text = trim_required("description", job.description)?;
         let last_seen_at = trim_required("last_seen_at", job.last_seen_at)?;
+        let salary_min = job.compensation.as_ref().and_then(|value| value.min);
+        let salary_max = job.compensation.as_ref().and_then(|value| value.max);
+        let salary_currency = job
+            .compensation
+            .as_ref()
+            .and_then(|value| trim_optional(value.currency.clone()));
+        let (salary_usd_min, salary_usd_max) = normalize_salary_to_usd_monthly(
+            salary_min,
+            salary_max,
+            salary_currency.as_deref(),
+            &description_text,
+        );
+        let extracted_skills = extract_skills(&description_text);
+        let company_meta = infer_company_meta(&description_text, None);
 
         let snapshot = RawSnapshot {
             source: self.source_name().to_string(),
@@ -57,10 +72,12 @@ impl MockSourceAdapter {
                 "source_url": source_url,
                 "position": title,
                 "employer": company_name,
+                "company_meta": company_meta,
                 "city": job.city,
                 "work_mode": job.work_mode,
                 "seniority": job.seniority,
                 "description": description_text,
+                "extracted_skills": extracted_skills.clone(),
                 "compensation": job.compensation,
                 "posted_at": job.posted_at,
                 "last_seen_at": last_seen_at,
@@ -72,17 +89,21 @@ impl MockSourceAdapter {
         Ok(NormalizationResult {
             job: NormalizedJob {
                 id: format!("job_{}_{}", self.source_name(), snapshot.source_job_id),
+                duplicate_of: None,
                 title,
                 company_name,
+                company_meta,
                 location: trim_optional(job.city),
                 remote_type: trim_optional(job.work_mode),
                 seniority: trim_optional(job.seniority),
                 description_text,
-                salary_min: job.compensation.as_ref().and_then(|value| value.min),
-                salary_max: job.compensation.as_ref().and_then(|value| value.max),
-                salary_currency: job
-                    .compensation
-                    .and_then(|value| trim_optional(value.currency)),
+                extracted_skills,
+                salary_min,
+                salary_max,
+                salary_currency,
+                salary_usd_min,
+                salary_usd_max,
+                quality_score: None,
                 posted_at: trim_optional(job.posted_at),
                 last_seen_at,
                 is_active: job.active,

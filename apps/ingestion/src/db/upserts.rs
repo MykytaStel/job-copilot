@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 
+use chrono::Duration;
 use sqlx::types::Json;
 use tracing::warn;
 
 use crate::models::{IngestionBatch, JobVariant, NormalizedJob};
+use crate::scrapers::{compute_job_quality_score, extract_skills};
 
 #[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
 pub(super) struct ExistingVariantState {
@@ -13,6 +15,19 @@ pub(super) struct ExistingVariantState {
     pub(super) last_seen_at: String,
     pub(super) fetched_at: String,
     pub(super) is_active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+struct DuplicateCandidate {
+    id: String,
+    title: String,
+    salary_min: Option<i32>,
+    salary_max: Option<i32>,
+    salary_currency: Option<String>,
+    salary_usd_min: Option<i32>,
+    salary_usd_max: Option<i32>,
+    posted_at: Option<String>,
+    first_seen_at: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +95,10 @@ pub(super) async fn resolve_batch(
 
         let mut resolved_job = job.clone();
         resolved_job.id = resolved_job_id;
+        if existing_variant.is_none() {
+            resolved_job.duplicate_of =
+                find_cross_source_duplicate(tx, &resolved_job, variant).await?;
+        }
         dedupe_job_ids.insert(variant.dedupe_key.clone(), resolved_job.id.clone());
         let mut resolved_variant = variant.clone();
         resolved_variant.job_id = resolved_job.id.clone();
@@ -118,15 +137,21 @@ pub(super) async fn upsert_job(
             remote_type,
             seniority,
             description_text,
+            extracted_skills,
             salary_min,
             salary_max,
             salary_currency,
+            salary_usd_min,
+            salary_usd_max,
+            quality_score,
+            company_meta,
             posted_at,
             first_seen_at,
             last_seen_at,
             is_active,
             inactivated_at,
-            reactivated_at
+            reactivated_at,
+            duplicate_of
         )
         VALUES (
             $1,
@@ -136,18 +161,24 @@ pub(super) async fn upsert_job(
             $5,
             $6,
             $7,
-            $8,
+            $8::jsonb,
             $9,
             $10,
-            $11::timestamptz,
-            COALESCE($11::timestamptz, $12::timestamptz),
-            $12::timestamptz,
+            $11,
+            $12,
             $13,
+            $14,
+            $15::jsonb,
+            $16::timestamptz,
+            COALESCE($16::timestamptz, $17::timestamptz),
+            $17::timestamptz,
+            $18,
             CASE
-                WHEN $13 THEN NULL
-                ELSE $12::timestamptz
+                WHEN $18 THEN NULL
+                ELSE $17::timestamptz
             END,
-            NULL
+            NULL,
+            $19
         )
         ON CONFLICT (id)
         DO UPDATE SET
@@ -157,10 +188,16 @@ pub(super) async fn upsert_job(
             remote_type = EXCLUDED.remote_type,
             seniority = EXCLUDED.seniority,
             description_text = EXCLUDED.description_text,
+            extracted_skills = EXCLUDED.extracted_skills,
             salary_min = EXCLUDED.salary_min,
             salary_max = EXCLUDED.salary_max,
             salary_currency = EXCLUDED.salary_currency,
+            salary_usd_min = EXCLUDED.salary_usd_min,
+            salary_usd_max = EXCLUDED.salary_usd_max,
+            quality_score = EXCLUDED.quality_score,
+            company_meta = EXCLUDED.company_meta,
             posted_at = EXCLUDED.posted_at,
+            duplicate_of = EXCLUDED.duplicate_of,
             first_seen_at = LEAST(jobs.first_seen_at, EXCLUDED.first_seen_at),
             last_seen_at = GREATEST(jobs.last_seen_at, EXCLUDED.last_seen_at)
         "#
@@ -174,15 +211,21 @@ pub(super) async fn upsert_job(
             remote_type,
             seniority,
             description_text,
+            extracted_skills,
             salary_min,
             salary_max,
             salary_currency,
+            salary_usd_min,
+            salary_usd_max,
+            quality_score,
+            company_meta,
             posted_at,
             first_seen_at,
             last_seen_at,
             is_active,
             inactivated_at,
-            reactivated_at
+            reactivated_at,
+            duplicate_of
         )
         VALUES (
             $1,
@@ -192,18 +235,24 @@ pub(super) async fn upsert_job(
             $5,
             $6,
             $7,
-            $8,
+            $8::jsonb,
             $9,
             $10,
-            $11::timestamptz,
-            COALESCE($11::timestamptz, $12::timestamptz),
-            $12::timestamptz,
+            $11,
+            $12,
             $13,
+            $14,
+            $15::jsonb,
+            $16::timestamptz,
+            COALESCE($16::timestamptz, $17::timestamptz),
+            $17::timestamptz,
+            $18,
             CASE
-                WHEN $13 THEN NULL
-                ELSE $12::timestamptz
+                WHEN $18 THEN NULL
+                ELSE $17::timestamptz
             END,
-            NULL
+            NULL,
+            $19
         )
         ON CONFLICT (id)
         DO UPDATE SET
@@ -213,10 +262,16 @@ pub(super) async fn upsert_job(
             remote_type = EXCLUDED.remote_type,
             seniority = EXCLUDED.seniority,
             description_text = EXCLUDED.description_text,
+            extracted_skills = EXCLUDED.extracted_skills,
             salary_min = EXCLUDED.salary_min,
             salary_max = EXCLUDED.salary_max,
             salary_currency = EXCLUDED.salary_currency,
+            salary_usd_min = EXCLUDED.salary_usd_min,
+            salary_usd_max = EXCLUDED.salary_usd_max,
+            quality_score = EXCLUDED.quality_score,
+            company_meta = EXCLUDED.company_meta,
             posted_at = EXCLUDED.posted_at,
+            duplicate_of = EXCLUDED.duplicate_of,
             first_seen_at = LEAST(jobs.first_seen_at, EXCLUDED.first_seen_at),
             last_seen_at = GREATEST(jobs.last_seen_at, EXCLUDED.last_seen_at),
             is_active = CASE
@@ -235,6 +290,17 @@ pub(super) async fn upsert_job(
             END
         "#
     };
+    let extracted_skills = if job.extracted_skills.is_empty() {
+        extract_skills(&job.description_text)
+    } else {
+        job.extracted_skills.clone()
+    };
+    let quality_score = job.quality_score.unwrap_or_else(|| {
+        let mut scored_job = job.clone();
+        scored_job.extracted_skills = extracted_skills.clone();
+        compute_job_quality_score(&scored_job)
+    });
+    let company_meta = job.company_meta.as_ref().map(Json);
 
     sqlx::query(query)
         .bind(&job.id)
@@ -244,12 +310,18 @@ pub(super) async fn upsert_job(
         .bind(&job.remote_type)
         .bind(&job.seniority)
         .bind(&job.description_text)
+        .bind(Json(&extracted_skills))
         .bind(job.salary_min)
         .bind(job.salary_max)
         .bind(&job.salary_currency)
+        .bind(job.salary_usd_min)
+        .bind(job.salary_usd_max)
+        .bind(quality_score)
+        .bind(company_meta)
         .bind(&job.posted_at)
         .bind(&job.last_seen_at)
         .bind(job.is_active)
+        .bind(&job.duplicate_of)
         .execute(&mut **tx)
         .await
         .map_err(|error| format!("failed to upsert job '{}': {error}", job.id))?;
@@ -410,6 +482,199 @@ pub(super) async fn upsert_job_variant(
     }
 }
 
+async fn find_cross_source_duplicate(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    job: &NormalizedJob,
+    variant: &JobVariant,
+) -> Result<Option<String>, String> {
+    let candidates = sqlx::query_as::<_, DuplicateCandidate>(
+        r#"
+        SELECT
+            jobs.id,
+            jobs.title,
+            jobs.salary_min,
+            jobs.salary_max,
+            jobs.salary_currency,
+            jobs.salary_usd_min,
+            jobs.salary_usd_max,
+            TO_CHAR(jobs.posted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS posted_at,
+            TO_CHAR(jobs.first_seen_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS first_seen_at
+        FROM jobs
+        WHERE jobs.id <> $1
+          AND jobs.duplicate_of IS NULL
+          AND LOWER(jobs.company_name) = LOWER($2)
+          AND EXISTS (
+              SELECT 1
+              FROM job_variants
+              WHERE job_variants.job_id = jobs.id
+                AND job_variants.source <> $3
+          )
+          AND ABS(EXTRACT(EPOCH FROM (
+              COALESCE(jobs.posted_at, jobs.first_seen_at) - COALESCE($4::timestamptz, $5::timestamptz)
+          ))) <= 604800
+        ORDER BY jobs.is_active DESC, jobs.last_seen_at DESC, jobs.first_seen_at ASC
+        LIMIT 25
+        "#,
+    )
+    .bind(&job.id)
+    .bind(&job.company_name)
+    .bind(&variant.source)
+    .bind(&job.posted_at)
+    .bind(&job.last_seen_at)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|error| {
+        format!(
+            "failed to resolve cross-source duplicate candidate for job '{}': {error}",
+            job.id
+        )
+    })?;
+
+    Ok(candidates
+        .into_iter()
+        .find(|candidate| is_fuzzy_duplicate(job, candidate))
+        .map(|candidate| candidate.id))
+}
+
+fn is_fuzzy_duplicate(job: &NormalizedJob, candidate: &DuplicateCandidate) -> bool {
+    title_similarity(&job.title, &candidate.title) > 0.8
+        && salary_matches(
+            job.salary_min,
+            job.salary_max,
+            job.salary_currency.as_deref(),
+            job.salary_usd_min,
+            job.salary_usd_max,
+            candidate.salary_min,
+            candidate.salary_max,
+            candidate.salary_currency.as_deref(),
+            candidate.salary_usd_min,
+            candidate.salary_usd_max,
+        )
+        && posted_within_days(
+            job.posted_at.as_deref().unwrap_or(&job.last_seen_at),
+            candidate
+                .posted_at
+                .as_deref()
+                .unwrap_or(&candidate.first_seen_at),
+            7,
+        )
+}
+
+fn title_similarity(left: &str, right: &str) -> f64 {
+    let left = normalized_title(left);
+    let right = normalized_title(right);
+
+    if left.is_empty() || right.is_empty() {
+        return 0.0;
+    }
+
+    let distance = levenshtein(&left, &right) as f64;
+    let max_len = left.chars().count().max(right.chars().count()) as f64;
+    1.0 - (distance / max_len)
+}
+
+fn normalized_title(value: &str) -> String {
+    value
+        .split_whitespace()
+        .filter(|chunk| !chunk.is_empty())
+        .map(|chunk| {
+            chunk
+                .chars()
+                .filter(|character| character.is_alphanumeric())
+                .flat_map(char::to_lowercase)
+                .collect::<String>()
+        })
+        .filter(|chunk| !chunk.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn levenshtein(left: &str, right: &str) -> usize {
+    let right_chars = right.chars().collect::<Vec<_>>();
+    let mut previous = (0..=right_chars.len()).collect::<Vec<_>>();
+    let mut current = vec![0; right_chars.len() + 1];
+
+    for (left_index, left_char) in left.chars().enumerate() {
+        current[0] = left_index + 1;
+
+        for (right_index, right_char) in right_chars.iter().enumerate() {
+            let substitution_cost = usize::from(left_char != *right_char);
+            current[right_index + 1] = (previous[right_index + 1] + 1)
+                .min(current[right_index] + 1)
+                .min(previous[right_index] + substitution_cost);
+        }
+
+        std::mem::swap(&mut previous, &mut current);
+    }
+
+    previous[right_chars.len()]
+}
+
+fn salary_matches(
+    left_min: Option<i32>,
+    left_max: Option<i32>,
+    left_currency: Option<&str>,
+    left_usd_min: Option<i32>,
+    left_usd_max: Option<i32>,
+    right_min: Option<i32>,
+    right_max: Option<i32>,
+    right_currency: Option<&str>,
+    right_usd_min: Option<i32>,
+    right_usd_max: Option<i32>,
+) -> bool {
+    let left_range = salary_range(left_usd_min, left_usd_max).or_else(|| {
+        same_currency(left_currency, right_currency).and_then(|_| salary_range(left_min, left_max))
+    });
+    let right_range = salary_range(right_usd_min, right_usd_max).or_else(|| {
+        same_currency(left_currency, right_currency)
+            .and_then(|_| salary_range(right_min, right_max))
+    });
+
+    match (left_range, right_range) {
+        (Some(left), Some(right)) => ranges_are_close(left, right),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn same_currency(left: Option<&str>, right: Option<&str>) -> Option<()> {
+    match (left, right) {
+        (Some(left), Some(right)) if left.eq_ignore_ascii_case(right) => Some(()),
+        _ => None,
+    }
+}
+
+fn salary_range(min: Option<i32>, max: Option<i32>) -> Option<(i32, i32)> {
+    match (min, max) {
+        (Some(min), Some(max)) => Some((min.min(max), min.max(max))),
+        (Some(value), None) | (None, Some(value)) => Some((value, value)),
+        (None, None) => None,
+    }
+}
+
+fn ranges_are_close(left: (i32, i32), right: (i32, i32)) -> bool {
+    if left.0 <= right.1 && right.0 <= left.1 {
+        return true;
+    }
+
+    let left_midpoint = (left.0 + left.1) as f64 / 2.0;
+    let right_midpoint = (right.0 + right.1) as f64 / 2.0;
+    let larger = left_midpoint.abs().max(right_midpoint.abs()).max(1.0);
+
+    ((left_midpoint - right_midpoint).abs() / larger) <= 0.1
+}
+
+fn posted_within_days(left: &str, right: &str, days: i64) -> bool {
+    let Ok(left) = chrono::DateTime::parse_from_rfc3339(left) else {
+        return false;
+    };
+    let Ok(right) = chrono::DateTime::parse_from_rfc3339(right) else {
+        return false;
+    };
+
+    (left - right).num_seconds().abs() <= Duration::days(days).num_seconds()
+}
+
 async fn existing_variant_state(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     source: &str,
@@ -534,10 +799,17 @@ async fn existing_job_id_for_dedupe_key(
 }
 
 pub(super) fn merge_job(current: &mut NormalizedJob, incoming: &NormalizedJob) {
+    current.duplicate_of = current
+        .duplicate_of
+        .clone()
+        .or_else(|| incoming.duplicate_of.clone());
+
     if incoming.last_seen_at >= current.last_seen_at {
         current.title = incoming.title.clone();
         current.company_name = incoming.company_name.clone();
+        current.company_meta = pick_company_meta(&incoming.company_meta, &current.company_meta);
         current.description_text = incoming.description_text.clone();
+        current.extracted_skills = incoming.extracted_skills.clone();
         current.location = pick_optional(&incoming.location, &current.location);
         current.remote_type = pick_optional(&incoming.remote_type, &current.remote_type);
         current.seniority = pick_optional(&incoming.seniority, &current.seniority);
@@ -545,7 +817,14 @@ pub(super) fn merge_job(current: &mut NormalizedJob, incoming: &NormalizedJob) {
         current.salary_max = incoming.salary_max.or(current.salary_max);
         current.salary_currency =
             pick_optional(&incoming.salary_currency, &current.salary_currency);
+        current.salary_usd_min = incoming.salary_usd_min.or(current.salary_usd_min);
+        current.salary_usd_max = incoming.salary_usd_max.or(current.salary_usd_max);
+        current.quality_score = incoming.quality_score.or(current.quality_score);
     } else {
+        current.company_meta = pick_company_meta(&current.company_meta, &incoming.company_meta);
+        if current.extracted_skills.is_empty() {
+            current.extracted_skills = incoming.extracted_skills.clone();
+        }
         current.location = pick_optional(&current.location, &incoming.location);
         current.remote_type = pick_optional(&current.remote_type, &incoming.remote_type);
         current.seniority = pick_optional(&current.seniority, &incoming.seniority);
@@ -553,6 +832,9 @@ pub(super) fn merge_job(current: &mut NormalizedJob, incoming: &NormalizedJob) {
         current.salary_max = current.salary_max.or(incoming.salary_max);
         current.salary_currency =
             pick_optional(&current.salary_currency, &incoming.salary_currency);
+        current.salary_usd_min = current.salary_usd_min.or(incoming.salary_usd_min);
+        current.salary_usd_max = current.salary_usd_max.or(incoming.salary_usd_max);
+        current.quality_score = current.quality_score.or(incoming.quality_score);
     }
 
     current.posted_at = earliest_timestamp(current.posted_at.as_ref(), incoming.posted_at.as_ref());
@@ -561,9 +843,17 @@ pub(super) fn merge_job(current: &mut NormalizedJob, incoming: &NormalizedJob) {
         .clone()
         .max(incoming.last_seen_at.clone());
     current.is_active = current.is_active || incoming.is_active;
+    current.quality_score = Some(compute_job_quality_score(current));
 }
 
 fn pick_optional(primary: &Option<String>, fallback: &Option<String>) -> Option<String> {
+    primary.clone().or_else(|| fallback.clone())
+}
+
+fn pick_company_meta(
+    primary: &Option<crate::models::CompanyMeta>,
+    fallback: &Option<crate::models::CompanyMeta>,
+) -> Option<crate::models::CompanyMeta> {
     primary.clone().or_else(|| fallback.clone())
 }
 
@@ -573,5 +863,85 @@ fn earliest_timestamp(left: Option<&String>, right: Option<&String>) -> Option<S
         (Some(left), None) => Some(left.clone()),
         (None, Some(right)) => Some(right.clone()),
         (None, None) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DuplicateCandidate, is_fuzzy_duplicate, title_similarity};
+    use crate::models::NormalizedJob;
+
+    fn job(title: &str, company_name: &str, salary_min: Option<i32>) -> NormalizedJob {
+        NormalizedJob {
+            id: "job_new".to_string(),
+            duplicate_of: None,
+            title: title.to_string(),
+            company_name: company_name.to_string(),
+            company_meta: None,
+            location: Some("Kyiv".to_string()),
+            remote_type: Some("remote".to_string()),
+            seniority: Some("senior".to_string()),
+            description_text: "Rust PostgreSQL backend role".to_string(),
+            extracted_skills: Vec::new(),
+            salary_min,
+            salary_max: salary_min.map(|value| value + 500),
+            salary_currency: Some("USD".to_string()),
+            salary_usd_min: salary_min,
+            salary_usd_max: salary_min.map(|value| value + 500),
+            quality_score: None,
+            posted_at: Some("2026-04-20T09:00:00Z".to_string()),
+            last_seen_at: "2026-04-20T10:00:00Z".to_string(),
+            is_active: true,
+        }
+    }
+
+    fn candidate(title: &str, salary_min: Option<i32>, posted_at: &str) -> DuplicateCandidate {
+        DuplicateCandidate {
+            id: "job_existing".to_string(),
+            title: title.to_string(),
+            salary_min,
+            salary_max: salary_min.map(|value| value + 500),
+            salary_currency: Some("USD".to_string()),
+            salary_usd_min: salary_min,
+            salary_usd_max: salary_min.map(|value| value + 500),
+            posted_at: Some(posted_at.to_string()),
+            first_seen_at: posted_at.to_string(),
+        }
+    }
+
+    #[test]
+    fn title_similarity_accepts_minor_wording_changes() {
+        assert!(title_similarity("Senior Rust Backend Engineer", "Sr Rust Backend Engineer") > 0.8);
+        assert!(title_similarity("Senior Rust Backend Engineer", "Product Designer") < 0.8);
+    }
+
+    #[test]
+    fn fuzzy_duplicate_requires_similar_title_salary_and_recent_posting() {
+        let incoming = job("Senior Rust Backend Engineer", "SignalHire", Some(4500));
+
+        assert!(is_fuzzy_duplicate(
+            &incoming,
+            &candidate(
+                "Senior Rust Backend Engineer",
+                Some(4600),
+                "2026-04-24T09:00:00Z"
+            )
+        ));
+        assert!(!is_fuzzy_duplicate(
+            &incoming,
+            &candidate(
+                "Senior Rust Backend Engineer",
+                Some(7000),
+                "2026-04-24T09:00:00Z"
+            )
+        ));
+        assert!(!is_fuzzy_duplicate(
+            &incoming,
+            &candidate(
+                "Senior Rust Backend Engineer",
+                Some(4600),
+                "2026-05-01T09:00:00Z"
+            )
+        ));
     }
 }

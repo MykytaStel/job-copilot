@@ -24,6 +24,8 @@ export type {
   EngineMarketOverview,
   EngineMarketCompanyEntry,
   EngineMarketCompaniesResponse,
+  EngineMarketCompanyVelocityEntry,
+  EngineMarketCompanyVelocityTrend,
   EngineMarketSalaryTrend,
   EngineMarketRoleDemandEntry,
 } from './engine-types/market';
