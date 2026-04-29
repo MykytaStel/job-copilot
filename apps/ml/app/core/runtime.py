@@ -47,7 +47,7 @@ class AppServices:
     interview_prep_service: InterviewPrepService | None
     weekly_guidance_service: WeeklyGuidanceService | None
     enrichment_provider_error: str | None
-    _http_client: Any
+    http_client: Any
     _enrichment_provider: Any | None
 
 
@@ -119,7 +119,7 @@ async def build_app_services(settings: RuntimeSettings) -> AppServices:
         interview_prep_service=interview_prep_service,
         weekly_guidance_service=weekly_guidance_service,
         enrichment_provider_error=enrichment_provider_error,
-        _http_client=http_client,
+        http_client=http_client,
         _enrichment_provider=enrichment_provider,
     )
 
@@ -135,5 +135,5 @@ async def close_app_services(services: AppServices) -> None:
             close = getattr(services._enrichment_provider, "close", None)
             if close is not None:
                 close()
-    await services._http_client.aclose()
+    await services.http_client.aclose()
     configure_shared_client(None)

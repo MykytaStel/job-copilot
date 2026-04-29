@@ -8,7 +8,8 @@ use crate::api::routes::jobs::load_feedback_state;
 use crate::services::behavior::BehaviorService;
 use crate::services::funnel::FunnelService;
 use crate::services::outcome_dataset::{
-    OutcomeDatasetError, OutcomeDatasetService, application_ids_by_job_id, outcome_job_ids,
+    OutcomeDatasetBuildInput, OutcomeDatasetError, OutcomeDatasetService,
+    application_ids_by_job_id, outcome_job_ids,
 };
 use crate::state::AppState;
 
@@ -71,16 +72,16 @@ pub async fn get_reranker_dataset(
     let funnel = FunnelService::new().build_aggregates(events.iter());
     let applications_by_job_id = load_profile_applications_by_job_id(&state, &events).await?;
     let dataset = OutcomeDatasetService::new()
-        .build(
-            &profile,
-            &events,
-            jobs_with_feedback,
-            &applications_by_job_id,
-            &feedback_updated_at_by_job_id,
-            &state.search_ranking,
-            &behavior,
-            &funnel,
-        )
+        .build(OutcomeDatasetBuildInput {
+            profile: &profile,
+            events: &events,
+            jobs: jobs_with_feedback,
+            applications_by_job_id: &applications_by_job_id,
+            feedback_updated_at_by_job_id: &feedback_updated_at_by_job_id,
+            search_ranking_service: &state.search_ranking,
+            behavior: &behavior,
+            funnel: &funnel,
+        })
         .map_err(outcome_dataset_error)?;
 
     Ok(axum::Json(OutcomeDatasetResponse::from(dataset)))

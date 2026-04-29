@@ -19,55 +19,58 @@ pub(super) fn build_reranker_comparison(
     state: &AppState,
     comparison: &SearchRerankerComparisonInput,
     live_runtime: &ResolvedRerankerRuntime,
-    baseline_ranked_jobs: &[RankedJob],
-    _live_ranked_jobs: &[RankedJob],
-    learning_aggregates: Option<&SearchLearningAggregates>,
-    feedback_by_job_id: &HashMap<String, JobFeedbackState>,
-    deterministic_score_by_job_id: &HashMap<String, u8>,
-    behavior_score_by_job_id: &HashMap<String, u8>,
+    context: RerankerComparisonContext<'_>,
 ) -> SearchRerankerComparisonResponse {
     let runtime_comparison = resolve_reranker_runtime_comparison(
         state.learned_reranker_enabled,
-        learning_aggregates.is_some(),
+        context.learning_aggregates.is_some(),
         &state.trained_reranker_availability,
     );
     let learned_ranked_jobs = apply_reranker_runtime_path(
         state,
-        baseline_ranked_jobs.to_vec(),
+        context.baseline_ranked_jobs.to_vec(),
         &runtime_comparison.learned,
-        learning_aggregates,
-        feedback_by_job_id,
-        deterministic_score_by_job_id,
-        behavior_score_by_job_id,
+        context.learning_aggregates,
+        context.feedback_by_job_id,
+        context.deterministic_score_by_job_id,
+        context.behavior_score_by_job_id,
     );
     let trained_ranked_jobs = apply_reranker_runtime_path(
         state,
-        baseline_ranked_jobs.to_vec(),
+        context.baseline_ranked_jobs.to_vec(),
         &runtime_comparison.trained,
-        learning_aggregates,
-        feedback_by_job_id,
-        deterministic_score_by_job_id,
-        behavior_score_by_job_id,
+        context.learning_aggregates,
+        context.feedback_by_job_id,
+        context.deterministic_score_by_job_id,
+        context.behavior_score_by_job_id,
     );
 
     SearchRerankerComparisonResponse {
         baseline_mode: runtime_comparison.baseline.active_mode.as_str().to_string(),
         active_mode: live_runtime.active_mode.as_str().to_string(),
         top_n: comparison.top_n,
-        baseline_top: top_reranker_comparison_items(baseline_ranked_jobs, comparison.top_n),
+        baseline_top: top_reranker_comparison_items(context.baseline_ranked_jobs, comparison.top_n),
         learned: build_reranker_comparison_mode(
             &runtime_comparison.learned,
-            baseline_ranked_jobs,
+            context.baseline_ranked_jobs,
             &learned_ranked_jobs,
             comparison.top_n,
         ),
         trained: build_reranker_comparison_mode(
             &runtime_comparison.trained,
-            baseline_ranked_jobs,
+            context.baseline_ranked_jobs,
             &trained_ranked_jobs,
             comparison.top_n,
         ),
     }
+}
+
+pub(crate) struct RerankerComparisonContext<'a> {
+    pub(crate) baseline_ranked_jobs: &'a [RankedJob],
+    pub(crate) learning_aggregates: Option<&'a SearchLearningAggregates>,
+    pub(crate) feedback_by_job_id: &'a HashMap<String, JobFeedbackState>,
+    pub(crate) deterministic_score_by_job_id: &'a HashMap<String, u8>,
+    pub(crate) behavior_score_by_job_id: &'a HashMap<String, u8>,
 }
 
 fn build_reranker_comparison_mode(
@@ -93,18 +96,18 @@ fn apply_reranker_runtime_path(
     deterministic_score_by_job_id: &HashMap<String, u8>,
     behavior_score_by_job_id: &HashMap<String, u8>,
 ) -> Vec<RankedJob> {
-    if runtime.apply_learned {
-        if let Some(aggregates) = learning_aggregates {
-            let (reranked_jobs, _) = apply_learned_reranking(
-                state,
-                ranked_jobs,
-                &aggregates.behavior,
-                &aggregates.funnel,
-                feedback_by_job_id,
-                deterministic_score_by_job_id,
-            );
-            ranked_jobs = reranked_jobs;
-        }
+    if runtime.apply_learned
+        && let Some(aggregates) = learning_aggregates
+    {
+        let (reranked_jobs, _) = apply_learned_reranking(
+            state,
+            ranked_jobs,
+            &aggregates.behavior,
+            &aggregates.funnel,
+            feedback_by_job_id,
+            deterministic_score_by_job_id,
+        );
+        ranked_jobs = reranked_jobs;
     }
 
     if runtime.apply_trained {

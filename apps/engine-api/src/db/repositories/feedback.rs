@@ -281,31 +281,6 @@ impl FeedbackRepository {
         self.list_feedback_tags_for_job(profile_id, job_id).await
     }
 
-    pub async fn remove_job_feedback_tag(
-        &self,
-        profile_id: &str,
-        job_id: &str,
-        tag: JobFeedbackReason,
-    ) -> Result<(), RepositoryError> {
-        let Some(pool) = self.database.pool() else {
-            return Err(RepositoryError::DatabaseDisabled);
-        };
-
-        sqlx::query(
-            r#"
-            DELETE FROM profile_job_feedback_tags
-            WHERE profile_id = $1 AND job_id = $2 AND tag = $3
-            "#,
-        )
-        .bind(profile_id)
-        .bind(job_id)
-        .bind(tag.as_str())
-        .execute(pool)
-        .await?;
-
-        Ok(())
-    }
-
     async fn list_feedback_tags_for_job(
         &self,
         profile_id: &str,
@@ -820,18 +795,15 @@ impl TryFrom<JobFeedbackRow> for JobFeedbackRecord {
         let salary_signal = row
             .salary_signal
             .as_deref()
-            .map(SalaryFeedbackSignal::parse)
-            .flatten();
+            .and_then(SalaryFeedbackSignal::parse);
         let work_mode_signal = row
             .work_mode_signal
             .as_deref()
-            .map(WorkModeFeedbackSignal::parse)
-            .flatten();
+            .and_then(WorkModeFeedbackSignal::parse);
         let legitimacy_signal = row
             .legitimacy_signal
             .as_deref()
-            .map(LegitimacySignal::parse)
-            .flatten();
+            .and_then(LegitimacySignal::parse);
 
         Ok(Self {
             profile_id: row.profile_id,

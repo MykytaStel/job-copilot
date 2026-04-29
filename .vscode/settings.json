@@ -1,5 +1,9 @@
 {
     "rust-analyzer.linkedProjects": [
         "./apps/engine-api/Cargo.toml"
+    ],
+    "yaml.customTags": [
+        "!reset sequence",
+        "!override sequence"
     ]
 }

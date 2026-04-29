@@ -18,8 +18,8 @@ use crate::services::search_ranking::summarize_match_quality;
 use crate::state::AppState;
 
 use super::{
-    apply_application_outcome_scoring, apply_behavior_scoring, apply_feedback_scoring,
-    apply_learned_reranking, apply_salary_scoring, apply_trained_reranking,
+    RerankerComparisonContext, apply_application_outcome_scoring, apply_behavior_scoring,
+    apply_feedback_scoring, apply_learned_reranking, apply_salary_scoring, apply_trained_reranking,
     build_reranker_comparison, load_learning_aggregates, load_search_salary_expectation,
     mark_reranker_fallback, score_by_job_id,
 };
@@ -139,19 +139,19 @@ pub async fn run_search(
         &state.trained_reranker_availability,
     );
     let mut learned_reranker_adjusted_jobs = 0usize;
-    if reranker_runtime.apply_learned {
-        if let Some(aggregates) = learning_aggregates.as_ref() {
-            let (reranked_jobs, adjusted_count) = apply_learned_reranking(
-                &state,
-                adjusted_jobs,
-                &aggregates.behavior,
-                &aggregates.funnel,
-                &feedback_by_job_id,
-                &deterministic_score_by_job_id,
-            );
-            adjusted_jobs = reranked_jobs;
-            learned_reranker_adjusted_jobs = adjusted_count;
-        }
+    if reranker_runtime.apply_learned
+        && let Some(aggregates) = learning_aggregates.as_ref()
+    {
+        let (reranked_jobs, adjusted_count) = apply_learned_reranking(
+            &state,
+            adjusted_jobs,
+            &aggregates.behavior,
+            &aggregates.funnel,
+            &feedback_by_job_id,
+            &deterministic_score_by_job_id,
+        );
+        adjusted_jobs = reranked_jobs;
+        learned_reranker_adjusted_jobs = adjusted_count;
     }
     let mut trained_reranker_adjusted_jobs = 0usize;
     if reranker_runtime.apply_trained {
@@ -184,22 +184,22 @@ pub async fn run_search(
     if matches!(
         reranker_runtime.active_mode,
         RerankerRuntimeMode::Deterministic
-    ) {
-        if let Some(reason) = reranker_runtime.fallback_reason.as_deref() {
-            mark_reranker_fallback(&mut adjusted_jobs, reason);
-        }
+    ) && let Some(reason) = reranker_runtime.fallback_reason.as_deref()
+    {
+        mark_reranker_fallback(&mut adjusted_jobs, reason);
     }
     let reranker_comparison = input.reranker_comparison.as_ref().map(|comparison| {
         build_reranker_comparison(
             &state,
             comparison,
             &reranker_runtime,
-            &deterministic_ranked_jobs,
-            &adjusted_jobs,
-            learning_aggregates.as_ref(),
-            &feedback_by_job_id,
-            &deterministic_score_by_job_id,
-            &behavior_score_by_job_id,
+            RerankerComparisonContext {
+                baseline_ranked_jobs: &deterministic_ranked_jobs,
+                learning_aggregates: learning_aggregates.as_ref(),
+                feedback_by_job_id: &feedback_by_job_id,
+                deterministic_score_by_job_id: &deterministic_score_by_job_id,
+                behavior_score_by_job_id: &behavior_score_by_job_id,
+            },
         )
     });
     adjusted_jobs.truncate(input.limit as usize);

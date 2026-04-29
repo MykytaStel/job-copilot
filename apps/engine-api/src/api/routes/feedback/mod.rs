@@ -3,9 +3,12 @@ mod handlers;
 mod tests;
 
 pub(crate) use handlers::ensure_profile_exists;
+#[cfg(test)]
 pub use handlers::{
     BulkHideJobsByCompanyQuery, ExportFeedbackQuery, FeedbackStatsQuery, FeedbackTimelineQuery,
     JobFeedbackActionQuery, RemoveCompanyBlacklistBySlugQuery, UpdateCompanyFeedbackBySlugQuery,
+};
+pub use handlers::{
     add_company_blacklist, add_company_whitelist, bulk_hide_jobs_by_company, clear_all_hidden_jobs,
     export_feedback_csv, get_feedback_stats, hide_job, list_feedback, list_feedback_timeline,
     mark_job_bad_fit, mark_job_bad_fit_by_query, patch_job_interest_rating_by_query,

@@ -6,19 +6,12 @@ use super::{
 pub(super) fn build_reasons(
     search_profile: &SearchProfile,
     job: &super::JobView,
-    role_alignment: &RoleAlignment,
-    matched_profile_skills: &[String],
-    matched_profile_keywords: &[String],
-    matched_search_terms: &[String],
-    matched_exclude_terms: &[String],
-    work_mode_match: Option<bool>,
-    region_match: Option<bool>,
-    seniority_alignment: &SeniorityAlignment,
+    input: BuildReasonsInput<'_>,
 ) -> Vec<String> {
     let mut reasons = Vec::new();
 
-    if role_alignment.matched_roles.is_empty() {
-        if let Some((target_role, job_role, overlap)) = role_alignment.best_partial_match {
+    if input.role_alignment.matched_roles.is_empty() {
+        if let Some((target_role, job_role, overlap)) = input.role_alignment.best_partial_match {
             if overlap >= PARTIAL_ROLE_MATCH_THRESHOLD {
                 reasons.push(format!(
                     "Role family overlap matched {} with {}",
@@ -35,7 +28,8 @@ pub(super) fn build_reasons(
     } else {
         reasons.push(format!(
             "Matched target roles: {}",
-            role_alignment
+            input
+                .role_alignment
                 .matched_roles
                 .iter()
                 .map(ToString::to_string)
@@ -51,24 +45,24 @@ pub(super) fn build_reasons(
         ));
     }
 
-    if !matched_profile_skills.is_empty() {
+    if !input.matched_profile_skills.is_empty() {
         reasons.push(format!(
             "Matched profile skills: {}",
-            matched_profile_skills.join(", ")
+            input.matched_profile_skills.join(", ")
         ));
     }
 
-    if !matched_profile_keywords.is_empty() {
+    if !input.matched_profile_keywords.is_empty() {
         reasons.push(format!(
             "Matched profile keywords: {}",
-            matched_profile_keywords.join(", ")
+            input.matched_profile_keywords.join(", ")
         ));
     }
 
-    if !matched_search_terms.is_empty() {
+    if !input.matched_search_terms.is_empty() {
         reasons.push(format!(
             "Matched search terms: {}",
-            matched_search_terms.join(", ")
+            input.matched_search_terms.join(", ")
         ));
     }
 
@@ -84,7 +78,7 @@ pub(super) fn build_reasons(
     }
 
     if !search_profile.work_modes.is_empty() {
-        match work_mode_match {
+        match input.work_mode_match {
             Some(true) => reasons.push("Work mode matched the search profile".to_string()),
             Some(false) => reasons.push("Work mode mismatch penalty applied".to_string()),
             None => reasons.push("Work mode could not be inferred from the job".to_string()),
@@ -92,7 +86,7 @@ pub(super) fn build_reasons(
     }
 
     if !search_profile.target_regions.is_empty() {
-        match region_match {
+        match input.region_match {
             Some(true) => reasons.push("Target region matched the job text".to_string()),
             Some(false) => reasons.push("Target region did not match the job text".to_string()),
             None => reasons.push("Region could not be inferred from the job".to_string()),
@@ -100,8 +94,8 @@ pub(super) fn build_reasons(
     }
 
     match (
-        seniority_alignment.normalized_profile.as_deref(),
-        seniority_alignment.normalized_job.as_deref(),
+        input.seniority_alignment.normalized_profile.as_deref(),
+        input.seniority_alignment.normalized_job.as_deref(),
     ) {
         (Some(profile_seniority), Some(job_seniority)) if profile_seniority == job_seniority => {
             reasons.push(format!("Matched seniority: {}", profile_seniority));
@@ -113,17 +107,18 @@ pub(super) fn build_reasons(
         _ => {}
     }
 
-    if !matched_exclude_terms.is_empty() {
+    if !input.matched_exclude_terms.is_empty() {
         reasons.push(format!(
             "Exclude term penalty applied: {}",
-            matched_exclude_terms.join(", ")
+            input.matched_exclude_terms.join(", ")
         ));
     }
 
-    if role_alignment.mismatch_penalty > 0.0 && !role_alignment.job_roles.is_empty() {
+    if input.role_alignment.mismatch_penalty > 0.0 && !input.role_alignment.job_roles.is_empty() {
         reasons.push(format!(
             "Role mismatch penalty applied: strongest job roles {}",
-            role_alignment
+            input
+                .role_alignment
                 .job_roles
                 .iter()
                 .take(3)
@@ -133,15 +128,26 @@ pub(super) fn build_reasons(
         ));
     }
 
-    if matched_profile_skills.is_empty()
+    if input.matched_profile_skills.is_empty()
         && !search_profile.profile_skills.is_empty()
-        && role_alignment.matched_roles.is_empty()
-        && matched_search_terms.is_empty()
+        && input.role_alignment.matched_roles.is_empty()
+        && input.matched_search_terms.is_empty()
     {
         reasons.push("No strong profile evidence matched the job text".to_string());
     }
 
     reasons
+}
+
+pub(super) struct BuildReasonsInput<'a> {
+    pub(super) role_alignment: &'a RoleAlignment,
+    pub(super) matched_profile_skills: &'a [String],
+    pub(super) matched_profile_keywords: &'a [String],
+    pub(super) matched_search_terms: &'a [String],
+    pub(super) matched_exclude_terms: &'a [String],
+    pub(super) work_mode_match: Option<bool>,
+    pub(super) region_match: Option<bool>,
+    pub(super) seniority_alignment: &'a SeniorityAlignment,
 }
 
 pub(super) fn confidence_factor(confidence: Option<u8>) -> f32 {
@@ -164,9 +170,7 @@ pub(super) fn penalty_entry(
     raw_penalty: f32,
     reason: Option<String>,
 ) -> Option<JobScorePenalty> {
-    let Some(reason) = reason else {
-        return None;
-    };
+    let reason = reason?;
 
     let score_delta = -((raw_penalty.round() as i16).max(0));
     if score_delta == 0 {

@@ -2,6 +2,7 @@ from functools import lru_cache
 
 from fastapi import Request
 
+from app import bootstrap_workflow
 from app.application_coach import (
     ApplicationCoachProviderError,
     http_error_from_application_coach_error,
@@ -27,8 +28,7 @@ from app.weekly_guidance import (
 )
 from app.engine_api_client import engine_api_client_context
 from app.reranker_bootstrap_service import RerankerBootstrapService
-from app import bootstrap_workflow
-from app.settings import DEFAULT_BOOTSTRAP_TASKS_DIR
+
 
 def get_app_services(request: Request) -> AppServices:
     return request.app.state.services

@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn builds_explicit_behavior_aggregates_and_summary() {
         let service = BehaviorService::new();
-        let events = vec![
+        let events = [
             event(
                 "evt-1",
                 UserEventType::JobSaved,
@@ -483,7 +483,7 @@ mod tests {
     #[test]
     fn weak_or_balanced_signals_do_not_change_score() {
         let service = BehaviorService::new();
-        let events = vec![
+        let events = [
             event(
                 "evt-1",
                 UserEventType::JobSaved,
@@ -509,7 +509,7 @@ mod tests {
     #[test]
     fn impressions_do_not_change_behavior_aggregates() {
         let service = BehaviorService::new();
-        let events = vec![
+        let events = [
             event(
                 "evt-1",
                 UserEventType::JobImpression,

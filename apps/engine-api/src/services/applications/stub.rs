@@ -152,7 +152,7 @@ impl ApplicationsServiceStub {
             .filter(|(id, _)| {
                 profiles
                     .get(*id)
-                    .map_or(true, |record_profile_id| record_profile_id == profile_id)
+                    .is_none_or(|record_profile_id| record_profile_id == profile_id)
             })
             .map(|(_, application)| application)
             .cloned()

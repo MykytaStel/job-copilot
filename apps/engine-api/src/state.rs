@@ -66,6 +66,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[cfg(test)]
     pub fn new(database: Database) -> Self {
         Self::new_with_config(database, &Config::from_env())
     }
@@ -87,33 +88,24 @@ impl AppState {
         )
         .expect("valid ML sidecar client configuration");
 
-        let mut state = Self::new_with_rerankers(
+        let mut state = Self::new_with_rerankers(StateRerankerConfig {
             database,
-            config.reranker_runtime_mode,
-            config.learned_reranker_enabled,
-            config.trained_reranker_enabled,
-            trained_reranker_availability,
-            trained_reranker_model,
+            runtime_mode: config.reranker_runtime_mode,
+            learned_enabled: config.learned_reranker_enabled,
+            trained_enabled: config.trained_reranker_enabled,
+            trained_availability: trained_reranker_availability,
+            trained_model: trained_reranker_model,
             reranker_bootstrap,
             cv_tailoring,
-            config.ml_sidecar_base_url.clone(),
-        );
+            ml_sidecar_base_url: config.ml_sidecar_base_url.clone(),
+        });
         state.jwt_secret = config.jwt_secret.clone();
         state.cors_allowed_origins = config.cors_allowed_origins.clone();
         state
     }
 
-    fn new_with_rerankers(
-        database: Database,
-        reranker_runtime_mode: RerankerRuntimeMode,
-        learned_reranker_enabled: bool,
-        trained_reranker_enabled: bool,
-        trained_reranker_availability: TrainedRerankerAvailability,
-        trained_reranker_model: Option<TrainedRerankerModel>,
-        reranker_bootstrap: RerankerBootstrapService,
-        cv_tailoring: CvTailoringService,
-        ml_sidecar_base_url: String,
-    ) -> Self {
+    fn new_with_rerankers(config: StateRerankerConfig) -> Self {
+        let database = config.database;
         let profiles_repository = ProfilesRepository::new(database.clone());
         let profile_ml_state_repository = ProfileMlStateRepository::new(database.clone());
         let profile_ml_metrics_repository = ProfileMlMetricsRepository::new(database.clone());
@@ -136,7 +128,7 @@ impl AppState {
             app_name: "engine-api".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             database,
-            ml_sidecar_base_url: ml_sidecar_base_url.trim_end_matches('/').to_string(),
+            ml_sidecar_base_url: config.ml_sidecar_base_url.trim_end_matches('/').to_string(),
             profile_records,
             profile_ml_state: ProfileMlStateService::new(profile_ml_state_repository),
             profile_ml_metrics: ProfileMlMetricsService::new(profile_ml_metrics_repository),
@@ -154,17 +146,29 @@ impl AppState {
             notifications_service: NotificationsService::new(notifications_repository),
             salary_service: SalaryService::new(jobs_repository.clone()),
             user_events_service: UserEventsService::new(user_events_repository),
-            reranker_runtime_mode,
-            learned_reranker_enabled,
-            trained_reranker_enabled,
-            trained_reranker_availability,
-            trained_reranker_model,
-            reranker_bootstrap,
-            cv_tailoring,
+            reranker_runtime_mode: config.runtime_mode,
+            learned_reranker_enabled: config.learned_enabled,
+            trained_reranker_enabled: config.trained_enabled,
+            trained_reranker_availability: config.trained_availability,
+            trained_reranker_model: config.trained_model,
+            reranker_bootstrap: config.reranker_bootstrap,
+            cv_tailoring: config.cv_tailoring,
             jwt_secret: None,
             cors_allowed_origins: Vec::new(),
         }
     }
+}
+
+struct StateRerankerConfig {
+    database: Database,
+    runtime_mode: RerankerRuntimeMode,
+    learned_enabled: bool,
+    trained_enabled: bool,
+    trained_availability: TrainedRerankerAvailability,
+    trained_model: Option<TrainedRerankerModel>,
+    reranker_bootstrap: RerankerBootstrapService,
+    cv_tailoring: CvTailoringService,
+    ml_sidecar_base_url: String,
 }
 
 fn load_trained_reranker_model(

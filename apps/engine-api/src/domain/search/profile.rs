@@ -64,11 +64,6 @@ impl ScoringWeights {
             / f32::from(default_skill_match_importance())
     }
 
-    pub fn salary_fit_multiplier(&self) -> f32 {
-        f32::from(clamp_weight(self.salary_fit_importance))
-            / f32::from(default_salary_fit_importance())
-    }
-
     pub fn job_freshness_multiplier(&self) -> f32 {
         f32::from(clamp_weight(self.job_freshness_importance))
             / f32::from(default_job_freshness_importance())

@@ -37,8 +37,9 @@ use roles::{
     analyze_role_alignment, collect_role_terms, collect_target_roles, infer_role_family_for_job,
 };
 use scoring::{
-    build_reasons, confidence_factor, is_low_signal_term, penalty_entry, push_ignored_term,
-    push_unique_region, push_unique_role, push_unique_string, weighted_overlap_ratio,
+    BuildReasonsInput, build_reasons, confidence_factor, is_low_signal_term, penalty_entry,
+    push_ignored_term, push_unique_region, push_unique_role, push_unique_string,
+    weighted_overlap_ratio,
 };
 use text::{
     build_searchable_text, build_searchable_text_parts, collect_missing_signal_details,
@@ -369,14 +370,16 @@ impl SearchMatchingService {
         let mut reasons = build_reasons(
             search_profile,
             job,
-            &role_alignment,
-            &matched_profile_skills.matched_terms,
-            &matched_profile_keywords.matched_terms,
-            &matched_search_terms.matched_terms,
-            &matched_exclude_terms.matched_terms,
-            work_mode_match,
-            region_match,
-            &seniority_alignment,
+            BuildReasonsInput {
+                role_alignment: &role_alignment,
+                matched_profile_skills: &matched_profile_skills.matched_terms,
+                matched_profile_keywords: &matched_profile_keywords.matched_terms,
+                matched_search_terms: &matched_search_terms.matched_terms,
+                matched_exclude_terms: &matched_exclude_terms.matched_terms,
+                work_mode_match,
+                region_match,
+                seniority_alignment: &seniority_alignment,
+            },
         );
 
         if age_signal.score_delta < 0 {
