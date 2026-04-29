@@ -3,9 +3,10 @@
 import type { CompanyFeedbackRecord } from '@job-copilot/shared/feedback';
 import type { JobPosting } from '@job-copilot/shared';
 import type { LucideIcon } from 'lucide-react';
-import { Bookmark, EyeOff, ThumbsDown } from 'lucide-react';
+import { Bookmark, Clock3, EyeOff, ThumbsDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import type { FeedbackTimelineItem } from '../../api/feedback';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import {
@@ -163,6 +164,111 @@ export function BadFitJobsSection({
   );
 }
 
+const TIMELINE_ACTION_LABELS: Record<string, string> = {
+  job_saved: 'Saved',
+  job_unsaved: 'Unsaved',
+  job_hidden: 'Hidden',
+  job_unhidden: 'Unhidden',
+  job_bad_fit: 'Marked bad fit',
+  job_bad_fit_removed: 'Removed bad fit',
+};
+
+function formatTimelineDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+}
+
+export function TimelineSection({
+  items,
+  totalCount,
+  hasMore,
+  isLoading,
+  isLoadingMore,
+  onLoadMore,
+}: {
+  items: FeedbackTimelineItem[];
+  totalCount: number;
+  hasMore: boolean;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
+}) {
+  return (
+    <Section
+      title="Timeline"
+      icon={<Clock3 size={16} />}
+      description="Feedback actions in reverse chronological order."
+      count={totalCount}
+    >
+      {isLoading ? (
+        <EmptyState message="Loading timeline..." className="px-4 py-5" />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={<Clock3 className="h-10 w-10" />}
+          message="No feedback history yet."
+          description="Save, hide, or mark jobs as bad fit to build a timeline."
+          className="px-4 py-5"
+        />
+      ) : (
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3">
+            {items.map((item) => {
+              const action = TIMELINE_ACTION_LABELS[item.eventType] ?? 'Updated';
+
+              return (
+                <div
+                  key={item.id}
+                  className="rounded-lg border border-border bg-card px-5 py-4"
+                >
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <p className="m-0 text-sm font-semibold text-card-foreground">
+                        {action} {item.jobTitle} at {item.companyName}
+                      </p>
+                      {item.reason ? (
+                        <p className="m-0 mt-1 text-sm text-muted-foreground">
+                          reason: {item.reason}
+                        </p>
+                      ) : null}
+                    </div>
+                    <time
+                      dateTime={item.createdAt}
+                      className="shrink-0 text-xs font-medium uppercase text-muted-foreground"
+                    >
+                      {formatTimelineDate(item.createdAt)}
+                    </time>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {hasMore ? (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 rounded-xl"
+                onClick={onLoadMore}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? 'Loading...' : 'Load more'}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function CompanyFeedbackPanel({
   title,
   description,
@@ -182,9 +288,11 @@ function CompanyFeedbackPanel({
   onMove,
   onRemove,
   onBulkHide,
+  onUpdateNotes,
   isMovePending,
   isRemovePending,
   isBulkHidePending,
+  isUpdateNotesPending,
 }: {
   title: string;
   description: string;
@@ -204,9 +312,11 @@ function CompanyFeedbackPanel({
   onMove: (companyName: string, nextStatus: 'whitelist' | 'blacklist') => void;
   onRemove: (companyName: string) => void;
   onBulkHide: (companyName: string) => void;
+  onUpdateNotes: (companySlug: string, notes: string) => void;
   isMovePending: boolean;
   isRemovePending: boolean;
   isBulkHidePending: boolean;
+  isUpdateNotesPending: boolean;
 }) {
   return (
     <CompanyPanel
@@ -225,6 +335,7 @@ function CompanyFeedbackPanel({
         <CompanyRow
           key={company.normalizedCompanyName}
           companyName={company.companyName}
+          notes={company.notes}
           accent={accent}
           badgeLabel={badgeLabel}
           description={rowDescription}
@@ -232,9 +343,11 @@ function CompanyFeedbackPanel({
           onMove={() => onMove(company.companyName, moveToStatus)}
           onRemove={() => onRemove(company.companyName)}
           onBulkHide={() => onBulkHide(company.companyName)}
+          onNotesBlur={(notes) => onUpdateNotes(company.normalizedCompanyName, notes)}
           isMovePending={isMovePending}
           isRemovePending={isRemovePending}
           isBulkHidePending={isBulkHidePending}
+          isUpdateNotesPending={isUpdateNotesPending}
         />
       ))}
     </CompanyPanel>
@@ -253,12 +366,14 @@ export function CompaniesSection({
   onRemoveWhitelist,
   onRemoveBlacklist,
   onBulkHideCompany,
+  onUpdateCompanyNotes,
   isAddWhitelistPending,
   isAddBlacklistPending,
   isMovePending,
   isRemoveWhitelistPending,
   isRemoveBlacklistPending,
   isBulkHidePending,
+  isUpdateNotesPending,
 }: {
   whitelistedCompanies: CompanyFeedbackRecord[];
   blacklistedCompanies: CompanyFeedbackRecord[];
@@ -271,12 +386,14 @@ export function CompaniesSection({
   onRemoveWhitelist: (companyName: string) => void;
   onRemoveBlacklist: (companyName: string) => void;
   onBulkHideCompany: (companyName: string) => void;
+  onUpdateCompanyNotes: (companySlug: string, notes: string) => void;
   isAddWhitelistPending: boolean;
   isAddBlacklistPending: boolean;
   isMovePending: boolean;
   isRemoveWhitelistPending: boolean;
   isRemoveBlacklistPending: boolean;
   isBulkHidePending: boolean;
+  isUpdateNotesPending: boolean;
 }) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -299,9 +416,11 @@ export function CompaniesSection({
         onMove={onMoveCompany}
         onRemove={onRemoveWhitelist}
         onBulkHide={onBulkHideCompany}
+        onUpdateNotes={onUpdateCompanyNotes}
         isMovePending={isMovePending}
         isRemovePending={isRemoveWhitelistPending}
         isBulkHidePending={isBulkHidePending}
+        isUpdateNotesPending={isUpdateNotesPending}
       />
 
       <CompanyFeedbackPanel
@@ -323,9 +442,11 @@ export function CompaniesSection({
         onMove={onMoveCompany}
         onRemove={onRemoveBlacklist}
         onBulkHide={onBulkHideCompany}
+        onUpdateNotes={onUpdateCompanyNotes}
         isMovePending={isMovePending}
         isRemovePending={isRemoveBlacklistPending}
         isBulkHidePending={isBulkHidePending}
+        isUpdateNotesPending={isUpdateNotesPending}
       />
     </div>
   );

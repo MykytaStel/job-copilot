@@ -31,6 +31,7 @@ use crate::state::AppState;
 pub fn public_router() -> Router<AppState> {
     Router::new()
         .route("/health", get(health::health))
+        .route("/ready", get(health::ready))
         .route("/api/v1/ping", get(health::ping))
         .route("/api/v1/auth/register", post(auth::register))
         .route("/api/v1/auth/login", post(auth::login))
@@ -92,8 +93,17 @@ pub fn protected_router() -> Router<AppState> {
             get(feedback::list_feedback),
         )
         .route(
+            "/api/v1/profiles/{id}/feedback/timeline",
+            get(feedback::list_feedback_timeline),
+        )
+        .route(
             "/api/v1/profiles/{id}/feedback/hidden/all",
             delete(feedback::clear_all_hidden_jobs),
+        )
+        .route("/api/v1/feedback/stats", get(feedback::get_feedback_stats))
+        .route(
+            "/api/v1/feedback/export",
+            get(feedback::export_feedback_csv),
         )
         .route(
             "/api/v1/profiles/{id}/reranker-dataset",
@@ -153,6 +163,10 @@ pub fn protected_router() -> Router<AppState> {
             delete(feedback::remove_company_blacklist_by_slug),
         )
         .route(
+            "/api/v1/feedback/companies/{company_slug}",
+            patch(feedback::update_company_feedback_notes_by_slug),
+        )
+        .route(
             "/api/v1/feedback/jobs/bulk-hide",
             post(feedback::bulk_hide_jobs_by_company),
         )
@@ -162,7 +176,11 @@ pub fn protected_router() -> Router<AppState> {
         )
         .route(
             "/api/v1/feedback/jobs/{job_id}/bad-fit",
-            delete(feedback::undo_job_bad_fit),
+            post(feedback::mark_job_bad_fit_by_query).delete(feedback::undo_job_bad_fit),
+        )
+        .route(
+            "/api/v1/feedback/jobs/{job_id}",
+            patch(feedback::patch_job_interest_rating_by_query),
         )
         .route("/api/v1/jobs/recent", get(jobs::get_recent_jobs))
         .route("/api/v1/jobs/{id}", get(jobs::get_job_by_id))

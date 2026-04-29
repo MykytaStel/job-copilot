@@ -107,7 +107,7 @@ pub(super) fn assign_label(signals: &OutcomeSignals) -> Option<OutcomeLabelAssig
 
     if signals.saved {
         let mut reasons = vec!["saved".to_string()];
-        if signals.interest_rating == Some(2) {
+        if signals.interest_rating == Some(5) {
             reasons.push("love_it".to_string());
         }
         return Some(OutcomeLabelAssignment {

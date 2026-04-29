@@ -359,21 +359,21 @@ export function useDashboardPage() {
   });
 
   const badFitMutation = useMutation({
-    mutationFn: async (jobId: string) => {
+    mutationFn: async ({ jobId, reason }: { jobId: string; reason?: string }) => {
       if (!profileId) {
         throw new Error('Create a profile first');
       }
 
-      await markJobBadFit(profileId, jobId);
+      await markJobBadFit(profileId, jobId, reason);
     },
-    onSuccess: (_result, jobId) => {
+    onSuccess: (_result, variables) => {
       void invalidateFeedbackViewQueries(queryClient, profileId);
       showToast({
         type: 'success',
         message: 'Marked as bad fit',
         action: {
           label: 'Undo',
-          onClick: () => undoBadFitMutation.mutate(jobId),
+          onClick: () => undoBadFitMutation.mutate(variables.jobId),
         },
         durationMs: UNDO_TOAST_DURATION_MS,
       });

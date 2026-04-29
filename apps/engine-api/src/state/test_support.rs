@@ -42,6 +42,7 @@ impl AppState {
             app_name: "engine-api".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             database: Database::disabled(),
+            ml_sidecar_base_url: "http://localhost:8000".to_string(),
             profile_records,
             profile_ml_state: ProfileMlStateService::for_tests(
                 crate::services::profile_ml_state::ProfileMlStateServiceStub::default(),

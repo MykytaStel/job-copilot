@@ -1,30 +1,50 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 
 import {
   addCompanyBlacklist,
   addCompanyWhitelist,
   bulkHideJobsByCompany,
+  exportFeedback,
+  type FeedbackExportType,
   getFeedback,
+  getFeedbackStats,
+  getFeedbackTimeline,
   removeCompanyBlacklist,
   removeCompanyWhitelist,
   unhideJob,
   unmarkJobBadFit,
   unsaveJob,
+  updateCompanyFeedbackNotes,
 } from '../../api/feedback';
 import { getJobsFeed } from '../../api/jobs';
 import { invalidateFeedbackViewQueries } from '../../lib/queryInvalidation';
 import { readProfileId } from '../../lib/profileSession';
 import { queryKeys } from '../../queryKeys';
-import {
-  FEEDBACK_TAB_META,
-  type FeedbackTab,
-} from './FeedbackCenterComponents';
+import { FEEDBACK_TAB_META, type FeedbackTab } from './FeedbackCenterComponents';
 import { filterJobsBySearch } from './FeedbackCenterSections';
+
+const TIMELINE_PAGE_SIZE = 20;
 
 function normalizeCompanyName(companyName: string) {
   return companyName.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function exportTypeForTab(tab: FeedbackTab): FeedbackExportType {
+  if (tab === 'timeline') return 'saved';
+  return tab === 'bad-fit' ? 'bad_fit' : tab;
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+
+  URL.revokeObjectURL(url);
 }
 
 export function useFeedbackCenterPage() {
@@ -44,6 +64,22 @@ export function useFeedbackCenterPage() {
   const { data: feedbackOverview, isLoading: feedbackLoading } = useQuery({
     queryKey: queryKeys.feedback.profile(profileId ?? ''),
     queryFn: () => getFeedback(profileId!),
+    enabled: !!profileId,
+  });
+
+  const { data: feedbackStats } = useQuery({
+    queryKey: queryKeys.feedback.stats(profileId ?? ''),
+    queryFn: () => getFeedbackStats(profileId!),
+    enabled: !!profileId,
+    retry: false,
+  });
+
+  const feedbackTimelineQuery = useInfiniteQuery({
+    queryKey: queryKeys.feedback.timeline(profileId ?? ''),
+    queryFn: ({ pageParam }) =>
+      getFeedbackTimeline(profileId!, { limit: TIMELINE_PAGE_SIZE, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
     enabled: !!profileId,
   });
 
@@ -72,12 +108,18 @@ export function useFeedbackCenterPage() {
     () => filterJobsBySearch(badFitJobs, normalizedSearch),
     [normalizedSearch, badFitJobs],
   );
+  const timelineItems = useMemo(
+    () => feedbackTimelineQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [feedbackTimelineQuery.data],
+  );
+  const timelineTotalCount = feedbackTimelineQuery.data?.pages[0]?.totalCount ?? 0;
 
   const tabCounts: Record<FeedbackTab, number> = {
     saved: savedJobs.length,
     hidden: hiddenJobs.length,
     'bad-fit': badFitJobs.length,
     companies: whitelistedCompanies.length + blacklistedCompanies.length,
+    timeline: timelineTotalCount,
   };
 
   const activeTabMeta =
@@ -170,6 +212,15 @@ export function useFeedbackCenterPage() {
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
   });
 
+  const updateCompanyNotesMutation = useMutation({
+    mutationFn: ({ companySlug, notes }: { companySlug: string; notes: string }) =>
+      updateCompanyFeedbackNotes(profileId!, companySlug, notes),
+    onSuccess: () => {
+      invalidateAfterAction();
+    },
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+  });
+
   const bulkHideCompanyMutation = useMutation({
     mutationFn: async (companyName: string) => {
       const normalizedCompany = normalizeCompanyName(companyName);
@@ -193,6 +244,21 @@ export function useFeedbackCenterPage() {
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
   });
+
+  const exportMutation = useMutation({
+    mutationFn: async () => exportFeedback(exportTypeForTab(activeTab)),
+    onSuccess: ({ blob, filename }) => {
+      downloadBlob(blob, filename ?? `feedback-${exportTypeForTab(activeTab)}.csv`);
+      toast.success('Feedback CSV exported');
+    },
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+  });
+
+  function loadMoreTimeline() {
+    if (feedbackTimelineQuery.hasNextPage && !feedbackTimelineQuery.isFetchingNextPage) {
+      void feedbackTimelineQuery.fetchNextPage();
+    }
+  }
 
   function submitCompany(status: 'whitelist' | 'blacklist') {
     const value = (status === 'whitelist' ? whitelistInput : blacklistInput).trim();
@@ -221,11 +287,17 @@ export function useFeedbackCenterPage() {
     savedJobs,
     badFitJobs,
     summary,
+    feedbackStats,
     tabCounts,
     activeTabMeta,
     filteredSavedJobs,
     filteredHiddenJobs,
     filteredBadFitJobs,
+    timelineItems,
+    timelineTotalCount,
+    hasMoreTimeline: feedbackTimelineQuery.hasNextPage,
+    isTimelineLoading: feedbackTimelineQuery.isLoading,
+    isTimelineLoadingMore: feedbackTimelineQuery.isFetchingNextPage,
     whitelistedCompanies,
     blacklistedCompanies,
     isLoading: jobsLoading || feedbackLoading,
@@ -237,7 +309,10 @@ export function useFeedbackCenterPage() {
     addWhitelistMutation,
     addBlacklistMutation,
     moveCompanyMutation,
+    updateCompanyNotesMutation,
     bulkHideCompanyMutation,
+    exportMutation,
+    loadMoreTimeline,
     submitCompany,
   };
 }

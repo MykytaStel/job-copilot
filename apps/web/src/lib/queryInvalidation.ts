@@ -8,10 +8,7 @@ export function invalidateApplicationSummaryQueries(queryClient: QueryClient) {
   ]);
 }
 
-export function invalidateFeedbackViewQueries(
-  queryClient: QueryClient,
-  profileId?: string | null,
-) {
+export function invalidateFeedbackViewQueries(queryClient: QueryClient, profileId?: string | null) {
   const tasks = [
     queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() }),
     queryClient.invalidateQueries({ queryKey: queryKeys.analytics.all() }),
@@ -19,6 +16,8 @@ export function invalidateFeedbackViewQueries(
 
   if (profileId) {
     tasks.push(queryClient.invalidateQueries({ queryKey: queryKeys.feedback.profile(profileId) }));
+    tasks.push(queryClient.invalidateQueries({ queryKey: queryKeys.feedback.stats(profileId) }));
+    tasks.push(queryClient.invalidateQueries({ queryKey: queryKeys.feedback.timeline(profileId) }));
     tasks.push(queryClient.invalidateQueries({ queryKey: queryKeys.ml.rerankPrefix(profileId) }));
   }
 
