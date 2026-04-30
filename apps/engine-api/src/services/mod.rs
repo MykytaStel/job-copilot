@@ -1,5 +1,6 @@
 pub mod activities;
 pub mod applications;
+pub mod auth_credentials;
 pub mod behavior;
 pub mod cv_tailoring;
 pub mod feedback;

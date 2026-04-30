@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially Implemented
+Implemented for current profile-scoped auth model
 
 ## Context
 
@@ -27,6 +27,11 @@ per-route ownership checks.
 - Claims: `sub` contains the caller's `profile_id` (string UUID); `exp` is the
   standard expiry claim
 
+**Password credentials:**
+- Register/login use email and password.
+- Password hashes are stored in `profile_auth_credentials`, linked to `profiles.id`.
+- Hashing uses Argon2; plaintext passwords are never stored or returned.
+
 **AuthUser:**
 After successful validation, engine-api middleware inserts an `AuthUser` struct:
 ```
@@ -50,7 +55,8 @@ requests through. This is intentional for local development.
 
 **Production requirement:**
 A missing `JWT_SECRET` must be rejected at startup in a production deployment. This
-guard is not yet enforced.
+guard is enforced, and the Docker Compose development placeholder is rejected in
+production.
 
 ## Consequences
 
@@ -83,12 +89,13 @@ guard is not yet enforced.
 - Dev-mode passthrough when `JWT_SECRET` is absent.
 - `check_profile_ownership` helper exists in
   `apps/engine-api/src/api/middleware/auth.rs` and is unit-tested.
+- Production startup rejects missing/empty/placeholder `JWT_SECRET`.
+- Register/login require password credentials and verify Argon2 password hashes.
 
 **Partial / gaps — open security issues:**
-- Profile ownership guard is **not yet applied** to all profile-scoped route handlers.
-  The helper exists but is not wired into every handler. This is the next security slice.
-- `JWT_SECRET` absence is **not rejected** in production mode at startup.
-- ML internal token production startup validation is not reliably enforced.
+- Multi-user account ownership is still profile-scoped through `sub = profile_id`;
+  there is no separate `users.id` principal yet.
+- Email verification, password reset, rate limiting, and OAuth are not implemented.
 
 See [security-model.md](../security-model.md) for the full gap list and the linked
 Codex task for the next implementation slice.

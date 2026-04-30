@@ -11,6 +11,18 @@ infrastructure hardening are out of scope here.
 Engine-api is the sole authority for validating JWTs.
 No other service validates tokens from the browser.
 
+### Password Credentials
+
+Email/password auth is backed by `profile_auth_credentials`, which links one
+credential row to one `profiles.id`.
+
+- `POST /api/v1/auth/register` requires `name`, `email`, `password`, and `raw_text`
+- `POST /api/v1/auth/login` requires `email` and `password`
+- Passwords are hashed with Argon2 before storage; plaintext passwords are never
+  stored or returned by the API
+- Login failures return the same `invalid_credentials` response for missing email
+  and wrong password
+
 ### Token format
 
 - Algorithm: HS256
