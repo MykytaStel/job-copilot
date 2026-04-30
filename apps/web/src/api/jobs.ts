@@ -53,6 +53,9 @@ export type FitAnalysis = {
   positiveReasons: string[];
   negativeReasons: string[];
   evidence: string[];
+  sourceMatch: boolean;
+  workModeMatch?: boolean;
+  regionMatch?: boolean;
 };
 
 export type MissingSignalDetail = {
@@ -334,6 +337,9 @@ export async function analyzeFit(profileId: string, jobId: string): Promise<FitA
     positiveReasons: result.positive_reasons,
     negativeReasons: result.negative_reasons,
     evidence,
+    sourceMatch: result.source_match,
+    workModeMatch: result.work_mode_match ?? undefined,
+    regionMatch: result.region_match ?? undefined,
   };
 }
 
