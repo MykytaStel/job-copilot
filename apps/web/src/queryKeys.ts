@@ -99,6 +99,8 @@ export const queryKeys = {
     interviewPrepPrefix: (profileId: string) => ['ml', 'interviewPrep', profileId] as const,
     interviewPrep: (profileId: string, jobId: string) =>
       ['ml', 'interviewPrep', profileId, jobId] as const,
+    resumeMatch: (profileId: string, jobId: string, resumeId: string) =>
+      ['ml', 'resumeMatch', profileId, jobId, resumeId] as const,
   },
   analytics: {
     all: () => ['analytics'] as const,

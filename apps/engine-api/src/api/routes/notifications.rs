@@ -6,7 +6,7 @@ use crate::api::dto::notifications::{
     UnreadNotificationsCountResponse, UpdateNotificationPreferencesRequest,
 };
 use crate::api::error::{ApiError, ApiJson};
-use crate::api::middleware::auth::AuthUser;
+use crate::api::middleware::auth::{AuthUser, check_profile_ownership};
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::state::AppState;
 
@@ -28,6 +28,12 @@ pub async fn list_notifications(
         return Err(ApiError::invalid_limit(limit));
     }
 
+    state
+        .notifications_service
+        .materialize_due_task_notifications(&profile_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "notifications_write_failed"))?;
+
     let notifications = state
         .notifications_service
         .list_by_profile(&profile_id, limit)
@@ -44,18 +50,27 @@ pub async fn list_notifications(
 
 pub async fn mark_notification_read(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     Path(notification_id): Path<String>,
 ) -> Result<axum::Json<NotificationResponse>, ApiError> {
+    let Some(notification) = state
+        .notifications_service
+        .get_by_id(&notification_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "notifications_query_failed"))?
+    else {
+        return Err(notification_not_found(&notification_id));
+    };
+
+    check_profile_ownership(auth.as_deref(), &notification.profile_id)?;
+
     let Some(notification) = state
         .notifications_service
         .mark_read(&notification_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "notifications_write_failed"))?
     else {
-        return Err(ApiError::not_found(
-            "notification_not_found",
-            format!("Notification '{notification_id}' was not found"),
-        ));
+        return Err(notification_not_found(&notification_id));
     };
 
     Ok(axum::Json(NotificationResponse::from(notification)))
@@ -67,6 +82,12 @@ pub async fn get_unread_count(
 ) -> Result<axum::Json<UnreadNotificationsCountResponse>, ApiError> {
     let profile_id = require_profile_id(auth.as_deref())?;
     ensure_profile_exists(&state, None, &profile_id).await?;
+
+    state
+        .notifications_service
+        .materialize_due_task_notifications(&profile_id)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "notifications_write_failed"))?;
 
     let unread_count = state
         .notifications_service
@@ -131,6 +152,13 @@ pub async fn patch_notification_preferences(
 fn require_profile_id(auth: Option<&AuthUser>) -> Result<String, ApiError> {
     auth.map(|u| u.profile_id.clone())
         .ok_or_else(|| ApiError::unauthorized("auth_required", "Authentication is required"))
+}
+
+fn notification_not_found(notification_id: &str) -> ApiError {
+    ApiError::not_found(
+        "notification_not_found",
+        format!("Notification '{notification_id}' was not found"),
+    )
 }
 
 #[cfg(test)]
@@ -259,7 +287,7 @@ mod tests {
         ));
 
         let payload = parse_json_response(
-            mark_notification_read(State(state), Path("notification-1".to_string()))
+            mark_notification_read(State(state), None, Path("notification-1".to_string()))
                 .await
                 .expect("mark read should succeed"),
         )
@@ -267,6 +295,39 @@ mod tests {
 
         assert_eq!(payload["id"], json!("notification-1"));
         assert_eq!(payload["read_at"], json!("2026-04-19T00:00:00Z"));
+    }
+
+    #[tokio::test]
+    async fn mark_notification_read_rejects_owner_mismatch_without_mutating() {
+        let state = test_state(NotificationsService::for_tests(
+            NotificationsServiceStub::default().with_notification(Notification {
+                profile_id: "profile-2".to_string(),
+                ..sample_notification("notification-1", NotificationType::NewJobsFound)
+            }),
+        ));
+
+        let error = mark_notification_read(
+            State(state.clone()),
+            Some(Extension(AuthUser {
+                profile_id: "profile-1".to_string(),
+            })),
+            Path("notification-1".to_string()),
+        )
+        .await
+        .expect_err("owner mismatch should be rejected before mutation");
+
+        assert_eq!(
+            error.into_response().status(),
+            axum::http::StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            state
+                .notifications_service
+                .unread_count("profile-2")
+                .await
+                .expect("unread count should succeed"),
+            1
+        );
     }
 
     #[tokio::test]

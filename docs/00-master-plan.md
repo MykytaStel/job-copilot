@@ -61,7 +61,7 @@ ingestion (Rust) ─→ PostgreSQL ←─ engine-api (Rust) ←─ web (React)
 ### Зараз (активно)
 - Детермінований scoring в Rust — головний двигун
 - Template enrichment provider в Python — структуровані пояснення без LLM (`ml/app/llm_provider_template.py`)
-- **Ollama provider активний, але не universal default** — runtime code default для `ML_LLM_PROVIDER` це `template`; Docker stack за замовчуванням підставляє `ML_LLM_PROVIDER=ollama`
+- **Ollama provider активний, але не default** — runtime code і Docker Compose default для `ML_LLM_PROVIDER` це `template`; `ollama` вмикається явно через env var
 - Bootstrap ML з реальних feedbacks юзера (`ml/app/bootstrap_training.py`)
 - Всі 6 enrichment endpoints доступні: fit explanation, cover letter, interview prep, profile insights, coaching, weekly guidance
 - Notifications і global search вже доступні в web + engine-api

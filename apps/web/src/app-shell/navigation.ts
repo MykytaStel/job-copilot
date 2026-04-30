@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Settings,
   User,
+  Users,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -19,6 +20,7 @@ export type NavItem = {
 export const navigation: NavItem[] = [
   { name: 'Dashboard', to: '/', end: true, icon: LayoutDashboard },
   { name: 'Applications', to: '/applications', end: false, icon: KanbanSquare },
+  { name: 'Contacts', to: '/contacts', end: false, icon: Users },
   { name: 'Feedback', to: '/feedback', end: false, icon: MessageSquare },
   { name: 'Analytics', to: '/analytics', end: false, icon: BarChart3 },
   { name: 'Market', to: '/market', end: false, icon: LineChart },

@@ -10,6 +10,21 @@ export function useResumePicker(setRawText: (value: string) => void) {
     if (!file) return;
     event.target.value = '';
 
+    const MAX_SIZE_BYTES = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE_BYTES) {
+      toast.error(
+        `Файл задто великий (${(file.size / 1024 / 1024).toFixed(1)} МБ). Максимальний розмір — 5 МБ.`,
+      );
+      return;
+    }
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const allowedExts = new Set(['pdf', 'txt', 'md', 'text']);
+    if (!allowedExts.has(ext ?? '')) {
+      toast.error('Непідтримуваний формат. Підтримуються: PDF, TXT, MD.');
+      return;
+    }
+
     if (file.type === 'application/pdf') {
       const loadingToast = toast.loading('Читаємо PDF…');
       try {

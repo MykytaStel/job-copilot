@@ -1,4 +1,11 @@
-import { Briefcase, CalendarDays, DollarSign, Search, TrendingUp } from 'lucide-react';
+import {
+  Briefcase,
+  CalendarDays,
+  DollarSign,
+  Search,
+  TrendingUp,
+  TriangleAlert,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { DashboardPageState } from '../../features/dashboard/useDashboardPage';
 import type { LifecycleFilter } from '../../features/dashboard/useDashboardPage';
@@ -27,6 +34,7 @@ export function DashboardMatchesSection({
   jobs,
   allJobs,
   rerankCoverage,
+  rerankerUnavailable,
   jobsLoading,
   lifecycleOptions,
   selectedLifecycle,
@@ -57,6 +65,7 @@ export function DashboardMatchesSection({
   | 'jobs'
   | 'allJobs'
   | 'rerankCoverage'
+  | 'rerankerUnavailable'
   | 'jobsLoading'
   | 'lifecycleOptions'
   | 'selectedLifecycle'
@@ -187,6 +196,15 @@ export function DashboardMatchesSection({
               Score sorting reranks the first {rerankCoverage.rankedJobs} feed items out of{' '}
               {rerankCoverage.totalJobs} to keep the dashboard responsive.
             </p>
+          ) : null}
+
+          {rerankerUnavailable ? (
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/8 px-3 py-2 text-sm text-amber-300">
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+              <p className="m-0 leading-5">
+                Ranking service unavailable — showing deterministic order.
+              </p>
+            </div>
           ) : null}
 
           {sourcesError && (

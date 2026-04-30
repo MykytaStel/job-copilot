@@ -59,7 +59,7 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
             };
 
             match scrape_result {
-                Ok(batch) => match db::upsert_batch(pool, &batch).await {
+                Ok(scrape_output) => match db::upsert_batch(pool, &scrape_output.batch).await {
                     Ok(summary) => {
                         let market_snapshot_summary = match db::refresh_market_snapshots(pool).await
                         {
@@ -74,7 +74,12 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                             }
                         };
 
+                        let mut errors_json = scrape_output.errors.clone();
+                        if market_snapshot_summary.is_none() {
+                            errors_json.push("market_snapshot_refresh_failed".to_string());
+                        }
                         let run_errors = scrape_errors
+                            + scrape_output.jobs_failed
                             + if market_snapshot_summary.is_none() {
                                 1
                             } else {
@@ -89,9 +94,12 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                             pool,
                             &db::IngestionRunMetrics {
                                 source: source.name(),
-                                jobs_fetched: batch.jobs.len() as u32,
+                                jobs_fetched: scrape_output.batch.jobs.len() as u32,
+                                jobs_attempted: scrape_output.jobs_attempted,
                                 jobs_upserted: summary.jobs_written as u32,
+                                jobs_failed: scrape_output.jobs_failed,
                                 errors: run_errors,
+                                errors_json,
                                 duration_ms: started.elapsed().as_millis() as u64,
                                 status,
                             },
@@ -120,13 +128,18 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                         )
                     }
                     Err(error) => {
+                        let mut errors_json = scrape_output.errors.clone();
+                        errors_json.push("db_upsert_failed".to_string());
                         if let Err(metrics_error) = db::record_ingestion_run(
                             pool,
                             &db::IngestionRunMetrics {
                                 source: source.name(),
-                                jobs_fetched: batch.jobs.len() as u32,
+                                jobs_fetched: scrape_output.batch.jobs.len() as u32,
+                                jobs_attempted: scrape_output.jobs_attempted,
                                 jobs_upserted: 0,
-                                errors: scrape_errors + 1,
+                                jobs_failed: scrape_output.jobs_failed,
+                                errors: scrape_errors + scrape_output.jobs_failed + 1,
+                                errors_json,
                                 duration_ms: started.elapsed().as_millis() as u64,
                                 status: db::IngestionRunStatus::Failed,
                             },
@@ -148,8 +161,11 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                         &db::IngestionRunMetrics {
                             source: source.name(),
                             jobs_fetched: 0,
+                            jobs_attempted: 0,
                             jobs_upserted: 0,
+                            jobs_failed: 0,
                             errors: scrape_errors,
+                            errors_json: vec!["scrape_failed".to_string()],
                             duration_ms: started.elapsed().as_millis() as u64,
                             status: db::IngestionRunStatus::Failed,
                         },

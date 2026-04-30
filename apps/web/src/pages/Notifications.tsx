@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, BriefcaseBusiness, CheckCheck, Clock3, ExternalLink, RefreshCcw } from 'lucide-react';
+import {
+  Bell,
+  BriefcaseBusiness,
+  CheckCheck,
+  Clock3,
+  ExternalLink,
+  RefreshCcw,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -66,31 +73,48 @@ function jobIdsFromPayload(payload: AppNotification['payload']) {
   if (!Array.isArray(jobIds)) return [];
 
   return Array.from(
-    new Set(jobIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)),
+    new Set(
+      jobIds.filter(
+        (value): value is string => typeof value === 'string' && value.trim().length > 0,
+      ),
+    ),
   );
+}
+
+function stringFromPayload(payload: AppNotification['payload'], key: string) {
+  const value = payload?.[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
 function NotificationRow({
   notification,
   onMarkRead,
+  onOpenApplication,
   onOpenJob,
   onReviewMatches,
   isPending,
 }: {
   notification: AppNotification;
   onMarkRead: (id: string) => void;
+  onOpenApplication: (notification: AppNotification, applicationId: string) => void;
   onOpenJob: (notification: AppNotification, jobId: string) => void;
   onReviewMatches: (notification: AppNotification, jobIds: string[]) => void;
   isPending: boolean;
 }) {
   const meta = NOTIFICATION_META[notification.type];
   const jobIds = jobIdsFromPayload(notification.payload);
+  const applicationId = stringFromPayload(notification.payload, 'application_id');
   const firstJobId = jobIds[0] ?? null;
-  const isActionable = jobIds.length > 0;
+  const isActionable = jobIds.length > 0 || !!applicationId;
 
   function handleOpen() {
     if (jobIds.length > 0) {
       onReviewMatches(notification, jobIds);
+      return;
+    }
+
+    if (applicationId) {
+      onOpenApplication(notification, applicationId);
     }
   }
 
@@ -129,7 +153,10 @@ function NotificationRow({
                 {meta.label}
               </Badge>
               {!notification.readAt && (
-                <Badge variant="default" className="px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]">
+                <Badge
+                  variant="default"
+                  className="px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]"
+                >
                   Unread
                 </Badge>
               )}
@@ -146,7 +173,11 @@ function NotificationRow({
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white-a04 px-2.5 py-1">
                 <BriefcaseBusiness className="h-3.5 w-3.5" />
-                {jobIds.length > 0 ? `${jobIds.length} match${jobIds.length === 1 ? '' : 'es'}` : formatEnumLabel(notification.type)}
+                {jobIds.length > 0
+                  ? `${jobIds.length} match${jobIds.length === 1 ? '' : 'es'}`
+                  : applicationId
+                    ? 'Application task'
+                    : formatEnumLabel(notification.type)}
               </span>
             </div>
           </div>
@@ -164,6 +195,20 @@ function NotificationRow({
               disabled={isPending}
             >
               Review matches
+            </Button>
+          ) : null}
+          {applicationId ? (
+            <Button
+              variant="default"
+              size="sm"
+              className="h-10 rounded-xl px-3"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenApplication(notification, applicationId);
+              }}
+              disabled={isPending}
+            >
+              Open application
             </Button>
           ) : null}
           {firstJobId ? (
@@ -236,6 +281,17 @@ export default function Notifications() {
         await markReadMutation.mutateAsync(notification.id);
       }
       navigate(`/jobs/${encodeURIComponent(jobId)}`);
+    } catch (value) {
+      toast.error(value instanceof Error ? value.message : 'Failed to open notification');
+    }
+  }
+
+  async function openNotificationApplication(notification: AppNotification, applicationId: string) {
+    try {
+      if (!notification.readAt) {
+        await markReadMutation.mutateAsync(notification.id);
+      }
+      navigate(`/applications/${encodeURIComponent(applicationId)}`);
     } catch (value) {
       toast.error(value instanceof Error ? value.message : 'Failed to open notification');
     }
@@ -366,6 +422,7 @@ export default function Notifications() {
                     key={notification.id}
                     notification={notification}
                     onMarkRead={(id) => markReadMutation.mutate(id)}
+                    onOpenApplication={openNotificationApplication}
                     onOpenJob={openNotificationJob}
                     onReviewMatches={reviewNotificationMatches}
                     isPending={markReadMutation.isPending}

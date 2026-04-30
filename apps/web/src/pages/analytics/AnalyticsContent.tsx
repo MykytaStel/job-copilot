@@ -25,7 +25,11 @@ export function AnalyticsContent({ state }: { state: AnalyticsPageState }) {
     insightsError,
   } = state;
 
-  const { trigger: onRetrain, status: retrainStatus, errorMsg: retrainError } = useRetrainModel(profileId ?? null);
+  const {
+    trigger: onRetrain,
+    status: retrainStatus,
+    errorMsg: retrainError,
+  } = useRetrainModel(profileId ?? null);
 
   if (!summary) {
     return null;
@@ -39,13 +43,19 @@ export function AnalyticsContent({ state }: { state: AnalyticsPageState }) {
         breadcrumb={[{ label: 'Dashboard', href: '/' }, { label: 'Analytics' }]}
       />
 
-      <AnalyticsHero summary={summary} behavior={behavior} funnel={funnel} ingestionStats={ingestionStats} />
+      <AnalyticsHero
+        summary={summary}
+        behavior={behavior}
+        funnel={funnel}
+        ingestionStats={ingestionStats}
+      />
 
       <PageGrid aside={<AnalyticsSidebar summary={summary} aiInsights={aiInsights} />}>
         <AnalyticsMainSections
           summary={summary}
           behavior={behavior}
           funnel={funnel}
+          ingestionStats={ingestionStats}
           llmCtx={llmCtx}
           rerankerMetrics={rerankerMetrics}
           weeklyGuidance={weeklyGuidance}
