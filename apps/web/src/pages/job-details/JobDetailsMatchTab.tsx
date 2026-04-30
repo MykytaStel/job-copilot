@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, FileText, MinusCircle, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FileText, Globe, MapPin, MinusCircle, Sparkles, Wifi, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import type { JobPosting } from '@job-copilot/shared/jobs';
@@ -29,8 +29,8 @@ export function JobDetailsMatchTab({
   if (!fit) {
     return (
       <Section
-        title="Match Breakdown"
-        description="Detailed evidence, matched terms, and missing signals from the current fit analysis."
+        title="Why this score?"
+        description="Matched signals, score breakdown, and missing gaps from the current fit analysis."
         icon={Sparkles}
       >
         <div className="space-y-5">
@@ -46,10 +46,20 @@ export function JobDetailsMatchTab({
     );
   }
 
+  const matchedRoleCount = fit.matchedRoles.length;
+  const matchedSkillCount = fit.matchedSkills.length;
+  const matchedKeywordCount = fit.matchedKeywords.length;
+
+  const matchSummaryParts = [
+    matchedRoleCount > 0 && `${matchedRoleCount} role${matchedRoleCount !== 1 ? 's' : ''} matched`,
+    matchedSkillCount > 0 && `${matchedSkillCount} skill${matchedSkillCount !== 1 ? 's' : ''} matched`,
+    matchedKeywordCount > 0 && `${matchedKeywordCount} keyword${matchedKeywordCount !== 1 ? 's' : ''} matched`,
+  ].filter(Boolean);
+
   return (
     <Section
-      title="Match Breakdown"
-      description="Matched roles explain why the job is relevant; missing signals show target/profile evidence not found strongly enough in this posting."
+      title="Why this score?"
+      description="Matched signals explain why the job is relevant; missing signals show profile evidence not found strongly enough in this posting."
       icon={Sparkles}
     >
       <div className="space-y-5">
@@ -61,10 +71,11 @@ export function JobDetailsMatchTab({
                 fit.negativeReasons[0] ??
                 'Fit analysis is based on canonical Rust matching over the stored profile and job signals.'}
             </p>
-            <p className="m-0 text-xs leading-5 text-muted-foreground">
-              A Mobile Engineer role can match through mobile, Kotlin, iOS, or Android signals while
-              React Native remains missing when that specific term is not evidenced strongly enough.
-            </p>
+            {matchSummaryParts.length > 0 ? (
+              <p className="m-0 text-xs leading-5 text-muted-foreground">
+                {matchSummaryParts.join(' · ')}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -73,6 +84,8 @@ export function JobDetailsMatchTab({
           <ScorePart label="Salary" value={fit.scoreBreakdown.salaryScore} />
           <ScorePart label="Freshness" value={fit.scoreBreakdown.freshnessScore} />
         </div>
+
+        <ContextSignals fit={fit} />
 
         <ResumeMatchPanel
           activeResume={activeResume}
@@ -129,25 +142,82 @@ export function JobDetailsMatchTab({
           details={fit.missingSignalDetails}
         />
 
-        <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
-          <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-success">
-            <CheckCircle2 className="h-4 w-4" />
-            Matched terms
-          </p>
-          {fit.matchedTerms.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {fit.matchedTerms.map((term) => (
-                <Badge key={term} variant="success" className="px-3 py-1 text-xs">
-                  {term}
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <p className="m-0 text-sm text-muted-foreground">No matched terms returned.</p>
-          )}
-        </div>
+        <MatchedSignals fit={fit} />
       </div>
     </Section>
+  );
+}
+
+function ContextSignals({ fit }: { fit: FitAnalysis }) {
+  const rows: { label: string; icon: typeof Globe; value: boolean | undefined }[] = [
+    { label: 'Source', icon: Globe, value: fit.sourceMatch },
+    { label: 'Work mode', icon: Wifi, value: fit.workModeMatch },
+    { label: 'Region', icon: MapPin, value: fit.regionMatch },
+  ];
+
+  const visibleRows = rows.filter((r) => r.value !== undefined);
+  if (visibleRows.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
+      <p className="mb-3 text-sm font-medium text-card-foreground">Context signals</p>
+      <div className="space-y-2">
+        {visibleRows.map(({ label, icon: Icon, value }) => (
+          <div key={label} className="flex items-center gap-3">
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">{label}</span>
+            {value ? (
+              <span className="ml-auto flex items-center gap-1 text-xs font-medium text-content-success">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Matched
+              </span>
+            ) : (
+              <span className="ml-auto flex items-center gap-1 text-xs font-medium text-content-warning">
+                <XCircle className="h-3.5 w-3.5" />
+                Not matched
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MatchedSignals({ fit }: { fit: FitAnalysis }) {
+  const groups = [
+    { label: 'Roles', items: fit.matchedRoles },
+    { label: 'Skills', items: fit.matchedSkills },
+    { label: 'Keywords', items: fit.matchedKeywords },
+  ].filter((g) => g.items.length > 0);
+
+  return (
+    <div className="rounded-2xl border border-border/70 bg-surface-muted p-4">
+      <p className="mb-3 flex items-center gap-2 text-sm font-medium text-content-success">
+        <CheckCircle2 className="h-4 w-4" />
+        Matched signals
+      </p>
+      {groups.length > 0 ? (
+        <div className="space-y-4">
+          {groups.map(({ label, items }) => (
+            <div key={label}>
+              <p className="mb-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {label}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {items.map((item) => (
+                  <Badge key={item} variant="success" className="px-3 py-1 text-xs">
+                    {item}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="m-0 text-sm text-muted-foreground">No matched signals returned.</p>
+      )}
+    </div>
   );
 }
 
