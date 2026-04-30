@@ -8,10 +8,11 @@ use tracing::{info, warn};
 
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
-    DetailSnapshot, ScraperConfig, cleanup_description_text, collect_text, extract_skills,
-    headers::build_default_headers, infer_company_meta, infer_remote_type,
-    infer_seniority_from_title_and_description, merge_detail_into_result, normalize_company_name,
-    normalized_non_empty, parse_salary_range_with_usd_monthly, polite_delay,
+    DetailSnapshot, ScraperConfig, ScraperRun, cleanup_description_text, collect_text,
+    detail_error_summaries, extract_skills, fetch_with_backoff, headers::build_default_headers,
+    infer_company_meta, infer_remote_type, infer_seniority_from_title_and_description,
+    merge_detail_into_result, normalize_company_name, normalized_non_empty,
+    parse_salary_range_with_usd_monthly, polite_delay,
 };
 
 const SOURCE: &str = "dou_ua";
@@ -38,7 +39,7 @@ impl DouUaScraper {
         Ok(Self { client })
     }
 
-    pub async fn scrape(&self, config: &ScraperConfig) -> Result<Vec<NormalizationResult>, String> {
+    pub async fn scrape(&self, config: &ScraperConfig) -> Result<ScraperRun, String> {
         let fetched_at = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         info!(source = SOURCE, url = FEED_URL, "fetching RSS feed");
 
@@ -52,7 +53,12 @@ impl DouUaScraper {
 
         if filtered.is_empty() {
             warn!(source = SOURCE, "RSS feed returned no matching jobs");
-            return Ok(Vec::new());
+            return Ok(ScraperRun {
+                jobs: Vec::new(),
+                jobs_attempted: 0,
+                jobs_failed: 0,
+                errors: Vec::new(),
+            });
         }
 
         let mut results = Vec::new();
@@ -62,22 +68,20 @@ impl DouUaScraper {
             }
         }
 
+        let jobs_attempted = results.len() as u32;
         let results = self.enrich_page_results(results, &fetched_at).await;
+        let jobs_failed = jobs_attempted.saturating_sub(results.len() as u32);
         info!(source = SOURCE, jobs = results.len(), "parsed RSS feed");
-        Ok(results)
+        Ok(ScraperRun {
+            jobs: results,
+            jobs_attempted,
+            jobs_failed,
+            errors: detail_error_summaries(SOURCE, jobs_failed),
+        })
     }
 
     async fn fetch(&self, url: &str) -> Result<String, String> {
-        self.client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| format!("request failed: {e}"))?
-            .error_for_status()
-            .map_err(|e| format!("HTTP error: {e}"))?
-            .text()
-            .await
-            .map_err(|e| format!("body read failed: {e}"))
+        fetch_with_backoff(&self.client, url).await
     }
 
     async fn enrich_page_results(

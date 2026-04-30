@@ -24,10 +24,15 @@ import {
 import type { RankedJob } from '../../api/jobs';
 import { getJobsFeed, rerankJobs } from '../../api/jobs';
 import { getSources } from '../../api/profiles';
+import {
+  getRerankerCacheInvalidationStatus,
+  RERANKER_CACHE_INVALIDATION_EVENT,
+  type RerankerCacheInvalidationEventDetail,
+} from '../../api/reranker';
 import { logJobImpressionsOnce } from '../events/jobImpressions';
 import {
   invalidateApplicationSummaryQueries,
-  invalidateFeedbackViewQueries,
+  invalidateJobQueries,
 } from '../../lib/queryInvalidation';
 import { readProfileId } from '../../lib/profileSession';
 import {
@@ -109,6 +114,9 @@ export function useDashboardPage() {
   const queryClient = useQueryClient(); const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
+  const [rerankerCacheDegraded, setRerankerCacheDegraded] = useState(
+    () => getRerankerCacheInvalidationStatus(profileId) === 'degraded',
+  );
   const { sortMode, setSortMode: setDisplaySortMode } = useDisplayPrefs();
   const setSortMode = useCallback((next: SortMode) => {
     setDisplaySortMode(next);
@@ -189,12 +197,30 @@ export function useDashboardPage() {
   const rerankJobIds = rerankCandidates.map((job) => job.id);
   const rerankJobsKey = rerankJobIds.join('|');
 
-  const { data: rankData } = useQuery<RankedJob[]>({
+  const { data: rankData, error: rerankError } = useQuery<RankedJob[]>({
     queryKey: queryKeys.ml.rerank(profileId ?? '', rerankJobsKey),
     queryFn: () => rerankJobs(profileId!, rerankJobIds),
     enabled: !!profileId && sortMode === 'relevance' && rerankJobIds.length > 0,
     retry: false,
   });
+
+  useEffect(() => {
+    setRerankerCacheDegraded(getRerankerCacheInvalidationStatus(profileId) === 'degraded');
+  }, [profileId]);
+
+  useEffect(() => {
+    function handleRerankerCacheInvalidation(event: Event) {
+      const detail = (event as CustomEvent<RerankerCacheInvalidationEventDetail>).detail;
+      if (!detail || detail.profileId !== profileId) return;
+
+      setRerankerCacheDegraded(detail.status === 'degraded');
+    }
+
+    window.addEventListener(RERANKER_CACHE_INVALIDATION_EVENT, handleRerankerCacheInvalidation);
+    return () => {
+      window.removeEventListener(RERANKER_CACHE_INVALIDATION_EVENT, handleRerankerCacheInvalidation);
+    };
+  }, [profileId]);
 
   const scoreById = useMemo(() => {
     const map = new Map<string, number>();
@@ -257,7 +283,7 @@ export function useDashboardPage() {
       }
     },
     onSuccess: () => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateJobQueries(queryClient, profileId);
       void invalidateApplicationSummaryQueries(queryClient);
       showToast({ type: 'success', message: 'Job saved' });
     },
@@ -275,7 +301,7 @@ export function useDashboardPage() {
       await undoJobHide(profileId, jobId);
     },
     onSuccess: () => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateJobQueries(queryClient, profileId);
       showToast({ type: 'success', message: 'Hide undone' });
     },
     onError: (value: unknown) => {
@@ -292,7 +318,7 @@ export function useDashboardPage() {
       await undoJobBadFit(profileId, jobId);
     },
     onSuccess: () => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateJobQueries(queryClient, profileId);
       showToast({ type: 'success', message: 'Bad-fit mark undone' });
     },
     onError: (value: unknown) => {
@@ -309,7 +335,7 @@ export function useDashboardPage() {
       await hideJobForProfile(profileId, jobId);
     },
     onSuccess: (_result, jobId) => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateJobQueries(queryClient, profileId, jobId);
       showToast({
         type: 'success',
         message: 'Job hidden',
@@ -347,7 +373,7 @@ export function useDashboardPage() {
     },
     onSuccess: (result) => {
       if (!result) return;
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateJobQueries(queryClient, profileId);
       showToast({
         type: 'success',
         message: `Hidden ${result.affectedCount} jobs from this company`,
@@ -367,7 +393,7 @@ export function useDashboardPage() {
       await markJobBadFit(profileId, jobId, reason);
     },
     onSuccess: (_result, variables) => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateJobQueries(queryClient, profileId, variables.jobId);
       showToast({
         type: 'success',
         message: 'Marked as bad fit',
@@ -392,7 +418,7 @@ export function useDashboardPage() {
       await unmarkJobBadFit(profileId, jobId);
     },
     onSuccess: () => {
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateJobQueries(queryClient, profileId);
       showToast({ type: 'success', message: 'Bad-fit mark removed' });
     },
     onError: (value: unknown) => {
@@ -433,6 +459,8 @@ export function useDashboardPage() {
     totalJobs: allJobs.length,
     isTruncated: allJobs.length > rerankJobIds.length,
   };
+  const rerankerUnavailable =
+    sortMode === 'relevance' && Boolean(profileId) && (rerankerCacheDegraded || Boolean(rerankError));
 
   const insights = [
     {
@@ -495,6 +523,7 @@ export function useDashboardPage() {
     interviewedCount,
     mode,
     rerankCoverage,
+    rerankerUnavailable,
     insights,
     saveMutation,
     hideMutation,

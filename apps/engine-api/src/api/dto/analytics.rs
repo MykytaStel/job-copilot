@@ -198,8 +198,18 @@ pub struct LlmContextResponse {
 #[derive(Debug, Serialize)]
 pub struct IngestionSourceEntry {
     pub source: String,
+    pub display_name: String,
     pub count: u32,
-    pub last_seen: String,
+    pub last_seen: Option<String>,
+    pub last_run_at: Option<String>,
+    pub next_scheduled_run_at: Option<String>,
+    pub status: String,
+    pub jobs_fetched: u32,
+    pub jobs_attempted: u32,
+    pub jobs_upserted: u32,
+    pub jobs_failed: u32,
+    pub errors: u32,
+    pub errors_json: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]

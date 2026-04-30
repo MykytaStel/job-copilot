@@ -16,7 +16,7 @@ import { Page } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { cn } from '../lib/cn';
-import { invalidateFeedbackViewQueries } from '../lib/queryInvalidation';
+import { invalidateFeedbackQueries } from '../lib/queryInvalidation';
 import { readProfileId } from '../lib/profileSession';
 import { queryKeys } from '../queryKeys';
 
@@ -122,7 +122,7 @@ export default function CompanyDetail() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.market.companyDetail(slug, profileId),
       });
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateFeedbackQueries(queryClient, profileId);
       toast.success('Company preference updated');
     },
     onError: (error: unknown) => {

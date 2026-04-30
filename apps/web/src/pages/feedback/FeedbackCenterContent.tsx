@@ -93,6 +93,16 @@ export function FeedbackCenterContent({ state }: { state: FeedbackCenterPageStat
           searchQuery={state.searchQuery}
           onUnsave={(jobId) => state.unsaveMutation.mutate(jobId)}
           isPending={state.unsaveMutation.isPending}
+          selectedJobIds={state.selectedJobIds}
+          selectedJobsCount={state.selectedJobsCount}
+          allVisibleJobsSelected={state.allVisibleJobsSelected}
+          onSelectAllVisible={state.setAllVisibleJobsSelected}
+          onToggleSelected={state.toggleJobSelected}
+          onClearSelection={state.clearSelectedJobs}
+          onBulkHide={() => state.bulkJobActionMutation.mutate('hide')}
+          onBulkBadFit={() => state.bulkJobActionMutation.mutate('bad-fit')}
+          onBulkSave={() => state.bulkJobActionMutation.mutate('save')}
+          isBulkPending={state.bulkJobActionMutation.isPending}
         />
       ) : null}
 
@@ -102,6 +112,16 @@ export function FeedbackCenterContent({ state }: { state: FeedbackCenterPageStat
           searchQuery={state.searchQuery}
           onUnhide={(jobId) => state.unhideMutation.mutate(jobId)}
           isPending={state.unhideMutation.isPending}
+          selectedJobIds={state.selectedJobIds}
+          selectedJobsCount={state.selectedJobsCount}
+          allVisibleJobsSelected={state.allVisibleJobsSelected}
+          onSelectAllVisible={state.setAllVisibleJobsSelected}
+          onToggleSelected={state.toggleJobSelected}
+          onClearSelection={state.clearSelectedJobs}
+          onBulkHide={() => state.bulkJobActionMutation.mutate('hide')}
+          onBulkBadFit={() => state.bulkJobActionMutation.mutate('bad-fit')}
+          onBulkSave={() => state.bulkJobActionMutation.mutate('save')}
+          isBulkPending={state.bulkJobActionMutation.isPending}
         />
       ) : null}
 
@@ -111,6 +131,16 @@ export function FeedbackCenterContent({ state }: { state: FeedbackCenterPageStat
           searchQuery={state.searchQuery}
           onUnmark={(jobId) => state.unmarkBadFitMutation.mutate(jobId)}
           isPending={state.unmarkBadFitMutation.isPending}
+          selectedJobIds={state.selectedJobIds}
+          selectedJobsCount={state.selectedJobsCount}
+          allVisibleJobsSelected={state.allVisibleJobsSelected}
+          onSelectAllVisible={state.setAllVisibleJobsSelected}
+          onToggleSelected={state.toggleJobSelected}
+          onClearSelection={state.clearSelectedJobs}
+          onBulkHide={() => state.bulkJobActionMutation.mutate('hide')}
+          onBulkBadFit={() => state.bulkJobActionMutation.mutate('bad-fit')}
+          onBulkSave={() => state.bulkJobActionMutation.mutate('save')}
+          isBulkPending={state.bulkJobActionMutation.isPending}
         />
       ) : null}
 

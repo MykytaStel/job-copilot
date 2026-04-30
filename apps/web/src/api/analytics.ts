@@ -480,12 +480,48 @@ type EngineIngestionStatsResponse = {
   last_ingested_at: string | null;
   total_jobs: number;
   active_jobs: number;
+  inactive_jobs: number;
+  sources: EngineIngestionSourceEntry[];
+};
+
+type EngineIngestionSourceEntry = {
+  source: string;
+  display_name: string;
+  count: number;
+  last_seen: string | null;
+  last_run_at: string | null;
+  next_scheduled_run_at: string | null;
+  status: string;
+  jobs_fetched: number;
+  jobs_attempted: number;
+  jobs_upserted: number;
+  jobs_failed: number;
+  errors: number;
+  errors_json: string[];
 };
 
 export type IngestionStats = {
   lastIngestedAt: string | null;
   totalJobs: number;
   activeJobs: number;
+  inactiveJobs: number;
+  sources: IngestionSourceEntry[];
+};
+
+export type IngestionSourceEntry = {
+  source: string;
+  displayName: string;
+  count: number;
+  lastSeen: string | null;
+  lastRunAt: string | null;
+  nextScheduledRunAt: string | null;
+  status: string;
+  jobsFetched: number;
+  jobsAttempted: number;
+  jobsUpserted: number;
+  jobsFailed: number;
+  errors: number;
+  errorMessages: string[];
 };
 
 export async function getIngestionStats(): Promise<IngestionStats> {
@@ -495,5 +531,21 @@ export async function getIngestionStats(): Promise<IngestionStats> {
     lastIngestedAt: response.last_ingested_at,
     totalJobs: response.total_jobs,
     activeJobs: response.active_jobs,
+    inactiveJobs: response.inactive_jobs,
+    sources: response.sources.map((source) => ({
+      source: source.source,
+      displayName: source.display_name,
+      count: source.count,
+      lastSeen: source.last_seen,
+      lastRunAt: source.last_run_at,
+      nextScheduledRunAt: source.next_scheduled_run_at,
+      status: source.status,
+      jobsFetched: source.jobs_fetched,
+      jobsAttempted: source.jobs_attempted,
+      jobsUpserted: source.jobs_upserted,
+      jobsFailed: source.jobs_failed,
+      errors: source.errors,
+      errorMessages: source.errors_json,
+    })),
   };
 }

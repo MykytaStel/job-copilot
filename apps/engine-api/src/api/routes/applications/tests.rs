@@ -186,6 +186,7 @@ async fn creates_application() {
 
     let result = create_application(
         State(state),
+        None,
         ApiJson(crate::api::dto::applications::CreateApplicationRequest {
             job_id: "job-1".to_string(),
             status: "saved".to_string(),
@@ -213,6 +214,7 @@ async fn creates_profile_scoped_application_event_when_profile_id_is_provided() 
 
     let (status, Json(application)) = create_application(
         State(state.clone()),
+        None,
         ApiJson(crate::api::dto::applications::CreateApplicationRequest {
             job_id: "job-1".to_string(),
             status: "saved".to_string(),

@@ -7,7 +7,7 @@ import type {
   SalaryFeedbackSignal,
   WorkModeFeedbackSignal,
 } from '@job-copilot/shared/feedback';
-import { json, mlRequest, request, requestBlob } from './client';
+import { json, request, requestBlob } from './client';
 import type {
   EngineCompanyFeedbackRecord,
   EngineFeedbackOverviewResponse,
@@ -16,6 +16,7 @@ import type {
   EngineJobFeedbackRecord,
 } from './engine-types';
 import { mapCompanyFeedbackRecord, mapJobFeedbackRecord } from './mappers';
+import { invalidateRerankCache } from './reranker';
 
 export type FeedbackStats = {
   savedThisWeekCount: number;
@@ -47,9 +48,7 @@ export type FeedbackTimelinePage = {
 };
 
 async function bustRerankCache(profileId: string): Promise<void> {
-  await mlRequest<void>('/api/v1/rerank/invalidate', json('POST', { profile_id: profileId })).catch(
-    () => undefined,
-  );
+  await invalidateRerankCache(profileId);
 }
 
 export async function getFeedback(profileId: string): Promise<FeedbackOverview> {
@@ -123,7 +122,7 @@ export async function exportFeedback(
 
 export async function markJobSaved(profileId: string, jobId: string): Promise<JobFeedbackRecord> {
   const record = await request<EngineJobFeedbackRecord>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/saved`,
+    `/api/v1/profiles/${encodeURIComponent(profileId)}/jobs/${encodeURIComponent(jobId)}/saved`,
     json('PUT', {}),
   );
   await bustRerankCache(profileId);
@@ -135,7 +134,7 @@ export async function hideJobForProfile(
   jobId: string,
 ): Promise<JobFeedbackRecord> {
   const record = await request<EngineJobFeedbackRecord>(
-    `/api/v1/profiles/${profileId}/jobs/${jobId}/hidden`,
+    `/api/v1/profiles/${encodeURIComponent(profileId)}/jobs/${encodeURIComponent(jobId)}/hidden`,
     json('PUT', {}),
   );
   await bustRerankCache(profileId);
@@ -170,15 +169,27 @@ export async function markJobBadFit(
 }
 
 export async function unsaveJob(profileId: string, jobId: string): Promise<void> {
-  await request<void>(`/api/v1/profiles/${profileId}/jobs/${jobId}/saved`, { method: 'DELETE' });
+  await request<void>(
+    `/api/v1/profiles/${encodeURIComponent(profileId)}/jobs/${encodeURIComponent(jobId)}/saved`,
+    { method: 'DELETE' },
+  );
+  await bustRerankCache(profileId);
 }
 
 export async function unhideJob(profileId: string, jobId: string): Promise<void> {
-  await request<void>(`/api/v1/profiles/${profileId}/jobs/${jobId}/hidden`, { method: 'DELETE' });
+  await request<void>(
+    `/api/v1/profiles/${encodeURIComponent(profileId)}/jobs/${encodeURIComponent(jobId)}/hidden`,
+    { method: 'DELETE' },
+  );
+  await bustRerankCache(profileId);
 }
 
 export async function unmarkJobBadFit(profileId: string, jobId: string): Promise<void> {
-  await request<void>(`/api/v1/profiles/${profileId}/jobs/${jobId}/bad-fit`, { method: 'DELETE' });
+  await request<void>(
+    `/api/v1/profiles/${encodeURIComponent(profileId)}/jobs/${encodeURIComponent(jobId)}/bad-fit`,
+    { method: 'DELETE' },
+  );
+  await bustRerankCache(profileId);
 }
 
 export async function undoJobHide(profileId: string, jobId: string): Promise<void> {

@@ -1,5 +1,9 @@
+use std::collections::BTreeMap;
+
 use axum::Extension;
 use axum::extract::{Path, State};
+use sqlx::FromRow;
+use sqlx::types::Json as SqlJson;
 
 use crate::api::dto::analytics::{
     AnalyticsSummaryResponse, FeedbackSummarySection, FunnelSummaryResponse, IngestionSourceEntry,
@@ -10,10 +14,13 @@ use crate::api::error::ApiError;
 use crate::api::middleware::auth::AuthUser;
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::domain::feedback::model::CompanyFeedbackStatus;
+use crate::domain::source::SOURCE_CATALOG;
 use crate::services::funnel::FunnelService;
 use crate::state::AppState;
 
 use super::helpers::{build_job_feedback_evidence_entries, build_search_quality_summary};
+
+const DEFAULT_INGESTION_INTERVAL_MINUTES: i64 = 60;
 
 pub async fn get_salary_intelligence(
     State(state): State<AppState>,
@@ -278,19 +285,125 @@ pub async fn get_ingestion_stats(
         .jobs_by_source()
         .await
         .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
+    let latest_runs = latest_ingestion_runs(&state).await?;
+    let runs_by_source = latest_runs
+        .into_iter()
+        .map(|run| (run.source.clone(), run))
+        .collect::<BTreeMap<_, _>>();
+    let counts_by_source = source_counts
+        .into_iter()
+        .map(|source| (source.source.clone(), source))
+        .collect::<BTreeMap<_, _>>();
+
+    let mut source_keys = SOURCE_CATALOG
+        .iter()
+        .map(|source| source.canonical_key.to_string())
+        .collect::<Vec<_>>();
+    for source in counts_by_source.keys().chain(runs_by_source.keys()) {
+        if !source_keys.contains(source) {
+            source_keys.push(source.clone());
+        }
+    }
 
     Ok(axum::Json(IngestionStatsResponse {
         last_ingested_at: feed_summary.last_ingested_at,
         total_jobs: feed_summary.total_jobs as u32,
         active_jobs: feed_summary.active_jobs as u32,
         inactive_jobs: feed_summary.inactive_jobs as u32,
-        sources: source_counts
+        sources: source_keys
             .into_iter()
-            .map(|s| IngestionSourceEntry {
-                source: s.source,
-                count: s.count as u32,
-                last_seen: s.last_seen,
+            .map(|source| {
+                let count = counts_by_source.get(&source);
+                let run = runs_by_source.get(&source);
+
+                IngestionSourceEntry {
+                    display_name: display_name_for_source(&source),
+                    source,
+                    count: count.map(|s| s.count).unwrap_or(0) as u32,
+                    last_seen: count.map(|s| s.last_seen.clone()),
+                    last_run_at: run.map(|run| run.run_at.clone()),
+                    next_scheduled_run_at: run.map(|run| run.next_scheduled_run_at.clone()),
+                    status: run
+                        .map(|run| run.status.clone())
+                        .unwrap_or_else(|| "unknown".to_string()),
+                    jobs_fetched: run.map(|run| run.jobs_fetched as u32).unwrap_or(0),
+                    jobs_attempted: run.map(|run| run.jobs_attempted as u32).unwrap_or(0),
+                    jobs_upserted: run.map(|run| run.jobs_upserted as u32).unwrap_or(0),
+                    jobs_failed: run.map(|run| run.jobs_failed as u32).unwrap_or(0),
+                    errors: run.map(|run| run.errors as u32).unwrap_or(0),
+                    errors_json: run.map(|run| run.errors_json.0.clone()).unwrap_or_default(),
+                }
             })
             .collect(),
     }))
+}
+
+#[derive(Debug, FromRow)]
+struct IngestionRunRow {
+    source: String,
+    run_at: String,
+    next_scheduled_run_at: String,
+    jobs_fetched: i32,
+    jobs_attempted: i32,
+    jobs_upserted: i32,
+    jobs_failed: i32,
+    errors: i32,
+    errors_json: SqlJson<Vec<String>>,
+    status: String,
+}
+
+async fn latest_ingestion_runs(state: &AppState) -> Result<Vec<IngestionRunRow>, ApiError> {
+    let Some(pool) = state.database.pool() else {
+        return Ok(Vec::new());
+    };
+
+    sqlx::query_as::<_, IngestionRunRow>(
+        r#"
+        WITH ranked AS (
+            SELECT
+                source,
+                run_at,
+                jobs_fetched,
+                jobs_attempted,
+                jobs_upserted,
+                jobs_failed,
+                errors,
+                errors_json,
+                status,
+                ROW_NUMBER() OVER (
+                    PARTITION BY source
+                    ORDER BY run_at DESC, id DESC
+                ) AS run_rank
+            FROM ingestion_runs
+        )
+        SELECT
+            source,
+            run_at::text AS run_at,
+            (run_at + make_interval(mins => CAST($1 AS integer)))::text AS next_scheduled_run_at,
+            jobs_fetched,
+            jobs_attempted,
+            jobs_upserted,
+            jobs_failed,
+            errors,
+            errors_json,
+            status
+        FROM ranked
+        WHERE run_rank = 1
+        "#,
+    )
+    .bind(DEFAULT_INGESTION_INTERVAL_MINUTES)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "failed to query latest ingestion runs");
+        ApiError::internal("ingestion_runs_query_failed", error.to_string())
+    })
+}
+
+fn display_name_for_source(source: &str) -> String {
+    SOURCE_CATALOG
+        .iter()
+        .find(|metadata| metadata.canonical_key == source)
+        .map(|metadata| metadata.display_name.to_string())
+        .unwrap_or_else(|| source.to_string())
 }

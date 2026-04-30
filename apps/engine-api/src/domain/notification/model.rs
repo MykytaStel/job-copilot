@@ -53,6 +53,15 @@ pub struct Notification {
     pub created_at: String,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct DueTaskNotification {
+    pub notification: Notification,
+    pub task_id: String,
+    pub application_id: String,
+    pub job_id: String,
+    pub due_at: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NotificationPreferences {
     pub profile_id: String,

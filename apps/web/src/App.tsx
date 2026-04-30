@@ -17,7 +17,11 @@ const Market = lazy(() => import('./pages/Market'));
 const CompanyDetail = lazy(() => import('./pages/CompanyDetail'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Contacts = lazy(() => import('./pages/Contacts'));
 const Setup = lazy(() => import('./pages/Setup'));
+const Debug = lazy(() => import('./pages/Debug'));
+
+const debugPageEnabled = import.meta.env.VITE_ENABLE_DEBUG_PAGE === 'true';
 
 function route(element: ReactNode) {
   return withErrorBoundary(<Suspense fallback={null}>{element}</Suspense>);
@@ -41,8 +45,11 @@ export default function App() {
             <Route path="analytics" element={route(<Analytics />)} />
             <Route path="market" element={route(<Market />)} />
             <Route path="market/companies/:slug" element={route(<CompanyDetail />)} />
+            <Route path="contacts" element={route(<Contacts />)} />
             <Route path="notifications" element={route(<Notifications />)} />
             <Route path="settings" element={route(<Settings />)} />
+            {debugPageEnabled ? <Route path="debug" element={route(<Debug />)} /> : null}
+            {debugPageEnabled ? <Route path="admin" element={route(<Debug />)} /> : null}
           </Route>
         </Routes>
       </BrowserRouter>

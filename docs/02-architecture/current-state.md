@@ -41,7 +41,7 @@
 - ✅ OpenAI provider with current model defaults
 - ✅ Ollama provider is implemented
 - ✅ Bootstrap training data pipeline
-- ⚠️ Runtime provider default is `template`; Docker Compose overrides default env to `ollama`
+- ✅ Runtime provider default and Docker Compose default are both `template`
 
 ### Web (React 19)
 - ✅ Dashboard: job feed, lifecycle filter, source filter, ML ranking toggle
@@ -64,7 +64,7 @@
 - ✅ Docker Compose: postgres + engine-api + web + scraper + ml
 - ✅ PostgreSQL health checks, restart policies
 - ✅ Auto-migrations при старті engine-api
-- ✅ Docker default `ML_LLM_PROVIDER=ollama`
+- ✅ Docker default `ML_LLM_PROVIDER=template`
 
 ## Відомі проблеми
 
@@ -73,7 +73,6 @@
 | Market readers still bypass snapshots | `market` routes query `jobs` directly | Snapshot refresh exists, but read-side decoupling is still incomplete |
 | Settings preferences are still partial | `apps/web/src/pages/Settings.tsx` | Dedicated notification controls and richer profile preferences are not implemented yet |
 | Analytics freshness widget відсутній | `apps/web/src/pages/Analytics.tsx` | Ingestion recency is not visible in the analytics flow |
-| Provider defaults are inconsistent | `apps/ml/app/settings.py`, `infra/docker-compose.yml` | Runtime code and Docker Compose still disagree on the default ML provider |
 
 ## Known Security Gaps
 
@@ -81,9 +80,9 @@ See [security-model.md](security-model.md) for the full model and gap list.
 
 | Gap | Status |
 |-----|--------|
-| Profile ownership guard not applied to all profile-scoped routes | Not yet implemented |
-| ML internal token production validation not fail-fast | Not yet enforced |
-| `JWT_SECRET` absence not rejected in production mode | Not yet enforced |
+| Profile ownership guard not applied to all profile-scoped routes | Implemented for current profile-scoped route set; keep checking new routes |
+| ML internal token production validation not fail-fast | Enforced for production |
+| `JWT_SECRET` absence not rejected in production mode | Enforced for production; dev placeholder is rejected in production |
 
 ---
 

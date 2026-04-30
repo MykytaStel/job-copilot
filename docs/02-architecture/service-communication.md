@@ -73,10 +73,8 @@ Prometheus. These are read-only pull paths with no reverse dependency on engine-
 3. ML validates the token to allow access to internal-only routes.
 4. The token value is never logged or included in responses.
 
-**Known gap:** ML startup does not yet fail fast when `ML_INTERNAL_TOKEN` is absent
-in production mode. The validation method exists in `apps/ml/app/settings.py` and is
-called at startup, but reliable enforcement in production has not been verified.
-Until this is confirmed, treat production token enforcement as an open gap.
+Production startup fails fast when `ML_INTERNAL_TOKEN` is absent. Local development
+can still run without the token.
 
 ---
 
@@ -93,12 +91,10 @@ The ML sidecar selects an LLM provider via the `ML_LLM_PROVIDER` environment var
 
 **Runtime default:** `template` (set in `apps/ml/app/settings.py`)
 
-**Docker Compose default:** `ollama` (set via `ML_LLM_PROVIDER: "${ML_LLM_PROVIDER:-ollama}"`)
+**Docker Compose default:** `template` (set via `ML_LLM_PROVIDER: "${ML_LLM_PROVIDER:-template}"`)
 
-**Known mismatch:** The runtime code default and the Docker Compose default disagree.
-Running the ML service outside Docker gets `template`; running inside Docker Compose
-gets `ollama` unless overridden. This is a known inconsistency documented in
-`docs/02-architecture/current-state.md`.
+Runtime code and Docker Compose intentionally share the same safe default. Use
+`ML_LLM_PROVIDER=ollama` only when Ollama is running and intended.
 
 Paid providers (OpenAI, Anthropic) are never the default path. They require explicit
 configuration.

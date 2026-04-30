@@ -101,12 +101,16 @@ export function JobRow({
   actionLabel,
   onAction,
   isPending,
+  isSelected = false,
+  onSelectedChange,
 }: {
   job: JobPosting;
   tone: FeedbackListTone;
   actionLabel: string;
   onAction: (jobId: string) => void;
   isPending: boolean;
+  isSelected?: boolean;
+  onSelectedChange?: (jobId: string) => void;
 }) {
   const presentation = job.presentation;
   const sourceLabel = presentation?.sourceLabel ?? job.primaryVariant?.source ?? 'source';
@@ -117,6 +121,15 @@ export function JobRow({
     <Card className="overflow-hidden border-border bg-card">
       <CardContent className="flex flex-col gap-4 px-5 py-5 md:flex-row md:items-start md:justify-between">
         <div className="flex min-w-0 gap-4">
+          {onSelectedChange ? (
+            <input
+              type="checkbox"
+              aria-label={`Select ${presentation?.title ?? job.title}`}
+              checked={isSelected}
+              onChange={() => onSelectedChange(job.id)}
+              className="mt-3 h-4 w-4 shrink-0 rounded border-border accent-primary"
+            />
+          ) : null}
           <div
             className={cn(
               'mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border',

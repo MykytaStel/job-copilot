@@ -36,6 +36,7 @@ from app.profile_insights import (
     ProfileInsightsResponse,
     http_error_from_provider_error,
 )
+from app.resume_match import ResumeMatchRequest, ResumeMatchResponse, ResumeMatchService
 from app.service_dependencies import (
     get_application_coach_service,
     get_cover_letter_draft_service,
@@ -53,6 +54,7 @@ from app.weekly_guidance import (
 )
 
 router = APIRouter()
+resume_match_service = ResumeMatchService()
 
 
 @router.post("/v1/enrichment/profile-insights", response_model=ProfileInsightsResponse)
@@ -143,6 +145,12 @@ async def enrich_weekly_guidance(
         return await service.enrich(payload)
     except WeeklyGuidanceProviderError as exc:
         raise http_error_from_weekly_guidance_error(exc) from exc
+
+
+@router.post("/v1/enrichment/resume-match", response_model=ResumeMatchResponse)
+@router.post("/api/v1/enrichment/resume-match", response_model=ResumeMatchResponse)
+async def enrich_resume_match(payload: ResumeMatchRequest) -> ResumeMatchResponse:
+    return resume_match_service.analyze(payload)
 
 
 @router.post("/v1/cv-tailoring", response_model=CvTailoringResponse)
