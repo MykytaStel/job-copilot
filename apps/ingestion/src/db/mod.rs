@@ -219,8 +219,8 @@ mod tests {
     use crate::adapters::SourceAdapter;
     use crate::adapters::mock_source::MockSourceAdapter;
     use crate::models::{
-        IngestionBatch, JobVariant, MockSourceInput, NormalizedJob, canonical_job_id,
-        compute_dedupe_key,
+        IngestionBatch, JobVariant, MockSourceInput, NormalizationResult, NormalizedJob,
+        RawSnapshot, canonical_job_id, compute_dedupe_key,
     };
 
     use super::reconciliation::{SourceRefresh, build_source_refreshes};
@@ -451,6 +451,13 @@ mod tests {
         payload: serde_json::Value,
     }
 
+    #[derive(Debug, sqlx::FromRow)]
+    struct MarketNotificationRow {
+        profile_id: String,
+        title: String,
+        payload: serde_json::Value,
+    }
+
     fn with_database_name(database_url: &str, database_name: &str) -> Result<String, String> {
         let (prefix, query_suffix) = match database_url.split_once('?') {
             Some((prefix, query)) => (prefix, format!("?{query}")),
@@ -528,6 +535,96 @@ mod tests {
                 path.display()
             )
         })
+    }
+
+    fn market_job(source_job_id: &str, company_name: &str, last_seen_at: &str) -> NormalizedJob {
+        NormalizedJob {
+            id: String::new(),
+            duplicate_of: None,
+            title: format!("Backend Platform Engineer {source_job_id}"),
+            company_name: company_name.to_string(),
+            company_meta: None,
+            location: Some("Kyiv".to_string()),
+            remote_type: Some("remote".to_string()),
+            seniority: Some("senior".to_string()),
+            description_text: format!(
+                "Build backend APIs and platform systems for {company_name} role {source_job_id}."
+            ),
+            extracted_skills: Vec::new(),
+            salary_min: None,
+            salary_max: None,
+            salary_currency: None,
+            salary_usd_min: None,
+            salary_usd_max: None,
+            quality_score: None,
+            posted_at: None,
+            last_seen_at: last_seen_at.to_string(),
+            is_active: true,
+        }
+    }
+
+    fn market_batch(entries: Vec<(&str, &str, &str)>) -> IngestionBatch {
+        let results = entries
+            .into_iter()
+            .map(
+                |(source_job_id, company_name, last_seen_at)| NormalizationResult {
+                    job: market_job(source_job_id, company_name, last_seen_at),
+                    snapshot: RawSnapshot {
+                        source: "market_mock".to_string(),
+                        source_job_id: source_job_id.to_string(),
+                        source_url: format!("https://market.example/jobs/{source_job_id}"),
+                        raw_payload: serde_json::json!({ "source_job_id": source_job_id }),
+                        fetched_at: last_seen_at.to_string(),
+                    },
+                },
+            )
+            .collect();
+
+        IngestionBatch::from_normalization_results(results)
+            .expect("market test batch should be valid")
+    }
+
+    async fn insert_profile(pool: &PgPool, profile_id: &str, primary_role: &str) {
+        sqlx::query(
+            r#"
+            INSERT INTO profiles (
+                id,
+                name,
+                email,
+                raw_text,
+                primary_role,
+                search_preferences,
+                created_at,
+                updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb, NOW(), NOW())
+            "#,
+        )
+        .bind(profile_id)
+        .bind(format!("Profile {profile_id}"))
+        .bind(format!("{profile_id}@example.com"))
+        .bind("Experienced candidate")
+        .bind(primary_role)
+        .bind(Json(
+            serde_json::json!({ "preferred_roles": [primary_role] }),
+        ))
+        .execute(pool)
+        .await
+        .expect("profile should insert");
+    }
+
+    async fn fetch_market_notifications(pool: &PgPool) -> Vec<MarketNotificationRow> {
+        sqlx::query_as::<_, MarketNotificationRow>(
+            r#"
+            SELECT profile_id, title, payload
+            FROM notifications
+            WHERE type = 'market_company_hiring_again'
+            ORDER BY profile_id ASC, title ASC
+            "#,
+        )
+        .fetch_all(pool)
+        .await
+        .expect("market notifications should query")
     }
 
     async fn fetch_variant_state(pool: &PgPool, source_job_id: &str) -> VariantState {
@@ -896,6 +993,115 @@ mod tests {
 
         assert!(error.contains("changed dedupe fingerprint"));
         assert!(error.contains("already belongs to canonical job"));
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn company_resume_market_alert_matches_profile_target_roles_once_per_company_role() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        insert_profile(&test_db.pool, "backend-profile", "backend_engineer").await;
+        insert_profile(&test_db.pool, "frontend-profile", "frontend_engineer").await;
+
+        upsert_batch(
+            &test_db.pool,
+            &market_batch(vec![(
+                "old-signalhire-backend",
+                "SignalHire",
+                "2026-03-01T09:00:00Z",
+            )]),
+        )
+        .await
+        .expect("old company job should upsert");
+
+        upsert_batch(
+            &test_db.pool,
+            &market_batch(vec![
+                (
+                    "new-signalhire-backend-1",
+                    "SignalHire",
+                    "2026-04-15T09:00:00Z",
+                ),
+                (
+                    "new-signalhire-backend-2",
+                    "SignalHire",
+                    "2026-04-15T09:05:00Z",
+                ),
+            ]),
+        )
+        .await
+        .expect("company resume batch should upsert");
+
+        let notifications = fetch_market_notifications(&test_db.pool).await;
+
+        assert_eq!(notifications.len(), 1);
+        assert_eq!(notifications[0].profile_id, "backend-profile");
+        assert_eq!(
+            notifications[0].title,
+            "SignalHire is hiring again for Backend Engineer"
+        );
+        assert_eq!(
+            notifications[0]
+                .payload
+                .get("role_id")
+                .and_then(|value| value.as_str()),
+            Some("backend_engineer")
+        );
+        assert_eq!(
+            notifications[0]
+                .payload
+                .get("job_ids")
+                .and_then(|value| value.as_array())
+                .map(Vec::len),
+            Some(2)
+        );
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn company_resume_market_alerts_are_capped_at_three_per_profile_per_day() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        insert_profile(&test_db.pool, "backend-profile", "backend_engineer").await;
+
+        upsert_batch(
+            &test_db.pool,
+            &market_batch(vec![
+                ("old-alpha", "AlphaWorks", "2026-03-01T09:00:00Z"),
+                ("old-beta", "BetaWorks", "2026-03-01T09:00:00Z"),
+                ("old-gamma", "GammaWorks", "2026-03-01T09:00:00Z"),
+                ("old-delta", "DeltaWorks", "2026-03-01T09:00:00Z"),
+            ]),
+        )
+        .await
+        .expect("old company jobs should upsert");
+
+        upsert_batch(
+            &test_db.pool,
+            &market_batch(vec![
+                ("new-alpha", "AlphaWorks", "2026-04-15T09:00:00Z"),
+                ("new-beta", "BetaWorks", "2026-04-15T09:01:00Z"),
+                ("new-gamma", "GammaWorks", "2026-04-15T09:02:00Z"),
+                ("new-delta", "DeltaWorks", "2026-04-15T09:03:00Z"),
+            ]),
+        )
+        .await
+        .expect("company resume jobs should upsert");
+
+        let notifications = fetch_market_notifications(&test_db.pool).await;
+
+        assert_eq!(notifications.len(), 3);
+        assert!(
+            notifications
+                .iter()
+                .all(|row| row.profile_id == "backend-profile")
+        );
 
         test_db.cleanup().await;
     }

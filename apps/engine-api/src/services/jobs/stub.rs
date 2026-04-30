@@ -4,8 +4,9 @@ use crate::db::repositories::RepositoryError;
 use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketOverview, MarketRoleDemandEntry,
-    MarketSalaryTrend, MarketSource,
+    MarketCompanyDetail, MarketCompanyEntry, MarketCompanyVelocityEntry, MarketFreezeSignalEntry,
+    MarketOverview, MarketRegionDemandEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
+    MarketSalaryTrend, MarketSource, MarketTechDemandEntry,
 };
 
 pub struct JobsServiceStub {
@@ -17,9 +18,14 @@ pub struct JobsServiceStub {
     source_counts: Vec<JobSourceCount>,
     market_overview: MarketOverview,
     market_companies: Vec<MarketCompanyEntry>,
+    market_company_details: HashMap<String, MarketCompanyDetail>,
     market_company_velocity: Vec<MarketCompanyVelocityEntry>,
+    market_freeze_signals: Vec<MarketFreezeSignalEntry>,
     market_salary_trends: HashMap<String, MarketSalaryTrend>,
+    market_salary_by_seniority: Vec<MarketSalaryBySeniorityEntry>,
     market_role_demand: Vec<MarketRoleDemandEntry>,
+    market_region_breakdown: Vec<MarketRegionDemandEntry>,
+    market_tech_demand: Vec<MarketTechDemandEntry>,
     database_disabled: bool,
 }
 
@@ -57,11 +63,21 @@ impl JobsServiceStub {
         self
     }
 
+    pub fn with_market_company_detail(mut self, slug: &str, detail: MarketCompanyDetail) -> Self {
+        self.market_company_details.insert(slug.to_string(), detail);
+        self
+    }
+
     pub fn with_market_company_velocity(
         mut self,
         entries: Vec<MarketCompanyVelocityEntry>,
     ) -> Self {
         self.market_company_velocity = entries;
+        self
+    }
+
+    pub fn with_market_freeze_signals(mut self, entries: Vec<MarketFreezeSignalEntry>) -> Self {
+        self.market_freeze_signals = entries;
         self
     }
 
@@ -71,8 +87,26 @@ impl JobsServiceStub {
         self
     }
 
+    pub fn with_market_salary_by_seniority(
+        mut self,
+        entries: Vec<MarketSalaryBySeniorityEntry>,
+    ) -> Self {
+        self.market_salary_by_seniority = entries;
+        self
+    }
+
     pub fn with_market_role_demand(mut self, entries: Vec<MarketRoleDemandEntry>) -> Self {
         self.market_role_demand = entries;
+        self
+    }
+
+    pub fn with_market_region_breakdown(mut self, entries: Vec<MarketRegionDemandEntry>) -> Self {
+        self.market_region_breakdown = entries;
+        self
+    }
+
+    pub fn with_market_tech_demand(mut self, entries: Vec<MarketTechDemandEntry>) -> Self {
+        self.market_tech_demand = entries;
         self
     }
 
@@ -195,6 +229,17 @@ impl JobsServiceStub {
         ))
     }
 
+    pub(crate) fn market_company_detail(
+        &self,
+        company_slug: &str,
+    ) -> Result<Option<MarketCompanyDetail>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self.market_company_details.get(company_slug).cloned())
+    }
+
     pub(crate) fn market_salary_trend(
         &self,
         seniority: &str,
@@ -217,6 +262,16 @@ impl JobsServiceStub {
         }
 
         Ok((self.market_company_velocity.clone(), MarketSource::Snapshot))
+    }
+
+    pub(crate) fn market_freeze_signals(
+        &self,
+    ) -> Result<(Vec<MarketFreezeSignalEntry>, MarketSource), RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok((self.market_freeze_signals.clone(), MarketSource::Snapshot))
     }
 
     pub(crate) fn market_salary_trends(
@@ -243,6 +298,19 @@ impl JobsServiceStub {
         Ok((trends, MarketSource::Snapshot))
     }
 
+    pub(crate) fn market_salary_by_seniority(
+        &self,
+    ) -> Result<(Vec<MarketSalaryBySeniorityEntry>, MarketSource), RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok((
+            self.market_salary_by_seniority.clone(),
+            MarketSource::Snapshot,
+        ))
+    }
+
     pub(crate) fn market_role_demand(
         &self,
         _period_days: i32,
@@ -252,6 +320,26 @@ impl JobsServiceStub {
         }
 
         Ok((self.market_role_demand.clone(), MarketSource::Snapshot))
+    }
+
+    pub(crate) fn market_region_breakdown(
+        &self,
+    ) -> Result<(Vec<MarketRegionDemandEntry>, MarketSource), RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok((self.market_region_breakdown.clone(), MarketSource::Snapshot))
+    }
+
+    pub(crate) fn market_tech_demand(
+        &self,
+    ) -> Result<(Vec<MarketTechDemandEntry>, MarketSource), RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok((self.market_tech_demand.clone(), MarketSource::Snapshot))
     }
 }
 
@@ -277,9 +365,14 @@ impl Default for JobsServiceStub {
                 remote_percentage: 0.0,
             },
             market_companies: Vec::new(),
+            market_company_details: HashMap::new(),
             market_company_velocity: Vec::new(),
+            market_freeze_signals: Vec::new(),
             market_salary_trends: HashMap::new(),
+            market_salary_by_seniority: Vec::new(),
             market_role_demand: Vec::new(),
+            market_region_breakdown: Vec::new(),
+            market_tech_demand: Vec::new(),
             database_disabled: false,
         }
     }

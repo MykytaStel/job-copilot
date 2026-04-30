@@ -1,6 +1,7 @@
 export type InternalAppNotificationType =
   | 'new_jobs_found'
   | 'job_reactivated'
+  | 'market_company_hiring_again'
   | 'application_due_soon';
 
 export type EngineNotification = {

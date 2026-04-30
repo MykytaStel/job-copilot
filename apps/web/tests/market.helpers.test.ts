@@ -13,10 +13,17 @@ describe('market page helpers', () => {
 
     expect(
       deriveMedianSalary([
-        { seniority: 'junior', p25: 1000, median: 1500, p75: 2000, sampleCount: 2 },
-        { seniority: 'middle', p25: 2500, median: 3000, p75: 3500, sampleCount: 8 },
+        { seniority: 'junior', medianMin: 1000, medianMax: 2000, sampleSize: 2 },
+        { seniority: 'mid', medianMin: 2500, medianMax: 3500, sampleSize: 8 },
       ]),
     ).toBe(3000);
+
+    expect(
+      deriveSalaryBounds([
+        { seniority: 'junior', medianMin: 1000, medianMax: 2000, sampleSize: 2 },
+        { seniority: 'mid', medianMin: 2500, medianMax: 3500, sampleSize: 8 },
+      ]),
+    ).toEqual({ min: 1000, max: 3500 });
   });
 
   it('sorts role demand by current period and previous period fallback', () => {

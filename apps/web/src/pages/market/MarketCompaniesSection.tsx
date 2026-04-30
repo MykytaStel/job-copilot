@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import type { MarketCompany } from '../../api/market';
+import { companySlug, type MarketCompany } from '../../api/market';
 import { EmptyState } from '../../components/ui/EmptyState';
 import type { MarketPageState } from '../../features/market/useMarketPage';
 import { formatCount } from './market.view-model';
@@ -16,18 +16,18 @@ function CompanyRow({ company }: { company: MarketCompany }) {
     company.latestJobIds.length > 0
       ? `/?job_ids=${encodeURIComponent(company.latestJobIds.join(','))}&company=${encodeURIComponent(company.companyName)}`
       : `/?company=${encodeURIComponent(company.companyName)}`;
+  const companyHref = `/market/companies/${encodeURIComponent(companySlug(company.companyName))}`;
 
   return (
     <div className="rounded-2xl border border-border/70 bg-surface-muted px-4 py-4">
-      <button
-        type="button"
-        className="grid w-full gap-3 text-left lg:grid-cols-[minmax(0,1.3fr)_120px_180px_32px] lg:items-center"
-        onClick={() => setExpanded((current) => !current)}
-      >
+      <div className="grid w-full gap-3 text-left lg:grid-cols-[minmax(0,1.3fr)_120px_180px_32px] lg:items-center">
         <div className="min-w-0">
-          <p className="m-0 truncate text-sm font-semibold text-card-foreground">
+          <Link
+            to={companyHref}
+            className="block truncate text-sm font-semibold text-card-foreground no-underline transition-colors hover:text-primary"
+          >
             {company.companyName}
-          </p>
+          </Link>
           <p className="m-0 mt-1 text-xs leading-5 text-muted-foreground">
             {formatCount(company.thisWeek)} new this week
             {' • '}
@@ -46,10 +46,15 @@ function CompanyRow({ company }: { company: MarketCompany }) {
           <span className="text-xs text-muted-foreground">Velocity</span>
           <MarketTrendBadge trend={company.velocity} />
         </div>
-        <ChevronDown
-          className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`}
-        />
-      </button>
+        <button
+          type="button"
+          title={expanded ? 'Collapse company details' : 'Expand company details'}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-white-a05 hover:text-foreground"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
 
       {expanded ? (
         <div className="mt-4 grid gap-4 border-t border-border/70 pt-4 md:grid-cols-3">
@@ -57,6 +62,12 @@ function CompanyRow({ company }: { company: MarketCompany }) {
           <CompanyDetail label="Top roles" values={company.topRoleGroups} />
           <CompanyDetail label="Latest jobs" values={company.latestJobIds} />
           <div className="md:col-span-3">
+            <Link
+              to={companyHref}
+              className="mr-2 inline-flex h-9 items-center justify-center rounded-[var(--radius-lg)] border border-border px-3.5 text-xs font-semibold text-foreground no-underline hover:bg-white-a05"
+            >
+              Open company page
+            </Link>
             <Link
               to={reviewHref}
               className="inline-flex h-9 items-center justify-center rounded-[var(--radius-lg)] border border-border px-3.5 text-xs font-semibold text-foreground no-underline hover:bg-white-a05"
@@ -77,7 +88,10 @@ function CompanyDetail({ label, values }: { label: string; values: string[] }) {
       <div className="mt-2 flex flex-wrap gap-2">
         {values.length > 0 ? (
           values.map((value) => (
-            <span key={value} className="rounded-full border border-border bg-background/60 px-2.5 py-1 text-xs text-card-foreground">
+            <span
+              key={value}
+              className="rounded-full border border-border bg-background/60 px-2.5 py-1 text-xs text-card-foreground"
+            >
               {value}
             </span>
           ))

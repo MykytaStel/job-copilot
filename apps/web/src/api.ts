@@ -45,6 +45,7 @@ export {
   getMarketOverview,
   getMarketCompanies,
   getMarketSalaries,
+  getMarketSalaryBySeniority,
   getMarketRoles,
 } from './api/market';
 export type {
@@ -53,6 +54,7 @@ export type {
   MarketOverview,
   MarketCompany,
   MarketSalaryTrend,
+  MarketSalaryBySeniority,
   MarketRoleDemand,
 } from './api/market';
 

@@ -24,12 +24,35 @@ export type EngineMarketCompaniesResponse = {
   companies: EngineMarketCompanyEntry[];
 };
 
+export type EngineMarketCompanyVelocityPoint = {
+  date: string;
+  job_count: number;
+};
+
+export type EngineMarketCompanyDetail = {
+  company_name: string;
+  normalized_company_name: string;
+  total_jobs: number;
+  active_jobs: number;
+  avg_salary?: number | null;
+  velocity: EngineMarketCompanyVelocityPoint[];
+  company_status?: 'whitelist' | 'blacklist' | null;
+  jobs: import('./jobs').EngineJob[];
+};
+
 export type EngineMarketCompanyVelocityTrend = 'growing' | 'stable' | 'declining';
 
 export type EngineMarketCompanyVelocityEntry = {
   company: string;
   job_count: number;
   trend: EngineMarketCompanyVelocityTrend;
+};
+
+export type EngineMarketFreezeSignalEntry = {
+  company: string;
+  last_posted_at: string;
+  days_since_last_post: number;
+  historical_count: number;
 };
 
 export type EngineMarketSalaryTrend = {
@@ -41,9 +64,28 @@ export type EngineMarketSalaryTrend = {
   sample_count: number;
 };
 
+export type EngineMarketSalaryBySeniorityEntry = {
+  seniority: string;
+  median_min: number;
+  median_max: number;
+  sample_size: number;
+};
+
 export type EngineMarketRoleDemandEntry = {
   role_group: string;
   this_period: number;
   prev_period: number;
   trend: InternalMarketTrend;
+};
+
+export type EngineMarketRegionDemandEntry = {
+  region: string;
+  job_count: number;
+  top_roles: string[];
+};
+
+export type EngineMarketTechDemandEntry = {
+  skill: string;
+  job_count: number;
+  percentage: number;
 };
