@@ -1,5 +1,6 @@
 import { EmptyState } from '../components/ui/EmptyState';
 import { Page } from '../components/ui/Page';
+import { SkeletonPage } from '../components/Skeleton';
 import { useAnalyticsPage } from '../features/analytics/useAnalyticsPage';
 
 import { AnalyticsContent } from './analytics/AnalyticsContent';
@@ -18,7 +19,7 @@ export default function Analytics() {
   if (state.isLoading) {
     return (
       <Page>
-        <EmptyState message="Loading analytics…" />
+        <SkeletonPage />
       </Page>
     );
   }

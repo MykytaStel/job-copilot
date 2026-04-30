@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+
+import { useToast } from '../../context/ToastContext';
 import {
   buildSearchProfile,
   saveProfileSearchPreferences,
@@ -27,6 +28,7 @@ export function useSearchProfileWorkflow(
   profile: Awaited<ReturnType<typeof getProfile>> | undefined,
 ) {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const initialDraft = useMemo(
     () =>
       resolveSearchProfileDraft(profile?.searchPreferences, readSearchProfileDraft(profile?.id)),
@@ -154,16 +156,17 @@ export function useSearchProfileWorkflow(
     },
     onSuccess: (result) => {
       setSearchResult(result);
-      toast.success(
-        result.results.length > 0
+      showToast({
+        type: 'success',
+        message: result.results.length > 0
           ? `Ranked ${result.results.length} job${result.results.length === 1 ? '' : 's'}`
           : 'Search completed with no matches',
-      );
+      });
     },
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : 'Search failed';
       setSearchError(message);
-      toast.error(message);
+      showToast({ type: 'error', message });
     },
   });
 
@@ -216,11 +219,11 @@ export function useSearchProfileWorkflow(
         result: result.result,
       });
       if (result.persistenceError) {
-        toast.error(result.persistenceError);
+        showToast({ type: 'error', message: result.persistenceError });
       }
-      toast.success('Search profile built');
+      showToast({ type: 'success', message: 'Search profile built' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Error' }),
   });
 
   return {

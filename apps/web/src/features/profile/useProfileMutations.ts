@@ -4,7 +4,8 @@ import type {
   LanguageProficiency,
   WorkModePreference,
 } from '@job-copilot/shared/profiles';
-import toast from 'react-hot-toast';
+
+import { useToast } from '../../context/ToastContext';
 import {
   analyzeStoredProfile,
   activateResume,
@@ -19,6 +20,7 @@ import { queryKeys } from '../../queryKeys';
 
 export function useProfileMutations(clearDraft: () => void) {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const saveMutation = useMutation({
     mutationFn: (vars: {
@@ -64,9 +66,9 @@ export function useProfileMutations(clearDraft: () => void) {
       queryClient.setQueryData(queryKeys.profile.rawText(), vars.rawText);
       clearDraft();
       void invalidateProfileAnalysisQueries(queryClient, updated.id);
-      toast.success('Profile saved');
+      showToast({ type: 'success', message: 'Profile saved' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Error' }),
   });
 
   const analyzeMutation = useMutation({
@@ -83,9 +85,9 @@ export function useProfileMutations(clearDraft: () => void) {
       if (profileId) {
         void invalidateProfileAnalysisQueries(queryClient, profileId);
       }
-      toast.success('Profile analyzed');
+      showToast({ type: 'success', message: 'Profile analyzed' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Error' }),
   });
 
   const updateSkillsMutation = useMutation({
@@ -94,18 +96,18 @@ export function useProfileMutations(clearDraft: () => void) {
     onSuccess: (updated) => {
       queryClient.setQueryData(queryKeys.profile.root(), updated);
       void invalidateProfileAnalysisQueries(queryClient, updated.id);
-      toast.success('Skills updated');
+      showToast({ type: 'success', message: 'Skills updated' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Error' }),
   });
 
   const activateResumeMutation = useMutation({
     mutationFn: activateResume,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.all() });
-      toast.success('CV activated');
+      showToast({ type: 'success', message: 'CV activated' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Error' }),
   });
 
   const deleteResumeMutation = useMutation({
@@ -113,9 +115,9 @@ export function useProfileMutations(clearDraft: () => void) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.active() });
-      toast.success('CV deleted');
+      showToast({ type: 'success', message: 'CV deleted' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Error'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Error' }),
   });
 
   return {

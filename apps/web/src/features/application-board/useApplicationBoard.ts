@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
 import type { Application, ApplicationStatus, JobPosting } from '@job-copilot/shared';
+
+import { useToast } from '../../context/ToastContext';
 
 import { getApplications, patchApplication } from '../../api/applications';
 import { getJobs } from '../../api/jobs';
@@ -36,6 +37,7 @@ function exportCsv(applications: Application[], jobs: Map<string, JobPosting>) {
 
 export function useApplicationBoard() {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const {
     data: applications = [],
@@ -79,7 +81,7 @@ export function useApplicationBoard() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' });
     },
   });
 
