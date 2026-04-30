@@ -21,6 +21,7 @@ export async function mlRequest<T>(path: string, init?: RequestInit): Promise<T>
     const body = (await res.json().catch(() => ({}))) as { detail?: string };
     throw new Error(body.detail ?? `ML HTTP ${res.status}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 

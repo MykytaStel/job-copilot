@@ -4,8 +4,17 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::db::repositories::{NotificationsRepository, RepositoryError};
+use crate::domain::notification::model::DueTaskNotification;
 use crate::domain::notification::model::Notification;
 use crate::domain::notification::model::NotificationPreferences;
+
+#[allow(dead_code)]
+pub mod job_alert_scoring {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../shared/rust/job_alert_scoring.rs"
+    ));
+}
 
 #[derive(Clone)]
 enum NotificationsServiceBackend {
@@ -48,6 +57,14 @@ impl NotificationsService {
         }
     }
 
+    pub async fn get_by_id(&self, id: &str) -> Result<Option<Notification>, RepositoryError> {
+        match &self.backend {
+            NotificationsServiceBackend::Repository(repository) => repository.get_by_id(id).await,
+            #[cfg(test)]
+            NotificationsServiceBackend::Stub(stub) => stub.get_by_id(id),
+        }
+    }
+
     pub async fn unread_count(&self, profile_id: &str) -> Result<i64, RepositoryError> {
         match &self.backend {
             NotificationsServiceBackend::Repository(repository) => {
@@ -57,6 +74,22 @@ impl NotificationsService {
             NotificationsServiceBackend::Stub(stub) => stub.unread_count(profile_id),
         }
     }
+
+    pub async fn materialize_due_task_notifications(
+        &self,
+        profile_id: &str,
+    ) -> Result<Vec<DueTaskNotification>, RepositoryError> {
+        match &self.backend {
+            NotificationsServiceBackend::Repository(repository) => {
+                repository.insert_due_task_notifications(profile_id).await
+            }
+            #[cfg(test)]
+            NotificationsServiceBackend::Stub(stub) => {
+                stub.materialize_due_task_notifications(profile_id)
+            }
+        }
+    }
+
     pub async fn get_preferences(
         &self,
         profile_id: &str,
@@ -171,6 +204,19 @@ impl NotificationsServiceStub {
         Ok(Some(notification.clone()))
     }
 
+    fn get_by_id(&self, id: &str) -> Result<Option<Notification>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self
+            .notifications_by_id
+            .lock()
+            .expect("notifications stub mutex should not be poisoned")
+            .get(id)
+            .cloned())
+    }
+
     fn unread_count(&self, profile_id: &str) -> Result<i64, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);
@@ -186,6 +232,18 @@ impl NotificationsServiceStub {
             })
             .count() as i64)
     }
+
+    fn materialize_due_task_notifications(
+        &self,
+        _profile_id: &str,
+    ) -> Result<Vec<DueTaskNotification>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(Vec::new())
+    }
+
     fn default_preferences(profile_id: &str) -> NotificationPreferences {
         NotificationPreferences {
             profile_id: profile_id.to_string(),

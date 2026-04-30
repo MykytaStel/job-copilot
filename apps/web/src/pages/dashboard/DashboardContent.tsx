@@ -51,6 +51,7 @@ export function DashboardContent({ state }: { state: DashboardPageState }) {
           jobs={state.jobs}
           allJobs={state.allJobs}
           rerankCoverage={state.rerankCoverage}
+          rerankerUnavailable={state.rerankerUnavailable}
           jobsLoading={state.jobsLoading}
           lifecycleOptions={state.lifecycleOptions}
           selectedLifecycle={state.selectedLifecycle}

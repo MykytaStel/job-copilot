@@ -90,6 +90,8 @@ function ApplicationDetailContent({ id }: { id: string }) {
 
       <ApplicationHeader detail={detail} />
 
+      {canShowInterviewPrep(detail) ? <InterviewPrepSection detail={detail} /> : null}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <ApplicationFormSection
           status={applicationForm.applicationStatus}
@@ -132,8 +134,6 @@ function ApplicationDetailContent({ id }: { id: string }) {
         <JobDetailsSection detail={detail} />
 
         <div className="space-y-6">
-          <InterviewPrepSection detail={detail} />
-
           <ContactsSection
             detail={detail}
             contactsLoading={contactsQuery.isLoading}
@@ -191,6 +191,10 @@ function buildDeterministicFit(fit: FitAnalysis) {
   };
 }
 
+function canShowInterviewPrep(detail: ApplicationDetailRecord) {
+  return detail.status === 'applied' || detail.status === 'interview';
+}
+
 function InterviewPrepSection({ detail }: { detail: ApplicationDetailRecord }) {
   const profileId = readProfileId();
   const [interviewPrep, setInterviewPrep] = useState<InterviewPrep | null>(null);
@@ -225,8 +229,8 @@ function InterviewPrepSection({ detail }: { detail: ApplicationDetailRecord }) {
 
   return (
     <Panel
-      title="Prepare for Interview"
-      description="Ephemeral interview prep for this application. Generate again whenever you reopen the page."
+      title="Interview Prep"
+      description="Structured preparation for active applications, grounded in deterministic fit and the current job."
       icon={MessageSquare}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -302,16 +306,16 @@ function InterviewPrepResults({ prep }: { prep: InterviewPrep }) {
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <ListPanel title="Common interview questions" items={prep.likelyTopics} />
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <ListPanel title="Likely topics" items={prep.likelyTopics} />
+        <ListPanel title="Stories to prepare" items={prep.storiesToPrepare} />
         <ListPanel
-          title="Suggested talking points"
-          items={[...prep.storiesToPrepare, ...prep.followUpPlan]}
-        />
-        <ListPanel
-          title="Skills to demonstrate"
+          title="Focus areas"
           items={[...prep.technicalFocus, ...prep.behavioralFocus]}
         />
+        <ListPanel title="Questions to ask" items={prep.questionsToAsk} />
+        <ListPanel title="Risk areas" items={prep.riskAreas} />
+        <ListPanel title="Follow-up plan" items={prep.followUpPlan} />
       </div>
     </div>
   );

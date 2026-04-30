@@ -8,7 +8,7 @@
 - **Canonical role catalog** — `RoleId` enum + aliases are live in Rust matching and related flows
 - **Bootstrap training data** — bootstrap retraining flow exists in `ml/app/bootstrap_training.py`
 - **Freshness decay** — deterministic search scoring decays older jobs
-- **Notifications** — DB table + API endpoints + web inbox + unread badge + ingestion trigger
+- **Notifications** — DB table + API endpoints + web inbox + unread badge + ingestion trigger + task due reminders
 - **Global search** — Cmd/Ctrl+K overlay is implemented
 - **Profile compensation + languages** — schema, API, persistence, and web UI are live
 - **Market base page** — overview, company activity, salary trends, and role demand are live
@@ -25,13 +25,10 @@
 
 - **Market Intelligence overall** — snapshot writer refreshes `market_snapshots` after successful
   ingestion upserts, but current UI/API still read directly from `jobs`
-- **ML provider defaulting** — runtime code defaults to `template`; Docker Compose defaults `ML_LLM_PROVIDER` to `ollama`
 
 ## Missing
 
-- Profile ownership guards in `engine-api` (see next slices) — see also [security-model.md](../02-architecture/security-model.md)
-- ML internal token production validation (see next slices) — see also [security-model.md](../02-architecture/security-model.md)
-- CV Tailoring endpoint + web entrypoint
+- CV Tailoring web entrypoint
 - Analytics freshness widget for ingestion recency
 - Dedicated notification preferences (settings expansion)
 - Additional market sections from the broader spec:
@@ -43,8 +40,9 @@
 
 - Active shell source of truth: `apps/web/src/AppShell.tsx`
 - Legacy alias only: `apps/web/src/AppShellNew.tsx`
-- Notifications, market base sections, profile compensation/languages, and global search should no longer be tracked as open feature work
+- Notifications, task due reminders, market base sections, profile compensation/languages, and global search should no longer be tracked as open feature work
 - `market_snapshots` is now refreshed by ingestion after successful upserts
+- Legacy profile role deserialization is scheduled for removal by 2026-07-01; tracking details live in `docs/05-roadmap/backlog.md` under "Remove legacy profile role deserialization by 2026-07-01"
 - Settings now has a minimal route/page, but dedicated notification preferences are still not implemented
 - Profile completion indicator now exists in the profile/settings surfaces
 - Lifecycle-heavy UI surfaces should read engine presentation labels instead of inferring state from `postedAt` alone
@@ -54,29 +52,19 @@
 
 ## Recommended Next Slices
 
-1. **Security: profile ownership guards**
-   - Profile-scoped engine routes must reject mismatched owner with `403`; missing profile stays `404`.
-   - Complexity: S, Priority: High.
-   - See `codex/tasks/security/profile-ownership-and-ml-token-slice.md`.
-
-2. **Security: ML internal token production validation**
-   - Production ML startup must fail fast without internal token; no token logging.
-   - Complexity: XS, Priority: High.
-   - See same task prompt.
-
-3. **CV Tailoring**
-   - ML endpoint + web modal (distinct from cover letter — focus on adapting CV to JD).
+1. **CV Tailoring**
+   - Add a web modal/panel for the existing engine + ML CV tailoring endpoints.
    - Complexity: M, Priority: High.
 
-4. **Settings expansion**
+2. **Settings expansion**
    - Dedicated notification prefs + profile preference controls beyond the current minimal route.
    - Complexity: M, Priority: Medium.
 
-5. **Analytics freshness widget**
+3. **Analytics freshness widget**
    - Ingestion recency and feed freshness in analytics.
    - Complexity: XS, Priority: Low.
 
-6. **Market snapshot readers**
+4. **Market snapshot readers**
    - Gradually migrate market sections from live `jobs` queries to snapshots where beneficial.
    - Complexity: M, Priority: Low.
 

@@ -3,7 +3,12 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import type { Application } from '@job-copilot/shared';
-import type { JobFeedbackReason, LegitimacySignal, SalaryFeedbackSignal, WorkModeFeedbackSignal } from '@job-copilot/shared/feedback';
+import type {
+  JobFeedbackReason,
+  LegitimacySignal,
+  SalaryFeedbackSignal,
+  WorkModeFeedbackSignal,
+} from '@job-copilot/shared/feedback';
 
 import { createApplication, getApplications } from '../../api/applications';
 import {
@@ -27,17 +32,21 @@ import {
   getCoverLetterDraft,
   getInterviewPrep,
   getJobFitExplanation,
+  getResumeMatch,
   type CoverLetterDraft,
   type InterviewPrep,
   type JobFitExplanation,
+  type ResumeMatch,
 } from '../../api/enrichment';
 import type { FitAnalysis } from '../../api/jobs';
 import { analyzeFit, getJob } from '../../api/jobs';
+import { getActiveResume } from '../../api/profiles';
 import { fireEvent } from '../../api/events';
 import {
   invalidateApplicationSummaryQueries,
-  invalidateFeedbackViewQueries,
+  invalidateFeedbackQueries,
   invalidateJobAiQueries,
+  invalidateJobQueries,
 } from '../../lib/queryInvalidation';
 import { readProfileId } from '../../lib/profileSession';
 import { queryKeys } from '../../queryKeys';
@@ -116,24 +125,50 @@ export function useJobDetailsPage() {
     retry: false,
   });
 
-  const deterministicFit = fit && job
-    ? {
-        jobId: fit.jobId,
-        score: fit.score,
-        scoreBreakdown: fit.scoreBreakdown,
-        matchedRoles: fit.matchedRoles,
-        matchedSkills: fit.matchedSkills,
-        matchedKeywords: fit.matchedKeywords,
-        missingSignals: fit.missingTerms,
-        sourceMatch: false,
-        workModeMatch: undefined,
-        regionMatch: undefined,
-        descriptionQuality: fit.descriptionQuality,
-        positiveReasons: fit.positiveReasons,
-        negativeReasons: fit.negativeReasons,
-        reasons: [...fit.positiveReasons, ...fit.negativeReasons],
-      }
-    : null;
+  const { data: activeResume } = useQuery({
+    queryKey: queryKeys.resumes.active(),
+    queryFn: getActiveResume,
+    enabled: activeTab === 'match' && !!profileId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
+  const {
+    data: resumeMatch,
+    isLoading: resumeMatchLoading,
+    error: resumeMatchError,
+  } = useQuery<ResumeMatch>({
+    queryKey: queryKeys.ml.resumeMatch(profileId ?? '', id ?? '', activeResume?.id ?? 'none'),
+    queryFn: () =>
+      getResumeMatch({
+        resumeText: activeResume!.rawText,
+        jdText: `${job!.title}\n${job!.description}`,
+      }),
+    enabled:
+      activeTab === 'match' && !!profileId && !!id && !!job?.description && !!activeResume?.rawText,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+
+  const deterministicFit =
+    fit && job
+      ? {
+          jobId: fit.jobId,
+          score: fit.score,
+          scoreBreakdown: fit.scoreBreakdown,
+          matchedRoles: fit.matchedRoles,
+          matchedSkills: fit.matchedSkills,
+          matchedKeywords: fit.matchedKeywords,
+          missingSignals: fit.missingTerms,
+          sourceMatch: false,
+          workModeMatch: undefined,
+          regionMatch: undefined,
+          descriptionQuality: fit.descriptionQuality,
+          positiveReasons: fit.positiveReasons,
+          negativeReasons: fit.negativeReasons,
+          reasons: [...fit.positiveReasons, ...fit.negativeReasons],
+        }
+      : null;
 
   const { data: fitExplanation, isLoading: fitExplanationLoading } = useQuery<JobFitExplanation>({
     queryKey: queryKeys.ml.fitExplanation(profileId ?? '', id ?? ''),
@@ -188,8 +223,8 @@ export function useJobDetailsPage() {
   const isBadFit = job?.feedback?.badFit;
   const companyStatus = job?.feedback?.companyStatus;
 
-  const invalidateFeedbackQueries = () => {
-    void invalidateFeedbackViewQueries(queryClient, profileId);
+  const invalidateCurrentJobQueries = () => {
+    void invalidateJobQueries(queryClient, profileId, id);
     void invalidateJobAiQueries(queryClient, profileId, id);
   };
 
@@ -204,7 +239,7 @@ export function useJobDetailsPage() {
       }
     },
     onSuccess: () => {
-      invalidateFeedbackQueries();
+      invalidateCurrentJobQueries();
       void invalidateApplicationSummaryQueries(queryClient);
       toast.success('Збережено в pipeline');
     },
@@ -221,7 +256,7 @@ export function useJobDetailsPage() {
       await unsaveJob(profileId, id!);
     },
     onSuccess: () => {
-      invalidateFeedbackQueries();
+      invalidateCurrentJobQueries();
       toast.success('Знято з обраного');
     },
     onError: (value: unknown) => {
@@ -237,7 +272,7 @@ export function useJobDetailsPage() {
       await hideJobForProfile(profileId, id!);
     },
     onSuccess: () => {
-      invalidateFeedbackQueries();
+      invalidateCurrentJobQueries();
       toast.success('Вакансію приховано');
     },
     onError: (value: unknown) => {
@@ -253,7 +288,7 @@ export function useJobDetailsPage() {
       await unhideJob(profileId, id!);
     },
     onSuccess: () => {
-      invalidateFeedbackQueries();
+      invalidateCurrentJobQueries();
       toast.success('Вакансію показано');
     },
     onError: (value: unknown) => {
@@ -269,7 +304,7 @@ export function useJobDetailsPage() {
       await markJobBadFit(profileId, id!);
     },
     onSuccess: () => {
-      invalidateFeedbackQueries();
+      invalidateCurrentJobQueries();
       toast.success('Позначено як bad fit');
     },
     onError: (value: unknown) => {
@@ -285,7 +320,7 @@ export function useJobDetailsPage() {
       await unmarkJobBadFit(profileId, id!);
     },
     onSuccess: () => {
-      invalidateFeedbackQueries();
+      invalidateCurrentJobQueries();
       toast.success('Позначку bad fit знято');
     },
     onError: (value: unknown) => {
@@ -314,8 +349,21 @@ export function useJobDetailsPage() {
         await addCompanyBlacklist(profileId, job!.company);
       }
     },
-    onSuccess: () => {
-      invalidateFeedbackQueries();
+    onSuccess: (_result, nextStatus) => {
+      const nextCompanyStatus = companyStatus === nextStatus ? undefined : nextStatus;
+
+      queryClient.setQueryData(queryKeys.jobs.detail(id!, profileId), (current: typeof job) =>
+        current
+          ? {
+              ...current,
+              feedback: {
+                ...current.feedback,
+                companyStatus: nextCompanyStatus,
+              },
+            }
+          : current,
+      );
+      void invalidateFeedbackQueries(queryClient, profileId);
       toast.success('Оновлено список компанії');
     },
     onError: (value: unknown) => {
@@ -342,7 +390,7 @@ export function useJobDetailsPage() {
       if (!profileId) throw new Error('Create a profile first');
       await setJobInterestRating(profileId, id!, rating);
     },
-    onSuccess: () => invalidateFeedbackQueries(),
+    onSuccess: () => invalidateCurrentJobQueries(),
     onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
   });
 
@@ -351,7 +399,7 @@ export function useJobDetailsPage() {
       if (!profileId) throw new Error('Create a profile first');
       await setJobSalarySignal(profileId, id!, signal);
     },
-    onSuccess: () => invalidateFeedbackQueries(),
+    onSuccess: () => invalidateCurrentJobQueries(),
     onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
   });
 
@@ -360,7 +408,7 @@ export function useJobDetailsPage() {
       if (!profileId) throw new Error('Create a profile first');
       await setJobWorkModeSignal(profileId, id!, signal);
     },
-    onSuccess: () => invalidateFeedbackQueries(),
+    onSuccess: () => invalidateCurrentJobQueries(),
     onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
   });
 
@@ -369,7 +417,7 @@ export function useJobDetailsPage() {
       if (!profileId) throw new Error('Create a profile first');
       await tagJobFeedback(profileId, id!, tags);
     },
-    onSuccess: () => invalidateFeedbackQueries(),
+    onSuccess: () => invalidateCurrentJobQueries(),
     onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
   });
 
@@ -379,7 +427,7 @@ export function useJobDetailsPage() {
       await setJobLegitimacySignal(profileId, id!, signal);
     },
     onSuccess: () => {
-      invalidateFeedbackQueries();
+      invalidateCurrentJobQueries();
       toast.success('Дякуємо за відгук');
     },
     onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
@@ -393,6 +441,10 @@ export function useJobDetailsPage() {
     error,
     applications,
     fit,
+    activeResume,
+    resumeMatch,
+    resumeMatchLoading,
+    resumeMatchError,
     deterministicFit,
     fitExplanation,
     fitExplanationLoading,

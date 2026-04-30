@@ -58,9 +58,10 @@ impl RoleId {
     }
 
     // TODO(remove by 2026-07-01): used only by ProfileRow deserialization for legacy rows that
-    // still store old-format keys (e.g. "frontend_developer"). Once a migration backfills all
-    // profiles.primary_role values to canonical keys, delete this and switch the call site in
-    // db/repositories/profiles.rs to parse_canonical_key().
+    // still store old-format keys (e.g. "frontend_developer"). Tracked in
+    // docs/05-roadmap/backlog.md under "Remove legacy profile role deserialization by 2026-07-01".
+    // Once a migration backfills all profiles.primary_role values to canonical keys, delete this
+    // and switch the call site in db/repositories/profiles.rs to parse_canonical_key().
     pub fn parse_compat_key(value: &str) -> Option<Self> {
         let normalized = value.trim().to_lowercase();
 

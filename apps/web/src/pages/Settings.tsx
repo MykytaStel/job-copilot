@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -22,7 +22,6 @@ import {
   getNotificationPreferences,
   getNotifications,
   patchNotificationPreferences,
-  type AppNotificationType,
   type NotificationPreferences,
 } from '../api/notifications';
 import {
@@ -32,6 +31,7 @@ import {
   getProfile,
   getResumes,
   getStoredProfileRawText,
+  uploadResume,
   updateScoringWeights,
   type ScoringWeights,
 } from '../api/profiles';
@@ -53,9 +53,10 @@ import {
 } from '../lib/ingestionFrequencyPrefs';
 import { queryKeys } from '../queryKeys';
 import { buildProfileCompletionState } from '../features/profile/profileCompletion';
+import { cleanupExtractedResumeText, extractPdfText } from '../features/profile/profile.utils';
 import { clearAllHiddenJobs, getFeedback, removeCompanyBlacklistBySlug } from '../api/feedback';
 import { exportUserData } from '../api/export';
-import { invalidateFeedbackViewQueries } from '../lib/queryInvalidation';
+import { invalidateFeedbackQueries } from '../lib/queryInvalidation';
 import { formatOptionalDate } from '../lib/format';
 import { resetProfileData } from '../api/dataManagement';
 
@@ -121,13 +122,6 @@ const SCORING_WEIGHT_CONTROLS: {
   },
 ];
 
-const NOTIF_LABELS: Record<AppNotificationType, string> = {
-  new_jobs_found: 'New jobs found',
-  job_reactivated: 'Job reactivated',
-  market_company_hiring_again: 'Market company hiring again',
-  application_due_soon: 'Application due soon',
-};
-
 type SectionId = 'profile' | 'search' | 'notifications' | 'display' | 'privacy';
 
 const SECTIONS: {
@@ -146,11 +140,13 @@ export default function Settings() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const profileId = readProfileId();
+  const resumeUploadInputRef = useRef<HTMLInputElement>(null);
   const [activeSection, setActiveSection] = useState<SectionId>('profile');
   const { density, sortMode: sortPref, setDensity, setSortMode: setSortPref } = useDisplayPrefs();
   const [ingestionFrequency, setIngestionFrequencyState] = useState(() => readIngestionFrequency());
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
   const [resetConfirmationInput, setResetConfirmationInput] = useState('');
+  const [resumeUploadError, setResumeUploadError] = useState<string | null>(null);
 
   const { data: notificationPreferences, isLoading: notificationPreferencesLoading } = useQuery({
     queryKey: queryKeys.notifications.preferences(profileId ?? 'none'),
@@ -211,7 +207,7 @@ export default function Settings() {
     onSuccess: () => {
       if (!profileId) return;
 
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateFeedbackQueries(queryClient, profileId);
     },
   });
 
@@ -231,7 +227,7 @@ export default function Settings() {
     onSuccess: () => {
       if (!profileId) return;
 
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateFeedbackQueries(queryClient, profileId);
     },
   });
 
@@ -303,6 +299,17 @@ export default function Settings() {
     },
   });
 
+  const uploadResumeMutation = useMutation({
+    mutationFn: uploadResume,
+    onMutate: () => {
+      setResumeUploadError(null);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.resumes.active() });
+    },
+  });
+
   const deleteResumeMutation = useMutation({
     mutationFn: deleteResume,
     onSuccess: () => {
@@ -325,7 +332,7 @@ export default function Settings() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.profile.root() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.applications.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats() });
-      void invalidateFeedbackViewQueries(queryClient, profileId);
+      void invalidateFeedbackQueries(queryClient, profileId);
     },
   });
 
@@ -399,6 +406,24 @@ export default function Settings() {
 
     if (confirmed) {
       deleteResumeMutation.mutate(resume.id);
+    }
+  }
+
+  async function handleResumeUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    try {
+      const rawText = await readResumeFile(file);
+      uploadResumeMutation.mutate({
+        filename: file.name,
+        rawText,
+      });
+    } catch (error) {
+      console.error('Resume upload failed before API submission:', error);
+      setResumeUploadError('Use PDF, TXT, or MD under 5 MB with readable text.');
     }
   }
 
@@ -529,12 +554,20 @@ export default function Settings() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => navigate('/profile')}
+                      onClick={() => resumeUploadInputRef.current?.click()}
+                      disabled={uploadResumeMutation.isPending}
                       className="shrink-0"
                     >
                       <Upload className="h-4 w-4" />
-                      Upload new CV
+                      {uploadResumeMutation.isPending ? 'Uploading CV' : 'Upload new CV'}
                     </Button>
+                    <input
+                      ref={resumeUploadInputRef}
+                      type="file"
+                      accept=".pdf,.txt,.md,.text,application/pdf,text/plain,text/markdown"
+                      className="hidden"
+                      onChange={handleResumeUpload}
+                    />
                   </div>
 
                   {resumesLoading && (
@@ -631,6 +664,12 @@ export default function Settings() {
                   {deleteResumeMutation.isError && (
                     <p className="mt-3 text-sm text-danger">
                       Could not delete this CV. Please try again.
+                    </p>
+                  )}
+                  {(uploadResumeMutation.isError || resumeUploadError) && (
+                    <p className="mt-3 text-sm text-danger">
+                      {resumeUploadError ??
+                        'Could not upload this CV. Use PDF, TXT, or MD under 5 MB.'}
                     </p>
                   )}
                 </div>
@@ -1139,4 +1178,34 @@ function formatDateForFilename(date: Date) {
   const day = String(date.getDate()).padStart(2, '0');
 
   return `${year}-${month}-${day}`;
+}
+
+async function readResumeFile(file: File): Promise<string> {
+  const maxSizeBytes = 5 * 1024 * 1024;
+
+  if (file.size > maxSizeBytes) {
+    throw new Error('Resume file is too large');
+  }
+
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  const allowedExtensions = new Set(['pdf', 'txt', 'md', 'text']);
+
+  if (!allowedExtensions.has(extension ?? '')) {
+    throw new Error('Unsupported resume file type');
+  }
+
+  if (file.type === 'application/pdf' || extension === 'pdf') {
+    const text = cleanupExtractedResumeText(await extractPdfText(file));
+    if (!text.trim()) {
+      throw new Error('Resume file is empty');
+    }
+    return text;
+  }
+
+  const text = cleanupExtractedResumeText(await file.text());
+  if (!text.trim()) {
+    throw new Error('Resume file is empty');
+  }
+
+  return text;
 }

@@ -11,8 +11,26 @@ import { JobDetailsTabs } from './JobDetailsTabs';
 import { buildJobDetailsViewModel } from './jobDetails.view-model';
 
 export function JobDetailsContent({ state }: { state: JobDetailsPageState }) {
-  const { job, activeTab, setActiveTab, profileId, deterministicFit, fitExplanation, fitExplanationLoading, coverLetter, coverLetterLoading, interviewPrep, interviewPrepLoading, setGenerateCoverLetter, setGenerateInterviewPrep, fit } =
-    state;
+  const {
+    job,
+    activeTab,
+    setActiveTab,
+    profileId,
+    deterministicFit,
+    fitExplanation,
+    fitExplanationLoading,
+    coverLetter,
+    coverLetterLoading,
+    interviewPrep,
+    interviewPrepLoading,
+    setGenerateCoverLetter,
+    setGenerateInterviewPrep,
+    fit,
+    activeResume,
+    resumeMatch,
+    resumeMatchLoading,
+    resumeMatchError,
+  } = state;
 
   if (!job) {
     return null;
@@ -43,7 +61,16 @@ export function JobDetailsContent({ state }: { state: JobDetailsPageState }) {
             />
           ) : null}
 
-          {activeTab === 'match' ? <JobDetailsMatchTab fit={fit} job={job} /> : null}
+          {activeTab === 'match' ? (
+            <JobDetailsMatchTab
+              fit={fit}
+              job={job}
+              activeResume={activeResume}
+              resumeMatch={resumeMatch}
+              resumeMatchLoading={resumeMatchLoading}
+              resumeMatchError={resumeMatchError}
+            />
+          ) : null}
 
           {activeTab === 'ai' ? (
             <JobDetailsAiTab

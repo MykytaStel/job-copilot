@@ -3,7 +3,10 @@ import {
   Brain,
   Bookmark,
   Building2,
+  CalendarClock,
   CheckCircle2,
+  Clock3,
+  Database,
   Eye,
   EyeOff,
   Layers,
@@ -19,6 +22,7 @@ import type {
   AnalyticsSummary,
   BehaviorSummary,
   FunnelSummary,
+  IngestionStats,
   LlmContext,
   RerankerMetrics,
 } from '../../api/analytics';
@@ -28,12 +32,7 @@ import type { RetrainStatus } from '../../features/analytics/useRetrainModel';
 import { Button } from '../../components/ui/Button';
 import { StatCard } from '../../components/ui/StatCard';
 
-import {
-  BarList,
-  ConversionCard,
-  Section,
-  SignalList,
-} from './AnalyticsHelpers';
+import { BarList, ConversionCard, Section, SignalList } from './AnalyticsHelpers';
 import {
   FunnelBySource,
   LlmContextPanel,
@@ -54,9 +53,7 @@ function RetrainControl({
   return (
     <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-surface-muted px-4 py-3">
       <div className="min-w-0">
-        <p className="m-0 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-          Retraining
-        </p>
+        <p className="m-0 text-xs uppercase tracking-[0.14em] text-muted-foreground">Retraining</p>
         <p className="m-0 mt-1 text-sm text-card-foreground">
           {status === 'done'
             ? 'Model retrained successfully.'
@@ -67,12 +64,7 @@ function RetrainControl({
                 : 'Trigger a new model retrain from current feedback data.'}
         </p>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onRetrain}
-        disabled={status === 'running'}
-      >
+      <Button variant="outline" size="sm" onClick={onRetrain} disabled={status === 'running'}>
         {status === 'running' ? (
           <>
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -94,10 +86,152 @@ function RetrainControl({
   );
 }
 
+function parseApiDate(value: string | null): Date | null {
+  if (!value) return null;
+  return new Date(value.endsWith('Z') ? value : `${value}Z`);
+}
+
+function formatRelativeTime(value: string | null): string {
+  const date = parseApiDate(value);
+  if (!date || Number.isNaN(date.getTime())) return 'Never';
+
+  const diffMin = Math.floor((Date.now() - date.getTime()) / 60_000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin} min ago`;
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  return `${Math.floor(diffHours / 24)}d ago`;
+}
+
+function formatScheduledTime(value: string | null): string {
+  const date = parseApiDate(value);
+  if (!date || Number.isNaN(date.getTime())) return 'Not scheduled';
+
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function statusClasses(status: string): string {
+  if (status === 'ok') {
+    return 'border-success/30 bg-success/10 text-success';
+  }
+  if (status === 'partial' || status === 'degraded') {
+    return 'border-warning/30 bg-warning/10 text-warning';
+  }
+  if (status === 'failed') {
+    return 'border-destructive/30 bg-destructive/10 text-destructive';
+  }
+  return 'border-border bg-white-a05 text-muted-foreground';
+}
+
+function DataFreshnessWidget({ ingestionStats }: { ingestionStats: IngestionStats | undefined }) {
+  const sources = ingestionStats?.sources ?? [];
+
+  return (
+    <Section
+      title="Data Freshness"
+      description="Latest ingestion runs, indexed volume, and expected next source refresh."
+      icon={Database}
+      eyebrow="Ingestion"
+    >
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <StatCard title="Total jobs" value={ingestionStats?.totalJobs ?? 0} icon={Database} />
+        <StatCard title="Active jobs" value={ingestionStats?.activeJobs ?? 0} icon={CheckCircle2} />
+        <StatCard title="Inactive jobs" value={ingestionStats?.inactiveJobs ?? 0} icon={EyeOff} />
+        <StatCard
+          title="Last ingest"
+          value={formatRelativeTime(ingestionStats?.lastIngestedAt ?? null)}
+          icon={Clock3}
+        />
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {sources.length > 0 ? (
+          sources.map((source) => (
+            <div
+              key={source.source}
+              className="grid gap-3 rounded-2xl border border-border/70 bg-surface-muted px-4 py-3 text-xs sm:grid-cols-[minmax(0,1.1fr)_90px_minmax(96px,0.8fr)_minmax(96px,0.8fr)_minmax(120px,1fr)] sm:items-center"
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate text-sm font-semibold text-card-foreground">
+                    {source.displayName}
+                  </span>
+                  <span
+                    className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${statusClasses(source.status)}`}
+                  >
+                    {source.status}
+                  </span>
+                </div>
+                <p className="m-0 mt-1 text-muted-foreground">
+                  Last run {formatRelativeTime(source.lastRunAt)}
+                </p>
+              </div>
+
+              <div>
+                <p className="m-0 text-[10px] uppercase text-muted-foreground">Jobs</p>
+                <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">
+                  {source.count}
+                </p>
+              </div>
+
+              <div>
+                <p className="m-0 text-[10px] uppercase text-muted-foreground">Attempted</p>
+                <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">
+                  {source.jobsAttempted}
+                </p>
+              </div>
+
+              <div>
+                <p className="m-0 text-[10px] uppercase text-muted-foreground">Stored</p>
+                <p className="m-0 mt-1 text-sm font-semibold text-card-foreground">
+                  {source.jobsUpserted}
+                  {source.jobsFailed > 0 ? (
+                    <span
+                      className="ml-2 text-warning"
+                      title={source.errorMessages.join('\n') || undefined}
+                    >
+                      {source.jobsFailed} failed
+                    </span>
+                  ) : null}
+                  {source.errors > source.jobsFailed ? (
+                    <span
+                      className="ml-2 text-warning"
+                      title={source.errorMessages.join('\n') || undefined}
+                    >
+                      {source.errors} errors
+                    </span>
+                  ) : null}
+                </p>
+              </div>
+
+              <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{formatScheduledTime(source.nextScheduledRunAt)}</span>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-2xl border border-border/70 bg-surface-muted px-4 py-4 text-sm text-muted-foreground">
+            No ingestion sources have reported yet.
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 export function AnalyticsMainSections({
   summary,
   behavior,
   funnel,
+  ingestionStats,
   llmCtx,
   rerankerMetrics,
   weeklyGuidance,
@@ -113,6 +247,7 @@ export function AnalyticsMainSections({
   summary: AnalyticsSummary;
   behavior: BehaviorSummary | undefined;
   funnel: FunnelSummary | undefined;
+  ingestionStats: IngestionStats | undefined;
   llmCtx: LlmContext | undefined;
   rerankerMetrics: RerankerMetrics | undefined;
   weeklyGuidance: WeeklyGuidance | undefined;
@@ -158,6 +293,8 @@ export function AnalyticsMainSections({
 
   return (
     <div className="space-y-8">
+      <DataFreshnessWidget ingestionStats={ingestionStats} />
+
       {funnel ? (
         <Section
           title="Search Funnel"
@@ -199,10 +336,26 @@ export function AnalyticsMainSections({
           <div className="mt-6 grid grid-cols-2 gap-4 xl:grid-cols-3">
             <StatCard title="Hidden" value={funnel.hideCount} icon={EyeOff} />
             <StatCard title="Bad Fit" value={funnel.badFitCount} icon={ThumbsDown} />
-            <StatCard title="Fit Explainers" value={funnel.fitExplanationRequestedCount} icon={Brain} />
-            <StatCard title="Coach Runs" value={funnel.applicationCoachRequestedCount} icon={Brain} />
-            <StatCard title="Cover Letters" value={funnel.coverLetterDraftRequestedCount} icon={Layers} />
-            <StatCard title="Interview Prep" value={funnel.interviewPrepRequestedCount} icon={Zap} />
+            <StatCard
+              title="Fit Explainers"
+              value={funnel.fitExplanationRequestedCount}
+              icon={Brain}
+            />
+            <StatCard
+              title="Coach Runs"
+              value={funnel.applicationCoachRequestedCount}
+              icon={Brain}
+            />
+            <StatCard
+              title="Cover Letters"
+              value={funnel.coverLetterDraftRequestedCount}
+              icon={Layers}
+            />
+            <StatCard
+              title="Interview Prep"
+              value={funnel.interviewPrepRequestedCount}
+              icon={Zap}
+            />
           </div>
         </Section>
       ) : null}

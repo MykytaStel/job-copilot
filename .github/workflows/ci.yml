@@ -87,6 +87,9 @@ jobs:
       - name: Cargo test ingestion
         run: cargo test --manifest-path apps/ingestion/Cargo.toml
 
+      - name: E2E smoke
+        run: ./scripts/e2e_smoke.sh
+
   ml-sidecar:
     name: ML sidecar checks
     runs-on: ubuntu-latest

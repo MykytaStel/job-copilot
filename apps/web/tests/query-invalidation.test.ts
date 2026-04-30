@@ -3,7 +3,8 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import {
   invalidateApplicationSummaryQueries,
-  invalidateFeedbackViewQueries,
+  invalidateFeedbackQueries,
+  invalidateJobQueries,
   invalidateProfileAnalysisQueries,
 } from '../src/lib/queryInvalidation';
 
@@ -14,16 +15,27 @@ function createQueryClientMock() {
 }
 
 describe('query invalidation helpers', () => {
-  it('invalidates rerank and analytics queries after feedback mutations', async () => {
+  it('keeps feedback invalidation focused on feedback queries', async () => {
     const queryClient = createQueryClientMock();
 
-    await invalidateFeedbackViewQueries(queryClient, 'profile-1');
+    await invalidateFeedbackQueries(queryClient, 'profile-1');
 
-    const calls = vi.mocked(queryClient.invalidateQueries).mock.calls;
-    expect(calls).toContainEqual([{ queryKey: ['jobs'] }]);
-    expect(calls).toContainEqual([{ queryKey: ['analytics'] }]);
-    expect(calls).toContainEqual([{ queryKey: ['feedback', 'profile-1'] }]);
-    expect(calls).toContainEqual([{ queryKey: ['ml', 'rerank', 'profile-1'] }]);
+    expect(vi.mocked(queryClient.invalidateQueries).mock.calls).toEqual([
+      [{ queryKey: ['feedback', 'profile-1'] }],
+      [{ queryKey: ['feedback', 'stats', 'profile-1'] }],
+      [{ queryKey: ['feedback', 'timeline', 'profile-1'] }],
+    ]);
+  });
+
+  it('keeps job invalidation focused on job queries', async () => {
+    const queryClient = createQueryClientMock();
+
+    await invalidateJobQueries(queryClient, 'profile-1', 'job-1');
+
+    expect(vi.mocked(queryClient.invalidateQueries).mock.calls).toEqual([
+      [{ queryKey: ['jobs'] }],
+      [{ queryKey: ['jobs', 'job-1', 'profile-1'] }],
+    ]);
   });
 
   it('invalidates profile-analysis dependent ML queries', async () => {

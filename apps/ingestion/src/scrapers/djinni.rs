@@ -8,8 +8,9 @@ use tracing::{info, warn};
 
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
-    DetailSnapshot, ScraperConfig, cleanup_description_text, collect_text, extract_skills,
-    headers::build_default_headers, infer_company_meta, infer_remote_type, infer_seniority,
+    DetailSnapshot, ScraperConfig, ScraperRun, cleanup_description_text, collect_text,
+    detail_error_summaries, extract_skills, fetch_with_backoff, headers::build_default_headers,
+    infer_company_meta, infer_remote_type, infer_seniority,
     infer_seniority_from_title_and_description, merge_detail_into_result, normalize_company_name,
     normalized_non_empty, parse_salary_range_with_usd_monthly, polite_delay,
 };
@@ -37,9 +38,11 @@ impl DjinniScraper {
         Ok(Self { client })
     }
 
-    pub async fn scrape(&self, config: &ScraperConfig) -> Result<Vec<NormalizationResult>, String> {
+    pub async fn scrape(&self, config: &ScraperConfig) -> Result<ScraperRun, String> {
         let fetched_at = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         let mut results: Vec<NormalizationResult> = Vec::new();
+        let mut jobs_attempted = 0u32;
+        let mut jobs_failed = 0u32;
 
         for page in 1..=config.pages {
             let url = build_url(config.keyword.as_deref(), page);
@@ -54,8 +57,11 @@ impl DjinniScraper {
             };
 
             let page_results = parse_page(&html, &fetched_at);
+            let attempted = page_results.len() as u32;
             let page_results = self.enrich_page_results(page_results, &fetched_at).await;
             let count = page_results.len();
+            jobs_attempted += attempted;
+            jobs_failed += attempted.saturating_sub(count as u32);
 
             if count == 0 {
                 // Dump a snippet so the developer can diagnose selector mismatches
@@ -85,20 +91,16 @@ impl DjinniScraper {
         }
 
         info!(total = results.len(), source = SOURCE, "scrape complete");
-        Ok(results)
+        Ok(ScraperRun {
+            jobs: results,
+            jobs_attempted,
+            jobs_failed,
+            errors: detail_error_summaries(SOURCE, jobs_failed),
+        })
     }
 
     async fn fetch(&self, url: &str) -> Result<String, String> {
-        self.client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| format!("request failed: {e}"))?
-            .error_for_status()
-            .map_err(|e| format!("HTTP error: {e}"))?
-            .text()
-            .await
-            .map_err(|e| format!("body read failed: {e}"))
+        fetch_with_backoff(&self.client, url).await
     }
 
     async fn enrich_page_results(

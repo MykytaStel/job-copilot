@@ -68,6 +68,7 @@ pub async fn get_recent_applications(
 
 pub async fn create_application(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthUser>>,
     ApiJson(payload): ApiJson<CreateApplicationRequest>,
 ) -> Result<(axum::http::StatusCode, axum::Json<ApplicationResponse>), ApiError> {
     let payload = payload.validate()?;
@@ -86,7 +87,7 @@ pub async fn create_application(
     };
 
     if let Some(profile_id) = profile_id.as_deref() {
-        ensure_profile_exists(&state, None, profile_id).await?;
+        ensure_profile_exists(&state, auth.as_deref(), profile_id).await?;
     }
 
     let event_metadata = if profile_id.is_some() {

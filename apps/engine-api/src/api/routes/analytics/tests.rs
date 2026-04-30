@@ -502,13 +502,25 @@ async fn ingestion_stats_sources_include_count_and_last_seen() {
         .await
         .expect("ingestion stats should succeed");
 
-    assert_eq!(stats.sources.len(), 2);
+    assert_eq!(stats.sources.len(), 4);
     assert_eq!(stats.sources[0].source, "djinni");
     assert_eq!(stats.sources[0].count, 7);
-    assert_eq!(stats.sources[0].last_seen, "2025-01-15T10:00:00");
-    assert_eq!(stats.sources[1].source, "work_ua");
-    assert_eq!(stats.sources[1].count, 3);
-    assert_eq!(stats.sources[1].last_seen, "2025-01-14T08:00:00");
+    assert_eq!(stats.sources[0].display_name, "Djinni");
+    assert_eq!(
+        stats.sources[0].last_seen.as_deref(),
+        Some("2025-01-15T10:00:00")
+    );
+    assert_eq!(stats.sources[0].status, "unknown");
+    assert_eq!(stats.sources[1].source, "dou_ua");
+    assert_eq!(stats.sources[1].display_name, "DOU");
+    assert_eq!(stats.sources[1].count, 0);
+    assert!(stats.sources[1].last_seen.is_none());
+    assert_eq!(stats.sources[2].source, "work_ua");
+    assert_eq!(stats.sources[2].count, 3);
+    assert_eq!(
+        stats.sources[2].last_seen.as_deref(),
+        Some("2025-01-14T08:00:00")
+    );
 }
 
 #[tokio::test]
@@ -530,5 +542,12 @@ async fn ingestion_stats_returns_none_when_no_jobs_ingested() {
     assert_eq!(stats.active_jobs, 0);
     assert_eq!(stats.inactive_jobs, 0);
     assert!(stats.last_ingested_at.is_none());
-    assert!(stats.sources.is_empty());
+    assert_eq!(stats.sources.len(), 4);
+    assert!(stats.sources.iter().all(|source| source.count == 0));
+    assert!(
+        stats
+            .sources
+            .iter()
+            .all(|source| source.status == "unknown")
+    );
 }

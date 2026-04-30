@@ -17,6 +17,7 @@
 		"verify:first-100": "python3 ./scripts/verify_first_100_runtime.py",
 		"verify:bootstrap-pressure": "python3 ./scripts/verify_bootstrap_pressure.py",
 		"verify:mixed-load": "python3 ./scripts/verify_mixed_load_runtime.py",
+		"smoke:e2e": "./scripts/e2e_smoke.sh",
 		"train:reranker:v2": "./scripts/train_reranker_v2.sh",
 		"train:reranker:v2:docker": "APPLY_TO_DOCKER=1 ./scripts/train_reranker_v2.sh",
 		"train:reranker:v3": "./scripts/train_reranker_v2.sh",

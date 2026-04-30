@@ -11,6 +11,9 @@ import {
   getFeedback,
   getFeedbackStats,
   getFeedbackTimeline,
+  hideJobForProfile,
+  markJobBadFit,
+  markJobSaved,
   removeCompanyBlacklist,
   removeCompanyWhitelist,
   unhideJob,
@@ -19,13 +22,15 @@ import {
   updateCompanyFeedbackNotes,
 } from '../../api/feedback';
 import { getJobsFeed } from '../../api/jobs';
-import { invalidateFeedbackViewQueries } from '../../lib/queryInvalidation';
+import { invalidateFeedbackQueries, invalidateJobQueries } from '../../lib/queryInvalidation';
 import { readProfileId } from '../../lib/profileSession';
 import { queryKeys } from '../../queryKeys';
 import { FEEDBACK_TAB_META, type FeedbackTab } from './FeedbackCenterComponents';
 import { filterJobsBySearch } from './FeedbackCenterSections';
 
 const TIMELINE_PAGE_SIZE = 20;
+
+type BulkFeedbackAction = 'hide' | 'bad-fit' | 'save';
 
 function normalizeCompanyName(companyName: string) {
   return companyName.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -54,6 +59,7 @@ export function useFeedbackCenterPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [whitelistInput, setWhitelistInput] = useState('');
   const [blacklistInput, setBlacklistInput] = useState('');
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(() => new Set());
 
   const { data: jobsFeed, isLoading: jobsLoading } = useQuery({
     queryKey: queryKeys.jobs.filtered('all', null, profileId),
@@ -124,15 +130,72 @@ export function useFeedbackCenterPage() {
 
   const activeTabMeta =
     FEEDBACK_TAB_META.find((tab) => tab.id === activeTab) ?? FEEDBACK_TAB_META[0];
+  const activeBulkJobs =
+    activeTab === 'saved'
+      ? filteredSavedJobs
+      : activeTab === 'hidden'
+        ? filteredHiddenJobs
+        : activeTab === 'bad-fit'
+          ? filteredBadFitJobs
+          : [];
+  const activeBulkJobIds = useMemo(() => activeBulkJobs.map((job) => job.id), [activeBulkJobs]);
+  const visibleSelectedJobIds = activeBulkJobIds.filter((jobId) => selectedJobIds.has(jobId));
+  const selectedJobsCount = visibleSelectedJobIds.length;
+  const allVisibleJobsSelected =
+    activeBulkJobIds.length > 0 && activeBulkJobIds.every((jobId) => selectedJobIds.has(jobId));
 
-  function invalidateAfterAction() {
-    void invalidateFeedbackViewQueries(queryClient, profileId);
+  function invalidateAfterJobAction() {
+    void invalidateJobQueries(queryClient, profileId);
+  }
+
+  function invalidateAfterFeedbackAction() {
+    void invalidateFeedbackQueries(queryClient, profileId);
+  }
+
+  function toggleJobSelected(jobId: string) {
+    setSelectedJobIds((current) => {
+      const next = new Set(current);
+      if (next.has(jobId)) {
+        next.delete(jobId);
+      } else {
+        next.add(jobId);
+      }
+      return next;
+    });
+  }
+
+  function selectAllVisibleJobs() {
+    setSelectedJobIds((current) => {
+      const next = new Set(current);
+      activeBulkJobIds.forEach((jobId) => next.add(jobId));
+      return next;
+    });
+  }
+
+  function clearSelectedJobs() {
+    setSelectedJobIds((current) => {
+      if (current.size === 0) return current;
+      return new Set();
+    });
+  }
+
+  function setAllVisibleJobsSelected(isSelected: boolean) {
+    if (isSelected) {
+      selectAllVisibleJobs();
+      return;
+    }
+
+    setSelectedJobIds((current) => {
+      const next = new Set(current);
+      activeBulkJobIds.forEach((jobId) => next.delete(jobId));
+      return next;
+    });
   }
 
   const unsaveMutation = useMutation({
     mutationFn: (jobId: string) => unsaveJob(profileId!, jobId),
     onSuccess: () => {
-      invalidateAfterAction();
+      invalidateAfterJobAction();
       toast.success('Збережено скасовано');
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
@@ -141,7 +204,7 @@ export function useFeedbackCenterPage() {
   const unhideMutation = useMutation({
     mutationFn: (jobId: string) => unhideJob(profileId!, jobId),
     onSuccess: () => {
-      invalidateAfterAction();
+      invalidateAfterJobAction();
       toast.success('Вакансію показано знову');
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
@@ -150,8 +213,38 @@ export function useFeedbackCenterPage() {
   const unmarkBadFitMutation = useMutation({
     mutationFn: (jobId: string) => unmarkJobBadFit(profileId!, jobId),
     onSuccess: () => {
-      invalidateAfterAction();
+      invalidateAfterJobAction();
       toast.success('Позначку bad fit знято');
+    },
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+  });
+
+  const bulkJobActionMutation = useMutation({
+    mutationFn: async (action: BulkFeedbackAction) => {
+      const jobIds = visibleSelectedJobIds;
+      if (jobIds.length === 0) return { action, count: 0 };
+
+      if (action === 'hide') {
+        await Promise.all(jobIds.map((jobId) => hideJobForProfile(profileId!, jobId)));
+      } else if (action === 'bad-fit') {
+        await Promise.all(jobIds.map((jobId) => markJobBadFit(profileId!, jobId)));
+      } else {
+        await Promise.all(jobIds.map((jobId) => markJobSaved(profileId!, jobId)));
+      }
+
+      return { action, count: jobIds.length };
+    },
+    onSuccess: ({ action, count }) => {
+      if (count === 0) return;
+      clearSelectedJobs();
+      invalidateAfterJobAction();
+      const label =
+        action === 'hide'
+          ? 'hidden'
+          : action === 'bad-fit'
+            ? 'marked as bad fit'
+            : 'saved';
+      toast.success(`${count} job${count === 1 ? '' : 's'} ${label}`);
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
   });
@@ -159,7 +252,7 @@ export function useFeedbackCenterPage() {
   const removeWhitelistMutation = useMutation({
     mutationFn: (companyName: string) => removeCompanyWhitelist(profileId!, companyName),
     onSuccess: () => {
-      invalidateAfterAction();
+      invalidateAfterFeedbackAction();
       toast.success('Видалено зі списку дозволених');
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
@@ -168,7 +261,7 @@ export function useFeedbackCenterPage() {
   const removeBlacklistMutation = useMutation({
     mutationFn: (companyName: string) => removeCompanyBlacklist(profileId!, companyName),
     onSuccess: () => {
-      invalidateAfterAction();
+      invalidateAfterFeedbackAction();
       toast.success('Видалено зі списку заблокованих');
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
@@ -177,7 +270,7 @@ export function useFeedbackCenterPage() {
   const addWhitelistMutation = useMutation({
     mutationFn: (companyName: string) => addCompanyWhitelist(profileId!, companyName),
     onSuccess: () => {
-      invalidateAfterAction();
+      invalidateAfterFeedbackAction();
       setWhitelistInput('');
       toast.success('Компанію додано до whitelist');
     },
@@ -187,7 +280,7 @@ export function useFeedbackCenterPage() {
   const addBlacklistMutation = useMutation({
     mutationFn: (companyName: string) => addCompanyBlacklist(profileId!, companyName),
     onSuccess: () => {
-      invalidateAfterAction();
+      invalidateAfterFeedbackAction();
       setBlacklistInput('');
       toast.success('Компанію додано до blacklist');
     },
@@ -206,7 +299,7 @@ export function useFeedbackCenterPage() {
         ? addCompanyWhitelist(profileId!, companyName)
         : addCompanyBlacklist(profileId!, companyName),
     onSuccess: () => {
-      invalidateAfterAction();
+      invalidateAfterFeedbackAction();
       toast.success('Статус компанії оновлено');
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
@@ -216,7 +309,7 @@ export function useFeedbackCenterPage() {
     mutationFn: ({ companySlug, notes }: { companySlug: string; notes: string }) =>
       updateCompanyFeedbackNotes(profileId!, companySlug, notes),
     onSuccess: () => {
-      invalidateAfterAction();
+      invalidateAfterFeedbackAction();
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
   });
@@ -239,7 +332,7 @@ export function useFeedbackCenterPage() {
     },
     onSuccess: (result) => {
       if (!result) return;
-      invalidateAfterAction();
+      invalidateAfterJobAction();
       toast.success(`Hidden ${result.affectedCount} jobs from this company`);
     },
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
@@ -277,7 +370,10 @@ export function useFeedbackCenterPage() {
   return {
     profileId,
     activeTab,
-    setActiveTab,
+    setActiveTab: (tab: FeedbackTab) => {
+      setActiveTab(tab);
+      clearSelectedJobs();
+    },
     searchQuery,
     setSearchQuery,
     whitelistInput,
@@ -293,6 +389,12 @@ export function useFeedbackCenterPage() {
     filteredSavedJobs,
     filteredHiddenJobs,
     filteredBadFitJobs,
+    selectedJobIds,
+    selectedJobsCount,
+    allVisibleJobsSelected,
+    setAllVisibleJobsSelected,
+    toggleJobSelected,
+    clearSelectedJobs,
     timelineItems,
     timelineTotalCount,
     hasMoreTimeline: feedbackTimelineQuery.hasNextPage,
@@ -304,6 +406,7 @@ export function useFeedbackCenterPage() {
     unsaveMutation,
     unhideMutation,
     unmarkBadFitMutation,
+    bulkJobActionMutation,
     removeWhitelistMutation,
     removeBlacklistMutation,
     addWhitelistMutation,

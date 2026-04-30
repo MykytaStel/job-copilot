@@ -33,16 +33,19 @@ async fn main() -> Result<(), String> {
         run_migrations_if_requested(&pool).await?;
         let started = Instant::now();
 
-        let batch = match run_scraper(scrape_mode).await {
-            Ok(batch) => batch,
+        let scrape_output = match run_scraper(scrape_mode).await {
+            Ok(output) => output,
             Err(error) => {
                 db::record_ingestion_run(
                     &pool,
                     &db::IngestionRunMetrics {
                         source: scrape_mode.source.name(),
                         jobs_fetched: 0,
+                        jobs_attempted: 0,
                         jobs_upserted: 0,
+                        jobs_failed: 0,
                         errors: 1,
+                        errors_json: vec!["scrape_failed".to_string()],
                         duration_ms: started.elapsed().as_millis() as u64,
                         status: db::IngestionRunStatus::Failed,
                     },
@@ -51,6 +54,7 @@ async fn main() -> Result<(), String> {
                 return Err(error);
             }
         };
+        let batch = scrape_output.batch;
 
         let summary = match db::upsert_batch(&pool, &batch).await {
             Ok(summary) => summary,
@@ -60,8 +64,11 @@ async fn main() -> Result<(), String> {
                     &db::IngestionRunMetrics {
                         source: scrape_mode.source.name(),
                         jobs_fetched: batch.jobs.len() as u32,
+                        jobs_attempted: scrape_output.jobs_attempted,
                         jobs_upserted: 0,
-                        errors: 1,
+                        jobs_failed: scrape_output.jobs_failed,
+                        errors: scrape_output.jobs_failed + 1,
+                        errors_json: append_error(scrape_output.errors.clone(), "db_upsert_failed"),
                         duration_ms: started.elapsed().as_millis() as u64,
                         status: db::IngestionRunStatus::Failed,
                     },
@@ -78,18 +85,29 @@ async fn main() -> Result<(), String> {
                 None
             }
         };
-        let run_errors = if market_snapshot_summary.is_none() {
+        let run_errors = (if market_snapshot_summary.is_none() {
             1
         } else {
             0
+        }) + scrape_output.jobs_failed;
+        let errors_json = if market_snapshot_summary.is_none() {
+            append_error(
+                scrape_output.errors.clone(),
+                "market_snapshot_refresh_failed",
+            )
+        } else {
+            scrape_output.errors.clone()
         };
         db::record_ingestion_run(
             &pool,
             &db::IngestionRunMetrics {
                 source: scrape_mode.source.name(),
                 jobs_fetched: batch.jobs.len() as u32,
+                jobs_attempted: scrape_output.jobs_attempted,
                 jobs_upserted: summary.jobs_written as u32,
+                jobs_failed: scrape_output.jobs_failed,
                 errors: run_errors,
+                errors_json,
                 duration_ms: started.elapsed().as_millis() as u64,
                 status: if run_errors > 0 {
                     db::IngestionRunStatus::Partial
@@ -179,4 +197,9 @@ fn print_summary(
             .map(|value| value.snapshots_written)
             .unwrap_or(0)
     );
+}
+
+fn append_error(mut errors: Vec<String>, error: &str) -> Vec<String> {
+    errors.push(error.to_string());
+    errors
 }

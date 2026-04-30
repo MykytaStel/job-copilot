@@ -2,12 +2,11 @@ import { json, request } from './client';
 import { hasToken } from '../lib/authSession';
 import type {
   EngineNotification,
+  EngineNotificationPreferences,
   EngineNotificationsResponse,
-  EngineUnreadNotificationsCountResponse,
-	EngineNotificationPreferences,
   EngineUpdateNotificationPreferencesRequest,
+  EngineUnreadNotificationsCountResponse,
 } from './engine-types';
-
 
 export type AppNotificationType =
   | 'new_jobs_found'

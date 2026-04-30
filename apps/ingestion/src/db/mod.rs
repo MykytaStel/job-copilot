@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use sqlx::PgPool;
+use sqlx::types::Json;
 use tracing::info;
 
 use crate::models::IngestionBatch;
@@ -70,8 +71,11 @@ impl IngestionRunStatus {
 pub struct IngestionRunMetrics<'a> {
     pub source: &'a str,
     pub jobs_fetched: u32,
+    pub jobs_attempted: u32,
     pub jobs_upserted: u32,
+    pub jobs_failed: u32,
     pub errors: u32,
+    pub errors_json: Vec<String>,
     pub duration_ms: u64,
     pub status: IngestionRunStatus,
 }
@@ -153,8 +157,12 @@ pub async fn record_ingestion_run(
 ) -> Result<(), String> {
     let jobs_fetched = i32::try_from(metrics.jobs_fetched)
         .map_err(|_| "jobs_fetched exceeds database integer range".to_string())?;
+    let jobs_attempted = i32::try_from(metrics.jobs_attempted)
+        .map_err(|_| "jobs_attempted exceeds database integer range".to_string())?;
     let jobs_upserted = i32::try_from(metrics.jobs_upserted)
         .map_err(|_| "jobs_upserted exceeds database integer range".to_string())?;
+    let jobs_failed = i32::try_from(metrics.jobs_failed)
+        .map_err(|_| "jobs_failed exceeds database integer range".to_string())?;
     let errors = i32::try_from(metrics.errors)
         .map_err(|_| "errors exceeds database integer range".to_string())?;
     let duration_ms = i64::try_from(metrics.duration_ms)
@@ -170,18 +178,24 @@ pub async fn record_ingestion_run(
         INSERT INTO ingestion_runs (
             source,
             jobs_fetched,
+            jobs_attempted,
             jobs_upserted,
+            jobs_failed,
             errors,
+            errors_json,
             duration_ms,
             status
         )
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         "#,
     )
     .bind(metrics.source)
     .bind(jobs_fetched)
+    .bind(jobs_attempted)
     .bind(jobs_upserted)
+    .bind(jobs_failed)
     .bind(errors)
+    .bind(Json(metrics.errors_json.clone()))
     .bind(duration_ms)
     .bind(metrics.status.as_str())
     .execute(&mut *tx)
@@ -458,6 +472,13 @@ mod tests {
         payload: serde_json::Value,
     }
 
+    #[derive(Debug, sqlx::FromRow)]
+    struct JobAlertNotificationRow {
+        profile_id: String,
+        title: String,
+        payload: serde_json::Value,
+    }
+
     fn with_database_name(database_url: &str, database_name: &str) -> Result<String, String> {
         let (prefix, query_suffix) = match database_url.split_once('?') {
             Some((prefix, query)) => (prefix, format!("?{query}")),
@@ -611,6 +632,70 @@ mod tests {
         .execute(pool)
         .await
         .expect("profile should insert");
+    }
+
+    async fn insert_search_alert_profile(pool: &PgPool, profile_id: &str, notifications: bool) {
+        sqlx::query(
+            r#"
+            INSERT INTO profiles (
+                id,
+                name,
+                email,
+                raw_text,
+                primary_role,
+                seniority,
+                skills,
+                keywords,
+                search_preferences,
+                created_at,
+                updated_at
+            )
+            VALUES ($1, $2, $3, $4, 'backend_engineer', 'senior', $5::jsonb, $6::jsonb, $7::jsonb, NOW(), NOW())
+            "#,
+        )
+        .bind(profile_id)
+        .bind(format!("Profile {profile_id}"))
+        .bind(format!("{profile_id}@example.com"))
+        .bind("Senior backend platform candidate")
+        .bind(Json(serde_json::json!(["postgres", "ingestion"])))
+        .bind(Json(serde_json::json!(["platform"])))
+        .bind(Json(serde_json::json!({
+            "preferred_roles": ["backend_engineer", "data_engineer"],
+            "work_modes": ["hybrid"],
+            "include_keywords": ["search"],
+            "exclude_keywords": ["gambling"]
+        })))
+        .execute(pool)
+        .await
+        .expect("alert profile should insert");
+
+        sqlx::query(
+            r#"
+            INSERT INTO notification_preferences (profile_id, new_jobs_matching_profile)
+            VALUES ($1, $2)
+            ON CONFLICT (profile_id) DO UPDATE
+            SET new_jobs_matching_profile = EXCLUDED.new_jobs_matching_profile
+            "#,
+        )
+        .bind(profile_id)
+        .bind(notifications)
+        .execute(pool)
+        .await
+        .expect("notification preferences should insert");
+    }
+
+    async fn fetch_job_alert_notifications(pool: &PgPool) -> Vec<JobAlertNotificationRow> {
+        sqlx::query_as::<_, JobAlertNotificationRow>(
+            r#"
+            SELECT profile_id, title, payload
+            FROM notifications
+            WHERE type = 'new_jobs_found'
+            ORDER BY profile_id ASC, title ASC
+            "#,
+        )
+        .fetch_all(pool)
+        .await
+        .expect("job alert notifications should query")
     }
 
     async fn fetch_market_notifications(pool: &PgPool) -> Vec<MarketNotificationRow> {
@@ -993,6 +1078,51 @@ mod tests {
 
         assert!(error.contains("changed dedupe fingerprint"));
         assert!(error.contains("already belongs to canonical job"));
+
+        test_db.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn new_matching_jobs_create_thresholded_profile_notifications() {
+        let Some(test_db) = TestDatabase::try_new().await else {
+            return;
+        };
+
+        insert_search_alert_profile(&test_db.pool, "alert-profile", true).await;
+        insert_search_alert_profile(&test_db.pool, "opted-out-profile", false).await;
+
+        let initial_batch = load_mock_source_fixture("mock_source_jobs_initial.json");
+        upsert_batch(&test_db.pool, &initial_batch)
+            .await
+            .expect("initial batch should upsert");
+
+        let notifications = fetch_job_alert_notifications(&test_db.pool).await;
+
+        assert_eq!(notifications.len(), 1);
+        assert!(
+            notifications
+                .iter()
+                .all(|notification| notification.profile_id == "alert-profile")
+        );
+        assert!(
+            notifications
+                .iter()
+                .all(|notification| notification.title.contains("matched your search profile"))
+        );
+        assert!(notifications.iter().all(|notification| {
+            notification
+                .payload
+                .get("score")
+                .and_then(|value| value.as_i64())
+                .is_some_and(|score| score > 60)
+        }));
+        assert!(notifications.iter().all(|notification| {
+            notification
+                .payload
+                .get("job_ids")
+                .and_then(|value| value.as_array())
+                .is_some_and(|job_ids| job_ids.len() == 1)
+        }));
 
         test_db.cleanup().await;
     }

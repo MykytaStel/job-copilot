@@ -498,13 +498,13 @@ export function ProfileFormSection({
             CV / текст профілю
             <Button type="button" variant="ghost" size="sm" onClick={onOpenFilePicker}>
               <Upload size={13} />
-              Завантажити .pdf / .txt / .md
+              Завантажити PDF
             </Button>
           </span>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.txt,.md,.text"
+            accept="application/pdf"
             className="hidden"
             onChange={onFileChange}
           />
@@ -512,7 +512,7 @@ export function ProfileFormSection({
             value={rawText}
             onChange={(event) => setRawText(event.target.value)}
             rows={12}
-            placeholder="Вставте ваше CV, досвід, навички та цільові ролі. Або натисніть «Завантажити» для .txt / .md файлу."
+            placeholder="Вставте ваше CV, досвід, навички та цільові ролі. Або натисніть «Завантажити» для PDF файлу."
             required
           />
         </label>

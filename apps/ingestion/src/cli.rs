@@ -39,6 +39,13 @@ pub(crate) struct ScrapeMode {
     pub(crate) keyword: Option<String>,
 }
 
+pub(crate) struct ScrapeOutput {
+    pub(crate) batch: IngestionBatch,
+    pub(crate) jobs_attempted: u32,
+    pub(crate) jobs_failed: u32,
+    pub(crate) errors: Vec<String>,
+}
+
 /// Runs all configured sources in a loop with a fixed interval.
 pub(crate) struct DaemonMode {
     pub(crate) sources: Vec<ScrapeSource>,
@@ -296,7 +303,7 @@ pub(crate) fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
     }
 }
 
-pub(crate) async fn run_scraper(mode: &ScrapeMode) -> Result<IngestionBatch, String> {
+pub(crate) async fn run_scraper(mode: &ScrapeMode) -> Result<ScrapeOutput, String> {
     info!(
         source = mode.source.name(),
         pages = mode.pages,
@@ -310,7 +317,7 @@ pub(crate) async fn run_scraper(mode: &ScrapeMode) -> Result<IngestionBatch, Str
         page_delay_ms: 600,
     };
 
-    let results = match mode.source {
+    let scrape_run = match mode.source {
         ScrapeSource::Djinni => {
             let scraper = DjinniScraper::new()?;
             scraper.scrape(&config).await?
@@ -329,14 +336,14 @@ pub(crate) async fn run_scraper(mode: &ScrapeMode) -> Result<IngestionBatch, Str
         }
     };
 
-    if results.is_empty() {
+    if scrape_run.jobs.is_empty() && scrape_run.jobs_attempted == 0 {
         return Err(
             "scraper returned no jobs — site structure may have changed, check selectors"
                 .to_string(),
         );
     }
 
-    let batch = IngestionBatch::from_normalization_results(results).map_err(|error| {
+    let batch = IngestionBatch::from_normalization_results(scrape_run.jobs).map_err(|error| {
         format!(
             "scraper '{}' returned invalid normalization results: {error}",
             mode.source.name()
@@ -350,7 +357,12 @@ pub(crate) async fn run_scraper(mode: &ScrapeMode) -> Result<IngestionBatch, Str
         "scrape finished"
     );
 
-    Ok(batch)
+    Ok(ScrapeOutput {
+        batch,
+        jobs_attempted: scrape_run.jobs_attempted,
+        jobs_failed: scrape_run.jobs_failed,
+        errors: scrape_run.errors,
+    })
 }
 
 #[cfg(test)]

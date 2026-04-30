@@ -136,11 +136,13 @@ interface JobCardProps {
   isBadFit?: boolean;
   isPending?: boolean;
   compact?: boolean;
+  isSelected?: boolean;
   onSave?: () => void;
   onHide?: () => void;
   onHideCompany?: () => void;
   onBadFit?: (reason?: string) => void;
   onUnmarkBadFit?: () => void;
+  onSelectedChange?: (isSelected: boolean) => void;
 }
 
 export function JobCard({
@@ -151,11 +153,13 @@ export function JobCard({
   isBadFit,
   isPending,
   compact = false,
+  isSelected = false,
   onSave,
   onHide,
   onHideCompany,
   onBadFit,
   onUnmarkBadFit,
+  onSelectedChange,
 }: JobCardProps) {
   const p = job.presentation;
   const title = p?.title ?? job.title;
@@ -193,6 +197,15 @@ export function JobCard({
     >
       <CardContent className={cn('p-4', compact && 'p-3')}>
         <div className="flex items-start gap-4">
+          {onSelectedChange ? (
+            <input
+              type="checkbox"
+              aria-label={`Select ${title}`}
+              checked={isSelected}
+              onChange={(event) => onSelectedChange(event.target.checked)}
+              className="mt-1 h-4 w-4 shrink-0 rounded border-border accent-primary"
+            />
+          ) : null}
           <div className="flex-1 min-w-0">
             {/* Header row: title + score */}
             <div className="flex items-start justify-between gap-2 mb-2">

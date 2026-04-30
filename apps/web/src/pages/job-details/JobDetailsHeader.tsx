@@ -15,11 +15,11 @@ import type { JobDetailsPageState } from '../../features/job-details/useJobDetai
 
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { CvTailoringPanel } from '../../components/CvTailoringPanel';
 import { PageHeader } from '../../components/ui/SectionHeader';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { getJobLifecycleLabels } from '../../lib/jobPresentation';
 import { HeroMetric } from './components';
-import { CvTailoringModal } from '../../components/job-detail/CvTailoringModal';
 
 export function JobDetailsHeader({
   state,
@@ -93,14 +93,10 @@ export function JobDetailsHeader({
               {copied ? <Check className="h-4 w-4 text-fit-excellent" /> : <Copy className="h-4 w-4" />}
               {copied ? 'Copied' : 'Share'}
             </Button>
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => setIsCvTailoringOpen(true)}
-						>
-							<Sparkles className="h-4 w-4" />
-							Tailor CV
-						</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setIsCvTailoringOpen(true)}>
+              <Sparkles className="h-4 w-4" />
+              Tailor CV
+            </Button>
           </>
         }
       />
@@ -178,11 +174,11 @@ export function JobDetailsHeader({
           </div>
         </div>
       </div>
-			<CvTailoringModal
-				jobId={job.id}
-				open={isCvTailoringOpen}
-				onClose={() => setIsCvTailoringOpen(false)}
-			/>
+      <CvTailoringPanel
+        jobId={job.id}
+        open={isCvTailoringOpen}
+        onClose={() => setIsCvTailoringOpen(false)}
+      />
     </>
   );
 }

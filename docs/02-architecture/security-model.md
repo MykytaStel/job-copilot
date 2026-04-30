@@ -39,8 +39,8 @@ Route handlers extract `AuthUser` from extensions to determine the caller's iden
 When `JWT_SECRET` is absent or empty, the auth middleware logs a warning and passes
 all requests through without validation. This is intentional for local development.
 
-**Gap:** `JWT_SECRET` dev fallback must not be allowed in a production deployment.
-There is currently no startup guard that rejects a missing `JWT_SECRET` in production mode.
+Production startup fails fast when `JWT_SECRET` is absent, empty, or still set to the
+Docker Compose dev placeholder.
 
 ---
 
@@ -59,11 +59,8 @@ The `check_profile_ownership` helper in
 `apps/engine-api/src/api/middleware/auth.rs` implements this comparison and is available
 to all route handlers.
 
-**Gap: profile ownership guards are NOT YET APPLIED across all profile-scoped routes.**
-The helper exists and is tested in isolation, but has not been wired into every
-profile-scoped route handler. Applying it consistently is the next security slice.
-See the Codex task:
-[../../codex/tasks/security/profile-ownership-and-ml-token-slice.md](../../codex/tasks/security/profile-ownership-and-ml-token-slice.md)
+The helper is wired into the current profile-scoped route set. New routes that add a
+`/profiles/{id}/...` scope must call the same helper or an equivalent ownership guard.
 
 ---
 
@@ -100,6 +97,6 @@ to exist:
 
 | Gap | Status |
 |-----|--------|
-| Profile ownership guard not applied to all profile-scoped routes | Not yet implemented |
+| Profile ownership guard not applied to all profile-scoped routes | Implemented for current route set; keep auditing new routes |
 | ML internal token production validation not fail-fast | Enforced — tested |
-| `JWT_SECRET` absence not rejected in production mode | Not yet enforced |
+| `JWT_SECRET` absence not rejected in production mode | Enforced; dev placeholder is rejected in production |

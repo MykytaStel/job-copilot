@@ -140,6 +140,17 @@ impl Config {
             .and_then(|value| value.parse::<u16>().ok())
             .unwrap_or(9090);
 
+        if is_production && !is_production_jwt_secret_acceptable(jwt_secret.as_deref()) {
+            panic!(
+                "JWT_SECRET must be set in production — refusing to start without authentication"
+            );
+        }
+        if is_production && ml_sidecar_internal_token.is_none() {
+            panic!(
+                "ML_INTERNAL_TOKEN must be set in production — refusing to start without ML service authentication"
+            );
+        }
+
         Self {
             port,
             database_url,
@@ -169,11 +180,19 @@ fn parse_bool(value: &str) -> bool {
     )
 }
 
+fn is_production_jwt_secret_acceptable(secret: Option<&str>) -> bool {
+    let Some(secret) = secret.map(str::trim).filter(|value| !value.is_empty()) else {
+        return false;
+    };
+
+    secret != "local-dev-secret-change-me"
+}
+
 #[cfg(test)]
 mod tests {
     use crate::services::search_ranking::runtime::RerankerRuntimeMode;
 
-    use super::parse_bool;
+    use super::{is_production_jwt_secret_acceptable, parse_bool};
 
     #[test]
     fn parses_truthy_booleans() {
@@ -200,5 +219,17 @@ mod tests {
             Some(RerankerRuntimeMode::Trained)
         );
         assert_eq!(RerankerRuntimeMode::parse("mystery"), None);
+    }
+
+    #[test]
+    fn rejects_missing_or_placeholder_production_jwt_secret() {
+        assert!(!is_production_jwt_secret_acceptable(None));
+        assert!(!is_production_jwt_secret_acceptable(Some("")));
+        assert!(!is_production_jwt_secret_acceptable(Some(
+            "local-dev-secret-change-me"
+        )));
+        assert!(is_production_jwt_secret_acceptable(Some(
+            "a-real-production-secret"
+        )));
     }
 }

@@ -41,6 +41,16 @@ function JobFeedbackSection({
   actionLabel,
   onAction,
   isPending,
+  selectedJobIds,
+  selectedJobsCount,
+  allVisibleJobsSelected,
+  onSelectAllVisible,
+  onToggleSelected,
+  onClearSelection,
+  onBulkHide,
+  onBulkBadFit,
+  onBulkSave,
+  isBulkPending,
 }: {
   title: string;
   description: string;
@@ -51,6 +61,16 @@ function JobFeedbackSection({
   actionLabel: string;
   onAction: (jobId: string) => void;
   isPending: boolean;
+  selectedJobIds: Set<string>;
+  selectedJobsCount: number;
+  allVisibleJobsSelected: boolean;
+  onSelectAllVisible: (isSelected: boolean) => void;
+  onToggleSelected: (jobId: string) => void;
+  onClearSelection: () => void;
+  onBulkHide: () => void;
+  onBulkBadFit: () => void;
+  onBulkSave: () => void;
+  isBulkPending: boolean;
 }) {
   return (
     <Section title={title} icon={<Icon size={16} />} description={description} count={jobs.length}>
@@ -70,6 +90,67 @@ function JobFeedbackSection({
         />
       ) : (
         <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-muted px-3 py-3 md:flex-row md:items-center md:justify-between">
+            <label className="flex items-center gap-2 text-sm font-medium text-card-foreground">
+              <input
+                type="checkbox"
+                checked={allVisibleJobsSelected}
+                onChange={(event) => onSelectAllVisible(event.target.checked)}
+                className="h-4 w-4 rounded border-border accent-primary"
+              />
+              Select all visible
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {selectedJobsCount} selected
+              </span>
+              {selectedJobsCount > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 rounded-lg"
+                  onClick={onClearSelection}
+                  disabled={isBulkPending}
+                >
+                  Clear
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-lg"
+                onClick={onBulkHide}
+                disabled={selectedJobsCount === 0 || isBulkPending}
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+                Hide selected
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-lg"
+                onClick={onBulkBadFit}
+                disabled={selectedJobsCount === 0 || isBulkPending}
+              >
+                <ThumbsDown className="h-3.5 w-3.5" />
+                Mark selected bad-fit
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-lg"
+                onClick={onBulkSave}
+                disabled={selectedJobsCount === 0 || isBulkPending}
+              >
+                <Bookmark className="h-3.5 w-3.5" />
+                Save selected
+              </Button>
+            </div>
+          </div>
           {jobs.map((job) => (
             <JobRow
               key={job.id}
@@ -78,6 +159,8 @@ function JobFeedbackSection({
               actionLabel={actionLabel}
               onAction={onAction}
               isPending={isPending}
+              isSelected={selectedJobIds.has(job.id)}
+              onSelectedChange={onToggleSelected}
             />
           ))}
         </div>
@@ -91,11 +174,31 @@ export function SavedJobsSection({
   searchQuery,
   onUnsave,
   isPending,
+  selectedJobIds,
+  selectedJobsCount,
+  allVisibleJobsSelected,
+  onSelectAllVisible,
+  onToggleSelected,
+  onClearSelection,
+  onBulkHide,
+  onBulkBadFit,
+  onBulkSave,
+  isBulkPending,
 }: {
   jobs: JobPosting[];
   searchQuery: string;
   onUnsave: (jobId: string) => void;
   isPending: boolean;
+  selectedJobIds: Set<string>;
+  selectedJobsCount: number;
+  allVisibleJobsSelected: boolean;
+  onSelectAllVisible: (isSelected: boolean) => void;
+  onToggleSelected: (jobId: string) => void;
+  onClearSelection: () => void;
+  onBulkHide: () => void;
+  onBulkBadFit: () => void;
+  onBulkSave: () => void;
+  isBulkPending: boolean;
 }) {
   return (
     <JobFeedbackSection
@@ -108,6 +211,16 @@ export function SavedJobsSection({
       actionLabel="Unsave"
       onAction={onUnsave}
       isPending={isPending}
+      selectedJobIds={selectedJobIds}
+      selectedJobsCount={selectedJobsCount}
+      allVisibleJobsSelected={allVisibleJobsSelected}
+      onSelectAllVisible={onSelectAllVisible}
+      onToggleSelected={onToggleSelected}
+      onClearSelection={onClearSelection}
+      onBulkHide={onBulkHide}
+      onBulkBadFit={onBulkBadFit}
+      onBulkSave={onBulkSave}
+      isBulkPending={isBulkPending}
     />
   );
 }
@@ -117,11 +230,31 @@ export function HiddenJobsSection({
   searchQuery,
   onUnhide,
   isPending,
+  selectedJobIds,
+  selectedJobsCount,
+  allVisibleJobsSelected,
+  onSelectAllVisible,
+  onToggleSelected,
+  onClearSelection,
+  onBulkHide,
+  onBulkBadFit,
+  onBulkSave,
+  isBulkPending,
 }: {
   jobs: JobPosting[];
   searchQuery: string;
   onUnhide: (jobId: string) => void;
   isPending: boolean;
+  selectedJobIds: Set<string>;
+  selectedJobsCount: number;
+  allVisibleJobsSelected: boolean;
+  onSelectAllVisible: (isSelected: boolean) => void;
+  onToggleSelected: (jobId: string) => void;
+  onClearSelection: () => void;
+  onBulkHide: () => void;
+  onBulkBadFit: () => void;
+  onBulkSave: () => void;
+  isBulkPending: boolean;
 }) {
   return (
     <JobFeedbackSection
@@ -134,6 +267,16 @@ export function HiddenJobsSection({
       actionLabel="Unhide"
       onAction={onUnhide}
       isPending={isPending}
+      selectedJobIds={selectedJobIds}
+      selectedJobsCount={selectedJobsCount}
+      allVisibleJobsSelected={allVisibleJobsSelected}
+      onSelectAllVisible={onSelectAllVisible}
+      onToggleSelected={onToggleSelected}
+      onClearSelection={onClearSelection}
+      onBulkHide={onBulkHide}
+      onBulkBadFit={onBulkBadFit}
+      onBulkSave={onBulkSave}
+      isBulkPending={isBulkPending}
     />
   );
 }
@@ -143,11 +286,31 @@ export function BadFitJobsSection({
   searchQuery,
   onUnmark,
   isPending,
+  selectedJobIds,
+  selectedJobsCount,
+  allVisibleJobsSelected,
+  onSelectAllVisible,
+  onToggleSelected,
+  onClearSelection,
+  onBulkHide,
+  onBulkBadFit,
+  onBulkSave,
+  isBulkPending,
 }: {
   jobs: JobPosting[];
   searchQuery: string;
   onUnmark: (jobId: string) => void;
   isPending: boolean;
+  selectedJobIds: Set<string>;
+  selectedJobsCount: number;
+  allVisibleJobsSelected: boolean;
+  onSelectAllVisible: (isSelected: boolean) => void;
+  onToggleSelected: (jobId: string) => void;
+  onClearSelection: () => void;
+  onBulkHide: () => void;
+  onBulkBadFit: () => void;
+  onBulkSave: () => void;
+  isBulkPending: boolean;
 }) {
   return (
     <JobFeedbackSection
@@ -160,6 +323,16 @@ export function BadFitJobsSection({
       actionLabel="Unmark"
       onAction={onUnmark}
       isPending={isPending}
+      selectedJobIds={selectedJobIds}
+      selectedJobsCount={selectedJobsCount}
+      allVisibleJobsSelected={allVisibleJobsSelected}
+      onSelectAllVisible={onSelectAllVisible}
+      onToggleSelected={onToggleSelected}
+      onClearSelection={onClearSelection}
+      onBulkHide={onBulkHide}
+      onBulkBadFit={onBulkBadFit}
+      onBulkSave={onBulkSave}
+      isBulkPending={isBulkPending}
     />
   );
 }
