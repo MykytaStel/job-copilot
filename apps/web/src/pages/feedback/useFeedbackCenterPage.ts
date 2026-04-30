@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+
+import { useToast } from '../../context/ToastContext';
 
 import {
   addCompanyBlacklist,
@@ -55,6 +56,7 @@ function downloadBlob(blob: Blob, filename: string) {
 export function useFeedbackCenterPage() {
   const profileId = readProfileId();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<FeedbackTab>('saved');
   const [searchQuery, setSearchQuery] = useState('');
   const [whitelistInput, setWhitelistInput] = useState('');
@@ -196,27 +198,27 @@ export function useFeedbackCenterPage() {
     mutationFn: (jobId: string) => unsaveJob(profileId!, jobId),
     onSuccess: () => {
       invalidateAfterJobAction();
-      toast.success('Збережено скасовано');
+      showToast({ type: 'success', message: 'Збережено скасовано' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const unhideMutation = useMutation({
     mutationFn: (jobId: string) => unhideJob(profileId!, jobId),
     onSuccess: () => {
       invalidateAfterJobAction();
-      toast.success('Вакансію показано знову');
+      showToast({ type: 'success', message: 'Вакансію показано знову' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const unmarkBadFitMutation = useMutation({
     mutationFn: (jobId: string) => unmarkJobBadFit(profileId!, jobId),
     onSuccess: () => {
       invalidateAfterJobAction();
-      toast.success('Позначку bad fit знято');
+      showToast({ type: 'success', message: 'Позначку bad fit знято' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const bulkJobActionMutation = useMutation({
@@ -244,27 +246,27 @@ export function useFeedbackCenterPage() {
           : action === 'bad-fit'
             ? 'marked as bad fit'
             : 'saved';
-      toast.success(`${count} job${count === 1 ? '' : 's'} ${label}`);
+      showToast({ type: 'success', message: `${count} job${count === 1 ? '' : 's'} ${label}` });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const removeWhitelistMutation = useMutation({
     mutationFn: (companyName: string) => removeCompanyWhitelist(profileId!, companyName),
     onSuccess: () => {
       invalidateAfterFeedbackAction();
-      toast.success('Видалено зі списку дозволених');
+      showToast({ type: 'success', message: 'Видалено зі списку дозволених' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const removeBlacklistMutation = useMutation({
     mutationFn: (companyName: string) => removeCompanyBlacklist(profileId!, companyName),
     onSuccess: () => {
       invalidateAfterFeedbackAction();
-      toast.success('Видалено зі списку заблокованих');
+      showToast({ type: 'success', message: 'Видалено зі списку заблокованих' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const addWhitelistMutation = useMutation({
@@ -272,9 +274,9 @@ export function useFeedbackCenterPage() {
     onSuccess: () => {
       invalidateAfterFeedbackAction();
       setWhitelistInput('');
-      toast.success('Компанію додано до whitelist');
+      showToast({ type: 'success', message: 'Компанію додано до whitelist' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const addBlacklistMutation = useMutation({
@@ -282,9 +284,9 @@ export function useFeedbackCenterPage() {
     onSuccess: () => {
       invalidateAfterFeedbackAction();
       setBlacklistInput('');
-      toast.success('Компанію додано до blacklist');
+      showToast({ type: 'success', message: 'Компанію додано до blacklist' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const moveCompanyMutation = useMutation({
@@ -300,9 +302,9 @@ export function useFeedbackCenterPage() {
         : addCompanyBlacklist(profileId!, companyName),
     onSuccess: () => {
       invalidateAfterFeedbackAction();
-      toast.success('Статус компанії оновлено');
+      showToast({ type: 'success', message: 'Статус компанії оновлено' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const updateCompanyNotesMutation = useMutation({
@@ -311,7 +313,7 @@ export function useFeedbackCenterPage() {
     onSuccess: () => {
       invalidateAfterFeedbackAction();
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const bulkHideCompanyMutation = useMutation({
@@ -333,18 +335,18 @@ export function useFeedbackCenterPage() {
     onSuccess: (result) => {
       if (!result) return;
       invalidateAfterJobAction();
-      toast.success(`Hidden ${result.affectedCount} jobs from this company`);
+      showToast({ type: 'success', message: `Hidden ${result.affectedCount} jobs from this company` });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   const exportMutation = useMutation({
     mutationFn: async () => exportFeedback(exportTypeForTab(activeTab)),
     onSuccess: ({ blob, filename }) => {
       downloadBlob(blob, filename ?? `feedback-${exportTypeForTab(activeTab)}.csv`);
-      toast.success('Feedback CSV exported');
+      showToast({ type: 'success', message: 'Feedback CSV exported' });
     },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : 'Помилка'),
+    onError: (error: unknown) => showToast({ type: 'error', message: error instanceof Error ? error.message : 'Помилка' }),
   });
 
   function loadMoreTimeline() {

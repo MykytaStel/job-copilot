@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
 
 import { login, register } from '../api/auth';
+import { useToast } from '../context/ToastContext';
 import { writeToken } from '../lib/authSession';
 import { writeProfileId } from '../lib/profileSession';
 import { Button } from '../components/ui/Button';
@@ -18,6 +18,7 @@ type Mode = 'register' | 'login';
 
 export default function Auth() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [mode, setMode] = useState<Mode>('register');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -37,7 +38,7 @@ export default function Auth() {
       writeProfileId(res.profile_id);
       navigate('/');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Something went wrong');
+      showToast({ type: 'error', message: err instanceof Error ? err.message : 'Something went wrong' });
     } finally {
       setLoading(false);
     }

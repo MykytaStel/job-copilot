@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Page } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
+import { SkeletonPage } from '../components/Skeleton';
 
 import { FeedbackCenterContent } from './feedback/FeedbackCenterContent';
 import { useFeedbackCenterPage } from './feedback/useFeedbackCenterPage';
@@ -36,9 +37,7 @@ export default function FeedbackCenter() {
   if (state.isLoading) {
     return (
       <Page>
-        <div className="rounded-2xl border border-border bg-card/70 px-5 py-7 text-center text-sm text-muted-foreground">
-        Loading feedback…
-      </div>
+        <SkeletonPage />
       </Page>
     );
   }

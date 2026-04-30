@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+
+import { useToast } from '../../context/ToastContext';
 import type { Application } from '@job-copilot/shared';
 import type {
   JobFeedbackReason,
@@ -52,6 +53,7 @@ import { readProfileId } from '../../lib/profileSession';
 import { queryKeys } from '../../queryKeys';
 
 export function useJobDetailsPage() {
+  const { showToast } = useToast();
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const profileId = readProfileId();
@@ -241,10 +243,10 @@ export function useJobDetailsPage() {
     onSuccess: () => {
       invalidateCurrentJobQueries();
       void invalidateApplicationSummaryQueries(queryClient);
-      toast.success('Збережено в pipeline');
+      showToast({ type: 'success', message: 'Збережено в pipeline' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' });
     },
   });
 
@@ -257,10 +259,10 @@ export function useJobDetailsPage() {
     },
     onSuccess: () => {
       invalidateCurrentJobQueries();
-      toast.success('Знято з обраного');
+      showToast({ type: 'success', message: 'Знято з обраного' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' });
     },
   });
 
@@ -273,10 +275,10 @@ export function useJobDetailsPage() {
     },
     onSuccess: () => {
       invalidateCurrentJobQueries();
-      toast.success('Вакансію приховано');
+      showToast({ type: 'success', message: 'Вакансію приховано' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' });
     },
   });
 
@@ -289,10 +291,10 @@ export function useJobDetailsPage() {
     },
     onSuccess: () => {
       invalidateCurrentJobQueries();
-      toast.success('Вакансію показано');
+      showToast({ type: 'success', message: 'Вакансію показано' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' });
     },
   });
 
@@ -305,10 +307,10 @@ export function useJobDetailsPage() {
     },
     onSuccess: () => {
       invalidateCurrentJobQueries();
-      toast.success('Позначено як bad fit');
+      showToast({ type: 'success', message: 'Позначено як bad fit' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' });
     },
   });
 
@@ -321,10 +323,10 @@ export function useJobDetailsPage() {
     },
     onSuccess: () => {
       invalidateCurrentJobQueries();
-      toast.success('Позначку bad fit знято');
+      showToast({ type: 'success', message: 'Позначку bad fit знято' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' });
     },
   });
 
@@ -364,10 +366,10 @@ export function useJobDetailsPage() {
           : current,
       );
       void invalidateFeedbackQueries(queryClient, profileId);
-      toast.success('Оновлено список компанії');
+      showToast({ type: 'success', message: 'Оновлено список компанії' });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Помилка');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' });
     },
   });
 
@@ -391,7 +393,7 @@ export function useJobDetailsPage() {
       await setJobInterestRating(profileId, id!, rating);
     },
     onSuccess: () => invalidateCurrentJobQueries(),
-    onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
+    onError: (value: unknown) => showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' }),
   });
 
   const salarySignalMutation = useMutation({
@@ -400,7 +402,7 @@ export function useJobDetailsPage() {
       await setJobSalarySignal(profileId, id!, signal);
     },
     onSuccess: () => invalidateCurrentJobQueries(),
-    onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
+    onError: (value: unknown) => showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' }),
   });
 
   const workModeMutation = useMutation({
@@ -409,7 +411,7 @@ export function useJobDetailsPage() {
       await setJobWorkModeSignal(profileId, id!, signal);
     },
     onSuccess: () => invalidateCurrentJobQueries(),
-    onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
+    onError: (value: unknown) => showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' }),
   });
 
   const tagsMutation = useMutation({
@@ -418,7 +420,7 @@ export function useJobDetailsPage() {
       await tagJobFeedback(profileId, id!, tags);
     },
     onSuccess: () => invalidateCurrentJobQueries(),
-    onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
+    onError: (value: unknown) => showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' }),
   });
 
   const legitimacyMutation = useMutation({
@@ -428,9 +430,9 @@ export function useJobDetailsPage() {
     },
     onSuccess: () => {
       invalidateCurrentJobQueries();
-      toast.success('Дякуємо за відгук');
+      showToast({ type: 'success', message: 'Дякуємо за відгук' });
     },
-    onError: (value: unknown) => toast.error(value instanceof Error ? value.message : 'Помилка'),
+    onError: (value: unknown) => showToast({ type: 'error', message: value instanceof Error ? value.message : 'Помилка' }),
   });
 
   return {
