@@ -213,6 +213,10 @@ pub fn protected_router() -> Router<AppState> {
             get(market::get_market_companies),
         )
         .route(
+            "/api/v1/market/companies/{company_slug}",
+            get(market::get_market_company_detail),
+        )
+        .route(
             "/api/v1/market/company-velocity",
             get(market::get_market_company_velocity),
         )

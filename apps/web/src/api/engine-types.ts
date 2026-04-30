@@ -24,6 +24,8 @@ export type {
   EngineMarketOverview,
   EngineMarketCompanyEntry,
   EngineMarketCompaniesResponse,
+  EngineMarketCompanyDetail,
+  EngineMarketCompanyVelocityPoint,
   EngineMarketCompanyVelocityEntry,
   EngineMarketCompanyVelocityTrend,
   EngineMarketFreezeSignalEntry,

@@ -24,6 +24,22 @@ export type EngineMarketCompaniesResponse = {
   companies: EngineMarketCompanyEntry[];
 };
 
+export type EngineMarketCompanyVelocityPoint = {
+  date: string;
+  job_count: number;
+};
+
+export type EngineMarketCompanyDetail = {
+  company_name: string;
+  normalized_company_name: string;
+  total_jobs: number;
+  active_jobs: number;
+  avg_salary?: number | null;
+  velocity: EngineMarketCompanyVelocityPoint[];
+  company_status?: 'whitelist' | 'blacklist' | null;
+  jobs: import('./jobs').EngineJob[];
+};
+
 export type EngineMarketCompanyVelocityTrend = 'growing' | 'stable' | 'declining';
 
 export type EngineMarketCompanyVelocityEntry = {

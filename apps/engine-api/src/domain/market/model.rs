@@ -32,6 +32,23 @@ pub struct MarketCompanyEntry {
     pub data_quality_flags: Vec<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MarketCompanyVelocityPoint {
+    pub date: String,
+    pub job_count: i64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MarketCompanyDetail {
+    pub company_name: String,
+    pub normalized_company_name: String,
+    pub total_jobs: i64,
+    pub active_jobs: i64,
+    pub avg_salary: Option<i32>,
+    pub velocity: Vec<MarketCompanyVelocityPoint>,
+    pub active_job_views: Vec<crate::domain::job::model::JobView>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MarketCompanyVelocityEntry {
     pub company: String,

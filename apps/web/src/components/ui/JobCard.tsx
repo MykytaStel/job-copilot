@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import type { Application, JobPosting } from '@job-copilot/shared';
+import { companySlug } from '../../lib/companySlug';
 import { cn } from '../../lib/cn';
 import { getJobMetaLabels } from '../../lib/jobPresentation';
 import { Badge } from './Badge';
@@ -159,6 +160,7 @@ export function JobCard({
   const p = job.presentation;
   const title = p?.title ?? job.title;
   const company = p?.company ?? job.company;
+  const companyHref = `/market/companies/${encodeURIComponent(companySlug(company))}`;
   const source = p?.sourceLabel ?? job.primaryVariant?.source ?? '';
   const badges = p?.badges ?? [];
   const summary = p?.summary;
@@ -210,7 +212,12 @@ export function JobCard({
                 </Link>
                 <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                   <Building2 className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{company}</span>
+                  <Link
+                    to={companyHref}
+                    className="truncate text-muted-foreground no-underline transition-colors hover:text-primary"
+                  >
+                    {company}
+                  </Link>
                 </div>
               </div>
 

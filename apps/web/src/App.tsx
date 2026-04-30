@@ -14,6 +14,7 @@ const Profile = lazy(() => import('./pages/Profile'));
 const FeedbackCenter = lazy(() => import('./pages/FeedbackCenter'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Market = lazy(() => import('./pages/Market'));
+const CompanyDetail = lazy(() => import('./pages/CompanyDetail'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Setup = lazy(() => import('./pages/Setup'));
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="feedback" element={route(<FeedbackCenter />)} />
             <Route path="analytics" element={route(<Analytics />)} />
             <Route path="market" element={route(<Market />)} />
+            <Route path="market/companies/:slug" element={route(<CompanyDetail />)} />
             <Route path="notifications" element={route(<Notifications />)} />
             <Route path="settings" element={route(<Settings />)} />
           </Route>

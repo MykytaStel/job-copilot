@@ -1,9 +1,11 @@
 use serde::Serialize;
 
+use crate::api::dto::jobs::JobResponse;
+use crate::domain::feedback::model::JobFeedbackState;
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketFreezeSignalEntry, MarketOverview,
-    MarketRegionDemandEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
-    MarketSalaryTrend, MarketTechDemandEntry,
+    MarketCompanyDetail, MarketCompanyEntry, MarketCompanyVelocityEntry,
+    MarketCompanyVelocityPoint, MarketFreezeSignalEntry, MarketOverview, MarketRegionDemandEntry,
+    MarketRoleDemandEntry, MarketSalaryBySeniorityEntry, MarketSalaryTrend, MarketTechDemandEntry,
 };
 
 #[derive(Debug, Serialize)]
@@ -59,6 +61,61 @@ impl From<MarketCompanyEntry> for MarketCompanyEntryResponse {
 #[derive(Debug, Serialize)]
 pub struct MarketCompaniesResponse {
     pub companies: Vec<MarketCompanyEntryResponse>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MarketCompanyVelocityPointResponse {
+    pub date: String,
+    pub job_count: i64,
+}
+
+impl From<MarketCompanyVelocityPoint> for MarketCompanyVelocityPointResponse {
+    fn from(value: MarketCompanyVelocityPoint) -> Self {
+        Self {
+            date: value.date,
+            job_count: value.job_count,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct MarketCompanyDetailResponse {
+    pub company_name: String,
+    pub normalized_company_name: String,
+    pub total_jobs: i64,
+    pub active_jobs: i64,
+    pub avg_salary: Option<i32>,
+    pub velocity: Vec<MarketCompanyVelocityPointResponse>,
+    pub company_status: Option<String>,
+    pub jobs: Vec<JobResponse>,
+}
+
+impl MarketCompanyDetailResponse {
+    pub fn from_detail(
+        detail: MarketCompanyDetail,
+        company_status: Option<String>,
+        feedback_states: Vec<JobFeedbackState>,
+    ) -> Self {
+        Self {
+            company_name: detail.company_name,
+            normalized_company_name: detail.normalized_company_name,
+            total_jobs: detail.total_jobs,
+            active_jobs: detail.active_jobs,
+            avg_salary: detail.avg_salary,
+            velocity: detail
+                .velocity
+                .into_iter()
+                .map(MarketCompanyVelocityPointResponse::from)
+                .collect(),
+            company_status,
+            jobs: detail
+                .active_job_views
+                .into_iter()
+                .zip(feedback_states)
+                .map(|(job, feedback)| JobResponse::from_view_with_feedback(job, feedback))
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]

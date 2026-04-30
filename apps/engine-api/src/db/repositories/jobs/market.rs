@@ -1,9 +1,10 @@
 use crate::db::repositories::RepositoryError;
+use crate::domain::job::model::JobView;
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketCompanyVelocityTrend,
-    MarketFreezeSignalEntry, MarketOverview, MarketRegionDemandEntry, MarketRoleDemandEntry,
-    MarketSalaryBySeniorityEntry, MarketSalaryTrend, MarketSource, MarketTechDemandEntry,
-    MarketTrendDirection,
+    MarketCompanyDetail, MarketCompanyEntry, MarketCompanyVelocityEntry,
+    MarketCompanyVelocityPoint, MarketCompanyVelocityTrend, MarketFreezeSignalEntry,
+    MarketOverview, MarketRegionDemandEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
+    MarketSalaryTrend, MarketSource, MarketTechDemandEntry, MarketTrendDirection,
 };
 use sqlx::FromRow;
 
@@ -15,6 +16,8 @@ mod market_role_heuristics {
 }
 
 use super::JobsRepository;
+use super::queries::job_view_query;
+use super::rows::JobViewRow;
 use market_role_heuristics::{
     MARKET_ROLE_GROUP_CLASSIFIER_CASE_SQL, MARKET_ROLE_GROUP_ORDER_ARRAY_SQL,
     MARKET_ROLE_GROUPS_VALUES_SQL,
@@ -40,6 +43,12 @@ fn normalize_company_name(company_name: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn company_slug_sql(expression: &str) -> String {
+    format!(
+        "LOWER(REGEXP_REPLACE(REGEXP_REPLACE(BTRIM({expression}), '[^[:alnum:]]+', '-', 'g'), '(^-+|-+$)', '', 'g'))"
+    )
 }
 
 impl JobsRepository {
@@ -248,6 +257,135 @@ impl JobsRepository {
     ) -> Result<(Option<MarketSalaryTrend>, MarketSource), RepositoryError> {
         let (trends, source) = self.fetch_market_salary_trends(Some(seniority)).await?;
         Ok((trends.into_iter().next(), source))
+    }
+
+    pub async fn market_company_detail(
+        &self,
+        company_slug: &str,
+    ) -> Result<Option<MarketCompanyDetail>, RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let company_slug = company_slug.trim().to_lowercase();
+        if company_slug.is_empty() {
+            return Ok(None);
+        }
+
+        #[derive(FromRow)]
+        struct MarketCompanyDetailStatsRow {
+            company_name: String,
+            normalized_company_name: String,
+            total_jobs: i64,
+            active_jobs: i64,
+            avg_salary: Option<i32>,
+        }
+
+        let slug_expr = company_slug_sql("company_name");
+        let stats_query = format!(
+            r#"
+            SELECT
+                MIN(BTRIM(company_name)) AS company_name,
+                LOWER(REGEXP_REPLACE(BTRIM(MIN(company_name)), '\s+', ' ', 'g')) AS normalized_company_name,
+                COUNT(*)::bigint AS total_jobs,
+                COUNT(*) FILTER (WHERE is_active)::bigint AS active_jobs,
+                ROUND(AVG(
+                    CASE
+                        WHEN is_active AND salary_min IS NOT NULL AND salary_max IS NOT NULL
+                            THEN (salary_min + salary_max)::numeric / 2
+                        WHEN is_active AND salary_min IS NOT NULL
+                            THEN salary_min::numeric
+                        WHEN is_active AND salary_max IS NOT NULL
+                            THEN salary_max::numeric
+                        ELSE NULL
+                    END
+                ))::int AS avg_salary
+            FROM jobs
+            WHERE duplicate_of IS NULL
+              AND company_name IS NOT NULL
+              AND BTRIM(company_name) <> ''
+              AND {slug_expr} = $1
+            GROUP BY {slug_expr}
+            "#
+        );
+
+        let Some(stats) = sqlx::query_as::<_, MarketCompanyDetailStatsRow>(&stats_query)
+            .bind(&company_slug)
+            .fetch_optional(pool)
+            .await?
+        else {
+            return Ok(None);
+        };
+
+        #[derive(FromRow)]
+        struct VelocityRow {
+            date: String,
+            job_count: i64,
+        }
+
+        let velocity_query = format!(
+            r#"
+            WITH days AS (
+                SELECT generate_series(
+                    CURRENT_DATE - INTERVAL '6 days',
+                    CURRENT_DATE,
+                    INTERVAL '1 day'
+                )::date AS day
+            ),
+            company_jobs AS (
+                SELECT first_seen_at::date AS day
+                FROM jobs
+                WHERE duplicate_of IS NULL
+                  AND is_active
+                  AND company_name IS NOT NULL
+                  AND BTRIM(company_name) <> ''
+                  AND {slug_expr} = $1
+                  AND first_seen_at >= CURRENT_DATE - INTERVAL '6 days'
+            )
+            SELECT
+                days.day::text AS date,
+                COUNT(company_jobs.day)::bigint AS job_count
+            FROM days
+            LEFT JOIN company_jobs ON company_jobs.day = days.day
+            GROUP BY days.day
+            ORDER BY days.day ASC
+            "#
+        );
+
+        let velocity = sqlx::query_as::<_, VelocityRow>(&velocity_query)
+            .bind(&company_slug)
+            .fetch_all(pool)
+            .await?
+            .into_iter()
+            .map(|row| MarketCompanyVelocityPoint {
+                date: row.date,
+                job_count: row.job_count,
+            })
+            .collect();
+
+        let jobs_where = format!(
+            "WHERE jobs.duplicate_of IS NULL AND jobs.is_active = TRUE AND {} = $1",
+            company_slug_sql("jobs.company_name")
+        );
+        let jobs_query = job_view_query(Some(&jobs_where), Some("LIMIT 100"));
+
+        let active_job_views = sqlx::query_as::<_, JobViewRow>(jobs_query.as_str())
+            .bind(&company_slug)
+            .fetch_all(pool)
+            .await?
+            .into_iter()
+            .map(JobView::from)
+            .collect();
+
+        Ok(Some(MarketCompanyDetail {
+            company_name: stats.company_name,
+            normalized_company_name: stats.normalized_company_name,
+            total_jobs: stats.total_jobs,
+            active_jobs: stats.active_jobs,
+            avg_salary: stats.avg_salary,
+            velocity,
+            active_job_views,
+        }))
     }
 
     pub async fn market_company_velocity(

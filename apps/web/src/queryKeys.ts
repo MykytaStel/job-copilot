@@ -32,6 +32,8 @@ export const queryKeys = {
     insights: () => ['market', 'insights'] as const,
     overview: () => ['market', 'overview'] as const,
     companies: () => ['market', 'companies'] as const,
+    companyDetail: (slug: string, profileId?: string | null) =>
+      ['market', 'companies', slug, profileId ?? 'none'] as const,
     companyVelocity: () => ['market', 'companyVelocity'] as const,
     freezeSignals: () => ['market', 'freezeSignals'] as const,
     salaries: () => ['market', 'salaries'] as const,

@@ -1,6 +1,9 @@
-import { request } from './client';
+import type { JobPosting } from '@job-copilot/shared/jobs';
+
+import { readStoredProfileId, request } from './client';
 import type {
   EngineMarketCompaniesResponse,
+  EngineMarketCompanyDetail,
   EngineMarketCompanyVelocityEntry,
   EngineMarketCompanyVelocityTrend,
   EngineMarketFreezeSignalEntry,
@@ -11,6 +14,8 @@ import type {
   EngineMarketSalaryTrend,
   EngineMarketTechDemandEntry,
 } from './engine-types';
+import { companySlug } from '../lib/companySlug';
+import { mapJob } from './mappers';
 
 export interface SkillStat {
   skill: string;
@@ -48,6 +53,20 @@ export type MarketCompany = {
   topRoleGroups: string[];
   latestJobIds: string[];
   dataQualityFlags: string[];
+};
+
+export type MarketCompanyDetail = {
+  companyName: string;
+  normalizedCompanyName: string;
+  totalJobs: number;
+  activeJobs: number;
+  avgSalary?: number;
+  companyStatus?: 'whitelist' | 'blacklist';
+  velocity: Array<{
+    date: string;
+    jobCount: number;
+  }>;
+  jobs: JobPosting[];
 };
 
 export type MarketCompanyVelocity = {
@@ -100,6 +119,8 @@ export type MarketTechDemand = {
 
 const DEFAULT_SENIORITY_BUCKETS = ['junior', 'middle', 'senior', 'lead'] as const;
 
+export { companySlug };
+
 export async function getMarketOverview(): Promise<MarketOverview> {
   const response = await request<EngineMarketOverview>('/api/v1/market/overview');
 
@@ -129,6 +150,32 @@ export async function getMarketCompanies(limit = 10): Promise<MarketCompany[]> {
     latestJobIds: company.latest_job_ids ?? [],
     dataQualityFlags: company.data_quality_flags ?? [],
   }));
+}
+
+export async function getMarketCompanyDetail(slug: string): Promise<MarketCompanyDetail> {
+  const params = new URLSearchParams();
+  const profileId = readStoredProfileId();
+  if (profileId) {
+    params.set('profile_id', profileId);
+  }
+  const query = params.toString();
+  const response = await request<EngineMarketCompanyDetail>(
+    `/api/v1/market/companies/${encodeURIComponent(slug)}${query ? `?${query}` : ''}`,
+  );
+
+  return {
+    companyName: response.company_name,
+    normalizedCompanyName: response.normalized_company_name,
+    totalJobs: response.total_jobs,
+    activeJobs: response.active_jobs,
+    avgSalary: response.avg_salary ?? undefined,
+    companyStatus: response.company_status ?? undefined,
+    velocity: response.velocity.map((point) => ({
+      date: point.date,
+      jobCount: point.job_count,
+    })),
+    jobs: response.jobs.map(mapJob),
+  };
 }
 
 export async function getMarketCompanyVelocity(): Promise<MarketCompanyVelocity[]> {

@@ -4,8 +4,8 @@ use crate::db::repositories::RepositoryError;
 use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 use crate::domain::market::model::{
-    MarketCompanyEntry, MarketCompanyVelocityEntry, MarketFreezeSignalEntry, MarketOverview,
-    MarketRegionDemandEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
+    MarketCompanyDetail, MarketCompanyEntry, MarketCompanyVelocityEntry, MarketFreezeSignalEntry,
+    MarketOverview, MarketRegionDemandEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
     MarketSalaryTrend, MarketSource, MarketTechDemandEntry,
 };
 
@@ -18,6 +18,7 @@ pub struct JobsServiceStub {
     source_counts: Vec<JobSourceCount>,
     market_overview: MarketOverview,
     market_companies: Vec<MarketCompanyEntry>,
+    market_company_details: HashMap<String, MarketCompanyDetail>,
     market_company_velocity: Vec<MarketCompanyVelocityEntry>,
     market_freeze_signals: Vec<MarketFreezeSignalEntry>,
     market_salary_trends: HashMap<String, MarketSalaryTrend>,
@@ -59,6 +60,11 @@ impl JobsServiceStub {
 
     pub fn with_market_companies(mut self, companies: Vec<MarketCompanyEntry>) -> Self {
         self.market_companies = companies;
+        self
+    }
+
+    pub fn with_market_company_detail(mut self, slug: &str, detail: MarketCompanyDetail) -> Self {
+        self.market_company_details.insert(slug.to_string(), detail);
         self
     }
 
@@ -223,6 +229,17 @@ impl JobsServiceStub {
         ))
     }
 
+    pub(crate) fn market_company_detail(
+        &self,
+        company_slug: &str,
+    ) -> Result<Option<MarketCompanyDetail>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(self.market_company_details.get(company_slug).cloned())
+    }
+
     pub(crate) fn market_salary_trend(
         &self,
         seniority: &str,
@@ -348,6 +365,7 @@ impl Default for JobsServiceStub {
                 remote_percentage: 0.0,
             },
             market_companies: Vec::new(),
+            market_company_details: HashMap::new(),
             market_company_velocity: Vec::new(),
             market_freeze_signals: Vec::new(),
             market_salary_trends: HashMap::new(),

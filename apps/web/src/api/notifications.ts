@@ -9,7 +9,11 @@ import type {
 } from './engine-types';
 
 
-export type AppNotificationType = 'new_jobs_found' | 'job_reactivated' | 'application_due_soon';
+export type AppNotificationType =
+  | 'new_jobs_found'
+  | 'job_reactivated'
+  | 'market_company_hiring_again'
+  | 'application_due_soon';
 
 export type AppNotification = {
   id: string;
