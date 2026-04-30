@@ -1,9 +1,11 @@
 import { useRef } from 'react';
-import toast from 'react-hot-toast';
+
+import { useToast } from '../../context/ToastContext';
 import { cleanupExtractedResumeText, extractPdfText } from './profile.utils';
 
 export function useResumePicker(setRawText: (value: string) => void) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { showToast, dismissToast } = useToast();
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -12,31 +14,34 @@ export function useResumePicker(setRawText: (value: string) => void) {
 
     const MAX_SIZE_BYTES = 5 * 1024 * 1024;
     if (file.size > MAX_SIZE_BYTES) {
-      toast.error(
-        `Файл задто великий (${(file.size / 1024 / 1024).toFixed(1)} МБ). Максимальний розмір — 5 МБ.`,
-      );
+      showToast({
+        type: 'error',
+        message: `Файл задто великий (${(file.size / 1024 / 1024).toFixed(1)} МБ). Максимальний розмір — 5 МБ.`,
+      });
       return;
     }
 
     const ext = file.name.split('.').pop()?.toLowerCase();
     const allowedExts = new Set(['pdf', 'txt', 'md', 'text']);
     if (!allowedExts.has(ext ?? '')) {
-      toast.error('Непідтримуваний формат. Підтримуються: PDF, TXT, MD.');
+      showToast({ type: 'error', message: 'Непідтримуваний формат. Підтримуються: PDF, TXT, MD.' });
       return;
     }
 
     if (file.type === 'application/pdf') {
-      const loadingToast = toast.loading('Читаємо PDF…');
+      const loadingId = showToast({ type: 'info', message: 'Читаємо PDF…', durationMs: 60_000 });
       try {
         const text = await extractPdfText(file);
+        dismissToast(loadingId);
         if (text.trim()) {
           setRawText(text);
-          toast.success(`PDF завантажено: ${file.name}`, { id: loadingToast });
+          showToast({ type: 'success', message: `PDF завантажено: ${file.name}` });
         } else {
-          toast.error('PDF порожній або захищений — спробуйте .txt', { id: loadingToast });
+          showToast({ type: 'error', message: 'PDF порожній або захищений — спробуйте .txt' });
         }
       } catch {
-        toast.error('Не вдалося прочитати PDF', { id: loadingToast });
+        dismissToast(loadingId);
+        showToast({ type: 'error', message: 'Не вдалося прочитати PDF' });
       }
       return;
     }
@@ -47,12 +52,12 @@ export function useResumePicker(setRawText: (value: string) => void) {
       const cleanedText = typeof text === 'string' ? cleanupExtractedResumeText(text) : '';
       if (cleanedText.trim()) {
         setRawText(cleanedText);
-        toast.success(`Файл завантажено: ${file.name}`);
+        showToast({ type: 'success', message: `Файл завантажено: ${file.name}` });
       } else {
-        toast.error('Файл порожній або не вдалося прочитати');
+        showToast({ type: 'error', message: 'Файл порожній або не вдалося прочитати' });
       }
     };
-    reader.onerror = () => toast.error('Помилка читання файлу');
+    reader.onerror = () => showToast({ type: 'error', message: 'Помилка читання файлу' });
     reader.readAsText(file, 'UTF-8');
   }
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+
+import { useToast } from '../../context/ToastContext';
 import type {
   ApplicationDetail,
   ApplicationContact,
@@ -78,6 +79,7 @@ function getApplicationFormState(
 
 export function useApplicationDetail(id?: string) {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const [noteContent, setNoteContent] = useState('');
   const [selectedExistingContactId, setSelectedExistingContactId] = useState('');
@@ -128,10 +130,10 @@ export function useApplicationDetail(id?: string) {
     onSuccess: async () => {
       setNoteContent('');
       await refreshDetail();
-      toast.success('Note added');
+      showToast({ type: 'success', message: 'Note added' });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to add note');
+      showToast({ type: 'error', message: error instanceof Error ? error.message : 'Failed to add note' });
     },
   });
 
@@ -145,10 +147,10 @@ export function useApplicationDetail(id?: string) {
         refreshDetail(),
         queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all() }),
       ]);
-      toast.success('Contact linked');
+      showToast({ type: 'success', message: 'Contact linked' });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to link contact');
+      showToast({ type: 'error', message: error instanceof Error ? error.message : 'Failed to link contact' });
     },
   });
 
@@ -167,10 +169,10 @@ export function useApplicationDetail(id?: string) {
         refreshDetail(),
         queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all() }),
       ]);
-      toast.success('Contact created and linked');
+      showToast({ type: 'success', message: 'Contact created and linked' });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to create contact');
+      showToast({ type: 'error', message: error instanceof Error ? error.message : 'Failed to create contact' });
     },
   });
 
@@ -188,10 +190,10 @@ export function useApplicationDetail(id?: string) {
     onSuccess: async () => {
       setOfferDraft(null);
       await refreshDetail();
-      toast.success('Offer saved');
+      showToast({ type: 'success', message: 'Offer saved' });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to save offer');
+      showToast({ type: 'error', message: error instanceof Error ? error.message : 'Failed to save offer' });
     },
   });
 
@@ -207,10 +209,10 @@ export function useApplicationDetail(id?: string) {
     onSuccess: async () => {
       setApplicationDraft(null);
       await Promise.all([refreshDetail(), invalidateApplicationSummaryQueries(queryClient)]);
-      toast.success('Application updated');
+      showToast({ type: 'success', message: 'Application updated' });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : 'Failed to update application');
+      showToast({ type: 'error', message: error instanceof Error ? error.message : 'Failed to update application' });
     },
   });
 

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, ExternalLink, Mail, Phone, Plus, Search, UserRound, X } from 'lucide-react';
-import toast from 'react-hot-toast';
 
 import { createContact, getContacts } from '../api/contacts';
+import { useToast } from '../context/ToastContext';
 import type { Contact, ContactInput } from '@job-copilot/shared/applications';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -17,6 +17,7 @@ export default function Contacts() {
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const { data: contacts = [], isLoading } = useQuery({
     queryKey: queryKeys.contacts.all(),
@@ -28,10 +29,10 @@ export default function Contacts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all() });
       setIsFormOpen(false);
-      toast.success('Contact added');
+      showToast({ type: 'success', message: 'Contact added' });
     },
     onError: () => {
-      toast.error('Failed to add contact');
+      showToast({ type: 'error', message: 'Failed to add contact' });
     },
   });
 

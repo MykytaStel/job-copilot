@@ -36,7 +36,7 @@ type ShowToastInput = {
 };
 
 type ToastContextValue = {
-  showToast: (toast: ShowToastInput) => void;
+  showToast: (toast: ShowToastInput) => string;
   dismissToast: (id: string) => void;
 };
 
@@ -66,6 +66,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       ].slice(0, MAX_VISIBLE_TOASTS));
 
       window.setTimeout(() => dismissToast(id), durationMs ?? AUTO_DISMISS_MS);
+
+      return id;
     },
     [dismissToast],
   );

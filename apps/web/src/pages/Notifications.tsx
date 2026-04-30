@@ -7,10 +7,10 @@ import {
   ExternalLink,
   RefreshCcw,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { getNotifications, markNotificationRead } from '../api/notifications';
+import { useToast } from '../context/ToastContext';
 import type { AppNotification } from '../api/notifications';
 import { AccentIconFrame } from '../components/ui/AccentIconFrame';
 import { Badge } from '../components/ui/Badge';
@@ -254,6 +254,7 @@ export default function Notifications() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const profileId = readProfileId();
+  const { showToast } = useToast();
 
   const {
     data: notifications = [],
@@ -271,7 +272,7 @@ export default function Notifications() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Failed to update notification');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Failed to update notification' });
     },
   });
 
@@ -282,7 +283,7 @@ export default function Notifications() {
       }
       navigate(`/jobs/${encodeURIComponent(jobId)}`);
     } catch (value) {
-      toast.error(value instanceof Error ? value.message : 'Failed to open notification');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Failed to open notification' });
     }
   }
 
@@ -293,7 +294,7 @@ export default function Notifications() {
       }
       navigate(`/applications/${encodeURIComponent(applicationId)}`);
     } catch (value) {
-      toast.error(value instanceof Error ? value.message : 'Failed to open notification');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Failed to open notification' });
     }
   }
 
@@ -304,7 +305,7 @@ export default function Notifications() {
       }
       navigate(`/?job_ids=${encodeURIComponent(jobIds.join(','))}`);
     } catch (value) {
-      toast.error(value instanceof Error ? value.message : 'Failed to open notification matches');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Failed to open notification matches' });
     }
   }
 
@@ -317,7 +318,7 @@ export default function Notifications() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all() });
     },
     onError: (value: unknown) => {
-      toast.error(value instanceof Error ? value.message : 'Failed to mark all as read');
+      showToast({ type: 'error', message: value instanceof Error ? value.message : 'Failed to mark all as read' });
     },
   });
 

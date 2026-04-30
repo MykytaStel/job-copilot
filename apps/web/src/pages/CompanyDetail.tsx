@@ -1,6 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
 import { BriefcaseBusiness, Building2, ShieldCheck, ShieldOff, TrendingUp } from 'lucide-react';
 
 import {
@@ -16,6 +15,7 @@ import { Page } from '../components/ui/Page';
 import { PageHeader } from '../components/ui/SectionHeader';
 import { StatCard } from '../components/ui/StatCard';
 import { cn } from '../lib/cn';
+import { useToast } from '../context/ToastContext';
 import { invalidateFeedbackQueries } from '../lib/queryInvalidation';
 import { readProfileId } from '../lib/profileSession';
 import { queryKeys } from '../queryKeys';
@@ -83,6 +83,7 @@ export default function CompanyDetail() {
   const { slug = '' } = useParams<{ slug: string }>();
   const profileId = readProfileId();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const companyQuery = useQuery({
     queryKey: queryKeys.market.companyDetail(slug, profileId),
@@ -123,10 +124,10 @@ export default function CompanyDetail() {
         queryKey: queryKeys.market.companyDetail(slug, profileId),
       });
       void invalidateFeedbackQueries(queryClient, profileId);
-      toast.success('Company preference updated');
+      showToast({ type: 'success', message: 'Company preference updated' });
     },
     onError: (error: unknown) => {
-      toast.error(error instanceof Error ? error.message : 'Unable to update company preference');
+      showToast({ type: 'error', message: error instanceof Error ? error.message : 'Unable to update company preference' });
     },
   });
 
