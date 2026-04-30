@@ -16,14 +16,16 @@ describe('buildProfileCompletionState', () => {
       preferredLocations: [],
       targetRegions: [],
       workModes: [],
+      preferredRoles: [],
     });
 
     expect(state.completedWeight).toBe(50);
-    expect(state.totalWeight).toBe(100);
-    expect(state.percent).toBe(50);
+    expect(state.totalWeight).toBe(120);
+    expect(state.percent).toBe(42);
     expect(state.missingLabels).toEqual([
       'At least 3 skills',
       'Work mode preference',
+      'Preferred roles',
       'Location preference',
       'Language preference',
     ]);
@@ -42,11 +44,12 @@ describe('buildProfileCompletionState', () => {
       preferredLocations: ['Kyiv'],
       targetRegions: ['ua'],
       workModes: ['remote'],
+      preferredRoles: ['frontend-engineer'],
     });
 
     expect(state.percent).toBe(100);
-    expect(state.completedWeight).toBe(100);
-    expect(state.totalWeight).toBe(100);
+    expect(state.completedWeight).toBe(120);
+    expect(state.totalWeight).toBe(120);
     expect(state.missingLabels).toEqual([]);
   });
 
@@ -63,6 +66,7 @@ describe('buildProfileCompletionState', () => {
       preferredLocations: ['Kyiv'],
       targetRegions: [],
       workModes: ['remote'],
+      preferredRoles: [],
     });
 
     expect(state.missingLabels).toContain('Salary expectation');
