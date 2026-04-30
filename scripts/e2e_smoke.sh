@@ -115,7 +115,7 @@ auth_response="$(
     -H "Content-Type: application/json" \
     -X POST "$API_BASE_URL/api/v1/auth/register" \
     --data @- <<JSON
-{"name":"Smoke Candidate","email":"$profile_email","raw_text":"Senior backend and data engineer with Rust, PostgreSQL, ingestion pipelines, search ranking, and analytics experience."}
+{"name":"Smoke Candidate","email":"$profile_email","password":"smoke-password-123","raw_text":"Senior backend and data engineer with Rust, PostgreSQL, ingestion pipelines, search ranking, and analytics experience."}
 JSON
 )"
 token="$(printf '%s' "$auth_response" | json_field token)"

@@ -4,6 +4,7 @@ use crate::db::repositories::{
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
+use crate::services::auth_credentials::{AuthCredentialsService, AuthCredentialsServiceStub};
 use crate::services::cv_tailoring::CvTailoringService;
 use crate::services::feedback::FeedbackService;
 use crate::services::fit_scoring::FitScoringService;
@@ -43,6 +44,9 @@ impl AppState {
             version: env!("CARGO_PKG_VERSION").to_string(),
             database: Database::disabled(),
             ml_sidecar_base_url: "http://localhost:8000".to_string(),
+            auth_credentials: AuthCredentialsService::for_tests(
+                AuthCredentialsServiceStub::default(),
+            ),
             profile_records,
             profile_ml_state: ProfileMlStateService::for_tests(
                 crate::services::profile_ml_state::ProfileMlStateServiceStub::default(),

@@ -9,6 +9,7 @@ export interface AuthResponse {
 export async function register(params: {
   name: string;
   email: string;
+  password: string;
   raw_text: string;
 }): Promise<AuthResponse> {
   return request<AuthResponse>('/api/v1/auth/register', {
@@ -18,7 +19,7 @@ export async function register(params: {
   });
 }
 
-export async function login(params: { email: string }): Promise<AuthResponse> {
+export async function login(params: { email: string; password: string }): Promise<AuthResponse> {
   return request<AuthResponse>('/api/v1/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
