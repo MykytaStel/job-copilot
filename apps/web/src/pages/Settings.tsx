@@ -124,6 +124,7 @@ const SCORING_WEIGHT_CONTROLS: {
 const NOTIF_LABELS: Record<AppNotificationType, string> = {
   new_jobs_found: 'New jobs found',
   job_reactivated: 'Job reactivated',
+  market_company_hiring_again: 'Market company hiring again',
   application_due_soon: 'Application due soon',
 };
 

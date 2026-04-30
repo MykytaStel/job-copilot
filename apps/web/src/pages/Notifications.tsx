@@ -39,6 +39,11 @@ const NOTIFICATION_META: Record<
     badgeVariant: 'warning',
     tone: 'warning',
   },
+  market_company_hiring_again: {
+    label: 'Market alert',
+    badgeVariant: 'default',
+    tone: 'primary',
+  },
   application_due_soon: {
     label: 'Due soon',
     badgeVariant: 'success',

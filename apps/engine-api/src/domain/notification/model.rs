@@ -6,6 +6,7 @@ use serde_json::Value;
 pub enum NotificationType {
     NewJobsFound,
     JobReactivated,
+    MarketCompanyHiringAgain,
     ApplicationDueSoon,
 }
 
@@ -14,6 +15,7 @@ impl NotificationType {
         match self {
             Self::NewJobsFound => "new_jobs_found",
             Self::JobReactivated => "job_reactivated",
+            Self::MarketCompanyHiringAgain => "market_company_hiring_again",
             Self::ApplicationDueSoon => "application_due_soon",
         }
     }
@@ -26,6 +28,7 @@ impl TryFrom<&str> for NotificationType {
         match value.trim() {
             "new_jobs_found" => Ok(Self::NewJobsFound),
             "job_reactivated" => Ok(Self::JobReactivated),
+            "market_company_hiring_again" => Ok(Self::MarketCompanyHiringAgain),
             "application_due_soon" => Ok(Self::ApplicationDueSoon),
             other => Err(format!("unsupported notification type '{other}'")),
         }

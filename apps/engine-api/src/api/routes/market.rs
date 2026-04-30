@@ -1,20 +1,28 @@
 use axum::Json;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use serde::Deserialize;
 
 use crate::api::dto::market::{
-    MarketCompaniesResponse, MarketCompanyEntryResponse, MarketCompanyVelocityEntryResponse,
-    MarketOverviewResponse, MarketRoleDemandEntryResponse, MarketSalaryTrendResponse,
+    MarketCompaniesResponse, MarketCompanyDetailResponse, MarketCompanyEntryResponse,
+    MarketCompanyVelocityEntryResponse, MarketFreezeSignalEntryResponse, MarketOverviewResponse,
+    MarketRegionDemandEntryResponse, MarketRoleDemandEntryResponse,
+    MarketSalaryBySeniorityEntryResponse, MarketSalaryTrendResponse, MarketTechDemandEntryResponse,
 };
 use crate::api::error::ApiError;
+use crate::api::routes::jobs::load_feedback_state;
 use crate::domain::market::model::MarketSource;
 use crate::state::AppState;
 
 #[derive(Debug, Default, Deserialize)]
 pub struct MarketCompaniesQuery {
     pub limit: Option<i64>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct MarketCompanyDetailQuery {
+    pub profile_id: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -84,6 +92,70 @@ pub async fn get_market_companies(
     ))
 }
 
+pub async fn get_market_company_detail(
+    State(state): State<AppState>,
+    Path(company_slug): Path<String>,
+    Query(query): Query<MarketCompanyDetailQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let company_slug = company_slug.trim().to_lowercase();
+    if company_slug.is_empty() {
+        return Err(ApiError::bad_request_with_details(
+            "invalid_company_slug",
+            "company_slug must not be empty",
+            serde_json::json!({ "field": "company_slug" }),
+        ));
+    }
+
+    let Some(detail) = state
+        .jobs_service
+        .market_company_detail(&company_slug)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?
+    else {
+        return Err(ApiError::not_found(
+            "market_company_not_found",
+            format!("Company '{company_slug}' was not found"),
+        ));
+    };
+
+    let feedback_states = load_feedback_state(
+        &state,
+        query.profile_id.as_deref(),
+        &detail.active_job_views,
+    )
+    .await?;
+    let mut company_status = feedback_states
+        .iter()
+        .find_map(|feedback| feedback.company_status)
+        .map(|status| status.as_str().to_string());
+
+    if company_status.is_none()
+        && let Some(profile_id) = query
+            .profile_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    {
+        company_status = state
+            .feedback_service
+            .list_company_feedback_for_names(
+                profile_id,
+                std::slice::from_ref(&detail.normalized_company_name),
+            )
+            .await
+            .map_err(|error| ApiError::from_repository(error, "feedback_query_failed"))?
+            .into_iter()
+            .next()
+            .map(|record| record.status.as_str().to_string());
+    }
+
+    Ok(Json(MarketCompanyDetailResponse::from_detail(
+        detail,
+        company_status,
+        feedback_states,
+    )))
+}
+
 pub async fn get_market_salary_trend(
     State(state): State<AppState>,
     Query(query): Query<MarketSalaryQuery>,
@@ -150,6 +222,32 @@ pub async fn get_market_company_velocity(
     ))
 }
 
+pub async fn get_market_freeze_signals(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let (entries, source) = state
+        .jobs_service
+        .market_freeze_signals()
+        .await
+        .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
+
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((
+        headers,
+        Json(
+            entries
+                .into_iter()
+                .map(MarketFreezeSignalEntryResponse::from)
+                .collect::<Vec<_>>(),
+        ),
+    ))
+}
+
 pub async fn get_market_salary_trends(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -171,6 +269,32 @@ pub async fn get_market_salary_trends(
             trends
                 .into_iter()
                 .map(MarketSalaryTrendResponse::from)
+                .collect::<Vec<_>>(),
+        ),
+    ))
+}
+
+pub async fn get_market_salary_by_seniority(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let (entries, source) = state
+        .jobs_service
+        .market_salary_by_seniority()
+        .await
+        .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
+
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((
+        headers,
+        Json(
+            entries
+                .into_iter()
+                .map(MarketSalaryBySeniorityEntryResponse::from)
                 .collect::<Vec<_>>(),
         ),
     ))
@@ -209,6 +333,58 @@ pub async fn get_market_role_demand(
     ))
 }
 
+pub async fn get_market_region_breakdown(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let (entries, source) = state
+        .jobs_service
+        .market_region_breakdown()
+        .await
+        .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
+
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((
+        headers,
+        Json(
+            entries
+                .into_iter()
+                .map(MarketRegionDemandEntryResponse::from)
+                .collect::<Vec<_>>(),
+        ),
+    ))
+}
+
+pub async fn get_market_tech_demand(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let (entries, source) = state
+        .jobs_service
+        .market_tech_demand()
+        .await
+        .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
+
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((
+        headers,
+        Json(
+            entries
+                .into_iter()
+                .map(MarketTechDemandEntryResponse::from)
+                .collect::<Vec<_>>(),
+        ),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use axum::body;
@@ -217,13 +393,19 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{
-        MarketCompaniesQuery, MarketRolesQuery, MarketSalaryQuery, get_market_companies,
-        get_market_company_velocity, get_market_overview, get_market_role_demand,
-        get_market_salary_trend, get_market_salary_trends,
+        MarketCompaniesQuery, MarketCompanyDetailQuery, MarketRolesQuery, MarketSalaryQuery,
+        get_market_companies, get_market_company_detail, get_market_company_velocity,
+        get_market_freeze_signals, get_market_overview, get_market_region_breakdown,
+        get_market_role_demand, get_market_salary_by_seniority, get_market_salary_trend,
+        get_market_salary_trends, get_market_tech_demand,
     };
+    use crate::domain::job::model::{Job, JobLifecycleStage, JobView};
     use crate::domain::market::model::{
-        MarketCompanyEntry, MarketCompanyVelocityEntry, MarketCompanyVelocityTrend, MarketOverview,
-        MarketRoleDemandEntry, MarketSalaryTrend, MarketTrendDirection,
+        MarketCompanyDetail, MarketCompanyEntry, MarketCompanyVelocityEntry,
+        MarketCompanyVelocityPoint, MarketCompanyVelocityTrend, MarketFreezeSignalEntry,
+        MarketOverview, MarketRegionDemandEntry, MarketRoleDemandEntry,
+        MarketSalaryBySeniorityEntry, MarketSalaryTrend, MarketTechDemandEntry,
+        MarketTrendDirection,
     };
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
@@ -238,6 +420,32 @@ mod tests {
             ApplicationsService::for_tests(ApplicationsServiceStub::default()),
             ResumesService::for_tests(ResumesServiceStub::default()),
         )
+    }
+
+    fn sample_job_view(id: &str, company_name: &str) -> JobView {
+        JobView {
+            job: Job {
+                id: id.to_string(),
+                title: "Backend Engineer".to_string(),
+                company_name: company_name.to_string(),
+                location: Some("Remote".to_string()),
+                remote_type: Some("remote".to_string()),
+                seniority: Some("senior".to_string()),
+                description_text: "Rust backend role".to_string(),
+                salary_min: Some(4000),
+                salary_max: Some(6000),
+                salary_currency: Some("USD".to_string()),
+                language: Some("en".to_string()),
+                posted_at: Some("2026-04-29T00:00:00Z".to_string()),
+                last_seen_at: "2026-04-30T00:00:00Z".to_string(),
+                is_active: true,
+            },
+            first_seen_at: "2026-04-29T00:00:00Z".to_string(),
+            inactivated_at: None,
+            reactivated_at: None,
+            lifecycle_stage: JobLifecycleStage::Active,
+            primary_variant: None,
+        }
     }
 
     async fn parse_json_response(response: impl IntoResponse) -> Value {
@@ -370,6 +578,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn market_company_detail_returns_stats_velocity_and_jobs() {
+        let state = test_state(JobsService::for_tests(
+            JobsServiceStub::default().with_market_company_detail(
+                "nova-ledger",
+                MarketCompanyDetail {
+                    company_name: "Nova Ledger".to_string(),
+                    normalized_company_name: "nova ledger".to_string(),
+                    total_jobs: 4,
+                    active_jobs: 2,
+                    avg_salary: Some(5000),
+                    velocity: vec![
+                        MarketCompanyVelocityPoint {
+                            date: "2026-04-29".to_string(),
+                            job_count: 1,
+                        },
+                        MarketCompanyVelocityPoint {
+                            date: "2026-04-30".to_string(),
+                            job_count: 1,
+                        },
+                    ],
+                    active_job_views: vec![sample_job_view("job-1", "Nova Ledger")],
+                },
+            ),
+        ));
+
+        let payload = parse_json_response(
+            get_market_company_detail(
+                State(state),
+                axum::extract::Path("nova-ledger".to_string()),
+                Query(MarketCompanyDetailQuery { profile_id: None }),
+            )
+            .await
+            .expect("company detail should succeed"),
+        )
+        .await;
+
+        assert_eq!(payload["company_name"], json!("Nova Ledger"));
+        assert_eq!(payload["total_jobs"], json!(4));
+        assert_eq!(payload["active_jobs"], json!(2));
+        assert_eq!(payload["avg_salary"], json!(5000));
+        assert_eq!(
+            payload["velocity"],
+            json!([
+                { "date": "2026-04-29", "job_count": 1 },
+                { "date": "2026-04-30", "job_count": 1 }
+            ])
+        );
+        assert_eq!(payload["jobs"][0]["id"], json!("job-1"));
+        assert_eq!(payload["jobs"][0]["company_name"], json!("Nova Ledger"));
+    }
+
+    #[tokio::test]
     async fn market_salary_trend_returns_percentiles_for_requested_seniority() {
         let state = test_state(JobsService::for_tests(
             JobsServiceStub::default().with_market_salary_trend(MarketSalaryTrend {
@@ -481,6 +741,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn market_freeze_signals_returns_companies_with_paused_posting() {
+        let state = test_state(JobsService::for_tests(
+            JobsServiceStub::default().with_market_freeze_signals(vec![
+                MarketFreezeSignalEntry {
+                    company: "Acme".to_string(),
+                    last_posted_at: "2026-04-10 09:00:00+00".to_string(),
+                    days_since_last_post: 19,
+                    historical_count: 7,
+                },
+                MarketFreezeSignalEntry {
+                    company: "Beta".to_string(),
+                    last_posted_at: "2026-04-14 09:00:00+00".to_string(),
+                    days_since_last_post: 15,
+                    historical_count: 5,
+                },
+            ]),
+        ));
+
+        let payload = parse_json_response(
+            get_market_freeze_signals(State(state))
+                .await
+                .expect("market freeze signals should succeed"),
+        )
+        .await;
+
+        assert_eq!(
+            payload,
+            json!([
+                {
+                    "company": "Acme",
+                    "last_posted_at": "2026-04-10 09:00:00+00",
+                    "days_since_last_post": 19,
+                    "historical_count": 7
+                },
+                {
+                    "company": "Beta",
+                    "last_posted_at": "2026-04-14 09:00:00+00",
+                    "days_since_last_post": 15,
+                    "historical_count": 5
+                }
+            ])
+        );
+    }
+
+    #[tokio::test]
     async fn market_salary_trends_returns_available_buckets() {
         let state = test_state(JobsService::for_tests(
             JobsServiceStub::default()
@@ -527,6 +832,51 @@ mod tests {
                     "median": 5000,
                     "p75": 6200,
                     "sample_count": 8
+                }
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn market_salary_by_seniority_returns_median_ranges() {
+        let state = test_state(JobsService::for_tests(
+            JobsServiceStub::default().with_market_salary_by_seniority(vec![
+                MarketSalaryBySeniorityEntry {
+                    seniority: "junior".to_string(),
+                    median_min: 1200,
+                    median_max: 1800,
+                    sample_size: 12,
+                },
+                MarketSalaryBySeniorityEntry {
+                    seniority: "lead_staff".to_string(),
+                    median_min: 6500,
+                    median_max: 8200,
+                    sample_size: 10,
+                },
+            ]),
+        ));
+
+        let payload = parse_json_response(
+            get_market_salary_by_seniority(State(state))
+                .await
+                .expect("market salary by seniority should succeed"),
+        )
+        .await;
+
+        assert_eq!(
+            payload,
+            json!([
+                {
+                    "seniority": "junior",
+                    "median_min": 1200,
+                    "median_max": 1800,
+                    "sample_size": 12
+                },
+                {
+                    "seniority": "lead_staff",
+                    "median_min": 6500,
+                    "median_max": 8200,
+                    "sample_size": 10
                 }
             ])
         );
@@ -606,5 +956,97 @@ mod tests {
         assert_eq!(payload["code"], json!("invalid_period"));
         assert_eq!(payload["details"]["field"], json!("period"));
         assert_eq!(payload["details"]["received"], json!(0));
+    }
+
+    #[tokio::test]
+    async fn market_region_breakdown_returns_region_counts_and_top_roles() {
+        let state = test_state(JobsService::for_tests(
+            JobsServiceStub::default().with_market_region_breakdown(vec![
+                MarketRegionDemandEntry {
+                    region: "Remote".to_string(),
+                    job_count: 12,
+                    top_roles: vec!["Frontend".to_string(), "Backend".to_string()],
+                },
+                MarketRegionDemandEntry {
+                    region: "Kyiv".to_string(),
+                    job_count: 5,
+                    top_roles: vec!["Management".to_string()],
+                },
+                MarketRegionDemandEntry {
+                    region: "Lviv".to_string(),
+                    job_count: 3,
+                    top_roles: Vec::new(),
+                },
+            ]),
+        ));
+
+        let payload = parse_json_response(
+            get_market_region_breakdown(State(state))
+                .await
+                .expect("market region breakdown should succeed"),
+        )
+        .await;
+
+        assert_eq!(
+            payload,
+            json!([
+                {
+                    "region": "Remote",
+                    "job_count": 12,
+                    "top_roles": ["Frontend", "Backend"]
+                },
+                {
+                    "region": "Kyiv",
+                    "job_count": 5,
+                    "top_roles": ["Management"]
+                },
+                {
+                    "region": "Lviv",
+                    "job_count": 3,
+                    "top_roles": []
+                }
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn market_tech_demand_returns_top_skill_counts() {
+        let state = test_state(JobsService::for_tests(
+            JobsServiceStub::default().with_market_tech_demand(vec![
+                MarketTechDemandEntry {
+                    skill: "TypeScript".to_string(),
+                    job_count: 12,
+                    percentage: 60.0,
+                },
+                MarketTechDemandEntry {
+                    skill: "React".to_string(),
+                    job_count: 10,
+                    percentage: 50.0,
+                },
+            ]),
+        ));
+
+        let payload = parse_json_response(
+            get_market_tech_demand(State(state))
+                .await
+                .expect("market tech demand should succeed"),
+        )
+        .await;
+
+        assert_eq!(
+            payload,
+            json!([
+                {
+                    "skill": "TypeScript",
+                    "job_count": 12,
+                    "percentage": 60.0
+                },
+                {
+                    "skill": "React",
+                    "job_count": 10,
+                    "percentage": 50.0
+                }
+            ])
+        );
     }
 }
