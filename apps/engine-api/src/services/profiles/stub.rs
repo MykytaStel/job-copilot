@@ -164,20 +164,6 @@ impl ProfilesServiceStub {
         Ok(Some(profile.clone()))
     }
 
-    pub(crate) fn get_by_email(&self, email: &str) -> Result<Option<Profile>, RepositoryError> {
-        if self.database_disabled {
-            return Err(RepositoryError::DatabaseDisabled);
-        }
-
-        Ok(self
-            .profiles_by_id
-            .lock()
-            .expect("profiles stub mutex should not be poisoned")
-            .values()
-            .find(|p| p.email == email)
-            .cloned())
-    }
-
     pub(crate) fn get_latest(&self) -> Result<Option<Profile>, RepositoryError> {
         if self.database_disabled {
             return Err(RepositoryError::DatabaseDisabled);

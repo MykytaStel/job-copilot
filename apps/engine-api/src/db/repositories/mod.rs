@@ -1,5 +1,6 @@
 mod activities;
 mod applications;
+mod auth_credentials;
 mod feedback;
 mod fit_scores;
 mod jobs;
@@ -16,6 +17,7 @@ use std::fmt;
 
 pub use activities::ActivitiesRepository;
 pub use applications::ApplicationsRepository;
+pub use auth_credentials::{AuthCredential, AuthCredentialsRepository};
 pub use feedback::FeedbackRepository;
 pub use fit_scores::FitScoresRepository;
 pub use jobs::JobsRepository;

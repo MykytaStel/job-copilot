@@ -182,53 +182,6 @@ impl ProfilesRepository {
         row.map(Profile::try_from).transpose()
     }
 
-    pub async fn get_by_email(&self, email: &str) -> Result<Option<Profile>, RepositoryError> {
-        let Some(pool) = self.database.pool() else {
-            return Err(RepositoryError::DatabaseDisabled);
-        };
-
-        let row = sqlx::query_as::<_, ProfileRow>(
-            r#"
-            SELECT
-                id,
-                name,
-                email,
-                location,
-                raw_text,
-                years_of_experience,
-                summary,
-                primary_role,
-                seniority,
-                skills::text AS skills_json,
-                keywords::text AS keywords_json,
-                salary_min,
-                salary_max,
-                COALESCE(salary_currency, 'USD') AS salary_currency,
-                COALESCE(languages, '[]'::jsonb)::text AS languages_json,
-                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
-                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
-                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
-                preferred_language,
-                search_preferences,
-                created_at::text AS created_at,
-                updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at,
-                portfolio_url,
-                github_url,
-                linkedin_url
-            FROM profiles
-            WHERE email = $1
-            ORDER BY created_at ASC
-            LIMIT 1
-            "#,
-        )
-        .bind(email)
-        .fetch_optional(pool)
-        .await?;
-
-        row.map(Profile::try_from).transpose()
-    }
-
     pub async fn get_latest(&self) -> Result<Option<Profile>, RepositoryError> {
         let Some(pool) = self.database.pool() else {
             return Err(RepositoryError::DatabaseDisabled);

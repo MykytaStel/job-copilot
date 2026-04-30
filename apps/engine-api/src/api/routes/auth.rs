@@ -4,6 +4,7 @@ use axum::http::StatusCode;
 use crate::api::dto::auth::{AuthResponse, LoginRequest, RegisterRequest};
 use crate::api::error::{ApiError, ApiJson};
 use crate::domain::profile::model::CreateProfile;
+use crate::services::auth_credentials::AuthCredentialsError;
 use crate::services::tokens::issue_token;
 use crate::state::AppState;
 
@@ -20,11 +21,24 @@ pub async fn register(
 
     let payload = payload.validate()?;
 
+    if state
+        .auth_credentials
+        .get_by_email(&payload.email)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "auth_credentials_query_failed"))?
+        .is_some()
+    {
+        return Err(ApiError::conflict(
+            "email_already_registered",
+            "An account already exists for this email address",
+        ));
+    }
+
     let profile = state
         .profile_records
         .create(CreateProfile {
             name: payload.name,
-            email: payload.email,
+            email: payload.email.clone(),
             raw_text: payload.raw_text,
             location: None,
             years_of_experience: None,
@@ -42,6 +56,12 @@ pub async fn register(
         })
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?;
+
+    state
+        .auth_credentials
+        .create(&profile.id, &profile.email, &payload.password)
+        .await
+        .map_err(map_auth_credentials_error)?;
 
     let issued = issue_token(&profile.id, secret)?;
 
@@ -68,23 +88,43 @@ pub async fn login(
 
     let payload = payload.validate()?;
 
-    let profile = state
-        .profile_records
+    let credential = state
+        .auth_credentials
         .get_by_email(&payload.email)
         .await
-        .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
-        .ok_or_else(|| {
-            ApiError::not_found(
-                "profile_not_found",
-                "No profile found for this email address",
-            )
-        })?;
+        .map_err(|error| ApiError::from_repository(error, "auth_credentials_query_failed"))?;
 
-    let issued = issue_token(&profile.id, secret)?;
+    let Some(credential) = credential else {
+        return Err(invalid_credentials());
+    };
+
+    if !state
+        .auth_credentials
+        .verify_password(&payload.password, &credential.password_hash)
+    {
+        return Err(invalid_credentials());
+    }
+
+    let issued = issue_token(&credential.profile_id, secret)?;
 
     Ok(axum::Json(AuthResponse {
         token: issued.token,
-        profile_id: profile.id,
+        profile_id: credential.profile_id,
         expires_at: issued.expires_at.to_rfc3339(),
     }))
+}
+
+fn invalid_credentials() -> ApiError {
+    ApiError::unauthorized("invalid_credentials", "Email or password is invalid")
+}
+
+fn map_auth_credentials_error(error: AuthCredentialsError) -> ApiError {
+    match error {
+        AuthCredentialsError::Repository(error) => {
+            ApiError::from_repository(error, "auth_credentials_query_failed")
+        }
+        AuthCredentialsError::PasswordHash => {
+            ApiError::internal("password_hash_failed", "Password could not be processed")
+        }
+    }
 }

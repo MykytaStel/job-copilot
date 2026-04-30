@@ -1,12 +1,14 @@
 use crate::config::Config;
 use crate::db::Database;
 use crate::db::repositories::{
-    ActivitiesRepository, ApplicationsRepository, FeedbackRepository, FitScoresRepository,
-    JobsRepository, NotificationsRepository, ProfileMlMetricsRepository, ProfileMlStateRepository,
-    ProfilesRepository, ResumesRepository, TasksRepository, UserEventsRepository,
+    ActivitiesRepository, ApplicationsRepository, AuthCredentialsRepository, FeedbackRepository,
+    FitScoresRepository, JobsRepository, NotificationsRepository, ProfileMlMetricsRepository,
+    ProfileMlStateRepository, ProfilesRepository, ResumesRepository, TasksRepository,
+    UserEventsRepository,
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
+use crate::services::auth_credentials::AuthCredentialsService;
 use crate::services::cv_tailoring::CvTailoringService;
 use crate::services::feedback::FeedbackService;
 use crate::services::fit_scoring::FitScoringService;
@@ -37,6 +39,7 @@ pub struct AppState {
     pub version: String,
     pub database: Database,
     pub ml_sidecar_base_url: String,
+    pub auth_credentials: AuthCredentialsService,
     pub profile_records: ProfileRecordsService,
     pub profile_ml_state: ProfileMlStateService,
     pub profile_ml_metrics: ProfileMlMetricsService,
@@ -107,6 +110,7 @@ impl AppState {
     fn new_with_rerankers(config: StateRerankerConfig) -> Self {
         let database = config.database;
         let profiles_repository = ProfilesRepository::new(database.clone());
+        let auth_credentials_repository = AuthCredentialsRepository::new(database.clone());
         let profile_ml_state_repository = ProfileMlStateRepository::new(database.clone());
         let profile_ml_metrics_repository = ProfileMlMetricsRepository::new(database.clone());
         let jobs_repository = JobsRepository::new(database.clone());
@@ -129,6 +133,7 @@ impl AppState {
             version: env!("CARGO_PKG_VERSION").to_string(),
             database,
             ml_sidecar_base_url: config.ml_sidecar_base_url.trim_end_matches('/').to_string(),
+            auth_credentials: AuthCredentialsService::new(auth_credentials_repository),
             profile_records,
             profile_ml_state: ProfileMlStateService::new(profile_ml_state_repository),
             profile_ml_metrics: ProfileMlMetricsService::new(profile_ml_metrics_repository),

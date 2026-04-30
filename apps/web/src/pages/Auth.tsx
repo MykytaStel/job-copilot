@@ -21,6 +21,7 @@ export default function Auth() {
   const [mode, setMode] = useState<Mode>('register');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rawText, setRawText] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -30,8 +31,8 @@ export default function Auth() {
     try {
       const res =
         mode === 'register'
-          ? await register({ name, email, raw_text: rawText })
-          : await login({ email });
+          ? await register({ name, email, password, raw_text: rawText })
+          : await login({ email, password });
       writeToken(res.token);
       writeProfileId(res.profile_id);
       navigate('/');
@@ -59,7 +60,7 @@ export default function Auth() {
             <CardDescription>
               {mode === 'register'
                 ? 'Paste your CV and we will set everything up.'
-                : 'Enter your email to access your profile.'}
+                : 'Enter your email and password to access your profile.'}
             </CardDescription>
           </CardHeader>
 
@@ -88,6 +89,19 @@ export default function Auth() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="alex@example.com"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Password</label>
+                <input
+                  className={inputClass}
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={mode === 'register' ? 8 : undefined}
                   required
                   disabled={loading}
                 />
