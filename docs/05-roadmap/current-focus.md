@@ -42,6 +42,7 @@
 - Legacy alias only: `apps/web/src/AppShellNew.tsx`
 - Notifications, task due reminders, market base sections, profile compensation/languages, and global search should no longer be tracked as open feature work
 - `market_snapshots` is now refreshed by ingestion after successful upserts
+- Legacy profile role deserialization is scheduled for removal by 2026-07-01; tracking details live in `docs/05-roadmap/backlog.md` under "Remove legacy profile role deserialization by 2026-07-01"
 - Settings now has a minimal route/page, but dedicated notification preferences are still not implemented
 - Profile completion indicator now exists in the profile/settings surfaces
 - Lifecycle-heavy UI surfaces should read engine presentation labels instead of inferring state from `postedAt` alone

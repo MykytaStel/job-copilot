@@ -8,6 +8,42 @@
 - Profile completion % indicator
 - Ingestion stats widget у Analytics ("Last updated X min ago")
 
+## Scheduled Cleanup
+
+### Remove legacy profile role deserialization by 2026-07-01
+
+Goal: remove the temporary compatibility parser for old profile role keys after all
+stored `profiles.primary_role` values are canonical `RoleId` keys.
+
+Assumptions:
+- Legacy values may still exist until a migration/backfill proves otherwise.
+- The Rust engine remains the canonical owner of role identity and validation.
+
+Files likely touched:
+- `apps/engine-api/migrations/` — add/verify a backfill for legacy `profiles.primary_role` values
+- `apps/engine-api/src/domain/role/role_id.rs` — delete `RoleId::parse_compat_key`
+- `apps/engine-api/src/db/repositories/profiles.rs` — switch `ProfileRow` deserialization to `RoleId::parse_canonical_key`
+
+Acceptance criteria:
+- All known legacy keys (`react_native_developer`, `frontend_developer`, `backend_developer`,
+  `fullstack_developer`, `ui_ux_designer`, `data_analyst`, `marketing_specialist`,
+  `sales_manager`, `customer_support_specialist`, `recruiter`) are backfilled or explicitly
+  rejected before the compatibility parser is removed.
+- Profile deserialization accepts canonical role keys only.
+- Legacy compatibility tests are removed or replaced with migration/backfill coverage.
+- The TODO in `role_id.rs` is removed.
+
+Verification commands:
+- `cargo test --manifest-path apps/engine-api/Cargo.toml role_id`
+- `cargo test --manifest-path apps/engine-api/Cargo.toml profiles`
+- `cargo check --manifest-path apps/engine-api/Cargo.toml`
+
+Risks / tradeoffs:
+- Removing the parser before production-like data is backfilled will make affected profiles fail
+  to deserialize.
+- Keeping the parser past 2026-07-01 weakens the canonical role catalog invariant by preserving
+  old role keys in the read path.
+
 ## Домен
 - Company resolution v2 (нормалізація назв компаній)
 - Compensation normalization (USD/EUR/UAH уніфікація)

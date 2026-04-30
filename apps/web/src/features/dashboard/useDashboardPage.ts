@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import { Bookmark, Briefcase, CalendarDays, Send, XCircle } from 'lucide-react';
@@ -27,7 +27,6 @@ import { getSources } from '../../api/profiles';
 import {
   getRerankerCacheInvalidationStatus,
   RERANKER_CACHE_INVALIDATION_EVENT,
-  type RerankerCacheInvalidationEventDetail,
 } from '../../api/reranker';
 import { logJobImpressionsOnce } from '../events/jobImpressions';
 import {
@@ -111,11 +110,19 @@ function readCompanyFilter(searchParams: URLSearchParams): string | null {
 
 export function useDashboardPage() {
   const profileId = readProfileId();
-  const queryClient = useQueryClient(); const { showToast } = useToast();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [rerankerCacheDegraded, setRerankerCacheDegraded] = useState(
+  const rerankerCacheDegraded = useSyncExternalStore(
+    (onStoreChange) => {
+      window.addEventListener(RERANKER_CACHE_INVALIDATION_EVENT, onStoreChange);
+      return () => {
+        window.removeEventListener(RERANKER_CACHE_INVALIDATION_EVENT, onStoreChange);
+      };
+    },
     () => getRerankerCacheInvalidationStatus(profileId) === 'degraded',
+    () => false,
   );
   const { sortMode, setSortMode: setDisplaySortMode } = useDisplayPrefs();
   const setSortMode = useCallback((next: SortMode) => {
@@ -158,12 +165,12 @@ export function useDashboardPage() {
     setSearchParams(nextSearchParams, { replace: true });
   };
 
-  const clearContextFilters = useCallback(() => {
+  const clearContextFilters = () => {
     const nextSearchParams = new URLSearchParams(searchParams);
     nextSearchParams.delete('job_ids');
     nextSearchParams.delete('company');
     setSearchParams(nextSearchParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+  };
 
   const {
     data: jobsFeed,
@@ -203,24 +210,6 @@ export function useDashboardPage() {
     enabled: !!profileId && sortMode === 'relevance' && rerankJobIds.length > 0,
     retry: false,
   });
-
-  useEffect(() => {
-    setRerankerCacheDegraded(getRerankerCacheInvalidationStatus(profileId) === 'degraded');
-  }, [profileId]);
-
-  useEffect(() => {
-    function handleRerankerCacheInvalidation(event: Event) {
-      const detail = (event as CustomEvent<RerankerCacheInvalidationEventDetail>).detail;
-      if (!detail || detail.profileId !== profileId) return;
-
-      setRerankerCacheDegraded(detail.status === 'degraded');
-    }
-
-    window.addEventListener(RERANKER_CACHE_INVALIDATION_EVENT, handleRerankerCacheInvalidation);
-    return () => {
-      window.removeEventListener(RERANKER_CACHE_INVALIDATION_EVENT, handleRerankerCacheInvalidation);
-    };
-  }, [profileId]);
 
   const scoreById = useMemo(() => {
     const map = new Map<string, number>();

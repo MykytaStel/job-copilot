@@ -1,3 +1,5 @@
+import type { ChangeEvent } from 'react';
+import toast from 'react-hot-toast';
 import { BriefcaseBusiness, FileText, Plus, Target } from 'lucide-react';
 import {
   LatestAnalysisSection,
@@ -17,6 +19,9 @@ import { SurfaceMetric } from '../components/ui/Surface';
 import { useProfilePage } from '../features/profile/useProfilePage';
 import { ProfileStrength } from '../components/ProfileStrength';
 import { ResumeHistory } from '../components/ResumeHistory';
+
+const MAX_RESUME_UPLOAD_BYTES = 5 * 1024 * 1024;
+const MAX_RESUME_UPLOAD_MB = 5;
 
 export default function Profile() {
   const {
@@ -101,6 +106,28 @@ export default function Profile() {
     setGithubUrl,
     setLinkedinUrl,
   } = useProfilePage();
+
+  function handleValidatedFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (file.type !== 'application/pdf') {
+      event.target.value = '';
+      toast.error('Please upload your resume as a PDF file.');
+      return;
+    }
+
+    if (file.size >= MAX_RESUME_UPLOAD_BYTES) {
+      event.target.value = '';
+      toast.error(`Please upload a PDF smaller than ${MAX_RESUME_UPLOAD_MB} MB.`);
+      return;
+    }
+
+    void handleFileChange(event);
+  }
 
   return (
     <Page>
@@ -228,7 +255,7 @@ export default function Profile() {
             onSave={saveCurrentProfile}
             onAnalyze={analyzeProfile}
             onOpenFilePicker={openFilePicker}
-            onFileChange={handleFileChange}
+            onFileChange={handleValidatedFileChange}
             setName={setName}
             setEmail={setEmail}
             setLocation={setLocation}
