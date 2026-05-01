@@ -822,6 +822,213 @@ fn old_job_has_negative_freshness_score_and_reason() {
 }
 
 #[test]
+fn work_mode_no_preference_does_not_affect_score() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.work_modes = vec![];
+    profile.target_regions = vec![];
+
+    let remote_job = job_view(
+        "job-remote",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        Some("remote"),
+        "djinni",
+    );
+    let onsite_job = job_view(
+        "job-onsite",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        Some("onsite"),
+        "djinni",
+    );
+
+    let remote_fit = service.score_job_deterministic(&profile, &remote_job);
+    let onsite_fit = service.score_job_deterministic(&profile, &onsite_job);
+
+    assert_eq!(
+        remote_fit.score, onsite_fit.score,
+        "no work mode preference must not affect score: remote={}, onsite={}",
+        remote_fit.score, onsite_fit.score
+    );
+    assert!(remote_fit.work_mode_match.is_none());
+    assert!(onsite_fit.work_mode_match.is_none());
+}
+
+#[test]
+fn work_mode_match_applies_positive_score_effect() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.target_regions = vec![];
+
+    let remote_job = job_view(
+        "job-remote",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        Some("remote"),
+        "djinni",
+    );
+    let unknown_mode_job = job_view(
+        "job-unknown",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        None,
+        "djinni",
+    );
+
+    let remote_fit = service.score_job_deterministic(&profile, &remote_job);
+    let unknown_fit = service.score_job_deterministic(&profile, &unknown_mode_job);
+
+    assert!(
+        remote_fit.score > unknown_fit.score,
+        "matching work mode must score higher than unknown work mode: remote={}, unknown={}",
+        remote_fit.score,
+        unknown_fit.score,
+    );
+    assert_eq!(remote_fit.work_mode_match, Some(true));
+    assert!(
+        remote_fit
+            .reasons
+            .iter()
+            .any(|r| r.contains("Work mode matched")),
+        "matching work mode must produce a positive reason"
+    );
+}
+
+#[test]
+fn work_mode_mismatch_applies_negative_score_effect() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.target_regions = vec![];
+
+    let onsite_job = job_view(
+        "job-onsite",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        Some("onsite"),
+        "djinni",
+    );
+    let unknown_mode_job = job_view(
+        "job-unknown",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        None,
+        "djinni",
+    );
+
+    let onsite_fit = service.score_job_deterministic(&profile, &onsite_job);
+    let unknown_fit = service.score_job_deterministic(&profile, &unknown_mode_job);
+
+    assert!(
+        onsite_fit.score < unknown_fit.score,
+        "mismatching work mode must score lower than unknown work mode: onsite={}, unknown={}",
+        onsite_fit.score,
+        unknown_fit.score,
+    );
+    assert_eq!(onsite_fit.work_mode_match, Some(false));
+    assert!(
+        onsite_fit
+            .reasons
+            .iter()
+            .any(|r| r.contains("Work mode mismatch penalty applied")),
+        "mismatching work mode must produce a penalty reason"
+    );
+}
+
+#[test]
+fn unknown_job_work_mode_does_not_penalize() {
+    let service = SearchMatchingService::new();
+    let profile = search_profile();
+
+    let unknown_job = job_view(
+        "job-unknown-mode",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        None,
+        "djinni",
+    );
+
+    let fit = service.score_job_deterministic(&profile, &unknown_job);
+
+    assert!(
+        fit.work_mode_match.is_none(),
+        "unknown work mode must return None match"
+    );
+    assert!(
+        !fit.score_breakdown
+            .penalties
+            .iter()
+            .any(|p| p.kind == "work_mode_mismatch"),
+        "unknown work mode must not produce a mismatch penalty entry"
+    );
+}
+
+#[test]
+fn work_mode_score_stays_within_zero_to_one_hundred() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.work_modes = vec![WorkMode::Remote];
+    profile.target_regions = vec![];
+    profile.allowed_sources = vec![];
+
+    let mismatch_job = job_view(
+        "job-mismatch-clamp",
+        "Pastry Chef",
+        "Onsite kitchen work preparing desserts",
+        Some("onsite"),
+        "djinni",
+    );
+
+    let fit = service.score_job_deterministic(&profile, &mismatch_job);
+
+    assert_eq!(
+        fit.score, fit.score_breakdown.total_score,
+        "fit.score and score_breakdown.total_score must stay in sync"
+    );
+    assert!(fit.score <= 100, "score must not exceed 100");
+}
+
+#[test]
+fn work_mode_match_and_mismatch_produce_explanation_reasons() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.target_regions = vec![];
+
+    let matching_job = job_view(
+        "job-mode-match",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        Some("remote"),
+        "djinni",
+    );
+    let mismatch_job = job_view(
+        "job-mode-mismatch",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        Some("onsite"),
+        "djinni",
+    );
+
+    let match_fit = service.score_job_deterministic(&profile, &matching_job);
+    let mismatch_fit = service.score_job_deterministic(&profile, &mismatch_job);
+
+    assert!(
+        match_fit
+            .reasons
+            .iter()
+            .any(|r| r.contains("Work mode matched")),
+        "matching work mode must include a positive explanation reason"
+    );
+    assert!(
+        mismatch_fit
+            .reasons
+            .iter()
+            .any(|r| r.contains("Work mode mismatch penalty applied")),
+        "mismatching work mode must include a penalty explanation reason"
+    );
+}
+
+#[test]
 fn score_never_goes_below_zero_for_irrelevant_old_job() {
     let service = SearchMatchingService::new();
     let profile = search_profile();
