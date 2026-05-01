@@ -365,6 +365,7 @@ export default function Settings() {
     preferredLocations: profile.preferredLocations,
     targetRegions: profile.searchPreferences?.targetRegions ?? [],
     workModes: profile.searchPreferences?.workModes ?? [],
+    preferredRoles: profile.searchPreferences?.preferredRoles ?? [],
   });
 
   const unreadCount = notifications.filter((n) => !n.readAt).length;

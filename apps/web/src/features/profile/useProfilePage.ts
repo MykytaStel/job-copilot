@@ -30,6 +30,7 @@ export function useProfilePage() {
     preferredLocations: form.preferredLocations,
     targetRegions: search.targetRegions,
     workModes: search.workModes,
+    preferredRoles: search.preferredRoles,
   });
 
   function saveCurrentProfile() {

@@ -12,6 +12,7 @@ export type ProfileCompletionInput = {
   preferredLocations: string[];
   targetRegions: string[];
   workModes: string[];
+  preferredRoles: string[];
 };
 
 export type ProfileCompletionCheckpoint = {
@@ -22,6 +23,7 @@ export type ProfileCompletionCheckpoint = {
     | 'cv'
     | 'salary'
     | 'work_mode'
+    | 'preferred_roles'
     | 'location_preference'
     | 'language_preference';
   label: string;
@@ -86,6 +88,13 @@ export function buildProfileCompletionState(input: ProfileCompletionInput): Prof
       complete: input.workModes.length > 0,
       weight: 10,
       targetId: 'profile-field-work-mode',
+    },
+    {
+      id: 'preferred_roles',
+      label: 'Preferred roles',
+      complete: input.preferredRoles.length > 0,
+      weight: 20,
+      targetId: 'profile-field-preferred-roles',
     },
     {
       id: 'location_preference',
