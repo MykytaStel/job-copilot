@@ -55,11 +55,12 @@ const PROFILE_KEYWORD_WEIGHT: f32 = 8.0;
 const SEARCH_TERM_WEIGHT: f32 = 8.0;
 const SOURCE_WEIGHT: f32 = 4.0;
 const WORK_MODE_WEIGHT: f32 = 5.0;
-const REGION_WEIGHT: f32 = 4.0;
+const REGION_WEIGHT: f32 = 5.0;
 const SENIORITY_WEIGHT: f32 = 6.0;
 const EXCLUDE_PENALTY_WEIGHT: f32 = 18.0;
 const ROLE_MISMATCH_PENALTY_WEIGHT: f32 = 18.0;
 const WORK_MODE_MISMATCH_PENALTY_WEIGHT: f32 = 10.0;
+const REGION_MISMATCH_PENALTY_WEIGHT: f32 = 8.0;
 const SENIORITY_MISMATCH_PENALTY_WEIGHT: f32 = 8.0;
 const PARTIAL_ROLE_MATCH_THRESHOLD: f32 = 0.30;
 const LOW_SIGNAL_TERM_MATCH_WEIGHT: f32 = 0.80;
@@ -149,6 +150,7 @@ struct DeterministicPenaltyReasons {
     exclude_terms: Option<String>,
     role_mismatch: Option<String>,
     work_mode_mismatch: Option<String>,
+    region_mismatch: Option<String>,
     seniority_mismatch: Option<String>,
 }
 
@@ -270,11 +272,9 @@ impl SearchMatchingService {
         let work_mode_score = matches!(work_mode_match, Some(true))
             .then_some(WORK_MODE_WEIGHT * remote_work_multiplier)
             .unwrap_or(0.0);
-        let region_score = match region_match {
-            Some(true) => REGION_WEIGHT,
-            Some(false) => 0.0,
-            None => 0.0,
-        };
+        let region_score = matches!(region_match, Some(true))
+            .then_some(REGION_WEIGHT)
+            .unwrap_or(0.0);
         let seniority_score = seniority_alignment.score;
         let exclude_penalty = weighted_overlap_ratio(
             matched_exclude_terms.matched_strength,
@@ -282,6 +282,9 @@ impl SearchMatchingService {
         ) * EXCLUDE_PENALTY_WEIGHT;
         let work_mode_penalty = matches!(work_mode_match, Some(false))
             .then_some(WORK_MODE_MISMATCH_PENALTY_WEIGHT * remote_work_multiplier)
+            .unwrap_or(0.0);
+        let region_mismatch_penalty = matches!(region_match, Some(false))
+            .then_some(REGION_MISMATCH_PENALTY_WEIGHT)
             .unwrap_or(0.0);
         let seniority_penalty = seniority_alignment.penalty;
 
@@ -315,6 +318,8 @@ impl SearchMatchingService {
             )),
             work_mode_mismatch: matches!(work_mode_match, Some(false))
                 .then_some("Work mode mismatch penalty applied".to_string()),
+            region_mismatch: matches!(region_match, Some(false))
+                .then_some("Region mismatch penalty applied".to_string()),
             seniority_mismatch: match (
                 seniority_alignment.normalized_profile.as_deref(),
                 seniority_alignment.normalized_job.as_deref(),
@@ -347,6 +352,11 @@ impl SearchMatchingService {
                 penalty_reasons.work_mode_mismatch.clone(),
             ),
             penalty_entry(
+                "region_mismatch",
+                region_mismatch_penalty,
+                penalty_reasons.region_mismatch.clone(),
+            ),
+            penalty_entry(
                 "seniority_mismatch",
                 seniority_penalty,
                 penalty_reasons.seniority_mismatch.clone(),
@@ -359,6 +369,7 @@ impl SearchMatchingService {
             - exclude_penalty
             - role_alignment.mismatch_penalty
             - work_mode_penalty
+            - region_mismatch_penalty
             - seniority_penalty;
         let age_signal = assess_job_age(job);
         let freshness_score =
