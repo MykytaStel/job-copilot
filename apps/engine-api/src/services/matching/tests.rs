@@ -1029,6 +1029,259 @@ fn work_mode_match_and_mismatch_produce_explanation_reasons() {
 }
 
 #[test]
+fn region_no_preference_does_not_affect_score() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.target_regions = vec![];
+    profile.work_modes = vec![];
+
+    let eu_job = job_view(
+        "job-eu",
+        "Senior Backend Developer",
+        "Remote Europe role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    let us_job = job_view(
+        "job-us",
+        "Senior Backend Developer",
+        "USA-based role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+
+    let eu_fit = service.score_job_deterministic(&profile, &eu_job);
+    let us_fit = service.score_job_deterministic(&profile, &us_job);
+
+    assert_eq!(
+        eu_fit.score, us_fit.score,
+        "no region preference must not affect score: eu={}, us={}",
+        eu_fit.score, us_fit.score,
+    );
+    assert!(eu_fit.region_match.is_none());
+    assert!(us_fit.region_match.is_none());
+}
+
+#[test]
+fn region_match_applies_positive_score_effect() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.target_regions = vec![TargetRegion::EuRemote];
+    profile.work_modes = vec![];
+
+    let eu_remote_job = job_view(
+        "job-eu-remote",
+        "Senior Backend Developer",
+        "Remote Europe role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    let no_region_job = job_view(
+        "job-no-region",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        Some("remote"),
+        "djinni",
+    );
+
+    let eu_fit = service.score_job_deterministic(&profile, &eu_remote_job);
+    let no_region_fit = service.score_job_deterministic(&profile, &no_region_job);
+
+    assert!(
+        eu_fit.score > no_region_fit.score,
+        "matching region must score higher than unknown region: eu={}, no_region={}",
+        eu_fit.score,
+        no_region_fit.score,
+    );
+    assert_eq!(eu_fit.region_match, Some(true));
+    assert!(
+        eu_fit
+            .reasons
+            .iter()
+            .any(|r| r.contains("Target region matched")),
+        "matching region must produce a positive reason"
+    );
+}
+
+#[test]
+fn region_mismatch_applies_negative_score_effect() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.target_regions = vec![TargetRegion::Ua];
+    profile.work_modes = vec![];
+
+    let us_job = job_view(
+        "job-us",
+        "Senior Backend Developer",
+        "USA-based role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    let no_region_job = job_view(
+        "job-no-region",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role",
+        Some("remote"),
+        "djinni",
+    );
+
+    let us_fit = service.score_job_deterministic(&profile, &us_job);
+    let no_region_fit = service.score_job_deterministic(&profile, &no_region_job);
+
+    assert!(
+        us_fit.score < no_region_fit.score,
+        "mismatching region must score lower than unknown region: us={}, no_region={}",
+        us_fit.score,
+        no_region_fit.score,
+    );
+    assert_eq!(us_fit.region_match, Some(false));
+    assert!(
+        us_fit
+            .reasons
+            .iter()
+            .any(|r| r.contains("Region mismatch penalty applied")),
+        "mismatching region must produce a penalty reason"
+    );
+}
+
+#[test]
+fn unknown_job_region_does_not_penalize() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.target_regions = vec![TargetRegion::Ua];
+    profile.work_modes = vec![];
+
+    let no_region_job = job_view(
+        "job-no-region",
+        "Senior Backend Developer",
+        "Rust and Postgres platform role with strong architecture ownership",
+        Some("remote"),
+        "djinni",
+    );
+
+    let fit = service.score_job_deterministic(&profile, &no_region_job);
+
+    assert!(
+        fit.region_match.is_none(),
+        "unknown job region must return None match, got {:?}",
+        fit.region_match,
+    );
+    assert!(
+        !fit.score_breakdown
+            .penalties
+            .iter()
+            .any(|p| p.kind == "region_mismatch"),
+        "unknown job region must not produce a mismatch penalty entry"
+    );
+    assert!(
+        !fit.reasons
+            .iter()
+            .any(|r| r.contains("Region mismatch penalty applied")),
+        "unknown job region must not produce a mismatch reason"
+    );
+}
+
+#[test]
+fn remote_only_job_without_eu_keywords_does_not_produce_eu_remote_region() {
+    // `remote_type = "remote"` enables the is_remote flag inside detect_job_regions,
+    // but EuRemote detection also requires at least one EU-area keyword in the text.
+    // A plain remote job with no EU signals must return None, not Some(false).
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.target_regions = vec![TargetRegion::EuRemote];
+    profile.work_modes = vec![];
+
+    let remote_no_eu_job = job_view(
+        "job-remote-no-eu",
+        "Senior Backend Developer",
+        "Fully remote role with Rust and Postgres, open to candidates worldwide",
+        Some("remote"),
+        "djinni",
+    );
+
+    let fit = service.score_job_deterministic(&profile, &remote_no_eu_job);
+
+    assert!(
+        fit.region_match.is_none(),
+        "remote job without EU keywords must return None, not Some(false): got {:?}",
+        fit.region_match,
+    );
+    assert!(
+        !fit.score_breakdown
+            .penalties
+            .iter()
+            .any(|p| p.kind == "region_mismatch"),
+        "remote job without EU keywords must not produce a region_mismatch penalty"
+    );
+}
+
+#[test]
+fn region_score_stays_within_zero_to_one_hundred() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.target_regions = vec![TargetRegion::Ua];
+    profile.work_modes = vec![WorkMode::Remote];
+    profile.allowed_sources = vec![];
+
+    let mismatch_job = job_view(
+        "job-region-clamp",
+        "Pastry Chef",
+        "USA-based role preparing desserts",
+        Some("onsite"),
+        "djinni",
+    );
+
+    let fit = service.score_job_deterministic(&profile, &mismatch_job);
+
+    assert_eq!(
+        fit.score, fit.score_breakdown.total_score,
+        "fit.score and score_breakdown.total_score must stay in sync"
+    );
+    assert!(fit.score <= 100, "score must not exceed 100");
+}
+
+#[test]
+fn region_match_and_mismatch_produce_explanation_reasons() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.target_regions = vec![TargetRegion::EuRemote];
+    profile.work_modes = vec![];
+
+    let matching_job = job_view(
+        "job-region-match",
+        "Senior Backend Developer",
+        "Remote Europe role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    let mismatch_job = job_view(
+        "job-region-mismatch",
+        "Senior Backend Developer",
+        "USA-based Rust and Postgres role",
+        Some("remote"),
+        "djinni",
+    );
+
+    let match_fit = service.score_job_deterministic(&profile, &matching_job);
+    let mismatch_fit = service.score_job_deterministic(&profile, &mismatch_job);
+
+    assert!(
+        match_fit
+            .reasons
+            .iter()
+            .any(|r| r.contains("Target region matched")),
+        "matching region must include a positive explanation reason"
+    );
+    assert!(
+        mismatch_fit
+            .reasons
+            .iter()
+            .any(|r| r.contains("Region mismatch penalty applied")),
+        "mismatching region must include a penalty explanation reason"
+    );
+}
+
+#[test]
 fn score_never_goes_below_zero_for_irrelevant_old_job() {
     let service = SearchMatchingService::new();
     let profile = search_profile();
