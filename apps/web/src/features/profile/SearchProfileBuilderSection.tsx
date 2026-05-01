@@ -110,7 +110,7 @@ export function SearchProfileBuilderSection({
           />
         </div>
 
-        <div className="fieldGroup">
+        <div id="profile-field-preferred-roles" className="fieldGroup">
           <span className="fieldLabel">Preferred roles</span>
           {roles.length > 0 ? (
             <OptionCardGroup
