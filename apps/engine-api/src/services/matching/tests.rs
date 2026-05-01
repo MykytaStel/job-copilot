@@ -747,3 +747,108 @@ fn missing_signals_stay_specific_and_drop_generic_noise() {
     assert!(!fit.missing_signals.iter().any(|term| term == "developer"));
     assert!(!fit.missing_signals.iter().any(|term| term == "engineer"));
 }
+
+#[test]
+fn fresh_job_has_no_freshness_penalty() {
+    let service = SearchMatchingService::new();
+    let profile = search_profile();
+    let base = job_view(
+        "job-fresh-check",
+        "Senior Backend Developer",
+        "Remote EU role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    // Far-future date: always 0 days old regardless of when the test runs.
+    let fresh_job = JobView {
+        job: Job {
+            posted_at: Some("2099-01-01T00:00:00Z".to_string()),
+            last_seen_at: "2099-01-01T00:00:00Z".to_string(),
+            ..base.job.clone()
+        },
+        first_seen_at: "2099-01-01T00:00:00Z".to_string(),
+        ..base
+    };
+
+    let fit = service.score_job_deterministic(&profile, &fresh_job);
+
+    assert_eq!(
+        fit.score_breakdown.freshness_score, 0,
+        "job within 14-day grace period must have zero freshness score"
+    );
+    assert!(
+        !fit.reasons.iter().any(|r| r.contains("Job age penalty applied")),
+        "fresh job must not include an age penalty reason"
+    );
+}
+
+#[test]
+fn old_job_has_negative_freshness_score_and_reason() {
+    let service = SearchMatchingService::new();
+    let profile = search_profile();
+    let base = job_view(
+        "job-old-check",
+        "Senior Backend Developer",
+        "Remote EU role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    // Ancient date: always well past the 30-day maximum-penalty threshold.
+    let old_job = JobView {
+        job: Job {
+            posted_at: Some("2020-01-01T00:00:00Z".to_string()),
+            last_seen_at: "2020-01-01T00:00:00Z".to_string(),
+            ..base.job.clone()
+        },
+        first_seen_at: "2020-01-01T00:00:00Z".to_string(),
+        ..base
+    };
+
+    let fit = service.score_job_deterministic(&profile, &old_job);
+
+    assert!(
+        fit.score_breakdown.freshness_score < 0,
+        "job older than 14 days must have a negative freshness_score, got {}",
+        fit.score_breakdown.freshness_score
+    );
+    assert!(
+        fit.reasons.iter().any(|r| r.contains("Job age penalty applied")),
+        "old job must include an age penalty reason in the explanation"
+    );
+}
+
+#[test]
+fn score_never_goes_below_zero_for_irrelevant_old_job() {
+    let service = SearchMatchingService::new();
+    let profile = search_profile();
+    let base = job_view(
+        "job-irrelevant-old",
+        "Pastry Chef",
+        "Onsite confectionery role preparing desserts and pastries",
+        Some("onsite"),
+        "djinni",
+    );
+    // Completely irrelevant job content + ancient date = worst-case score without clamping.
+    let job = JobView {
+        job: Job {
+            posted_at: Some("2020-01-01T00:00:00Z".to_string()),
+            last_seen_at: "2020-01-01T00:00:00Z".to_string(),
+            ..base.job.clone()
+        },
+        first_seen_at: "2020-01-01T00:00:00Z".to_string(),
+        ..base
+    };
+
+    let fit = service.score_job_deterministic(&profile, &job);
+
+    // u8 can never be negative, but this guards against silent wrap-around
+    // if the clamp inside refresh_total were ever removed.
+    assert_eq!(
+        fit.score, fit.score_breakdown.total_score,
+        "fit.score and score_breakdown.total_score must stay in sync"
+    );
+    assert!(
+        fit.score_breakdown.freshness_score < 0,
+        "old irrelevant job must carry a freshness penalty"
+    );
+}
