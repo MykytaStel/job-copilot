@@ -777,7 +777,9 @@ fn fresh_job_has_no_freshness_penalty() {
         "job within 14-day grace period must have zero freshness score"
     );
     assert!(
-        !fit.reasons.iter().any(|r| r.contains("Job age penalty applied")),
+        !fit.reasons
+            .iter()
+            .any(|r| r.contains("Job age penalty applied")),
         "fresh job must not include an age penalty reason"
     );
 }
@@ -812,7 +814,9 @@ fn old_job_has_negative_freshness_score_and_reason() {
         fit.score_breakdown.freshness_score
     );
     assert!(
-        fit.reasons.iter().any(|r| r.contains("Job age penalty applied")),
+        fit.reasons
+            .iter()
+            .any(|r| r.contains("Job age penalty applied")),
         "old job must include an age penalty reason in the explanation"
     );
 }
