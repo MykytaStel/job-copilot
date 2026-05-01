@@ -37,7 +37,7 @@ pub fn job_age_score_delta(days_old: i64) -> i16 {
     match days_old {
         days if days >= 30 => -15,
         days if days >= 21 => -10,
-        days if days >= 14 => -5,
+        days if days >= 15 => -5,
         _ => 0,
     }
 }
@@ -107,8 +107,9 @@ mod tests {
     fn job_age_score_delta_covers_all_ranges() {
         assert_eq!(job_age_score_delta(0), 0);
         assert_eq!(job_age_score_delta(13), 0);
+        assert_eq!(job_age_score_delta(14), 0);
 
-        assert_eq!(job_age_score_delta(14), -5);
+        assert_eq!(job_age_score_delta(15), -5);
         assert_eq!(job_age_score_delta(20), -5);
 
         assert_eq!(job_age_score_delta(21), -10);
