@@ -88,7 +88,7 @@ pub(super) fn build_reasons(
     if !search_profile.target_regions.is_empty() {
         match input.region_match {
             Some(true) => reasons.push("Target region matched the job text".to_string()),
-            Some(false) => reasons.push("Target region did not match the job text".to_string()),
+            Some(false) => reasons.push("Region mismatch penalty applied".to_string()),
             None => reasons.push("Region could not be inferred from the job".to_string()),
         }
     }
