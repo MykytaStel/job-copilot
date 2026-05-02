@@ -1353,7 +1353,9 @@ fn salary_no_expectation_does_not_affect_score() {
         "no salary expectation must not affect salary score"
     );
     assert!(
-        !fit.reasons.iter().any(|r| r.to_lowercase().contains("salary")),
+        !fit.reasons
+            .iter()
+            .any(|r| r.to_lowercase().contains("salary")),
         "no salary expectation must not produce a salary reason"
     );
 }
@@ -1384,7 +1386,9 @@ fn salary_missing_job_salary_does_not_penalize() {
         "missing job salary must not affect salary score"
     );
     assert!(
-        !fit.reasons.iter().any(|r| r.to_lowercase().contains("below")),
+        !fit.reasons
+            .iter()
+            .any(|r| r.to_lowercase().contains("below")),
         "missing job salary must not produce a below-target reason"
     );
 }
@@ -1430,8 +1434,10 @@ fn salary_overlap_applies_positive_score_effect() {
     });
     let profile_without_salary = search_profile();
 
-    let with_salary_fit = service.score_job_deterministic(&profile_with_salary, &overlapping_salary_job);
-    let without_salary_fit = service.score_job_deterministic(&profile_without_salary, &no_salary_job);
+    let with_salary_fit =
+        service.score_job_deterministic(&profile_with_salary, &overlapping_salary_job);
+    let without_salary_fit =
+        service.score_job_deterministic(&profile_without_salary, &no_salary_job);
 
     assert!(
         with_salary_fit.score > without_salary_fit.score,
@@ -1534,7 +1540,9 @@ fn salary_unrecognized_currency_does_not_penalize() {
         fit.score_breakdown.salary_score,
     );
     assert!(
-        !fit.reasons.iter().any(|r| r.to_lowercase().contains("salary")),
+        !fit.reasons
+            .iter()
+            .any(|r| r.to_lowercase().contains("salary")),
         "unrecognized job currency must not produce a salary reason"
     );
 }

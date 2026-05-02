@@ -317,7 +317,10 @@ mod tests {
 
         let score = score_search_salary(Some(&expectation()), &gbp_job);
 
-        assert_eq!(score.score_delta, 0, "unrecognized currency must not affect score");
+        assert_eq!(
+            score.score_delta, 0,
+            "unrecognized currency must not affect score"
+        );
         assert!(score.reason.is_none());
         assert!(!score.missing_salary);
     }
