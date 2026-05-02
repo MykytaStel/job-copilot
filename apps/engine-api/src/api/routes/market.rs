@@ -37,7 +37,10 @@ pub struct MarketRolesQuery {
 
 fn live_fallback_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
-    headers.insert("x-market-data-source", HeaderValue::from_static("live-fallback"));
+    headers.insert(
+        "x-market-data-source",
+        HeaderValue::from_static("live-fallback"),
+    );
     headers
 }
 

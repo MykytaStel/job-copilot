@@ -1,9 +1,6 @@
 import argparse
 import json
 import logging
-import sys
-
-logger = logging.getLogger(__name__)
 
 from app.reranker_evaluation import OutcomeDataset, evaluate_dataset, temporal_train_test_split
 
@@ -21,6 +18,8 @@ from .features import clamp, extract_features, has_text
 from .lgbm_model import distill_lgbm_labels, lgbm_available, lgbm_candidate_available
 from .model import TrainedRerankerModel, sigmoid
 from .training import average_log_loss, dot, smoothed_logit, train_model
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "ARTIFACT_VERSION",
