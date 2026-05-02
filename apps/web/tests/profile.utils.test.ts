@@ -7,7 +7,7 @@ import {
   cleanupExtractedResumeText,
   extractPdfTextFromData,
   extractPdfTextFromItems,
-} from '../src/features/profile/profile.utils';
+} from '../src/features/profile/profile.pdf.utils';
 
 const FIXTURES_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), './fixtures');
 

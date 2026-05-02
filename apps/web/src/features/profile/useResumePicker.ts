@@ -1,7 +1,6 @@
 import { useRef } from 'react';
 
 import { useToast } from '../../context/ToastContext';
-import { cleanupExtractedResumeText, extractPdfText } from './profile.utils';
 
 export function useResumePicker(setRawText: (value: string) => void) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,6 +30,7 @@ export function useResumePicker(setRawText: (value: string) => void) {
     if (file.type === 'application/pdf') {
       const loadingId = showToast({ type: 'info', message: 'Читаємо PDF…', durationMs: 60_000 });
       try {
+        const { extractPdfText } = await import('./profile.pdf.utils');
         const text = await extractPdfText(file);
         dismissToast(loadingId);
         if (text.trim()) {
@@ -47,9 +47,14 @@ export function useResumePicker(setRawText: (value: string) => void) {
     }
 
     const reader = new FileReader();
-    reader.onload = (loadEvent) => {
+    reader.onload = async (loadEvent) => {
       const text = loadEvent.target?.result;
-      const cleanedText = typeof text === 'string' ? cleanupExtractedResumeText(text) : '';
+      if (typeof text !== 'string') {
+        showToast({ type: 'error', message: 'Помилка читання файлу' });
+        return;
+      }
+      const { cleanupExtractedResumeText } = await import('./profile.pdf.utils');
+      const cleanedText = cleanupExtractedResumeText(text);
       if (cleanedText.trim()) {
         setRawText(cleanedText);
         showToast({ type: 'success', message: `Файл завантажено: ${file.name}` });
