@@ -47,6 +47,9 @@
 		"typescript": "^5.9.2"
 	},
 	"pnpm": {
-		"onlyBuiltDependencies": ["lefthook"]
+		"onlyBuiltDependencies": ["lefthook"],
+		"overrides": {
+			"postcss": ">=8.5.10"
+		}
 	}
 }

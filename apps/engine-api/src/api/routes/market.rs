@@ -1,6 +1,6 @@
 use axum::Json;
 use axum::extract::{Path, Query, State};
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::IntoResponse;
 use serde::Deserialize;
 
@@ -37,7 +37,10 @@ pub struct MarketRolesQuery {
 
 fn live_fallback_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
-    headers.insert("x-market-data-source", "live-fallback".parse().unwrap());
+    headers.insert(
+        "x-market-data-source",
+        HeaderValue::from_static("live-fallback"),
+    );
     headers
 }
 

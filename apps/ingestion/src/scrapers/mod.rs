@@ -276,15 +276,11 @@ pub fn infer_company_size_hint(description: &str) -> Option<String> {
 }
 
 pub fn infer_company_industry_hint(description: &str) -> Option<String> {
-    for (label, aliases) in COMPANY_INDUSTRY_DICTIONARY {
-        if aliases
-            .iter()
-            .any(|alias| company_alias_re(alias).is_match(description))
-        {
-            return Some((*label).to_string());
+    for (label, re) in company_industry_regexes() {
+        if re.is_match(description) {
+            return Some(label.to_string());
         }
     }
-
     None
 }
 
@@ -555,12 +551,25 @@ fn company_enterprise_re() -> &'static Regex {
     })
 }
 
-fn company_alias_re(alias: &str) -> Regex {
-    let escaped = regex::escape(alias);
-    Regex::new(&format!(
-        r"(?iu)(^|[^\p{{L}}\p{{N}}]){escaped}($|[^\p{{L}}\p{{N}}])"
-    ))
-    .expect("valid company alias regex")
+fn company_industry_regexes() -> &'static Vec<(&'static str, Regex)> {
+    static RE: OnceLock<Vec<(&'static str, Regex)>> = OnceLock::new();
+    RE.get_or_init(|| {
+        COMPANY_INDUSTRY_DICTIONARY
+            .iter()
+            .map(|(label, aliases)| {
+                let pattern = aliases
+                    .iter()
+                    .map(|a| regex::escape(a))
+                    .collect::<Vec<_>>()
+                    .join("|");
+                let re = Regex::new(&format!(
+                    r"(?iu)(^|[^\p{{L}}\p{{N}}])({pattern})($|[^\p{{L}}\p{{N}}])"
+                ))
+                .expect("valid company industry regex");
+                (*label, re)
+            })
+            .collect()
+    })
 }
 
 pub const SKILL_DICTIONARY: &[(&str, &[&str])] = &[
@@ -594,18 +603,16 @@ pub const SKILL_DICTIONARY: &[(&str, &[&str])] = &[
 
 pub fn extract_skills(description: &str) -> Vec<String> {
     let searchable = skill_searchable_text(description);
-    let mut extracted = Vec::new();
-
-    for (skill, aliases) in SKILL_DICTIONARY {
-        if aliases
-            .iter()
-            .any(|alias| skill_alias_re(alias).is_match(&searchable))
-        {
-            extracted.push((*skill).to_string());
-        }
-    }
-
-    extracted
+    skill_regexes()
+        .iter()
+        .filter_map(|(skill, re)| {
+            if re.is_match(&searchable) {
+                Some(skill.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn skill_searchable_text(description: &str) -> String {
@@ -637,12 +644,25 @@ fn explicit_skill_prefix_re() -> &'static Regex {
     })
 }
 
-fn skill_alias_re(alias: &str) -> Regex {
-    let escaped = regex::escape(alias);
-    Regex::new(&format!(
-        r"(?iu)(^|[^\p{{L}}\p{{N}}]){escaped}($|[^\p{{L}}\p{{N}}])"
-    ))
-    .expect("valid skill alias regex")
+fn skill_regexes() -> &'static Vec<(&'static str, Regex)> {
+    static RE: OnceLock<Vec<(&'static str, Regex)>> = OnceLock::new();
+    RE.get_or_init(|| {
+        SKILL_DICTIONARY
+            .iter()
+            .map(|(skill, aliases)| {
+                let pattern = aliases
+                    .iter()
+                    .map(|a| regex::escape(a))
+                    .collect::<Vec<_>>()
+                    .join("|");
+                let re = Regex::new(&format!(
+                    r"(?iu)(^|[^\p{{L}}\p{{N}}])({pattern})($|[^\p{{L}}\p{{N}}])"
+                ))
+                .expect("valid skill regex");
+                (*skill, re)
+            })
+            .collect()
+    })
 }
 
 pub const EUR_TO_USD_RATE: f64 = 1.10;
