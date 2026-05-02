@@ -4,7 +4,11 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "W"]
-ignore = ["E501"]
+ignore = [
+    "E501",
+    "UP040",  # TypeAlias → type keyword (Python 3.12 syntax, optional)
+    "UP047",  # TypeVar via type params (Python 3.12 syntax, optional)
+]
 
 [tool.mypy]
 python_version = "3.12"

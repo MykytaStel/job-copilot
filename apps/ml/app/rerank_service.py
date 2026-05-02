@@ -3,10 +3,9 @@ import logging
 from dataclasses import dataclass
 from time import monotonic, perf_counter
 
-from app.api_models import RerankRequest, RerankResponse, RerankedJob
+from app.api_models import RerankedJob, RerankRequest, RerankResponse
 from app.engine_api_client import EngineApiClient
 from app.scoring import score_job, unique_preserving_order
-
 
 logger = logging.getLogger(__name__)
 

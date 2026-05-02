@@ -1,5 +1,5 @@
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.reranker_evaluation import OutcomeDataset, OutcomeExample
@@ -16,8 +16,8 @@ from app.reranker_signal_weights import (
 from .artifact import (
     DEFAULT_FEATURE_NAMES,
     FEATURE_TRANSFORMS,
-    TrainingSummary,
     TrainedRerankerArtifact,
+    TrainingSummary,
 )
 from .feature_stats import FeatureStatistics
 from .features import extract_features
@@ -216,7 +216,7 @@ def reference_now_timestamp(examples: list[OutcomeExample]) -> datetime:
     ]
     if observed_timestamps:
         return max(observed_timestamps)
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def parse_timestamp(value: str | None) -> datetime | None:
@@ -235,5 +235,5 @@ def parse_timestamp(value: str | None) -> datetime | None:
         return None
 
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)

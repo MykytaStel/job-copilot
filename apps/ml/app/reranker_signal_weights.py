@@ -3,7 +3,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 OutcomeSignalBucket = Literal[
     "applied",
     "dismissed",

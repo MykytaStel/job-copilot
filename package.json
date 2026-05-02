@@ -9,7 +9,7 @@
 		"lint:rust": "cargo clippy --manifest-path apps/engine-api/Cargo.toml -- -D warnings && cargo clippy --manifest-path apps/ingestion/Cargo.toml -- -D warnings",
 		"lint:python": "cd apps/ml && ruff check . && mypy app/ --ignore-missing-imports",
 		"typecheck": "pnpm -r typecheck",
-		"hooks:install": "lefthook install",
+		"hooks:install": "lefthook install --reset-hooks-path",
 		"docker:up": "docker compose -f infra/docker-compose.yml up --build -d",
 		"docker:up:trained": "TRAINED_RERANKER_ENABLED=true docker compose -f infra/docker-compose.yml up --build -d",
 		"docker:down": "docker compose -f infra/docker-compose.yml down",
@@ -43,6 +43,10 @@
 	"devDependencies": {
 		"concurrently": "^9.2.1",
 		"dotenv-cli": "^11.0.0",
+		"lefthook": "^2.1.6",
 		"typescript": "^5.9.2"
+	},
+	"pnpm": {
+		"onlyBuiltDependencies": ["lefthook"]
 	}
 }

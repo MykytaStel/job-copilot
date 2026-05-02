@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from time import perf_counter
-from typing import Any, Awaitable, Callable, TypeVar
-
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 

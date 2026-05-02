@@ -1,9 +1,7 @@
 import asyncio
 from typing import Any
 
-from app.cv_tailoring import (
-    CvTailoringRequest
-)
+from app.cv_tailoring import CvTailoringRequest
 from app.cv_tailoring_service import CvTailoringService
 from app.llm_provider_template import TemplateEnrichmentProvider
 

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -e
+
+echo "Running workspace typecheck..."
+pnpm typecheck
+
+echo "Running workspace build..."
+pnpm build
+
+echo "Running web tests..."
+pnpm --dir apps/web test
+
+echo "Running cargo checks..."
+cargo check --manifest-path apps/engine-api/Cargo.toml
+cargo check --manifest-path apps/ingestion/Cargo.toml
+
+echo "Pre-push checks passed."

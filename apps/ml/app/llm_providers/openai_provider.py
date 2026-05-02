@@ -45,7 +45,13 @@ class _OpenAIJsonSchemaProvider:
         timeout_seconds: float | None = None,
     ):
         try:
-            from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
+            from openai import (
+                APIConnectionError,
+                APITimeoutError,
+                InternalServerError,
+                OpenAI,
+                RateLimitError,
+            )
         except ImportError as exc:
             raise ProfileInsightsProviderError(
                 "OpenAI provider is configured but the openai package is not installed."

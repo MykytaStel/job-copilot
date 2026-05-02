@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import math
 from collections import Counter
 from dataclasses import dataclass
-import math
 
 from app.enrichment.resume_match.contract import (
     MAX_GAP_SUMMARY_LENGTH,

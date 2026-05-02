@@ -9,13 +9,13 @@ from .artifact import (
     DEFAULT_FEATURE_NAMES,
     FEATURE_TRANSFORMS,
     MODEL_TYPE,
-    TrainingSummary,
     TrainedRerankerArtifact,
+    TrainingSummary,
     load_dataset,
 )
 from .bpr_model import bpr_candidate_available, train_bpr_model
-from .lgbm_model import distill_lgbm_labels, lgbm_available, lgbm_candidate_available
 from .features import clamp, extract_features, has_text
+from .lgbm_model import distill_lgbm_labels, lgbm_available, lgbm_candidate_available
 from .model import TrainedRerankerModel, sigmoid
 from .training import average_log_loss, dot, smoothed_logit, train_model
 

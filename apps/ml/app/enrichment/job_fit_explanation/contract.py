@@ -3,12 +3,10 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.enrichment.shared_job_fit.contract import (
-    CurrentJobFeedbackState,
     DeterministicFitContext,
     FeedbackStateContext,
     RankedJobContext,
     SearchProfileContext,
-    SearchProfileRoleCandidate,
 )
 from app.enrichment.shared_profile.contract import (
     MAX_LIST_ITEMS,

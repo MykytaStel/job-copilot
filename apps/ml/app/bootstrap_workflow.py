@@ -5,8 +5,8 @@ import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from app.bootstrap_client import fetch_labeled_examples as fetch_labeled_examples_from_engine
 from app.bootstrap_benchmark import build_bpr_benchmark
+from app.bootstrap_client import fetch_labeled_examples as fetch_labeled_examples_from_engine
 from app.bootstrap_contract import BootstrapWorkflowResult
 from app.bootstrap_feature_selection import select_feature_set
 from app.bootstrap_label_policy import (

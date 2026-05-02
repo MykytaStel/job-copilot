@@ -4,9 +4,9 @@ from app.api_models import (
     FitAnalyzeRequest,
     FitAnalyzeResponse,
     HealthResponse,
+    RerankedJob,
     RerankRequest,
     RerankResponse,
-    RerankedJob,
 )
 
 __all__ = [

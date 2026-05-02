@@ -3,9 +3,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.enrichment.shared_profile.contract import (
-    LIST_PREFIX_RE,
     MAX_LIST_ITEMS,
-    WHITESPACE_RE,
     LlmContextAnalyzedProfile,
     LlmContextEvidenceEntry,
     LlmContextFeedbackSummary,

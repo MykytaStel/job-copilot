@@ -8,10 +8,10 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, field_validator
 
-logger = logging.getLogger(__name__)
-
 from app.dataset import OutcomeDataset
 from app.settings import RuntimeSettings, get_runtime_settings
+
+logger = logging.getLogger(__name__)
 
 
 class EngineApiError(BaseModel):

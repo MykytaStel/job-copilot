@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from app.reranker_evaluation import OutcomeDataset, OutcomeExample
 from app.reranker_signal_weights import (
     DEFAULT_OUTCOME_CONFIDENCE_WEIGHTS,
     DEFAULT_OUTCOME_SIGNAL_WEIGHTS,
@@ -11,7 +12,6 @@ from app.reranker_signal_weights import (
     confidence_weight_for_example,
     training_target_for_example,
 )
-from app.reranker_evaluation import OutcomeDataset, OutcomeExample
 
 from .artifact import DEFAULT_FEATURE_NAMES
 from .features import extract_features
