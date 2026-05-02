@@ -125,7 +125,6 @@ ingestion (Rust) ─→ PostgreSQL ←─ engine-api (Rust) ←─ web (React)
 ## 8. Operational Notes
 
 - Active web shell runtime path: `apps/web/src/App.tsx` -> `apps/web/src/AppShell.tsx`
-- `apps/web/src/AppShellNew.tsx` is a legacy alias only
 - Market endpoints currently aggregate directly from `jobs`; `market_snapshots` is now refreshed by ingestion after successful upserts
 - PostgreSQL extension recommendations for self-hosted PG16: `docs/04-development/postgres-extensions.md`
 - Verification commands per app: `docs/04-development/verification-matrix.md`
