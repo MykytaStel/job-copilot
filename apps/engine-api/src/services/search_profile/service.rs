@@ -73,6 +73,7 @@ impl SearchProfileService {
             search_terms,
             exclude_terms,
             scoring_weights: preferences.scoring_weights.clone().normalized(),
+            salary_expectation: None,
         }
     }
 }

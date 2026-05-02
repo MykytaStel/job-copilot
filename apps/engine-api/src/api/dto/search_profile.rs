@@ -308,6 +308,7 @@ impl From<SearchProfile> for SearchProfileResponse {
             search_terms,
             exclude_terms,
             scoring_weights,
+            salary_expectation: _,
         } = search_profile;
 
         Self {
@@ -559,6 +560,7 @@ mod tests {
             search_terms: vec!["react native developer".to_string()],
             exclude_terms: vec!["gambling".to_string()],
             scoring_weights: Default::default(),
+            salary_expectation: None,
         });
 
         assert_eq!(response.primary_role, "mobile_engineer");
