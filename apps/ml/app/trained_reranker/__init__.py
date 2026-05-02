@@ -1,6 +1,9 @@
 import argparse
 import json
+import logging
 import sys
+
+logger = logging.getLogger(__name__)
 
 from app.reranker_evaluation import OutcomeDataset, evaluate_dataset, temporal_train_test_split
 
@@ -93,7 +96,7 @@ def main() -> None:
         )
         model.save(args.output)
     except (OSError, ValueError, json.JSONDecodeError) as error:
-        print(f"error: {error}", file=sys.stderr)
+        logger.error("training failed: %s", error)
         raise SystemExit(1) from error
 
     summary = evaluate_dataset(

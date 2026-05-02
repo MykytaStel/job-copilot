@@ -7,7 +7,7 @@ use crate::state::AppState;
 use axum::Router;
 use axum::http::{HeaderValue, Method, Request};
 use axum_prometheus::{EndpointLabel, PrometheusMetricLayerBuilder};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::request_id::{
     MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer,
 };
@@ -99,5 +99,9 @@ fn build_cors_layer(state: &AppState) -> CorsLayer {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        .allow_headers(Any)
+        .allow_headers([
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::ACCEPT,
+        ])
 }

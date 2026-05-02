@@ -185,12 +185,12 @@ services:
 
   # ── Grafana ─────────────────────────────────────────────────────────────────
   # Pre-provisioned with Prometheus datasource and engine-api dashboard.
-  # UI: http://localhost:3001  login: admin / admin
+  # UI: http://localhost:3001  login: admin / ${GRAFANA_ADMIN_PASSWORD:-change-me-in-prod}
   grafana:
     image: grafana/grafana:10.3.3
     container_name: job-copilot-grafana
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-change-me-in-prod}"
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
