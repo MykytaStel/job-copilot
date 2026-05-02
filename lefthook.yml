@@ -1,15 +1,14 @@
 pre-commit:
   parallel: true
   commands:
-    cargo-fmt-engine:
-      glob: "apps/engine-api/**/*.rs"
-      run: cargo fmt --manifest-path apps/engine-api/Cargo.toml -- --check
-    cargo-fmt-ingestion:
-      glob: "apps/ingestion/**/*.rs"
-      run: cargo fmt --manifest-path apps/ingestion/Cargo.toml -- --check
+    cargo-fmt:
+      glob: "apps/{engine-api,ingestion}/**/*.rs"
+      run: cargo fmt --all -- --check
+
     web-eslint:
       glob: "apps/web/**/*.{ts,tsx}"
       run: pnpm --dir apps/web eslint .
+
     python-ruff:
       glob: "apps/ml/**/*.py"
       run: cd apps/ml && ruff check .
@@ -17,11 +16,8 @@ pre-commit:
 pre-push:
   parallel: true
   commands:
-    cargo-clippy-engine:
-      run: cargo clippy --manifest-path apps/engine-api/Cargo.toml -- -D warnings
-    cargo-clippy-ingestion:
-      run: cargo clippy --manifest-path apps/ingestion/Cargo.toml -- -D warnings
-    cargo-test-engine:
-      run: cargo test --manifest-path apps/engine-api/Cargo.toml
-    cargo-test-ingestion:
-      run: cargo test --manifest-path apps/ingestion/Cargo.toml
+    cargo-clippy:
+      run: cargo clippy --workspace --all-targets -- -D warnings
+
+    cargo-test:
+      run: cargo test --workspace
