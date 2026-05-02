@@ -29,6 +29,7 @@ apps/ml/models/
 apps/ml/reports/
 apps/ml/.runtime/
 apps/ml/.bootstrap-locks/
+.bootstrap-locks/
 
 .DS_Store
 __MACOSX/
