@@ -6,8 +6,8 @@ from app.reranker_evaluation import OutcomeDataset, OutcomeExample
 from .artifact import (
     DEFAULT_FEATURE_NAMES,
     FEATURE_TRANSFORMS,
-    TrainingSummary,
     TrainedRerankerArtifact,
+    TrainingSummary,
 )
 from .feature_stats import FeatureStatistics
 from .features import extract_features

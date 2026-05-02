@@ -1,5 +1,5 @@
-from app.trained_reranker.lgbm_model import lgbm_available, lgbm_candidate_available
 from app.dataset import OutcomeDataset, OutcomeExample, OutcomeRankingFeatures, OutcomeSignals
+from app.trained_reranker.lgbm_model import lgbm_available, lgbm_candidate_available
 
 
 def sample_example(label: str) -> OutcomeExample:

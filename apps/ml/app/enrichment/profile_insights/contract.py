@@ -3,9 +3,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.enrichment.shared_profile.contract import (
-    LIST_PREFIX_RE,
+    LIST_PREFIX_RE,  # noqa: F401
     MAX_LIST_ITEMS,
-    WHITESPACE_RE,
+    WHITESPACE_RE,  # noqa: F401
     LlmContextAnalyzedProfile,
     LlmContextEvidenceEntry,
     LlmContextFeedbackSummary,

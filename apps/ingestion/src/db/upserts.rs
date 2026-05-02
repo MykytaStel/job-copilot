@@ -610,6 +610,7 @@ fn levenshtein(left: &str, right: &str) -> usize {
     previous[right_chars.len()]
 }
 
+#[allow(clippy::too_many_arguments)]
 fn salary_matches(
     left_min: Option<i32>,
     left_max: Option<i32>,
@@ -753,18 +754,17 @@ async fn validate_dedupe_transition(
 
     if let Some(conflict_job_id) =
         existing_job_id_for_dedupe_key(tx, &incoming_variant.dedupe_key).await?
+        && conflict_job_id != existing_variant.job_id
     {
-        if conflict_job_id != existing_variant.job_id {
-            return Err(format!(
-                "source variant '{}:{}' changed dedupe fingerprint from '{}' to '{}' but the new fingerprint already belongs to canonical job '{}' instead of '{}'",
-                incoming_variant.source,
-                incoming_variant.source_job_id,
-                existing_variant.dedupe_key,
-                incoming_variant.dedupe_key,
-                conflict_job_id,
-                existing_variant.job_id
-            ));
-        }
+        return Err(format!(
+            "source variant '{}:{}' changed dedupe fingerprint from '{}' to '{}' but the new fingerprint already belongs to canonical job '{}' instead of '{}'",
+            incoming_variant.source,
+            incoming_variant.source_job_id,
+            existing_variant.dedupe_key,
+            incoming_variant.dedupe_key,
+            conflict_job_id,
+            existing_variant.job_id
+        ));
     }
 
     warn!(

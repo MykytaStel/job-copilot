@@ -5,7 +5,6 @@ from typing import Any
 
 from app.enrichment.cv_tailoring.contract import CvTailoringRequest
 
-
 COMMON_SKILL_ALIASES: dict[str, list[str]] = {
     "react": ["react", "react.js", "reactjs"],
     "react native": ["react native", "rn"],

@@ -62,7 +62,7 @@ def register_health_routes(application: FastAPI, settings: RuntimeSettings) -> N
                 status=ingestion_payload.get("status", "stale"),
                 last_run_at=ingestion_payload.get("last_run_at"),
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "engine-api readiness probe timed out",
                 extra={"timeout_seconds": timeout_seconds, "request_id": request_id or "-"},

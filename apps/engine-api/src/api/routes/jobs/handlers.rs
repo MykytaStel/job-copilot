@@ -139,7 +139,7 @@ pub async fn get_recent_jobs(
     let feedback_duration_ms = feedback_started_at.elapsed().as_millis();
     let jobs: Vec<JobResponse> = jobs
         .into_iter()
-        .zip(feedback_states.into_iter())
+        .zip(feedback_states)
         .filter(|(_, feedback)| !feedback.hidden)
         .map(|(job, feedback)| JobResponse::from_view_with_feedback(job, feedback))
         .collect();

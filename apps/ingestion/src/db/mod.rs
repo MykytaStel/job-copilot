@@ -17,7 +17,7 @@ mod reconciliation;
 mod snapshots;
 mod upserts;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct UpsertSummary {
     pub jobs_written: usize,
     pub variants_created: usize,
@@ -27,21 +27,6 @@ pub struct UpsertSummary {
     pub jobs_inactivated: usize,
     pub jobs_reactivated: usize,
     pub sources_refreshed: usize,
-}
-
-impl Default for UpsertSummary {
-    fn default() -> Self {
-        Self {
-            jobs_written: 0,
-            variants_created: 0,
-            variants_updated: 0,
-            variants_unchanged: 0,
-            variants_inactivated: 0,
-            jobs_inactivated: 0,
-            jobs_reactivated: 0,
-            sources_refreshed: 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

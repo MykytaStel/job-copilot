@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from app.reranker_evaluation import OutcomeDataset, OutcomeExample
 from app.reranker_signal_weights import (
     DEFAULT_OUTCOME_CONFIDENCE_WEIGHTS,
     DEFAULT_OUTCOME_SIGNAL_WEIGHTS,
@@ -11,7 +12,6 @@ from app.reranker_signal_weights import (
     confidence_weight_for_example,
     training_target_for_example,
 )
-from app.reranker_evaluation import OutcomeDataset, OutcomeExample
 
 from .artifact import DEFAULT_FEATURE_NAMES
 from .features import extract_features
@@ -103,7 +103,7 @@ def distill_lgbm_labels(
     }
     try:
         model = lgb.train(params, dataset, num_boost_round=num_boost_round, callbacks=[lgb.log_evaluation(period=-1)])
-        soft_labels: list[float] = model.predict(X).tolist()
+        soft_labels: list[float] = model.predict(X).tolist()  # type: ignore[union-attr]
         logger.info(
             "lgbm distillation: trained on %d examples, avg soft label=%.4f",
             len(examples),

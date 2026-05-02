@@ -3,9 +3,9 @@ from app.api_models import (
     BootstrapResponse,
     FitAnalyzeRequest,
     FitAnalyzeResponse,
+    RerankedJob,
     RerankRequest,
     RerankResponse,
-    RerankedJob,
 )
 
 __all__ = [

@@ -5,8 +5,8 @@ from app.dataset import OutcomeDataset, OutcomeExample, OutcomeRankingFeatures, 
 from app.evaluation import (
     evaluate_dataset,
     evaluate_variant,
-    temporal_train_test_split,
     resolve_signal_weights,
+    temporal_train_test_split,
     variant_score,
 )
 from app.metrics import (
@@ -50,7 +50,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    with open(args.dataset_json, "r", encoding="utf-8") as handle:
+    with open(args.dataset_json, encoding="utf-8") as handle:
         payload = json.load(handle)
 
     trained_model = None

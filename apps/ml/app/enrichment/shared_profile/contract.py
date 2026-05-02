@@ -3,7 +3,6 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 MAX_LIST_ITEMS = 6
 WHITESPACE_RE = re.compile(r"\s+")
 LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*•]+|\d+\.)\s*")

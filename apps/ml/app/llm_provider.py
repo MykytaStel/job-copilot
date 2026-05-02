@@ -1,11 +1,3 @@
-from app.llm_provider_types import (
-    ApplicationCoachProvider,
-    CoverLetterDraftProvider,
-    InterviewPrepProvider,
-    JobFitExplanationProvider,
-    ProfileInsightsProvider,
-    WeeklyGuidanceProvider,
-)
 from app.llm_provider_factory import (
     build_application_coach_provider,
     build_cover_letter_draft_provider,
@@ -16,6 +8,14 @@ from app.llm_provider_factory import (
 )
 from app.llm_provider_remote import OllamaEnrichmentProvider, OpenAIEnrichmentProvider
 from app.llm_provider_template import TemplateEnrichmentProvider
+from app.llm_provider_types import (
+    ApplicationCoachProvider,
+    CoverLetterDraftProvider,
+    InterviewPrepProvider,
+    JobFitExplanationProvider,
+    ProfileInsightsProvider,
+    WeeklyGuidanceProvider,
+)
 
 __all__ = [
     "ProfileInsightsProvider",

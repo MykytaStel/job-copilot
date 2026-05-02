@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 import httpx
 import pytest
 
-from app import bootstrap_client, bootstrap_training, engine_api_client as engine_api_client_module
+from app import bootstrap_client, bootstrap_training
+from app import engine_api_client as engine_api_client_module
 from app.api_models import BootstrapRequest
 from app.bootstrap_contract import BootstrapWorkflowResult
 from app.engine_api_client import EngineApiClient, EngineApiResponseError, EngineApiUnavailableError

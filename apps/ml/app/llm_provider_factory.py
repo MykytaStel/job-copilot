@@ -8,7 +8,6 @@ from app.llm_provider_remote import OllamaEnrichmentProvider, OpenAIEnrichmentPr
 from app.llm_provider_template import TemplateEnrichmentProvider
 from app.settings import get_runtime_settings
 
-
 EnrichmentProvider = (
     TemplateEnrichmentProvider | OpenAIEnrichmentProvider | OllamaEnrichmentProvider
 )

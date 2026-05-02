@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fcntl
+from io import TextIOWrapper
 from pathlib import Path
 
 
@@ -11,7 +12,7 @@ class ProfileBootstrapAlreadyRunningError(Exception):
 class ProfileBootstrapLock:
     def __init__(self, lock_path: Path) -> None:
         self._lock_path = lock_path
-        self._handle = None
+        self._handle: TextIOWrapper | None = None
 
     def acquire(self) -> None:
         self._lock_path.parent.mkdir(parents=True, exist_ok=True)

@@ -699,6 +699,7 @@ pub fn normalize_salary_to_usd_monthly(
     )
 }
 
+#[allow(clippy::type_complexity)]
 pub fn parse_salary_range_with_usd_monthly(
     text: &str,
 ) -> (

@@ -522,7 +522,7 @@ fn extract_rich_text(document: &Html, selectors: &[&str]) -> Option<String> {
 /// Extract numeric job ID from a Work.ua job URL.
 /// "/job/87654321/" → "87654321"
 fn extract_job_id(href: &str) -> Option<String> {
-    let id = href.trim_matches('/').split('/').last()?;
+    let id = href.trim_matches('/').split('/').next_back()?;
     if !id.is_empty() && id.chars().all(|c| c.is_ascii_digit()) {
         Some(id.to_string())
     } else {

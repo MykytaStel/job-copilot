@@ -7,6 +7,8 @@ from app.bootstrap_client import fetch_labeled_examples as _fetch_labeled_exampl
 from app.bootstrap_contract import BootstrapWorkflowResult
 from app.bootstrap_workflow import (
     DEFAULT_MODEL_PATH as _DEFAULT_MODEL_PATH,
+)
+from app.bootstrap_workflow import (
     bootstrap_and_retrain as _bootstrap_and_retrain,
 )
 from app.trained_reranker_config import DEFAULT_TRAINED_RERANKER_MODEL_PATH

@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-from app.bootstrap_contract import BootstrapWorkflowResult
 from app.bootstrap_workflow import bootstrap_and_retrain
 from app.dataset import OutcomeDataset, OutcomeExample, OutcomeRankingFeatures, OutcomeSignals
 
