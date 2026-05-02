@@ -64,6 +64,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -72,8 +74,17 @@ jobs:
             apps/engine-api
             apps/ingestion
 
-      - name: Cargo fmt
+      - name: Cargo fmt (engine-api)
         run: cargo fmt --manifest-path apps/engine-api/Cargo.toml --all -- --check
+
+      - name: Cargo fmt (ingestion)
+        run: cargo fmt --manifest-path apps/ingestion/Cargo.toml --all -- --check
+
+      - name: Cargo clippy (engine-api)
+        run: cargo clippy --manifest-path apps/engine-api/Cargo.toml -- -D warnings
+
+      - name: Cargo clippy (ingestion)
+        run: cargo clippy --manifest-path apps/ingestion/Cargo.toml -- -D warnings
 
       - name: Cargo check engine-api
         run: cargo check --manifest-path apps/engine-api/Cargo.toml
@@ -107,6 +118,12 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r apps/ml/requirements-dev.txt
+
+      - name: Lint with ruff
+        run: cd apps/ml && ruff check .
+
+      - name: Type check with mypy
+        run: cd apps/ml && mypy app/ --ignore-missing-imports
 
       - name: Run ML tests
         run: pytest apps/ml/tests/ -v --tb=short

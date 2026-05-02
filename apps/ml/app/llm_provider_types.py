@@ -8,6 +8,7 @@ from app.enrichment.cover_letter_draft.contract import (
     CoverLetterDraftPrompt,
     CoverLetterDraftRequest,
 )
+from app.enrichment.cv_tailoring.contract import CvTailoringPrompt, CvTailoringRequest
 from app.enrichment.interview_prep.contract import InterviewPrepPrompt, InterviewPrepRequest
 from app.enrichment.job_fit_explanation.contract import (
     JobFitExplanationPrompt,
@@ -17,7 +18,6 @@ from app.enrichment.profile_insights.contract import (
     LlmContextRequest,
     ProfileInsightsPrompt,
 )
-from app.enrichment.cv_tailoring.contract import CvTailoringPrompt, CvTailoringRequest
 from app.enrichment.weekly_guidance.contract import WeeklyGuidanceRequest
 from app.enrichment.weekly_guidance.prompt import WeeklyGuidancePrompt
 

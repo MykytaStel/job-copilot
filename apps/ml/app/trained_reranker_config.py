@@ -1,6 +1,5 @@
-from pathlib import Path
 import re
-
+from pathlib import Path
 
 _PROFILE_SEGMENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
 

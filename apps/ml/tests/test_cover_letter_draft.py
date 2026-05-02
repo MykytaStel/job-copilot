@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.api import app
 from app.cover_letter_draft import (
     MAX_BODY_PARAGRAPHS,
     MAX_PARAGRAPH_LENGTH,
@@ -9,7 +10,6 @@ from app.cover_letter_draft import (
     build_cover_letter_draft_prompt,
     parse_cover_letter_draft_output,
 )
-from app.api import app
 from app.cover_letter_draft_service import CoverLetterDraftService
 from app.service_dependencies import get_cover_letter_draft_service
 

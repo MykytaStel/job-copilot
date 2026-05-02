@@ -670,6 +670,7 @@ fn preference_array(preferences: &Option<Json<serde_json::Value>>, key: &str) ->
         .unwrap_or_default()
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn insert_job_alert_notification(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     profile_id: &str,

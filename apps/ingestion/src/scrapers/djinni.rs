@@ -837,7 +837,7 @@ fn extract_datetime(document: &Html) -> Option<String> {
 /// Extract numeric job ID from a Djinni job slug.
 /// "/jobs/12345-senior-rust-engineer/" → "12345"
 fn extract_job_id(href: &str) -> Option<String> {
-    let slug = href.trim_matches('/').split('/').last()?;
+    let slug = href.trim_matches('/').split('/').next_back()?;
     let id_part = slug.split('-').next()?;
     if !id_part.is_empty() && id_part.chars().all(|c| c.is_ascii_digit()) {
         Some(id_part.to_string())

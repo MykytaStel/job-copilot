@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -10,7 +9,6 @@ from app.reranker_signal_weights import (
     DEFAULT_OUTCOME_SIGNAL_WEIGHTS,
 )
 from app.trained_reranker.feature_stats import FeatureStatistics
-
 
 ARTIFACT_VERSION = "trained_reranker_v3"
 MODEL_TYPE = "logistic_regression"
@@ -102,13 +100,13 @@ class TrainedRerankerArtifact(BaseModel):
     signal_bucket_distribution: dict[str, float] = Field(default_factory=dict)
     distribution_shift_score: float | None = None
     lgbm_distilled: bool = False
-    feature_statistics: Optional[FeatureStatistics] = None
+    feature_statistics: FeatureStatistics | None = None
     intercept: float
     max_score_delta: int = Field(default=8, ge=1, le=20)
     training: TrainingSummary
 
 
 def load_dataset(path: str | Path) -> OutcomeDataset:
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         payload = json.load(handle)
     return OutcomeDataset.model_validate(payload)

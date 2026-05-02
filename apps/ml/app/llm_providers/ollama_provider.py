@@ -36,7 +36,6 @@ from app.enrichment.weekly_guidance.prompt import WeeklyGuidancePrompt
 from app.llm_providers.common import build_async_client, build_async_retrying
 from app.settings import DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
 
-
 RETRYABLE_OLLAMA_ERRORS = (
     httpx.ConnectError,
     httpx.PoolTimeout,

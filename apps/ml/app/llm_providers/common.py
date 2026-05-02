@@ -1,7 +1,13 @@
 from typing import TypeAlias
 
 import httpx
-from tenacity import AsyncRetrying, Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    AsyncRetrying,
+    Retrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from app.enrichment.application_coach.contract import ApplicationCoachPrompt
 from app.enrichment.cover_letter_draft.contract import CoverLetterDraftPrompt
@@ -11,7 +17,6 @@ from app.enrichment.job_fit_explanation.contract import JobFitExplanationPrompt
 from app.enrichment.profile_insights.contract import ProfileInsightsPrompt
 from app.enrichment.weekly_guidance.prompt import WeeklyGuidancePrompt
 from app.settings import DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
-
 
 PromptPayload: TypeAlias = (
     ProfileInsightsPrompt

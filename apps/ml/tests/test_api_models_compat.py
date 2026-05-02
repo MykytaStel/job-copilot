@@ -1,5 +1,7 @@
 from app.api_models import (
     BootstrapRequest as CanonicalBootstrapRequest,
+)
+from app.api_models import (
     FitAnalyzeRequest as CanonicalFitAnalyzeRequest,
 )
 from app.models import BootstrapRequest as LegacyBootstrapRequest

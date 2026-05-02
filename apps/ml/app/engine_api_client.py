@@ -8,10 +8,10 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, field_validator
 
-logger = logging.getLogger(__name__)
-
 from app.dataset import OutcomeDataset
 from app.settings import RuntimeSettings, get_runtime_settings
+
+logger = logging.getLogger(__name__)
 
 
 class EngineApiError(BaseModel):
@@ -140,9 +140,9 @@ def build_shared_http_client(settings: RuntimeSettings) -> httpx.AsyncClient:
         "headers": headers or None,
     }
     try:
-        return httpx.AsyncClient(**kwargs)
+        return httpx.AsyncClient(**kwargs)  # type: ignore[arg-type]
     except TypeError:
-        return httpx.AsyncClient(timeout=kwargs["timeout"])
+        return httpx.AsyncClient(timeout=kwargs["timeout"])  # type: ignore[arg-type]
 
 
 _shared_client: httpx.AsyncClient | None = None

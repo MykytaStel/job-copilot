@@ -1,6 +1,5 @@
 import re
 
-
 NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 
 RAW_ALIAS_REPLACEMENTS: tuple[tuple[str, str], ...] = (

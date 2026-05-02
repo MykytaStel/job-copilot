@@ -1,10 +1,10 @@
 from app.enrichment.cv_tailoring import (
     CvTailoringGapItem,
-    CvTailoringSuggestions,
-    CvTailoringRequest,
-    CvTailoringResponse,
     CvTailoringPrompt,
     CvTailoringProviderError,
+    CvTailoringRequest,
+    CvTailoringResponse,
+    CvTailoringSuggestions,
     MalformedCvTailoringOutputError,
     build_cv_tailoring_prompt,
     cv_tailoring_suggestions_schema,

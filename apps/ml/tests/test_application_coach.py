@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.api import app
 from app.application_coach import (
     ApplicationCoachRequest,
     ApplicationCoachResponse,
@@ -7,7 +8,6 @@ from app.application_coach import (
     build_application_coach_prompt,
     parse_application_coach_output,
 )
-from app.api import app
 from app.application_coach_service import ApplicationCoachService
 from app.service_dependencies import get_application_coach_service
 

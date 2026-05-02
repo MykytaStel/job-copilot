@@ -3,10 +3,9 @@ import logging
 from dataclasses import dataclass
 from time import monotonic, perf_counter
 
-from app.api_models import RerankRequest, RerankResponse, RerankedJob
+from app.api_models import RerankedJob, RerankRequest, RerankResponse
 from app.engine_api_client import EngineApiClient
 from app.scoring import score_job, unique_preserving_order
-
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +59,7 @@ class RerankService:
 
         jobs = []
         for job_id, result in zip(unique_job_ids, raw_results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.warning(
                     "failed to fetch job lifecycle",
                     extra={"job_id": job_id, "error": str(result)},

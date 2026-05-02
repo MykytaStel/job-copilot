@@ -6,7 +6,11 @@ import httpx
 import pytest
 
 from app.llm_provider_remote import OllamaEnrichmentProvider, OpenAIEnrichmentProvider
-from app.profile_insights import LlmContextRequest, ProfileInsightsPrompt, ProfileInsightsProviderError
+from app.profile_insights import (
+    LlmContextRequest,
+    ProfileInsightsPrompt,
+    ProfileInsightsProviderError,
+)
 
 
 def sample_context() -> LlmContextRequest:

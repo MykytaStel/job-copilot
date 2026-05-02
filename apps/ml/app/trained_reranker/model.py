@@ -30,7 +30,7 @@ class TrainedRerankerModel:
 
     @classmethod
     def load(cls, path: str | Path) -> "TrainedRerankerModel":
-        with open(path, "r", encoding="utf-8") as handle:
+        with open(path, encoding="utf-8") as handle:
             payload = json.load(handle)
         return cls(TrainedRerankerArtifact.model_validate(payload))
 

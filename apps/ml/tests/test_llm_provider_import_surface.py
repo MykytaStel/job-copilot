@@ -7,16 +7,16 @@ from typing import Any, get_args
 
 from app.application_coach import ApplicationCoachRequest as LegacyApplicationCoachRequest
 from app.cover_letter_draft import CoverLetterDraftRequest as LegacyCoverLetterDraftRequest
-from app.interview_prep import InterviewPrepRequest as LegacyInterviewPrepRequest
-from app.job_fit_explanation import JobFitExplanationRequest as LegacyJobFitExplanationRequest
-from app.profile_insights import LlmContextRequest as LegacyLlmContextRequest
-from app.weekly_guidance import WeeklyGuidanceRequest as LegacyWeeklyGuidanceRequest
 from app.enrichment.application_coach import ApplicationCoachPrompt, ApplicationCoachRequest
 from app.enrichment.cover_letter_draft import CoverLetterDraftPrompt, CoverLetterDraftRequest
 from app.enrichment.interview_prep import InterviewPrepPrompt, InterviewPrepRequest
 from app.enrichment.job_fit_explanation import (
     JobFitExplanationPrompt,
     JobFitExplanationRequest,
+)
+from app.enrichment.profile_insights import LlmContextRequest, ProfileInsightsPrompt
+from app.enrichment.profile_insights.contract import (
+    MAX_LIST_ITEMS as ProfileInsightsMaxListItems,
 )
 from app.enrichment.profile_insights.contract import (
     LlmContextAnalyzedProfile as ProfileInsightsLlmContextAnalyzedProfile,
@@ -27,10 +27,6 @@ from app.enrichment.profile_insights.contract import (
 from app.enrichment.profile_insights.contract import (
     LlmContextFeedbackSummary as ProfileInsightsLlmContextFeedbackSummary,
 )
-from app.enrichment.profile_insights.contract import (
-    MAX_LIST_ITEMS as ProfileInsightsMaxListItems,
-)
-from app.enrichment.profile_insights import LlmContextRequest, ProfileInsightsPrompt
 from app.enrichment.profile_insights.contract import sanitize_text as profile_insights_sanitize_text
 from app.enrichment.shared_job_fit.contract import (
     CurrentJobFeedbackState as SharedCurrentJobFeedbackState,
@@ -38,12 +34,17 @@ from app.enrichment.shared_job_fit.contract import (
 from app.enrichment.shared_job_fit.contract import (
     DeterministicFitContext as SharedDeterministicFitContext,
 )
-from app.enrichment.shared_job_fit.contract import FeedbackStateContext as SharedFeedbackStateContext
+from app.enrichment.shared_job_fit.contract import (
+    FeedbackStateContext as SharedFeedbackStateContext,
+)
 from app.enrichment.shared_job_fit.contract import RankedJobContext as SharedRankedJobContext
-from app.enrichment.shared_job_fit.contract import SearchProfileContext as SharedSearchProfileContext
+from app.enrichment.shared_job_fit.contract import (
+    SearchProfileContext as SharedSearchProfileContext,
+)
 from app.enrichment.shared_job_fit.contract import (
     SearchProfileRoleCandidate as SharedSearchProfileRoleCandidate,
 )
+from app.enrichment.shared_profile.contract import MAX_LIST_ITEMS as SharedMaxListItems
 from app.enrichment.shared_profile.contract import (
     LlmContextAnalyzedProfile as SharedLlmContextAnalyzedProfile,
 )
@@ -53,9 +54,10 @@ from app.enrichment.shared_profile.contract import (
 from app.enrichment.shared_profile.contract import (
     LlmContextFeedbackSummary as SharedLlmContextFeedbackSummary,
 )
-from app.enrichment.shared_profile.contract import MAX_LIST_ITEMS as SharedMaxListItems
 from app.enrichment.shared_profile.contract import sanitize_text as shared_sanitize_text
 from app.enrichment.weekly_guidance import WeeklyGuidancePrompt, WeeklyGuidanceRequest
+from app.interview_prep import InterviewPrepRequest as LegacyInterviewPrepRequest
+from app.job_fit_explanation import JobFitExplanationRequest as LegacyJobFitExplanationRequest
 from app.llm_provider_template import TemplateEnrichmentProvider
 from app.llm_provider_types import (
     ApplicationCoachProvider,
@@ -68,6 +70,8 @@ from app.llm_provider_types import (
 from app.llm_providers.common import PromptPayload
 from app.llm_providers.ollama_provider import OllamaEnrichmentProvider
 from app.llm_providers.openai_provider import OpenAIEnrichmentProvider
+from app.profile_insights import LlmContextRequest as LegacyLlmContextRequest
+from app.weekly_guidance import WeeklyGuidanceRequest as LegacyWeeklyGuidanceRequest
 
 ML_APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -362,12 +366,14 @@ def test_profile_insights_contract_reexports_shared_profile_contract_symbols():
 
 
 def test_job_fit_explanation_contract_reexports_shared_job_fit_contract_symbols():
-    from app.enrichment.job_fit_explanation.contract import CurrentJobFeedbackState
-    from app.enrichment.job_fit_explanation.contract import DeterministicFitContext
-    from app.enrichment.job_fit_explanation.contract import FeedbackStateContext
-    from app.enrichment.job_fit_explanation.contract import RankedJobContext
-    from app.enrichment.job_fit_explanation.contract import SearchProfileContext
-    from app.enrichment.job_fit_explanation.contract import SearchProfileRoleCandidate
+    from app.enrichment.job_fit_explanation.contract import (
+        CurrentJobFeedbackState,
+        DeterministicFitContext,
+        FeedbackStateContext,
+        RankedJobContext,
+        SearchProfileContext,
+        SearchProfileRoleCandidate,
+    )
 
     assert SearchProfileRoleCandidate is SharedSearchProfileRoleCandidate
     assert SearchProfileContext is SharedSearchProfileContext

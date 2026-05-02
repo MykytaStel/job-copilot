@@ -2,11 +2,10 @@ import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
+from app import service_dependencies
 from app.api_models import FitAnalyzeRequest, RerankRequest
 from app.fit_analysis_service import FitAnalysisService
 from app.rerank_service import RerankService
-from app import service_dependencies
-from app.trained_reranker_config import DEFAULT_TRAINED_RERANKER_MODEL_PATH
 
 
 def test_engine_api_client_factory_reuses_shared_engine_api_context(monkeypatch):

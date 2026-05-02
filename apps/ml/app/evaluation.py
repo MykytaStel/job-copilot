@@ -217,5 +217,5 @@ def aggregate_variant_metrics(metrics: list[RankingVariantMetrics]) -> RankingVa
         mrr_at_top_n=round(sum(metric.mrr_at_top_n for metric in metrics) / len(metrics), 6),
         map_at_top_n=round(sum(metric.map_at_top_n for metric in metrics) / len(metrics), 6),
         precision_at_3=round(sum(metric.precision_at_3 for metric in metrics) / len(metrics), 6),
-        signal_bucket_metrics=aggregated_buckets,
+        signal_bucket_metrics=aggregated_buckets,  # type: ignore[arg-type]
     )

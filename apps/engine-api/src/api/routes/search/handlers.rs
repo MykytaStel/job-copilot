@@ -83,7 +83,7 @@ pub async fn run_search(
     let filtered_out_company_blacklist = 0usize;
     let jobs_with_feedback = candidate_jobs
         .into_iter()
-        .zip(feedback_states.into_iter())
+        .zip(feedback_states)
         .filter_map(|(job, feedback)| {
             if feedback.hidden {
                 filtered_out_hidden += 1;

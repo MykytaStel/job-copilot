@@ -5,8 +5,7 @@ from pydantic import BaseModel
 
 from app.api_models import BootstrapResponse
 from app.metrics import RerankerEvaluationSummary
-from app.trained_reranker import ARTIFACT_VERSION, MODEL_TYPE
-from app.trained_reranker import TrainingSummary
+from app.trained_reranker import ARTIFACT_VERSION, MODEL_TYPE, TrainingSummary
 
 
 class BootstrapWorkflowResult(BaseModel):

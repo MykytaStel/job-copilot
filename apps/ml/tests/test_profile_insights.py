@@ -4,7 +4,6 @@ from app.api import app
 from app.profile_insights import (
     LlmContextRequest,
     MalformedProviderOutputError,
-    ProfileInsightsProviderError,
     ProfileInsightsResponse,
     build_profile_insights_prompt,
     parse_profile_insights_output,

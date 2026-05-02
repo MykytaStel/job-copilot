@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.api_models import BootstrapResponse, BootstrapTaskStatus
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 class BootstrapTaskStore:
@@ -94,10 +94,10 @@ class BootstrapTaskStore:
         return BootstrapTaskStatus.model_validate(payload)
 
     def cleanup_expired(self) -> None:
-        cutoff = datetime.now(timezone.utc) - self._task_ttl
+        cutoff = datetime.now(UTC) - self._task_ttl
         for path in self._tasks_dir.glob("*.json"):
             try:
-                modified = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+                modified = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
             except FileNotFoundError:
                 continue
             if modified >= cutoff:

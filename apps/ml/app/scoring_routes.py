@@ -1,6 +1,5 @@
 import logging
 import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Request, status
 
@@ -10,10 +9,10 @@ from app.api_models import (
     BootstrapTaskStatus,
     FitAnalyzeRequest,
     FitAnalyzeResponse,
+    RerankerStatusResponse,
     RerankInvalidateRequest,
     RerankRequest,
     RerankResponse,
-    RerankerStatusResponse,
 )
 from app.engine_api_client import EngineApiResponseError, EngineApiUnavailableError
 from app.rerank_service import InvalidRerankRequestError

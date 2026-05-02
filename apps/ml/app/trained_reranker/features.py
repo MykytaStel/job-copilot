@@ -25,6 +25,8 @@ def extract_features(
     rating_pos_max = max(1.0, stats.interest_rating_max if stats else 2.0)
     rating_neg_max = max(1.0, -(stats.interest_rating_min if stats else -2.0))
 
+    time_to_apply = _time_to_apply_days(signals)
+
     return {
         "deterministic_score": clamp(ranking.deterministic_score, 0, 100) / 100.0,
         "behavior_score_delta": clamp(ranking.behavior_score_delta, -25, 25) / 25.0,
@@ -60,12 +62,8 @@ def extract_features(
             getattr(signals, "returned_count", 0) if signals else 0, 0, returned_max
         )
         / returned_max,
-        "quick_apply": 1.0
-        if _time_to_apply_days(signals) is not None and _time_to_apply_days(signals) <= 3
-        else 0.0,
-        "delayed_apply": 1.0
-        if _time_to_apply_days(signals) is not None and _time_to_apply_days(signals) > 14
-        else 0.0,
+        "quick_apply": 1.0 if time_to_apply is not None and time_to_apply <= 3 else 0.0,
+        "delayed_apply": 1.0 if time_to_apply is not None and time_to_apply > 14 else 0.0,
         # Slice 7: legitimacy
         "legitimacy_suspicious": 1.0 if _bool_signal(signals, "legitimacy_suspicious") else 0.0,
     }

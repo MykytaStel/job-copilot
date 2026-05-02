@@ -395,10 +395,10 @@ impl SearchMatchingService {
                 age_signal.days_old, age_signal.source, age_signal.score_delta
             ));
         }
-        if salary_result.score_delta != 0 {
-            if let Some(reason) = salary_result.reason.clone() {
-                reasons.push(reason);
-            }
+        if salary_result.score_delta != 0
+            && let Some(reason) = salary_result.reason.clone()
+        {
+            reasons.push(reason);
         }
         let score_breakdown = JobScoreBreakdown::new(
             matching_score.round() as i16,
