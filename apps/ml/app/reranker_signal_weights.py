@@ -92,7 +92,7 @@ def signal_weight_config_from_payload(
     if not signal_weights:
         return DEFAULT_OUTCOME_SIGNAL_WEIGHTS
 
-    payload = dict(signal_weights)
+    payload: dict[str, float | str] = dict(signal_weights)
     if policy_version:
         payload["policy_version"] = policy_version
     return OutcomeSignalWeightConfig.model_validate(payload)
@@ -106,7 +106,7 @@ def confidence_weight_config_from_payload(
     if not confidence_weights:
         return DEFAULT_OUTCOME_CONFIDENCE_WEIGHTS
 
-    payload = dict(confidence_weights)
+    payload: dict[str, float | str] = dict(confidence_weights)
     if policy_version:
         payload["policy_version"] = policy_version
     return OutcomeConfidenceWeightConfig.model_validate(payload)

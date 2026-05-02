@@ -83,8 +83,8 @@ class RerankerBootstrapService:
                     result = await self._bootstrap_workflow(
                         payload.profile_id,
                         payload.min_examples,
-                        artifact_path=profile_model_path,
-                        compatibility_model_path=runtime_model_path,
+                        profile_model_path,
+                        runtime_model_path,
                     )
                 finally:
                     self._active_jobs -= 1

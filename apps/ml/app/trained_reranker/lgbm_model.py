@@ -103,7 +103,7 @@ def distill_lgbm_labels(
     }
     try:
         model = lgb.train(params, dataset, num_boost_round=num_boost_round, callbacks=[lgb.log_evaluation(period=-1)])
-        soft_labels: list[float] = model.predict(X).tolist()
+        soft_labels: list[float] = model.predict(X).tolist()  # type: ignore[union-attr]
         logger.info(
             "lgbm distillation: trained on %d examples, avg soft label=%.4f",
             len(examples),

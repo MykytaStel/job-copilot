@@ -69,7 +69,7 @@ def _extract_weighted_terms(text: str) -> Counter[str]:
 
     for left, right in zip(tokens, tokens[1:]):
         if _is_keyword(left) and _is_keyword(right):
-            counts[f"{left} {right}"] += 1.4
+            counts[f"{left} {right}"] += 1.4  # type: ignore[assignment]
 
     return counts
 

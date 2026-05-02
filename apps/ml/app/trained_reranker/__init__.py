@@ -78,14 +78,14 @@ def main() -> None:
             else [merged_input]
         )
         candidate_model = train_model(
-            candidate_datasets,
+            candidate_datasets,  # type: ignore[arg-type]
             epochs=args.epochs,
             learning_rate=args.learning_rate,
             l2=args.l2,
             max_score_delta=args.max_score_delta,
         )
         model = train_model(
-            datasets,
+            datasets,  # type: ignore[arg-type]
             epochs=args.epochs,
             learning_rate=args.learning_rate,
             l2=args.l2,
@@ -102,9 +102,9 @@ def main() -> None:
         trained_model=candidate_model,
     )
     benchmark = None
-    if bpr_candidate_available(candidate_datasets):
+    if bpr_candidate_available(candidate_datasets):  # type: ignore[arg-type]
         bpr_model = train_bpr_model(
-            candidate_datasets,
+            candidate_datasets,  # type: ignore[arg-type]
             epochs=args.epochs,
             learning_rate=args.learning_rate,
             l2=args.l2,

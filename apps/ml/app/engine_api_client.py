@@ -140,9 +140,9 @@ def build_shared_http_client(settings: RuntimeSettings) -> httpx.AsyncClient:
         "headers": headers or None,
     }
     try:
-        return httpx.AsyncClient(**kwargs)
+        return httpx.AsyncClient(**kwargs)  # type: ignore[arg-type]
     except TypeError:
-        return httpx.AsyncClient(timeout=kwargs["timeout"])
+        return httpx.AsyncClient(timeout=kwargs["timeout"])  # type: ignore[arg-type]
 
 
 _shared_client: httpx.AsyncClient | None = None

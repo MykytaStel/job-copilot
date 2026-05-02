@@ -143,100 +143,22 @@ fn feature_value(feature_name: &str, features: &TrainedRerankerFeatures) -> f64 
         "matched_role_count" => features.matched_role_count.min(10) as f64 / 10.0,
         "matched_skill_count" => features.matched_skill_count.min(20) as f64 / 20.0,
         "matched_keyword_count" => features.matched_keyword_count.min(20) as f64 / 20.0,
-        "source_present" => {
-            if features.source_present {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        "role_family_present" => {
-            if features.role_family_present {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        "outcome_received_offer" => {
-            if features.outcome_received_offer {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        "outcome_reached_interview" => {
-            if features.outcome_reached_interview {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        "outcome_rejected" => {
-            if features.outcome_rejected {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        "has_salary_rejection" => {
-            if features.has_salary_rejection {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        "has_remote_rejection" => {
-            if features.has_remote_rejection {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        "has_tech_rejection" => {
-            if features.has_tech_rejection {
-                1.0
-            } else {
-                0.0
-            }
-        }
+        "source_present" if features.source_present => 1.0,
+        "role_family_present" if features.role_family_present => 1.0,
+        "outcome_received_offer" if features.outcome_received_offer => 1.0,
+        "outcome_reached_interview" if features.outcome_reached_interview => 1.0,
+        "outcome_rejected" if features.outcome_rejected => 1.0,
+        "has_salary_rejection" if features.has_salary_rejection => 1.0,
+        "has_remote_rejection" if features.has_remote_rejection => 1.0,
+        "has_tech_rejection" if features.has_tech_rejection => 1.0,
         "interest_rating_positive" => features.interest_rating_positive.clamp(0.0, 1.0),
         "interest_rating_negative" => features.interest_rating_negative.clamp(0.0, 1.0),
-        "work_mode_deal_breaker" => {
-            if features.work_mode_deal_breaker {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        "scrolled_to_bottom" => {
-            if features.scrolled_to_bottom {
-                1.0
-            } else {
-                0.0
-            }
-        }
+        "work_mode_deal_breaker" if features.work_mode_deal_breaker => 1.0,
+        "scrolled_to_bottom" if features.scrolled_to_bottom => 1.0,
         "returned_count" => features.returned_count.min(5) as f64 / 5.0,
-        "quick_apply" => {
-            if features.quick_apply {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        "delayed_apply" => {
-            if features.delayed_apply {
-                1.0
-            } else {
-                0.0
-            }
-        }
-        "legitimacy_suspicious" => {
-            if features.legitimacy_suspicious {
-                1.0
-            } else {
-                0.0
-            }
-        }
+        "quick_apply" if features.quick_apply => 1.0,
+        "delayed_apply" if features.delayed_apply => 1.0,
+        "legitimacy_suspicious" if features.legitimacy_suspicious => 1.0,
         _ => 0.0,
     }
 }

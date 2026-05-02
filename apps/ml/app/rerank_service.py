@@ -59,7 +59,7 @@ class RerankService:
 
         jobs = []
         for job_id, result in zip(unique_job_ids, raw_results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.warning(
                     "failed to fetch job lifecycle",
                     extra={"job_id": job_id, "error": str(result)},

@@ -64,10 +64,7 @@ pub async fn get_reranker_dataset(
     }
 
     let feedback_states = load_feedback_state(&state, Some(&profile_id), &jobs).await?;
-    let jobs_with_feedback = jobs
-        .into_iter()
-        .zip(feedback_states.into_iter())
-        .collect::<Vec<_>>();
+    let jobs_with_feedback = jobs.into_iter().zip(feedback_states).collect::<Vec<_>>();
     let behavior = BehaviorService::new().build_aggregates(events.iter());
     let funnel = FunnelService::new().build_aggregates(events.iter());
     let applications_by_job_id = load_profile_applications_by_job_id(&state, &events).await?;

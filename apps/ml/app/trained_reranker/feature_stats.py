@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
@@ -44,7 +45,7 @@ def compute_feature_statistics(examples: list[OutcomeExample]) -> FeatureStatist
     ratings = [
         int(e.signals.interest_rating)
         for e in examples
-        if e.signals and getattr(e.signals, "interest_rating", None) is not None
+        if e.signals and e.signals.interest_rating is not None
     ]
 
     return FeatureStatistics(
@@ -102,7 +103,7 @@ def compute_ablation_candidates(
         )
 
 
-def _p95(values: list[float | int]) -> float:
+def _p95(values: Sequence[float | int]) -> float:
     if not values:
         return 0.0
     sorted_values = sorted(float(v) for v in values)
