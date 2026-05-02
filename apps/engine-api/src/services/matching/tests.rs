@@ -1,6 +1,8 @@
 use crate::domain::job::model::{Job, JobLifecycleStage, JobSourceVariant, JobView};
 use crate::domain::role::RoleId;
-use crate::domain::search::profile::{SearchProfile, SearchRoleCandidate, TargetRegion, WorkMode};
+use crate::domain::search::profile::{
+    SearchProfile, SearchRoleCandidate, SearchSalaryExpectation, TargetRegion, WorkMode,
+};
 use crate::domain::source::SourceId;
 
 use super::SearchMatchingService;
@@ -33,6 +35,7 @@ fn search_profile() -> SearchProfile {
         ],
         exclude_terms: vec!["gambling".to_string()],
         scoring_weights: Default::default(),
+        salary_expectation: None,
     }
 }
 
@@ -64,6 +67,7 @@ fn mobile_profile() -> SearchProfile {
         ],
         exclude_terms: vec!["gambling".to_string()],
         scoring_weights: Default::default(),
+        salary_expectation: None,
     }
 }
 
@@ -95,6 +99,7 @@ fn frontend_profile() -> SearchProfile {
         ],
         exclude_terms: vec!["gambling".to_string()],
         scoring_weights: Default::default(),
+        salary_expectation: None,
     }
 }
 
@@ -564,6 +569,7 @@ fn non_contiguous_frontend_search_phrase_matches_canonical_frontend_term() {
         search_terms: vec!["frontend specialist".to_string()],
         exclude_terms: vec![],
         scoring_weights: Default::default(),
+        salary_expectation: None,
     };
     let job = job_view(
         "job-frontend-search-term",
@@ -691,6 +697,7 @@ fn required_skill_gap_penalizes_more_than_preferred_skill_gap() {
         search_terms: vec![],
         exclude_terms: vec![],
         scoring_weights: Default::default(),
+        salary_expectation: None,
     };
 
     let required_skill_match = job_view(
@@ -1314,5 +1321,337 @@ fn score_never_goes_below_zero_for_irrelevant_old_job() {
     assert!(
         fit.score_breakdown.freshness_score < 0,
         "old irrelevant job must carry a freshness penalty"
+    );
+}
+
+#[test]
+fn salary_no_expectation_does_not_affect_score() {
+    let service = SearchMatchingService::new();
+    let profile = search_profile(); // salary_expectation: None
+
+    let base = job_view(
+        "job-salary-no-expectation",
+        "Senior Backend Developer",
+        "Remote EU role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    let job_with_salary = JobView {
+        job: Job {
+            salary_min: Some(5000),
+            salary_max: Some(8000),
+            salary_currency: Some("USD".to_string()),
+            ..base.job
+        },
+        ..base
+    };
+
+    let fit = service.score_job_deterministic(&profile, &job_with_salary);
+
+    assert_eq!(
+        fit.score_breakdown.salary_score, 0,
+        "no salary expectation must not affect salary score"
+    );
+    assert!(
+        !fit.reasons
+            .iter()
+            .any(|r| r.to_lowercase().contains("salary")),
+        "no salary expectation must not produce a salary reason"
+    );
+}
+
+#[test]
+fn salary_missing_job_salary_does_not_penalize() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.salary_expectation = Some(SearchSalaryExpectation {
+        min: Some(4000),
+        max: Some(7000),
+        currency: "USD".to_string(),
+    });
+
+    // job_view has salary_min: None, salary_max: None by default
+    let no_salary_job = job_view(
+        "job-no-salary",
+        "Senior Backend Developer",
+        "Remote EU role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+
+    let fit = service.score_job_deterministic(&profile, &no_salary_job);
+
+    assert_eq!(
+        fit.score_breakdown.salary_score, 0,
+        "missing job salary must not affect salary score"
+    );
+    assert!(
+        !fit.reasons
+            .iter()
+            .any(|r| r.to_lowercase().contains("below")),
+        "missing job salary must not produce a below-target reason"
+    );
+}
+
+#[test]
+fn salary_overlap_applies_positive_score_effect() {
+    let service = SearchMatchingService::new();
+    let base = job_view(
+        "job-salary-overlap",
+        "Senior Backend Developer",
+        "Remote EU role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    // Pin to a future date so freshness decay does not interfere.
+    let overlapping_salary_job = JobView {
+        job: Job {
+            salary_min: Some(5000),
+            salary_max: Some(8000),
+            salary_currency: Some("USD".to_string()),
+            posted_at: Some("2099-01-01T00:00:00Z".to_string()),
+            last_seen_at: "2099-01-01T00:00:00Z".to_string(),
+            ..base.job.clone()
+        },
+        first_seen_at: "2099-01-01T00:00:00Z".to_string(),
+        ..base.clone()
+    };
+    let no_salary_job = JobView {
+        job: Job {
+            posted_at: Some("2099-01-01T00:00:00Z".to_string()),
+            last_seen_at: "2099-01-01T00:00:00Z".to_string(),
+            ..base.job
+        },
+        first_seen_at: "2099-01-01T00:00:00Z".to_string(),
+        ..base
+    };
+
+    let mut profile_with_salary = search_profile();
+    profile_with_salary.salary_expectation = Some(SearchSalaryExpectation {
+        min: Some(4000),
+        max: Some(7000),
+        currency: "USD".to_string(),
+    });
+    let profile_without_salary = search_profile();
+
+    let with_salary_fit =
+        service.score_job_deterministic(&profile_with_salary, &overlapping_salary_job);
+    let without_salary_fit =
+        service.score_job_deterministic(&profile_without_salary, &no_salary_job);
+
+    assert!(
+        with_salary_fit.score > without_salary_fit.score,
+        "overlapping salary must give higher score than no salary expectation: with={}, without={}",
+        with_salary_fit.score,
+        without_salary_fit.score,
+    );
+    assert!(
+        with_salary_fit.score_breakdown.salary_score > 0,
+        "overlapping salary must produce positive salary_score, got {}",
+        with_salary_fit.score_breakdown.salary_score,
+    );
+}
+
+#[test]
+fn salary_clearly_below_minimum_applies_negative_score_effect() {
+    let service = SearchMatchingService::new();
+    let base = job_view(
+        "job-salary-low",
+        "Senior Backend Developer",
+        "Remote EU role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    // salary_max $2800 is >20% below expected min of $4000
+    let low_salary_job = JobView {
+        job: Job {
+            salary_min: Some(2000),
+            salary_max: Some(2800),
+            salary_currency: Some("USD".to_string()),
+            ..base.job.clone()
+        },
+        ..base.clone()
+    };
+    let no_salary_job = base;
+
+    let mut profile = search_profile();
+    profile.salary_expectation = Some(SearchSalaryExpectation {
+        min: Some(4000),
+        max: Some(7000),
+        currency: "USD".to_string(),
+    });
+
+    let low_salary_fit = service.score_job_deterministic(&profile, &low_salary_job);
+    let no_salary_fit = service.score_job_deterministic(&profile, &no_salary_job);
+
+    assert!(
+        low_salary_fit.score < no_salary_fit.score,
+        "below-minimum salary must score lower than missing salary: low={}, no_salary={}",
+        low_salary_fit.score,
+        no_salary_fit.score,
+    );
+    assert!(
+        low_salary_fit.score_breakdown.salary_score < 0,
+        "below-minimum salary must produce negative salary_score, got {}",
+        low_salary_fit.score_breakdown.salary_score,
+    );
+    assert!(
+        low_salary_fit
+            .reasons
+            .iter()
+            .any(|r| r.to_lowercase().contains("below")),
+        "below-minimum salary must produce a penalty reason"
+    );
+}
+
+#[test]
+fn salary_unrecognized_currency_does_not_penalize() {
+    let service = SearchMatchingService::new();
+    let base = job_view(
+        "job-gbp-salary",
+        "Senior Backend Developer",
+        "Remote EU role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    // GBP is not in the recognized currency list
+    let gbp_job = JobView {
+        job: Job {
+            salary_min: Some(1500),
+            salary_max: Some(2500),
+            salary_currency: Some("GBP".to_string()),
+            ..base.job
+        },
+        ..base
+    };
+
+    let mut profile = search_profile();
+    profile.salary_expectation = Some(SearchSalaryExpectation {
+        min: Some(4000),
+        max: Some(7000),
+        currency: "USD".to_string(),
+    });
+
+    let fit = service.score_job_deterministic(&profile, &gbp_job);
+
+    assert_eq!(
+        fit.score_breakdown.salary_score, 0,
+        "unrecognized job currency must not affect salary score, got {}",
+        fit.score_breakdown.salary_score,
+    );
+    assert!(
+        !fit.reasons
+            .iter()
+            .any(|r| r.to_lowercase().contains("salary")),
+        "unrecognized job currency must not produce a salary reason"
+    );
+}
+
+#[test]
+fn salary_score_stays_within_zero_to_one_hundred() {
+    let service = SearchMatchingService::new();
+    let mut profile = search_profile();
+    profile.salary_expectation = Some(SearchSalaryExpectation {
+        min: Some(4000),
+        max: Some(7000),
+        currency: "USD".to_string(),
+    });
+    profile.allowed_sources = vec![];
+    profile.work_modes = vec![WorkMode::Remote];
+    profile.target_regions = vec![];
+
+    let base = job_view(
+        "job-salary-clamp",
+        "Pastry Chef",
+        "Onsite kitchen role preparing desserts",
+        Some("onsite"),
+        "djinni",
+    );
+    // Completely irrelevant job, old date, far-below-minimum salary
+    let job = JobView {
+        job: Job {
+            salary_min: Some(500),
+            salary_max: Some(1000),
+            salary_currency: Some("USD".to_string()),
+            posted_at: Some("2020-01-01T00:00:00Z".to_string()),
+            last_seen_at: "2020-01-01T00:00:00Z".to_string(),
+            ..base.job
+        },
+        first_seen_at: "2020-01-01T00:00:00Z".to_string(),
+        ..base
+    };
+
+    let fit = service.score_job_deterministic(&profile, &job);
+
+    assert_eq!(
+        fit.score, fit.score_breakdown.total_score,
+        "fit.score and score_breakdown.total_score must stay in sync"
+    );
+    assert!(fit.score <= 100, "score must not exceed 100");
+    assert!(
+        fit.score_breakdown.salary_score < 0,
+        "far-below-target salary must produce negative salary_score"
+    );
+}
+
+#[test]
+fn salary_match_and_penalty_produce_explanation_reasons() {
+    let service = SearchMatchingService::new();
+    let base = job_view(
+        "job-salary-reason",
+        "Senior Backend Developer",
+        "Remote EU role with Rust and Postgres",
+        Some("remote"),
+        "djinni",
+    );
+    // salary fully inside candidate range: reason "fully within"
+    let matching_salary_job = JobView {
+        job: Job {
+            salary_min: Some(4500),
+            salary_max: Some(6500),
+            salary_currency: Some("USD".to_string()),
+            posted_at: Some("2099-01-01T00:00:00Z".to_string()),
+            last_seen_at: "2099-01-01T00:00:00Z".to_string(),
+            ..base.job.clone()
+        },
+        first_seen_at: "2099-01-01T00:00:00Z".to_string(),
+        ..base.clone()
+    };
+    // salary max $2800 is >20% below expected min of $4000: reason "20% below"
+    let below_salary_job = JobView {
+        job: Job {
+            salary_min: Some(2000),
+            salary_max: Some(2800),
+            salary_currency: Some("USD".to_string()),
+            ..base.job
+        },
+        ..base
+    };
+
+    let mut profile = search_profile();
+    profile.salary_expectation = Some(SearchSalaryExpectation {
+        min: Some(4000),
+        max: Some(7000),
+        currency: "USD".to_string(),
+    });
+
+    let matching_fit = service.score_job_deterministic(&profile, &matching_salary_job);
+    let below_fit = service.score_job_deterministic(&profile, &below_salary_job);
+
+    assert!(
+        matching_fit
+            .reasons
+            .iter()
+            .any(|r| r.contains("Salary range is fully within the profile target")),
+        "matching salary must produce a positive explanation reason; got: {:?}",
+        matching_fit.reasons,
+    );
+    assert!(
+        below_fit
+            .reasons
+            .iter()
+            .any(|r| r.contains("Salary range is more than 20% below the profile minimum")),
+        "below-target salary must produce a penalty explanation reason; got: {:?}",
+        below_fit.reasons,
     );
 }

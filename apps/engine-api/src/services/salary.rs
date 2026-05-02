@@ -2,20 +2,14 @@ use crate::db::repositories::{JobsRepository, RepositoryError};
 use crate::domain::analytics::model::SalaryBucket;
 use crate::domain::job::model::Job;
 
+pub use crate::domain::search::profile::SearchSalaryExpectation;
+
 const UAH_TO_USD: f64 = 1.0 / 41.0;
 const EUR_TO_USD: f64 = 1.09;
 
-const FULL_SALARY_FIT_BONUS: i16 = 10;
-const PARTIAL_SALARY_OVERLAP_BONUS: i16 = 5;
+const SALARY_FIT_BONUS: i16 = 5;
 const BELOW_TARGET_SALARY_PENALTY: i16 = -10;
 const BELOW_TARGET_TOLERANCE_RATIO: f64 = 0.20;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SearchSalaryExpectation {
-    pub min: Option<i32>,
-    pub max: Option<i32>,
-    pub currency: String,
-}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SearchSalaryScore {
@@ -52,6 +46,10 @@ pub fn score_search_salary(
         return SearchSalaryScore::default();
     };
 
+    if !is_recognized_currency(&expectation.currency) {
+        return SearchSalaryScore::default();
+    }
+
     let candidate_min = normalize_to_usd(candidate_min, &expectation.currency);
     let candidate_max = normalize_to_usd(candidate_max, &expectation.currency);
 
@@ -69,6 +67,11 @@ pub fn score_search_salary(
     };
 
     let job_currency = job.salary_currency.as_deref().unwrap_or("USD");
+
+    if !is_recognized_currency(job_currency) {
+        return SearchSalaryScore::default();
+    }
+
     let job_min = normalize_to_usd(job_min, job_currency);
     let job_max = normalize_to_usd(job_max, job_currency);
 
@@ -83,7 +86,7 @@ pub fn score_search_salary(
 
     if job_min >= candidate_min && job_max <= candidate_max {
         return SearchSalaryScore {
-            score_delta: FULL_SALARY_FIT_BONUS,
+            score_delta: SALARY_FIT_BONUS,
             reason: Some("Salary range is fully within the profile target".to_string()),
             label: Some("Salary fits target".to_string()),
             missing_salary: false,
@@ -92,9 +95,18 @@ pub fn score_search_salary(
 
     if ranges_overlap(candidate_min, candidate_max, job_min, job_max) {
         return SearchSalaryScore {
-            score_delta: PARTIAL_SALARY_OVERLAP_BONUS,
+            score_delta: SALARY_FIT_BONUS,
             reason: Some("Salary range overlaps the profile target".to_string()),
             label: Some("Salary partially overlaps target".to_string()),
+            missing_salary: false,
+        };
+    }
+
+    if job_min > candidate_max {
+        return SearchSalaryScore {
+            score_delta: SALARY_FIT_BONUS,
+            reason: Some("Salary is above the profile target".to_string()),
+            label: Some("Salary above target".to_string()),
             missing_salary: false,
         };
     }
@@ -120,6 +132,13 @@ fn ranges_overlap(candidate_min: f64, candidate_max: f64, job_min: f64, job_max:
     job_min <= candidate_max && job_max >= candidate_min
 }
 
+fn is_recognized_currency(currency: &str) -> bool {
+    matches!(
+        currency.to_uppercase().trim(),
+        "" | "USD" | "UAH" | "UAH/MONTH" | "EUR"
+    )
+}
+
 fn normalize_to_usd(amount: i32, currency: &str) -> f64 {
     let amount = amount as f64;
 
@@ -133,8 +152,9 @@ fn normalize_to_usd(amount: i32, currency: &str) -> f64 {
 #[cfg(test)]
 mod tests {
     use crate::domain::job::model::Job;
+    use crate::domain::search::profile::SearchSalaryExpectation;
 
-    use super::{SearchSalaryExpectation, score_search_salary};
+    use super::score_search_salary;
 
     fn job() -> Job {
         Job {
@@ -211,7 +231,7 @@ mod tests {
 
         let score = score_search_salary(Some(&expectation()), &matching_job);
 
-        assert_eq!(score.score_delta, 10);
+        assert_eq!(score.score_delta, 5);
         assert_eq!(
             score.reason.as_deref(),
             Some("Salary range is fully within the profile target")
@@ -237,6 +257,23 @@ mod tests {
             score.label.as_deref(),
             Some("Salary partially overlaps target")
         );
+    }
+
+    #[test]
+    fn boosts_when_job_salary_is_clearly_above_candidate_range() {
+        let mut above_job = job();
+        above_job.salary_min = Some(8000);
+        above_job.salary_max = Some(12000);
+
+        let score = score_search_salary(Some(&expectation()), &above_job);
+
+        assert_eq!(score.score_delta, 5);
+        assert_eq!(
+            score.reason.as_deref(),
+            Some("Salary is above the profile target")
+        );
+        assert_eq!(score.label.as_deref(), Some("Salary above target"));
+        assert!(!score.missing_salary);
     }
 
     #[test]
@@ -272,6 +309,23 @@ mod tests {
     }
 
     #[test]
+    fn returns_zero_for_unrecognized_job_currency() {
+        let mut gbp_job = job();
+        gbp_job.salary_min = Some(3500);
+        gbp_job.salary_max = Some(5500);
+        gbp_job.salary_currency = Some("GBP".to_string());
+
+        let score = score_search_salary(Some(&expectation()), &gbp_job);
+
+        assert_eq!(
+            score.score_delta, 0,
+            "unrecognized currency must not affect score"
+        );
+        assert!(score.reason.is_none());
+        assert!(!score.missing_salary);
+    }
+
+    #[test]
     fn normalizes_uah_salary_before_comparison() {
         let mut uah_job = job();
         uah_job.salary_min = Some(184_500);
@@ -280,7 +334,7 @@ mod tests {
 
         let score = score_search_salary(Some(&expectation()), &uah_job);
 
-        assert_eq!(score.score_delta, 10);
+        assert_eq!(score.score_delta, 5);
         assert_eq!(score.label.as_deref(), Some("Salary fits target"));
     }
 
@@ -293,7 +347,7 @@ mod tests {
 
         let score = score_search_salary(Some(&expectation()), &eur_job);
 
-        assert_eq!(score.score_delta, 10);
+        assert_eq!(score.score_delta, 5);
         assert_eq!(score.label.as_deref(), Some("Salary fits target"));
     }
 }

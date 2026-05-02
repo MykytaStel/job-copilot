@@ -3,6 +3,13 @@ use serde::{Deserialize, Serialize};
 use crate::domain::role::RoleId;
 use crate::domain::source::SourceId;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SearchSalaryExpectation {
+    pub min: Option<i32>,
+    pub max: Option<i32>,
+    pub currency: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TargetRegion {
@@ -73,6 +80,11 @@ impl ScoringWeights {
         f32::from(clamp_weight(self.remote_work_importance))
             / f32::from(default_remote_work_importance())
     }
+
+    pub fn salary_fit_multiplier(&self) -> f32 {
+        f32::from(clamp_weight(self.salary_fit_importance))
+            / f32::from(default_salary_fit_importance())
+    }
 }
 
 fn clamp_weight(value: u8) -> u8 {
@@ -129,4 +141,5 @@ pub struct SearchProfile {
     pub search_terms: Vec<String>,
     pub exclude_terms: Vec<String>,
     pub scoring_weights: ScoringWeights,
+    pub salary_expectation: Option<SearchSalaryExpectation>,
 }

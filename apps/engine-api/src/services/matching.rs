@@ -27,6 +27,7 @@ use crate::domain::source::SourceId;
 use crate::services::profile_analysis::text::{
     PreparedText, normalize_term_for_output, normalize_text,
 };
+use crate::services::salary::score_search_salary;
 
 use filters::{
     compute_region_match, compute_seniority_alignment, compute_source_match,
@@ -241,6 +242,7 @@ impl SearchMatchingService {
         let skill_match_multiplier = scoring_weights.skill_match_multiplier();
         let remote_work_multiplier = scoring_weights.remote_work_multiplier();
         let job_freshness_multiplier = scoring_weights.job_freshness_multiplier();
+        let salary_fit_multiplier = scoring_weights.salary_fit_multiplier();
         let primary_role_score = role_alignment.primary_overlap
             * PRIMARY_ROLE_WEIGHT
             * confidence_factor(search_profile.primary_role_confidence);
@@ -365,19 +367,13 @@ impl SearchMatchingService {
         .into_iter()
         .flatten()
         .collect::<Vec<_>>();
-        let base_score = matching_score
-            - exclude_penalty
-            - role_alignment.mismatch_penalty
-            - work_mode_penalty
-            - region_mismatch_penalty
-            - seniority_penalty;
         let age_signal = assess_job_age(job);
         let freshness_score =
             (f32::from(age_signal.score_delta) * job_freshness_multiplier).round() as i16;
-
-        let score = (base_score + f32::from(freshness_score))
-            .clamp(0.0, 100.0)
-            .round() as u8;
+        let salary_result =
+            score_search_salary(search_profile.salary_expectation.as_ref(), &job.job);
+        let salary_score =
+            (f32::from(salary_result.score_delta) * salary_fit_multiplier).round() as i16;
         let mut reasons = build_reasons(
             search_profile,
             job,
@@ -399,15 +395,21 @@ impl SearchMatchingService {
                 age_signal.days_old, age_signal.source, age_signal.score_delta
             ));
         }
+        if salary_result.score_delta != 0 {
+            if let Some(reason) = salary_result.reason.clone() {
+                reasons.push(reason);
+            }
+        }
+        let score_breakdown = JobScoreBreakdown::new(
+            matching_score.round() as i16,
+            salary_score,
+            freshness_score,
+            penalties,
+        );
         JobFit {
             job_id: job.job.id.clone(),
-            score,
-            score_breakdown: JobScoreBreakdown::new(
-                matching_score.round() as i16,
-                0,
-                freshness_score,
-                penalties,
-            ),
+            score: score_breakdown.total_score,
+            score_breakdown,
             matched_roles: role_alignment.matched_roles,
             matched_skills: matched_profile_skills.matched_terms.clone(),
             matched_keywords,
