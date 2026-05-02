@@ -151,6 +151,7 @@ impl SearchProfileRequest {
             search_terms: normalize_string_list(self.search_terms),
             exclude_terms: normalize_string_list(self.exclude_terms),
             scoring_weights: Default::default(),
+            salary_expectation: None,
         })
     }
 }
