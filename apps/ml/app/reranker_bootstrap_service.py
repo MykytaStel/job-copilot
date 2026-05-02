@@ -1,7 +1,8 @@
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
 from app.api_models import BootstrapRequest, BootstrapResponse
 from app.bootstrap.locking import ProfileBootstrapAlreadyRunningError, ProfileBootstrapLock
@@ -32,7 +33,17 @@ class RerankerBootstrapConflictError(RerankerBootstrapServiceError):
     pass
 
 
-BootstrapWorkflow = Callable[[str, int, Path, Path], Awaitable[BootstrapWorkflowResult]]
+class BootstrapWorkflow(Protocol):
+    async def __call__(
+        self,
+        profile_id: str,
+        min_examples: int,
+        *,
+        artifact_path: Path,
+        compatibility_model_path: Path,
+    ) -> BootstrapWorkflowResult: ...
+
+
 StartedCallback = Callable[[], None]
 
 
@@ -83,8 +94,8 @@ class RerankerBootstrapService:
                     result = await self._bootstrap_workflow(
                         payload.profile_id,
                         payload.min_examples,
-                        profile_model_path,
-                        runtime_model_path,
+                        artifact_path=profile_model_path,
+                        compatibility_model_path=runtime_model_path,
                     )
                 finally:
                     self._active_jobs -= 1
