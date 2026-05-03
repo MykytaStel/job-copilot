@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["apps/engine-api", "apps/ingestion"]
+members = ["apps/engine-api", "apps/ingestion", "crates/job-copilot-domain"]
 
 [workspace.dependencies]
 argon2 = "0.5"
