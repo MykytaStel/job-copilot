@@ -6,7 +6,10 @@
 		"dev": "dotenv -e .env -- concurrently -n engine-api,web -c auto \"cargo run --manifest-path apps/engine-api/Cargo.toml\" \"pnpm --dir apps/web dev\"",
 		"build": "pnpm -r build",
 		"lint": "pnpm -r lint",
-		"lint:rust": "cargo clippy --manifest-path apps/engine-api/Cargo.toml -- -D warnings && cargo clippy --manifest-path apps/ingestion/Cargo.toml -- -D warnings",
+		"lint:rust": "cargo clippy --workspace --all-targets -- -D warnings",
+		"check:rust": "cargo check --workspace",
+		"fmt:rust": "cargo fmt --all -- --check",
+		"test:rust": "cargo test --workspace",
 		"lint:python": "cd apps/ml && ruff check . && mypy app/ --ignore-missing-imports",
 		"typecheck": "pnpm -r typecheck",
 		"hooks:install": "lefthook install --reset-hooks-path",
@@ -47,7 +50,9 @@
 		"typescript": "^5.9.2"
 	},
 	"pnpm": {
-		"onlyBuiltDependencies": ["lefthook"],
+		"onlyBuiltDependencies": [
+			"lefthook"
+		],
 		"overrides": {
 			"postcss": ">=8.5.10"
 		}

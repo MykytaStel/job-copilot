@@ -176,12 +176,10 @@ pnpm --dir apps/web lint
 pnpm --dir apps/web test
 
 # Rust
-cargo fmt --manifest-path apps/engine-api/Cargo.toml --all -- --check
-cargo fmt --manifest-path apps/ingestion/Cargo.toml --all -- --check
-cargo clippy --manifest-path apps/engine-api/Cargo.toml -- -D warnings
-cargo clippy --manifest-path apps/ingestion/Cargo.toml -- -D warnings
-cargo test --manifest-path apps/engine-api/Cargo.toml
-cargo test --manifest-path apps/ingestion/Cargo.toml
+pnpm fmt:rust
+pnpm check:rust
+pnpm lint:rust
+pnpm test:rust
 
 # Python
 cd apps/ml && ruff check .
