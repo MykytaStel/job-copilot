@@ -10,6 +10,7 @@ axum.workspace = true
 axum-prometheus.workspace = true
 chrono.workspace = true
 jsonwebtoken.workspace = true
+job-copilot-domain = { path = "../../crates/job-copilot-domain" }
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
