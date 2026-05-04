@@ -7,6 +7,7 @@ edition = "2024"
 mock = []
 
 [dependencies]
+job-copilot-domain = { path = "../../crates/job-copilot-domain" }
 chrono.workspace = true
 regex.workspace = true
 reqwest.workspace = true
