@@ -4,6 +4,8 @@ use sqlx::FromRow;
 use sqlx::types::Json;
 use tracing::info;
 
+use crate::error::{IngestionError, Result};
+
 use crate::models::IngestionBatch;
 
 mod job_alert_scoring {
@@ -68,7 +70,7 @@ pub(super) async fn mark_missing_variants_inactive(
     source: &str,
     seen_source_job_ids: &[String],
     refreshed_at: &str,
-) -> Result<InactivationResult, String> {
+) -> Result<InactivationResult> {
     let rows = sqlx::query_scalar::<_, String>(
         r#"
         UPDATE job_variants
@@ -86,9 +88,7 @@ pub(super) async fn mark_missing_variants_inactive(
     .bind(seen_source_job_ids)
     .fetch_all(&mut **tx)
     .await
-    .map_err(|error| {
-        format!("failed to mark missing variants inactive for source '{source}': {error}")
-    })?;
+    .map_err(IngestionError::Database)?;
 
     if !rows.is_empty() {
         info!(
@@ -108,7 +108,7 @@ pub(super) async fn mark_missing_variants_inactive(
 pub(super) async fn reconcile_jobs(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     job_ids: &[String],
-) -> Result<ReconcileSummary, String> {
+) -> Result<ReconcileSummary> {
     let rows = sqlx::query_as::<_, (bool, bool)>(
         r#"
         WITH current_state AS (
@@ -150,8 +150,7 @@ pub(super) async fn reconcile_jobs(
     )
     .bind(job_ids)
     .fetch_all(&mut **tx)
-    .await
-    .map_err(|error| format!("failed to reconcile canonical jobs: {error}"))?;
+    .await?;
 
     let summary = ReconcileSummary {
         jobs_inactivated: rows
@@ -178,7 +177,7 @@ pub(super) async fn reconcile_jobs(
 pub(super) async fn create_profile_notifications(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     job_ids: &[String],
-) -> Result<(), String> {
+) -> Result<()> {
     if job_ids.is_empty() {
         return Ok(());
     }
@@ -306,7 +305,7 @@ END
 async fn insert_market_company_hiring_again_notifications(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     job_ids: &[String],
-) -> Result<(), String> {
+) -> Result<()> {
     let query = format!(
         r#"
         WITH candidate_jobs AS (
@@ -436,11 +435,7 @@ async fn insert_market_company_hiring_again_notifications(
         "#,
     );
 
-    sqlx::query(&query)
-        .bind(job_ids)
-        .execute(&mut **tx)
-        .await
-        .map_err(|error| format!("failed to create market company hiring alerts: {error}"))?;
+    sqlx::query(&query).bind(job_ids).execute(&mut **tx).await?;
 
     Ok(())
 }
@@ -448,13 +443,9 @@ async fn insert_market_company_hiring_again_notifications(
 async fn insert_new_job_notifications(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     job_ids: &[String],
-) -> Result<(), String> {
-    let jobs = fetch_alert_candidate_jobs(tx, job_ids, AlertJobKind::New)
-        .await
-        .map_err(|error| format!("failed to load new job alert candidates: {error}"))?;
-    let profiles = fetch_alert_profiles(tx)
-        .await
-        .map_err(|error| format!("failed to load alert profiles: {error}"))?;
+) -> Result<()> {
+    let jobs = fetch_alert_candidate_jobs(tx, job_ids, AlertJobKind::New).await?;
+    let profiles = fetch_alert_profiles(tx).await?;
 
     for profile in &profiles {
         if !alert_profile_has_signals(&profile.profile) {
@@ -490,13 +481,9 @@ async fn insert_new_job_notifications(
 async fn insert_reactivated_job_notifications(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     job_ids: &[String],
-) -> Result<(), String> {
-    let jobs = fetch_alert_candidate_jobs(tx, job_ids, AlertJobKind::Reactivated)
-        .await
-        .map_err(|error| format!("failed to load reactivated job alert candidates: {error}"))?;
-    let profiles = fetch_alert_profiles(tx)
-        .await
-        .map_err(|error| format!("failed to load alert profiles: {error}"))?;
+) -> Result<()> {
+    let jobs = fetch_alert_candidate_jobs(tx, job_ids, AlertJobKind::Reactivated).await?;
+    let profiles = fetch_alert_profiles(tx).await?;
 
     for profile in &profiles {
         if !alert_profile_has_signals(&profile.profile) {
@@ -569,7 +556,7 @@ async fn fetch_alert_candidate_jobs(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     job_ids: &[String],
     kind: AlertJobKind,
-) -> Result<Vec<AlertJobCandidate>, sqlx::Error> {
+) -> Result<Vec<AlertJobCandidate>> {
     let lifecycle_filter = match kind {
         AlertJobKind::New => "reactivated_at IS NULL",
         AlertJobKind::Reactivated => "reactivated_at IS NOT NULL AND reactivated_at = last_seen_at",
@@ -617,7 +604,7 @@ async fn fetch_alert_candidate_jobs(
 
 async fn fetch_alert_profiles(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-) -> Result<Vec<AlertProfileCandidate>, sqlx::Error> {
+) -> Result<Vec<AlertProfileCandidate>> {
     let rows = sqlx::query_as::<_, AlertProfileRow>(
         r#"
         SELECT
@@ -680,7 +667,7 @@ async fn insert_job_alert_notification(
     job_id: &str,
     score: u8,
     matched_signals: &[String],
-) -> Result<(), String> {
+) -> Result<()> {
     sqlx::query(
         r#"
         INSERT INTO notifications (id, profile_id, type, title, body, payload)
@@ -712,8 +699,7 @@ async fn insert_job_alert_notification(
     .bind(i32::from(JOB_ALERT_SCORE_THRESHOLD))
     .bind(Json(matched_signals.to_vec()))
     .execute(&mut **tx)
-    .await
-    .map_err(|error| format!("failed to create job alert notification: {error}"))?;
+    .await?;
 
     Ok(())
 }

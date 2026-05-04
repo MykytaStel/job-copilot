@@ -4,6 +4,7 @@ members = ["apps/engine-api", "apps/ingestion", "crates/job-copilot-domain"]
 
 [workspace.dependencies]
 argon2 = "0.5"
+thiserror = "2"
 axum = "0.8"
 axum-prometheus = "0.10.0"
 chrono = { version = "0.4", default-features = false, features = [

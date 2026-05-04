@@ -1,10 +1,12 @@
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
+use crate::error::{IngestionError, Result};
+
 pub fn build_default_headers(
     accept: &str,
     accept_language: &str,
     extra_headers: &[(&str, &str)],
-) -> Result<HeaderMap, String> {
+) -> Result<HeaderMap> {
     let mut headers = HeaderMap::new();
     insert_header(&mut headers, "Accept", accept)?;
     insert_header(&mut headers, "Accept-Language", accept_language)?;
@@ -16,11 +18,13 @@ pub fn build_default_headers(
     Ok(headers)
 }
 
-fn insert_header(headers: &mut HeaderMap, name: &str, value: &str) -> Result<(), String> {
-    let header_name = HeaderName::from_bytes(name.as_bytes())
-        .map_err(|error| format!("invalid header name '{name}': {error}"))?;
-    let header_value = HeaderValue::from_str(value)
-        .map_err(|error| format!("invalid header value for '{name}': {error}"))?;
+fn insert_header(headers: &mut HeaderMap, name: &str, value: &str) -> Result<()> {
+    let header_name = HeaderName::from_bytes(name.as_bytes()).map_err(|error| {
+        IngestionError::Config(format!("invalid header name '{name}': {error}"))
+    })?;
+    let header_value = HeaderValue::from_str(value).map_err(|error| {
+        IngestionError::Config(format!("invalid header value for '{name}': {error}"))
+    })?;
     headers.insert(header_name, header_value);
     Ok(())
 }

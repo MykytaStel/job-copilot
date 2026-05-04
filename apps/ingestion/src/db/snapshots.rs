@@ -1,13 +1,15 @@
 use sqlx::PgPool;
 use sqlx::types::Json;
 
+use crate::error::Result;
+
 use super::MarketSnapshotSummary;
 use super::market_role_heuristics::{
     MARKET_ROLE_GROUP_CLASSIFIER_CASE_SQL, MARKET_ROLE_GROUP_ORDER_ARRAY_SQL,
     MARKET_ROLE_GROUPS_VALUES_SQL,
 };
 
-pub(super) async fn run_refresh(pool: &PgPool) -> Result<MarketSnapshotSummary, String> {
+pub(super) async fn run_refresh(pool: &PgPool) -> Result<MarketSnapshotSummary> {
     let snapshot_date = chrono::Utc::now().date_naive();
     let overview_payload = build_overview(pool).await?;
     let company_stats_payload = build_company_stats(pool).await?;
@@ -59,7 +61,7 @@ pub(super) async fn run_refresh(pool: &PgPool) -> Result<MarketSnapshotSummary, 
     })
 }
 
-async fn build_overview(pool: &PgPool) -> Result<serde_json::Value, String> {
+async fn build_overview(pool: &PgPool) -> Result<serde_json::Value> {
     sqlx::query_scalar::<_, serde_json::Value>(
         r#"
         SELECT jsonb_build_object(
@@ -96,10 +98,10 @@ async fn build_overview(pool: &PgPool) -> Result<serde_json::Value, String> {
     )
     .fetch_one(pool)
     .await
-    .map_err(|error| format!("failed to build market overview snapshot: {error}"))
+    .map_err(crate::error::IngestionError::Database)
 }
 
-async fn build_company_stats(pool: &PgPool) -> Result<serde_json::Value, String> {
+async fn build_company_stats(pool: &PgPool) -> Result<serde_json::Value> {
     let query = format!(
         r#"
         WITH active_company_jobs AS (
@@ -164,10 +166,10 @@ async fn build_company_stats(pool: &PgPool) -> Result<serde_json::Value, String>
     sqlx::query_scalar::<_, serde_json::Value>(&query)
         .fetch_one(pool)
         .await
-        .map_err(|error| format!("failed to build market company stats snapshot: {error}"))
+        .map_err(crate::error::IngestionError::Database)
 }
 
-async fn build_salary_trends(pool: &PgPool) -> Result<serde_json::Value, String> {
+async fn build_salary_trends(pool: &PgPool) -> Result<serde_json::Value> {
     sqlx::query_scalar::<_, serde_json::Value>(
         r#"
         WITH filtered_jobs AS (
@@ -243,10 +245,10 @@ async fn build_salary_trends(pool: &PgPool) -> Result<serde_json::Value, String>
     )
     .fetch_one(pool)
     .await
-    .map_err(|error| format!("failed to build market salary trends snapshot: {error}"))
+    .map_err(crate::error::IngestionError::Database)
 }
 
-async fn build_role_demand(pool: &PgPool) -> Result<serde_json::Value, String> {
+async fn build_role_demand(pool: &PgPool) -> Result<serde_json::Value> {
     let query = format!(
         r#"
         WITH role_groups(role_group) AS (
@@ -304,10 +306,10 @@ async fn build_role_demand(pool: &PgPool) -> Result<serde_json::Value, String> {
     sqlx::query_scalar::<_, serde_json::Value>(&query)
         .fetch_one(pool)
         .await
-        .map_err(|error| format!("failed to build market role demand snapshot: {error}"))
+        .map_err(crate::error::IngestionError::Database)
 }
 
-async fn build_company_velocity(pool: &PgPool) -> Result<serde_json::Value, String> {
+async fn build_company_velocity(pool: &PgPool) -> Result<serde_json::Value> {
     sqlx::query_scalar::<_, serde_json::Value>(
         r#"
         WITH recent_company_jobs AS (
@@ -357,10 +359,10 @@ async fn build_company_velocity(pool: &PgPool) -> Result<serde_json::Value, Stri
     )
     .fetch_one(pool)
     .await
-    .map_err(|error| format!("failed to build market company velocity snapshot: {error}"))
+    .map_err(crate::error::IngestionError::Database)
 }
 
-async fn build_freeze_signals(pool: &PgPool) -> Result<serde_json::Value, String> {
+async fn build_freeze_signals(pool: &PgPool) -> Result<serde_json::Value> {
     sqlx::query_scalar::<_, serde_json::Value>(
         r#"
         WITH recent_company_jobs AS (
@@ -407,10 +409,10 @@ async fn build_freeze_signals(pool: &PgPool) -> Result<serde_json::Value, String
     )
     .fetch_one(pool)
     .await
-    .map_err(|error| format!("failed to build market freeze signals snapshot: {error}"))
+    .map_err(crate::error::IngestionError::Database)
 }
 
-async fn build_salary_by_seniority(pool: &PgPool) -> Result<serde_json::Value, String> {
+async fn build_salary_by_seniority(pool: &PgPool) -> Result<serde_json::Value> {
     sqlx::query_scalar::<_, serde_json::Value>(
         r#"
         WITH normalized_jobs AS (
@@ -489,10 +491,10 @@ async fn build_salary_by_seniority(pool: &PgPool) -> Result<serde_json::Value, S
     )
     .fetch_one(pool)
     .await
-    .map_err(|error| format!("failed to build market salary by seniority snapshot: {error}"))
+    .map_err(crate::error::IngestionError::Database)
 }
 
-async fn build_region_breakdown(pool: &PgPool) -> Result<serde_json::Value, String> {
+async fn build_region_breakdown(pool: &PgPool) -> Result<serde_json::Value> {
     let query = format!(
         r#"
         WITH region_groups(region_rank, region) AS (
@@ -572,10 +574,10 @@ async fn build_region_breakdown(pool: &PgPool) -> Result<serde_json::Value, Stri
     sqlx::query_scalar::<_, serde_json::Value>(&query)
         .fetch_one(pool)
         .await
-        .map_err(|error| format!("failed to build market region breakdown snapshot: {error}"))
+        .map_err(crate::error::IngestionError::Database)
 }
 
-async fn build_tech_demand(pool: &PgPool) -> Result<serde_json::Value, String> {
+async fn build_tech_demand(pool: &PgPool) -> Result<serde_json::Value> {
     sqlx::query_scalar::<_, serde_json::Value>(
         r#"
         WITH tech_skills(skill, pattern) AS (
@@ -645,7 +647,7 @@ async fn build_tech_demand(pool: &PgPool) -> Result<serde_json::Value, String> {
     )
     .fetch_one(pool)
     .await
-    .map_err(|error| format!("failed to build market tech demand snapshot: {error}"))
+    .map_err(crate::error::IngestionError::Database)
 }
 
 async fn upsert(
@@ -653,7 +655,7 @@ async fn upsert(
     snapshot_date: chrono::NaiveDate,
     snapshot_type: &str,
     payload: serde_json::Value,
-) -> Result<(), String> {
+) -> Result<()> {
     let snapshot_date_string = snapshot_date.format("%Y-%m-%d").to_string();
     let snapshot_id = format!("market_snapshot_{}_{}", snapshot_type, snapshot_date_string);
 
@@ -673,9 +675,7 @@ async fn upsert(
     .bind(Json(payload))
     .execute(pool)
     .await
-    .map_err(|error| {
-        format!("failed to upsert market snapshot '{snapshot_type}' for '{snapshot_date}': {error}")
-    })?;
+    .map_err(crate::error::IngestionError::Database)?;
 
     Ok(())
 }

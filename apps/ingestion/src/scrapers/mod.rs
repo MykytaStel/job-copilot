@@ -58,25 +58,20 @@ pub async fn polite_delay(ms: u64) {
 /// Jitter is deterministic (avoids the `rand` dependency): each retry adds
 /// an extra 200 ms on top of the exponential base so concurrent scrapers
 /// don't all retry at the exact same instant.
-pub async fn fetch_with_backoff(client: &Client, url: &str) -> Result<String, String> {
+pub async fn fetch_with_backoff(client: &Client, url: &str) -> crate::error::Result<String> {
+    use crate::error::IngestionError;
+
     const MAX_RETRIES: u32 = 3;
     const BASE_DELAY_MS: u64 = 1_000;
 
     let mut attempt = 0u32;
     loop {
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| format!("request failed: {e}"))?;
+        let response = client.get(url).send().await?;
 
         let status = response.status();
 
         if status.is_success() {
-            return response
-                .text()
-                .await
-                .map_err(|e| format!("body read failed: {e}"));
+            return Ok(response.text().await?);
         }
 
         if status.as_u16() == 429 || status.is_server_error() {
@@ -87,7 +82,9 @@ pub async fn fetch_with_backoff(client: &Client, url: &str) -> Result<String, St
                     retries = MAX_RETRIES,
                     "giving up after max retries due to rate limiting or server error"
                 );
-                return Err(format!("HTTP {status} after {MAX_RETRIES} retries: {url}"));
+                return Err(IngestionError::Scraper(format!(
+                    "HTTP {status} after {MAX_RETRIES} retries: {url}"
+                )));
             }
 
             let retry_after_ms = response
@@ -114,7 +111,9 @@ pub async fn fetch_with_backoff(client: &Client, url: &str) -> Result<String, St
             continue;
         }
 
-        return Err(format!("HTTP error: {status}: {url}"));
+        return Err(IngestionError::Scraper(format!(
+            "HTTP error: {status}: {url}"
+        )));
     }
 }
 
