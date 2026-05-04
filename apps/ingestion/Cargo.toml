@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-mock = []
+mock = ["job-copilot-domain/mock"]
 
 [dependencies]
 job-copilot-domain = { path = "../../crates/job-copilot-domain" }
@@ -19,3 +19,6 @@ sqlx.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+job-copilot-domain = { path = "../../crates/job-copilot-domain", features = ["mock"] }
