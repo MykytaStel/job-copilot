@@ -9,6 +9,7 @@ use tracing::info;
 use crate::adapters::SourceAdapter;
 #[cfg(any(feature = "mock", test))]
 use crate::adapters::mock_source::MockSourceAdapter;
+use crate::error::{IngestionError, Result};
 #[cfg(any(feature = "mock", test))]
 use crate::models::MockSourceInput;
 use crate::models::{IngestionBatch, InputDocument};
@@ -66,27 +67,33 @@ pub(crate) enum InputFormat {
 pub(crate) struct ScrapeSource(SourceId);
 
 impl Config {
-    pub(crate) fn from_env() -> Result<Self, String> {
+    pub(crate) fn from_env() -> Result<Self> {
         let database_url = env::var("DATABASE_URL")
             .ok()
             .map(|v| v.trim().to_string())
             .filter(|v| !v.is_empty())
-            .ok_or_else(|| "DATABASE_URL is required".to_string())?;
+            .ok_or_else(|| IngestionError::Config("DATABASE_URL is required".to_string()))?;
 
         let mut args = env::args().skip(1);
-        let flag = args.next().ok_or_else(usage_error)?;
+        let flag = args
+            .next()
+            .ok_or_else(|| IngestionError::Config(usage_error()))?;
 
         let run_mode = match flag.as_str() {
             "--input" => {
-                let path = args.next().ok_or("missing value for --input")?;
+                let path = args.next().ok_or_else(|| {
+                    IngestionError::Config("missing value for --input".to_string())
+                })?;
                 let mut input_format = InputFormat::Normalized;
                 while let Some(f) = args.next() {
                     if f != "--input-format" {
-                        return Err(format!(
+                        return Err(IngestionError::Config(format!(
                             "unsupported argument '{f}', expected '--input-format'"
-                        ));
+                        )));
                     }
-                    let val = args.next().ok_or("missing value for --input-format")?;
+                    let val = args.next().ok_or_else(|| {
+                        IngestionError::Config("missing value for --input-format".to_string())
+                    })?;
                     input_format = InputFormat::from_cli(&val)?;
                 }
                 RunMode::File(FileMode {
@@ -95,7 +102,9 @@ impl Config {
                 })
             }
             "--source" => {
-                let source_str = args.next().ok_or("missing value for --source")?;
+                let source_str = args.next().ok_or_else(|| {
+                    IngestionError::Config("missing value for --source".to_string())
+                })?;
                 let source = ScrapeSource::from_cli(&source_str)?;
                 let mut pages: u32 = 3;
                 let mut keyword: Option<String> = None;
@@ -103,18 +112,30 @@ impl Config {
                 while let Some(f) = args.next() {
                     match f.as_str() {
                         "--pages" => {
-                            let val = args.next().ok_or("missing value for --pages")?;
+                            let val = args.next().ok_or_else(|| {
+                                IngestionError::Config("missing value for --pages".to_string())
+                            })?;
                             pages = val.parse::<u32>().map_err(|_| {
-                                format!("--pages must be a positive integer, got '{val}'")
+                                IngestionError::Config(format!(
+                                    "--pages must be a positive integer, got '{val}'"
+                                ))
                             })?;
                             if pages == 0 {
-                                return Err("--pages must be at least 1".to_string());
+                                return Err(IngestionError::Config(
+                                    "--pages must be at least 1".to_string(),
+                                ));
                             }
                         }
                         "--keyword" => {
-                            keyword = Some(args.next().ok_or("missing value for --keyword")?);
+                            keyword = Some(args.next().ok_or_else(|| {
+                                IngestionError::Config("missing value for --keyword".to_string())
+                            })?);
                         }
-                        other => return Err(format!("unsupported argument '{other}'")),
+                        other => {
+                            return Err(IngestionError::Config(format!(
+                                "unsupported argument '{other}'"
+                            )));
+                        }
                     }
                 }
 
@@ -133,7 +154,9 @@ impl Config {
                 while let Some(f) = args.next() {
                     match f.as_str() {
                         "--sources" => {
-                            let val = args.next().ok_or("missing value for --sources")?;
+                            let val = args.next().ok_or_else(|| {
+                                IngestionError::Config("missing value for --sources".to_string())
+                            })?;
                             for s in val.split(',') {
                                 let s = s.trim();
                                 if s == "all" {
@@ -147,29 +170,47 @@ impl Config {
                             }
                         }
                         "--pages" => {
-                            let val = args.next().ok_or("missing value for --pages")?;
+                            let val = args.next().ok_or_else(|| {
+                                IngestionError::Config("missing value for --pages".to_string())
+                            })?;
                             pages = val.parse::<u32>().map_err(|_| {
-                                format!("--pages must be a positive integer, got '{val}'")
+                                IngestionError::Config(format!(
+                                    "--pages must be a positive integer, got '{val}'"
+                                ))
                             })?;
                             if pages == 0 {
-                                return Err("--pages must be at least 1".to_string());
+                                return Err(IngestionError::Config(
+                                    "--pages must be at least 1".to_string(),
+                                ));
                             }
                         }
                         "--interval-minutes" => {
-                            let val = args.next().ok_or("missing value for --interval-minutes")?;
-                            interval_minutes = val.parse::<u64>().map_err(|_| {
-                                format!(
-                                    "--interval-minutes must be a positive integer, got '{val}'"
+                            let val = args.next().ok_or_else(|| {
+                                IngestionError::Config(
+                                    "missing value for --interval-minutes".to_string(),
                                 )
                             })?;
+                            interval_minutes = val.parse::<u64>().map_err(|_| {
+                                IngestionError::Config(format!(
+                                    "--interval-minutes must be a positive integer, got '{val}'"
+                                ))
+                            })?;
                             if interval_minutes == 0 {
-                                return Err("--interval-minutes must be at least 1".to_string());
+                                return Err(IngestionError::Config(
+                                    "--interval-minutes must be at least 1".to_string(),
+                                ));
                             }
                         }
                         "--keyword" => {
-                            keyword = Some(args.next().ok_or("missing value for --keyword")?);
+                            keyword = Some(args.next().ok_or_else(|| {
+                                IngestionError::Config("missing value for --keyword".to_string())
+                            })?);
                         }
-                        other => return Err(format!("unsupported daemon argument '{other}'")),
+                        other => {
+                            return Err(IngestionError::Config(format!(
+                                "unsupported daemon argument '{other}'"
+                            )));
+                        }
                     }
                 }
 
@@ -188,7 +229,12 @@ impl Config {
                     keyword,
                 })
             }
-            other => return Err(format!("unsupported flag '{other}'\n{}", usage_error())),
+            other => {
+                return Err(IngestionError::Config(format!(
+                    "unsupported flag '{other}'\n{}",
+                    usage_error()
+                )));
+            }
         };
 
         Ok(Self {
@@ -209,14 +255,14 @@ fn usage_error() -> String {
 }
 
 impl InputFormat {
-    fn from_cli(value: &str) -> Result<Self, String> {
+    fn from_cli(value: &str) -> Result<Self> {
         match value.trim() {
             "normalized" => Ok(Self::Normalized),
             #[cfg(any(feature = "mock", test))]
             "mock-source" => Ok(Self::MockSource),
-            other => Err(format!(
+            other => Err(IngestionError::Config(format!(
                 "unsupported input format '{other}', expected 'normalized'"
-            )),
+            ))),
         }
     }
 }
@@ -227,15 +273,15 @@ impl ScrapeSource {
     pub(crate) const WORK_UA: Self = Self(SourceId::WorkUa);
     pub(crate) const ROBOTA_UA: Self = Self(SourceId::RobotaUa);
 
-    fn from_cli(value: &str) -> Result<Self, String> {
+    fn from_cli(value: &str) -> Result<Self> {
         match value.trim().to_lowercase().as_str() {
             "djinni" => Ok(Self::DJINNI),
             "dou" | "douua" | "dou_ua" | "dou.ua" => Ok(Self::DOU_UA),
             "workua" | "work_ua" | "work.ua" => Ok(Self::WORK_UA),
             "robotaua" | "robota_ua" | "robota.ua" => Ok(Self::ROBOTA_UA),
-            other => Err(format!(
+            other => Err(IngestionError::Config(format!(
                 "unsupported source '{other}', expected 'djinni', 'douua', 'workua', or 'robotaua'"
-            )),
+            ))),
         }
     }
 
@@ -248,7 +294,7 @@ impl ScrapeSource {
     }
 }
 
-pub(crate) fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
+pub(crate) fn load_batch(mode: &FileMode) -> Result<IngestionBatch> {
     info!(
         input_path = %mode.input_path.display(),
         input_format = match mode.input_format {
@@ -259,13 +305,18 @@ pub(crate) fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
         "loading ingestion batch from file"
     );
 
-    let raw = fs::read_to_string(&mode.input_path)
-        .map_err(|e| format!("failed to read {}: {e}", mode.input_path.display()))?;
+    let raw = fs::read_to_string(&mode.input_path).map_err(|e| {
+        IngestionError::Input(format!("failed to read {}: {e}", mode.input_path.display()))
+    })?;
 
     match mode.input_format {
         InputFormat::Normalized => {
-            let payload = serde_json::from_str::<InputDocument>(&raw)
-                .map_err(|e| format!("failed to parse {}: {e}", mode.input_path.display()))?;
+            let payload = serde_json::from_str::<InputDocument>(&raw).map_err(|e| {
+                IngestionError::Input(format!(
+                    "failed to parse {}: {e}",
+                    mode.input_path.display()
+                ))
+            })?;
             let batch = IngestionBatch::from_jobs(payload.into_jobs());
             info!(
                 input_path = %mode.input_path.display(),
@@ -276,21 +327,25 @@ pub(crate) fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
         }
         #[cfg(any(feature = "mock", test))]
         InputFormat::MockSource => {
-            let payload = serde_json::from_str::<MockSourceInput>(&raw)
-                .map_err(|e| format!("failed to parse {}: {e}", mode.input_path.display()))?;
+            let payload = serde_json::from_str::<MockSourceInput>(&raw).map_err(|e| {
+                IngestionError::Input(format!(
+                    "failed to parse {}: {e}",
+                    mode.input_path.display()
+                ))
+            })?;
             let adapter = MockSourceAdapter;
             let normalized = adapter.normalize(payload).map_err(|error| {
-                format!(
+                IngestionError::Normalization(format!(
                     "failed to normalize {} as mock-source input: {error}",
                     mode.input_path.display()
-                )
+                ))
             })?;
             let batch =
                 IngestionBatch::from_normalization_results(normalized).map_err(|error| {
-                    format!(
+                    IngestionError::Normalization(format!(
                         "failed to build ingestion batch from {}: {error}",
                         mode.input_path.display()
-                    )
+                    ))
                 })?;
             info!(
                 input_path = %mode.input_path.display(),
@@ -303,7 +358,7 @@ pub(crate) fn load_batch(mode: &FileMode) -> Result<IngestionBatch, String> {
     }
 }
 
-pub(crate) async fn run_scraper(mode: &ScrapeMode) -> Result<ScrapeOutput, String> {
+pub(crate) async fn run_scraper(mode: &ScrapeMode) -> Result<ScrapeOutput> {
     info!(
         source = mode.source.name(),
         pages = mode.pages,
@@ -337,17 +392,17 @@ pub(crate) async fn run_scraper(mode: &ScrapeMode) -> Result<ScrapeOutput, Strin
     };
 
     if scrape_run.jobs.is_empty() && scrape_run.jobs_attempted == 0 {
-        return Err(
+        return Err(IngestionError::Scraper(
             "scraper returned no jobs — site structure may have changed, check selectors"
                 .to_string(),
-        );
+        ));
     }
 
     let batch = IngestionBatch::from_normalization_results(scrape_run.jobs).map_err(|error| {
-        format!(
+        IngestionError::Normalization(format!(
             "scraper '{}' returned invalid normalization results: {error}",
             mode.source.name()
-        )
+        ))
     })?;
 
     info!(
@@ -405,7 +460,7 @@ mod tests {
         })
         .expect_err("missing file should fail");
 
-        assert!(error.contains("failed to read"));
+        assert!(error.to_string().contains("failed to read"));
     }
 
     #[test]

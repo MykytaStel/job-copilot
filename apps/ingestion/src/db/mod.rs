@@ -4,6 +4,8 @@ use sqlx::PgPool;
 use sqlx::types::Json;
 use tracing::info;
 
+use crate::error::{IngestionError, Result};
+
 use crate::models::IngestionBatch;
 
 mod market_role_heuristics {
@@ -65,13 +67,10 @@ pub struct IngestionRunMetrics<'a> {
     pub status: IngestionRunStatus,
 }
 
-pub async fn upsert_batch(pool: &PgPool, batch: &IngestionBatch) -> Result<UpsertSummary, String> {
+pub async fn upsert_batch(pool: &PgPool, batch: &IngestionBatch) -> Result<UpsertSummary> {
     batch.validate()?;
 
-    let mut tx = pool
-        .begin()
-        .await
-        .map_err(|error| format!("failed to begin transaction: {error}"))?;
+    let mut tx = pool.begin().await.map_err(IngestionError::Database)?;
     let resolved_batch = upserts::resolve_batch(&mut tx, batch).await?;
     let mut summary = UpsertSummary::default();
     let mut affected_job_ids = BTreeSet::new();
@@ -114,9 +113,7 @@ pub async fn upsert_batch(pool: &PgPool, batch: &IngestionBatch) -> Result<Upser
         reconciliation::create_profile_notifications(&mut tx, &affected_job_ids).await?;
     }
 
-    tx.commit()
-        .await
-        .map_err(|error| format!("failed to commit transaction: {error}"))?;
+    tx.commit().await.map_err(IngestionError::Database)?;
 
     summary.jobs_written = resolved_batch.jobs.len();
     info!(
@@ -132,31 +129,31 @@ pub async fn upsert_batch(pool: &PgPool, batch: &IngestionBatch) -> Result<Upser
     Ok(summary)
 }
 
-pub async fn refresh_market_snapshots(pool: &PgPool) -> Result<MarketSnapshotSummary, String> {
+pub async fn refresh_market_snapshots(pool: &PgPool) -> Result<MarketSnapshotSummary> {
     snapshots::run_refresh(pool).await
 }
 
-pub async fn record_ingestion_run(
-    pool: &PgPool,
-    metrics: &IngestionRunMetrics<'_>,
-) -> Result<(), String> {
-    let jobs_fetched = i32::try_from(metrics.jobs_fetched)
-        .map_err(|_| "jobs_fetched exceeds database integer range".to_string())?;
-    let jobs_attempted = i32::try_from(metrics.jobs_attempted)
-        .map_err(|_| "jobs_attempted exceeds database integer range".to_string())?;
-    let jobs_upserted = i32::try_from(metrics.jobs_upserted)
-        .map_err(|_| "jobs_upserted exceeds database integer range".to_string())?;
-    let jobs_failed = i32::try_from(metrics.jobs_failed)
-        .map_err(|_| "jobs_failed exceeds database integer range".to_string())?;
-    let errors = i32::try_from(metrics.errors)
-        .map_err(|_| "errors exceeds database integer range".to_string())?;
-    let duration_ms = i64::try_from(metrics.duration_ms)
-        .map_err(|_| "duration_ms exceeds database bigint range".to_string())?;
+pub async fn record_ingestion_run(pool: &PgPool, metrics: &IngestionRunMetrics<'_>) -> Result<()> {
+    let jobs_fetched = i32::try_from(metrics.jobs_fetched).map_err(|_| {
+        IngestionError::Validation("jobs_fetched exceeds database integer range".to_string())
+    })?;
+    let jobs_attempted = i32::try_from(metrics.jobs_attempted).map_err(|_| {
+        IngestionError::Validation("jobs_attempted exceeds database integer range".to_string())
+    })?;
+    let jobs_upserted = i32::try_from(metrics.jobs_upserted).map_err(|_| {
+        IngestionError::Validation("jobs_upserted exceeds database integer range".to_string())
+    })?;
+    let jobs_failed = i32::try_from(metrics.jobs_failed).map_err(|_| {
+        IngestionError::Validation("jobs_failed exceeds database integer range".to_string())
+    })?;
+    let errors = i32::try_from(metrics.errors).map_err(|_| {
+        IngestionError::Validation("errors exceeds database integer range".to_string())
+    })?;
+    let duration_ms = i64::try_from(metrics.duration_ms).map_err(|_| {
+        IngestionError::Validation("duration_ms exceeds database bigint range".to_string())
+    })?;
 
-    let mut tx = pool
-        .begin()
-        .await
-        .map_err(|error| format!("failed to begin ingestion run transaction: {error}"))?;
+    let mut tx = pool.begin().await.map_err(IngestionError::Database)?;
 
     sqlx::query(
         r#"
@@ -185,21 +182,14 @@ pub async fn record_ingestion_run(
     .bind(metrics.status.as_str())
     .execute(&mut *tx)
     .await
-    .map_err(|error| {
-        format!(
-            "failed to record ingestion run for source '{}': {error}",
-            metrics.source
-        )
-    })?;
+    .map_err(IngestionError::Database)?;
 
     sqlx::query("DELETE FROM ingestion_runs WHERE run_at < NOW() - INTERVAL '7 days'")
         .execute(&mut *tx)
         .await
-        .map_err(|error| format!("failed to prune old ingestion runs: {error}"))?;
+        .map_err(IngestionError::Database)?;
 
-    tx.commit()
-        .await
-        .map_err(|error| format!("failed to commit ingestion run transaction: {error}"))?;
+    tx.commit().await.map_err(IngestionError::Database)?;
 
     Ok(())
 }
@@ -1061,8 +1051,9 @@ mod tests {
             .await
             .expect_err("dedupe collision should be rejected");
 
-        assert!(error.contains("changed dedupe fingerprint"));
-        assert!(error.contains("already belongs to canonical job"));
+        let error_str = error.to_string();
+        assert!(error_str.contains("changed dedupe fingerprint"));
+        assert!(error_str.contains("already belongs to canonical job"));
 
         test_db.cleanup().await;
     }

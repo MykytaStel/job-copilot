@@ -6,6 +6,7 @@ use scraper::{ElementRef, Html, Selector};
 use serde_json::json;
 use tracing::{info, warn};
 
+use crate::error::Result;
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
     DetailSnapshot, ScraperConfig, ScraperRun, cleanup_description_text, collect_text,
@@ -23,16 +24,15 @@ pub struct WorkUaScraper {
 }
 
 impl WorkUaScraper {
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> Result<Self> {
         let client = Client::builder()
             .user_agent("Mozilla/5.0 (compatible; JobCopilot/1.0)")
             .timeout(Duration::from_secs(20))
-            .build()
-            .map_err(|e| format!("failed to build HTTP client: {e}"))?;
+            .build()?;
         Ok(Self { client })
     }
 
-    pub async fn scrape(&self, config: &ScraperConfig) -> Result<ScraperRun, String> {
+    pub async fn scrape(&self, config: &ScraperConfig) -> Result<ScraperRun> {
         let fetched_at = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         let selectors = WorkUaSelectors::new();
         let mut results: Vec<NormalizationResult> = Vec::new();
@@ -86,7 +86,7 @@ impl WorkUaScraper {
         })
     }
 
-    async fn fetch(&self, url: &str) -> Result<String, String> {
+    async fn fetch(&self, url: &str) -> Result<String> {
         fetch_with_backoff(&self.client, url).await
     }
 

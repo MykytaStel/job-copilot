@@ -3,6 +3,7 @@ mod cli;
 mod daemon;
 mod db;
 mod db_runtime;
+mod error;
 mod models;
 mod scrapers;
 
@@ -12,11 +13,12 @@ use std::time::Instant;
 use tracing::{info, warn};
 
 use crate::cli::{Config, RunMode, load_batch, run_scraper};
+use crate::error::{IngestionError, Result};
 
 // ── Entry point ─────────────────────────────────────────────────────────────
 
 #[tokio::main]
-async fn main() -> Result<(), String> {
+async fn main() -> Result<()> {
     tracing_subscriber::fmt().with_env_filter("info").init();
 
     let config = Config::from_env()?;
@@ -129,7 +131,7 @@ async fn main() -> Result<(), String> {
     };
 
     if batch.jobs.is_empty() {
-        return Err("no jobs to ingest".to_string());
+        return Err(IngestionError::Input("no jobs to ingest".to_string()));
     }
 
     let pool = db_runtime::connect(&config.database_url).await?;
@@ -149,7 +151,7 @@ async fn main() -> Result<(), String> {
     Ok(())
 }
 
-async fn run_migrations_if_requested(pool: &sqlx::PgPool) -> Result<(), String> {
+async fn run_migrations_if_requested(pool: &sqlx::PgPool) -> Result<()> {
     // Run migrations if RUN_DB_MIGRATIONS=true — useful when running ingestion
     // standalone without engine-api having started first.
     if env::var("RUN_DB_MIGRATIONS")

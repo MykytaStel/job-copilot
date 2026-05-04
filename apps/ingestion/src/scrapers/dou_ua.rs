@@ -6,6 +6,7 @@ use scraper::{Html, Selector};
 use serde_json::json;
 use tracing::{info, warn};
 
+use crate::error::Result;
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
     DetailSnapshot, ScraperConfig, ScraperRun, cleanup_description_text, collect_text,
@@ -24,7 +25,7 @@ pub struct DouUaScraper {
 }
 
 impl DouUaScraper {
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> Result<Self> {
         let headers = build_default_headers(
             "application/rss+xml,application/xml,text/xml;q=0.9,text/html;q=0.8,*/*;q=0.7",
             "uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -34,12 +35,11 @@ impl DouUaScraper {
             .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
             .timeout(Duration::from_secs(20))
             .default_headers(headers)
-            .build()
-            .map_err(|e| format!("failed to build HTTP client: {e}"))?;
+            .build()?;
         Ok(Self { client })
     }
 
-    pub async fn scrape(&self, config: &ScraperConfig) -> Result<ScraperRun, String> {
+    pub async fn scrape(&self, config: &ScraperConfig) -> Result<ScraperRun> {
         let fetched_at = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         info!(source = SOURCE, url = FEED_URL, "fetching RSS feed");
 
@@ -80,7 +80,7 @@ impl DouUaScraper {
         })
     }
 
-    async fn fetch(&self, url: &str) -> Result<String, String> {
+    async fn fetch(&self, url: &str) -> Result<String> {
         fetch_with_backoff(&self.client, url).await
     }
 
