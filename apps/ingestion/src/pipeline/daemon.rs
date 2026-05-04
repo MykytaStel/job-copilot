@@ -193,6 +193,23 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
             next_in_minutes = mode.interval_minutes,
             "sleeping until next round"
         );
-        tokio::time::sleep(interval).await;
+        tokio::select! {
+            shutdown = tokio::signal::ctrl_c() => {
+                match shutdown {
+                    Ok(()) => {
+                        info!("shutdown signal received; stopping ingestion daemon");
+                        break;
+                    }
+                    Err(error) => {
+                        warn!(%error, "failed to listen for shutdown signal");
+                        break;
+                    }
+                }
+            }
+            _ = tokio::time::sleep(interval) => {}
+        }
     }
+
+    info!("ingestion daemon stopped");
+    Ok(())
 }

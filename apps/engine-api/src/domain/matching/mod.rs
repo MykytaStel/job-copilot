@@ -110,29 +110,6 @@ pub struct JobFit {
     pub reasons: Vec<String>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn total_score_clamps_at_zero_when_components_sum_negative() {
-        let breakdown = JobScoreBreakdown::new(0, 0, -15, vec![]);
-        assert_eq!(
-            breakdown.total_score, 0,
-            "negative component sum must clamp to 0"
-        );
-    }
-
-    #[test]
-    fn total_score_does_not_exceed_100() {
-        let breakdown = JobScoreBreakdown::new(200, 0, 0, vec![]);
-        assert_eq!(
-            breakdown.total_score, 100,
-            "component sum above 100 must clamp to 100"
-        );
-    }
-}
-
 impl JobFit {
     pub fn apply_matching_adjustment(&mut self, score_delta: i16, reason: Option<String>) {
         if score_delta == 0 {
@@ -206,5 +183,28 @@ impl JobFit {
     fn sync_score(&mut self) {
         self.score_breakdown.refresh_total();
         self.score = self.score_breakdown.total_score;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn total_score_clamps_at_zero_when_components_sum_negative() {
+        let breakdown = JobScoreBreakdown::new(0, 0, -15, vec![]);
+        assert_eq!(
+            breakdown.total_score, 0,
+            "negative component sum must clamp to 0"
+        );
+    }
+
+    #[test]
+    fn total_score_does_not_exceed_100() {
+        let breakdown = JobScoreBreakdown::new(200, 0, 0, vec![]);
+        assert_eq!(
+            breakdown.total_score, 100,
+            "component sum above 100 must clamp to 100"
+        );
     }
 }

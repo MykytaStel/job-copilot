@@ -71,7 +71,7 @@ pub struct AppState {
 impl AppState {
     #[cfg(test)]
     pub fn new(database: Database) -> Self {
-        Self::new_with_config(database, &Config::from_env())
+        Self::new_with_config(database, &Config::from_env().expect("valid test config"))
     }
 
     pub fn new_with_config(database: Database, config: &Config) -> Self {
