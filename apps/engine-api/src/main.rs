@@ -17,7 +17,10 @@ use tracing_subscriber::EnvFilter;
 async fn main() {
     init_tracing();
 
-    let config = Config::from_env();
+    let config = Config::from_env().unwrap_or_else(|err| {
+        eprintln!("engine-api configuration error: {err}");
+        std::process::exit(1);
+    });
     info!(
         app_env = config.app_env,
         production = config.is_production(),
