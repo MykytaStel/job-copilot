@@ -3,7 +3,16 @@ use std::time::{Duration, Instant};
 use tracing::{error, info, warn};
 
 const MAX_SCRAPE_ATTEMPTS: u8 = 3;
-const SCRAPE_BACKOFF_SECS: [u64; 2] = [5, 15];
+const SCRAPE_TIMEOUT: Duration = Duration::from_secs(120);
+
+fn delay_for_attempt(attempt: u8) -> Duration {
+    let secs = match attempt {
+        1 => 5,
+        2 => 15,
+        _ => 30,
+    };
+    Duration::from_secs(secs)
+}
 
 use crate::cli::{DaemonMode, ScrapeMode, run_scraper};
 use crate::db;
@@ -34,21 +43,37 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                 let mut attempt = 0u8;
                 let mut errors = 0u32;
                 loop {
-                    result = run_scraper(&scrape_mode).await;
+                    result = match tokio::time::timeout(SCRAPE_TIMEOUT, run_scraper(&scrape_mode))
+                        .await
+                    {
+                        Ok(inner) => inner,
+                        Err(_elapsed) => {
+                            warn!(
+                                source = source.name(),
+                                attempt,
+                                timeout_secs = SCRAPE_TIMEOUT.as_secs(),
+                                "scrape timed out"
+                            );
+                            Err(crate::error::IngestionError::Config(format!(
+                                "scrape timed out after {}s",
+                                SCRAPE_TIMEOUT.as_secs()
+                            )))
+                        }
+                    };
                     attempt += 1;
                     match &result {
                         Ok(_) => break,
                         Err(error) if attempt < MAX_SCRAPE_ATTEMPTS => {
                             errors += 1;
-                            let delay = SCRAPE_BACKOFF_SECS[usize::from(attempt - 1)];
+                            let delay = delay_for_attempt(attempt);
                             warn!(
                                 source = source.name(),
                                 attempt,
-                                delay_secs = delay,
+                                delay_secs = delay.as_secs(),
                                 error = %error,
                                 "scrape failed, retrying"
                             );
-                            tokio::time::sleep(Duration::from_secs(delay)).await;
+                            tokio::time::sleep(delay).await;
                         }
                         Err(_) => {
                             errors += 1;

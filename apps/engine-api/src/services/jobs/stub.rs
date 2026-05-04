@@ -126,6 +126,17 @@ impl JobsServiceStub {
         Ok(self.job_views_by_id.get(id).cloned())
     }
 
+    pub(crate) fn get_views_by_ids(&self, ids: &[String]) -> Result<Vec<JobView>, RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok(ids
+            .iter()
+            .filter_map(|id| self.job_views_by_id.get(id).cloned())
+            .collect())
+    }
+
     pub(crate) fn list_filtered_views(
         &self,
         limit: i64,

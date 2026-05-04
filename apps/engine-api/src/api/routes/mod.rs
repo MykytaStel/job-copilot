@@ -33,8 +33,58 @@ pub fn public_router() -> Router<AppState> {
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
         .route("/api/v1/ping", get(health::ping))
+}
+
+/// Auth routes with a conservative rate limit to reduce brute-force exposure.
+/// 20 requests per 60-second fixed window (global, single-user product).
+pub fn auth_router() -> Router<AppState> {
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    use axum::http::StatusCode;
+    use axum::middleware::Next;
+    use axum::response::IntoResponse;
+    use tokio::sync::Mutex;
+
+    #[derive(Clone)]
+    struct RateLimiter(Arc<Mutex<(Instant, u32)>>);
+
+    impl RateLimiter {
+        fn new() -> Self {
+            Self(Arc::new(Mutex::new((Instant::now(), 0))))
+        }
+
+        async fn check(&self) -> bool {
+            let mut guard = self.0.lock().await;
+            let (window_start, count) = &mut *guard;
+            let now = Instant::now();
+            if now.duration_since(*window_start) >= Duration::from_secs(60) {
+                *window_start = now;
+                *count = 1;
+                true
+            } else if *count < 20 {
+                *count += 1;
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    let limiter = RateLimiter::new();
+    Router::new()
         .route("/api/v1/auth/register", post(auth::register))
         .route("/api/v1/auth/login", post(auth::login))
+        .layer(axum::middleware::from_fn(move |req, next: Next| {
+            let limiter = limiter.clone();
+            async move {
+                if limiter.check().await {
+                    next.run(req).await
+                } else {
+                    StatusCode::TOO_MANY_REQUESTS.into_response()
+                }
+            }
+        }))
 }
 
 pub fn internal_router() -> Router<AppState> {

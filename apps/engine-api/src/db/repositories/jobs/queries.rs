@@ -152,6 +152,26 @@ impl JobsRepository {
         Ok(row.map(JobView::from))
     }
 
+    pub async fn get_views_by_ids(&self, ids: &[String]) -> Result<Vec<JobView>, RepositoryError> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        let rows = sqlx::query_as::<_, JobViewRow>(&job_view_query(
+            Some("WHERE jobs.id = ANY($1::text[])"),
+            None,
+        ))
+        .bind(ids)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows.into_iter().map(JobView::from).collect())
+    }
+
     pub async fn list_filtered_views(
         &self,
         limit: i64,
