@@ -3,9 +3,9 @@ use tracing::warn;
 
 use crate::models::NormalizationResult;
 
+use super::company::normalize_company_name;
 use super::detail_merge::{DetailSnapshot, merge_detail_into_result};
 use super::http::{fetch_with_backoff, polite_delay};
-use super::company::normalize_company_name;
 
 /// Shared scraping behaviour: HTTP fetch, per-result detail enrichment, polite pacing.
 ///

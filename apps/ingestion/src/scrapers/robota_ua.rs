@@ -16,6 +16,7 @@ use tracing::{info, warn};
 
 use crate::error::{IngestionError, Result};
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
+use crate::scrapers::runner::JobSource;
 use crate::scrapers::{
     DetailSnapshot, ScraperConfig, ScraperRun, cleanup_description_text, detail_error_summaries,
     extract_skills, headers::build_default_headers, infer_company_meta, infer_remote_type,
@@ -23,7 +24,6 @@ use crate::scrapers::{
     normalize_salary_to_usd_monthly, normalized_non_empty, parse_salary_range_with_usd_monthly,
     polite_delay,
 };
-use crate::scrapers::runner::JobSource;
 
 const SOURCE: &str = <RobotaUaScraper as JobSource>::SOURCE;
 const API_BASE: &str = "https://api.robota.ua";

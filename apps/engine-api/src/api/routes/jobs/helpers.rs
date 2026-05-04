@@ -27,7 +27,12 @@ pub(super) async fn load_profile_ranked_jobs(
         .get_by_id(profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
-        .ok_or_else(|| ApiError::not_found("profile_not_found", format!("profile {profile_id} not found")))?;
+        .ok_or_else(|| {
+            ApiError::not_found(
+                "profile_not_found",
+                format!("profile {profile_id} not found"),
+            )
+        })?;
     let analyzed_profile = state.profile_analysis.analyze(&profile.raw_text);
     let search_profile = state
         .search_profile_builder

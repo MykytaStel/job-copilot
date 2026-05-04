@@ -152,10 +152,7 @@ impl JobsRepository {
         Ok(row.map(JobView::from))
     }
 
-    pub async fn get_views_by_ids(
-        &self,
-        ids: &[String],
-    ) -> Result<Vec<JobView>, RepositoryError> {
+    pub async fn get_views_by_ids(&self, ids: &[String]) -> Result<Vec<JobView>, RepositoryError> {
         if ids.is_empty() {
             return Ok(vec![]);
         }

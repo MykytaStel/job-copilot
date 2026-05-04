@@ -151,8 +151,7 @@ impl CvTailoringService {
 
                 let response = loop {
                     let mut request = client.post(&url).json(payload);
-                    if let Some(token) =
-                        internal_token.as_deref().filter(|token| !token.is_empty())
+                    if let Some(token) = internal_token.as_deref().filter(|token| !token.is_empty())
                     {
                         request = request.header(INTERNAL_TOKEN_HEADER, token);
                     }

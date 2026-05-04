@@ -29,11 +29,14 @@ mod tests {
 
     use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 
-    use super::company::{compute_job_quality_score, infer_company_industry_hint, infer_company_size_hint};
+    use super::company::{
+        compute_job_quality_score, infer_company_industry_hint, infer_company_size_hint,
+    };
     use super::detail_merge::merge_detail_into_result;
     use super::{
         DetailSnapshot, cleanup_description_text, extract_skills, infer_company_meta,
-        infer_seniority, infer_seniority_from_title_and_description, normalize_salary_to_usd_monthly,
+        infer_seniority, infer_seniority_from_title_and_description,
+        normalize_salary_to_usd_monthly,
     };
 
     #[test]

@@ -55,10 +55,7 @@ impl JobsService {
         }
     }
 
-    pub async fn get_views_by_ids(
-        &self,
-        ids: &[String],
-    ) -> Result<Vec<JobView>, RepositoryError> {
+    pub async fn get_views_by_ids(&self, ids: &[String]) -> Result<Vec<JobView>, RepositoryError> {
         match &self.backend {
             JobsServiceBackend::Repository(repository) => repository.get_views_by_ids(ids).await,
             #[cfg(test)]

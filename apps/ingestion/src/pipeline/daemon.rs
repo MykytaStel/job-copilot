@@ -43,7 +43,9 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                 let mut attempt = 0u8;
                 let mut errors = 0u32;
                 loop {
-                    result = match tokio::time::timeout(SCRAPE_TIMEOUT, run_scraper(&scrape_mode)).await {
+                    result = match tokio::time::timeout(SCRAPE_TIMEOUT, run_scraper(&scrape_mode))
+                        .await
+                    {
                         Ok(inner) => inner,
                         Err(_elapsed) => {
                             warn!(
@@ -52,9 +54,10 @@ pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result
                                 timeout_secs = SCRAPE_TIMEOUT.as_secs(),
                                 "scrape timed out"
                             );
-                            Err(crate::error::IngestionError::Config(
-                                format!("scrape timed out after {}s", SCRAPE_TIMEOUT.as_secs()),
-                            ))
+                            Err(crate::error::IngestionError::Config(format!(
+                                "scrape timed out after {}s",
+                                SCRAPE_TIMEOUT.as_secs()
+                            )))
                         }
                     };
                     attempt += 1;
