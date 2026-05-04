@@ -1230,12 +1230,12 @@ mod tests {
             .await
             .expect("market snapshots should refresh idempotently");
 
-        assert_eq!(first_summary.snapshots_written, 4);
+        assert_eq!(first_summary.snapshots_written, 9);
         assert_eq!(first_summary.snapshot_date, second_summary.snapshot_date);
-        assert_eq!(second_summary.snapshots_written, 4);
+        assert_eq!(second_summary.snapshots_written, 9);
 
         let snapshots = fetch_market_snapshots(&test_db.pool).await;
-        assert_eq!(snapshots.len(), 4);
+        assert_eq!(snapshots.len(), 9);
 
         let by_type = snapshots
             .into_iter()

@@ -1,18 +1,12 @@
+use std::fmt;
+use std::str::FromStr;
+
 use thiserror::Error;
 use tracing::warn;
 
 use crate::services::search_ranking::runtime::RerankerRuntimeMode;
 
-#[derive(Debug, Error)]
-pub enum ConfigError {
-    #[error("invalid environment variable {name}: {reason}")]
-    InvalidEnv { name: &'static str, reason: String },
-
-    #[error("production configuration error: {0}")]
-    Production(String),
-}
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Config {
     pub port: u16,
     pub app_env: String,
@@ -33,42 +27,50 @@ pub struct Config {
     pub metrics_port: u16,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ConfigError {
+    #[error("missing required environment variable: {0}")]
+    MissingEnv(&'static str),
+
+    #[error("invalid environment variable {name}: {reason}")]
+    InvalidEnv { name: &'static str, reason: String },
+
+    #[error("production configuration error: {0}")]
+    Production(String),
+}
+
 impl Config {
     pub fn is_production(&self) -> bool {
         self.app_env == "production"
     }
 
     pub fn from_env() -> Result<Self, ConfigError> {
-        let port = parse_env_or_default("PORT", 8080u16)?;
-        let database_url = std::env::var("DATABASE_URL")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
-        let database_max_connections = parse_env_or_default("DATABASE_MAX_CONNECTIONS", 5u32)?;
-        let run_db_migrations = std::env::var("RUN_DB_MIGRATIONS")
-            .ok()
-            .as_deref()
-            .map(parse_bool)
-            .unwrap_or(true);
-        let learned_reranker_enabled = std::env::var("LEARNED_RERANKER_ENABLED")
-            .ok()
-            .as_deref()
-            .map(parse_bool)
-            .unwrap_or(true);
-        let trained_reranker_enabled = std::env::var("TRAINED_RERANKER_ENABLED")
-            .ok()
-            .as_deref()
-            .map(parse_bool)
-            .unwrap_or(false);
-        let reranker_runtime_mode = std::env::var("RERANKER_RUNTIME_MODE")
-            .ok()
+        Self::from_env_vars(|name| std::env::var(name).ok())
+    }
+
+    fn from_env_vars(get_env: impl Fn(&str) -> Option<String>) -> Result<Self, ConfigError> {
+        let port = parse_or_default(&get_env, "PORT", 8080_u16)?;
+
+        let database_url = optional_trimmed(&get_env, "DATABASE_URL");
+
+        let database_max_connections =
+            parse_or_default(&get_env, "DATABASE_MAX_CONNECTIONS", 5_u32)?;
+
+        let run_db_migrations = parse_bool_or_default(&get_env, "RUN_DB_MIGRATIONS", true)?;
+
+        let learned_reranker_enabled =
+            parse_bool_or_default(&get_env, "LEARNED_RERANKER_ENABLED", true)?;
+
+        let trained_reranker_enabled =
+            parse_bool_or_default(&get_env, "TRAINED_RERANKER_ENABLED", false)?;
+
+        let reranker_runtime_mode = optional_trimmed(&get_env, "RERANKER_RUNTIME_MODE")
             .and_then(|value| {
-                let trimmed = value.trim().to_string();
-                let parsed = RerankerRuntimeMode::parse(&trimmed);
+                let parsed = RerankerRuntimeMode::parse(&value);
 
                 if parsed.is_none() {
                     warn!(
-                        mode = trimmed,
+                        mode = value,
                         "invalid RERANKER_RUNTIME_MODE; falling back to feature-flag derived mode"
                     );
                 }
@@ -81,56 +83,33 @@ impl Config {
                     trained_reranker_enabled,
                 )
             });
-        let trained_reranker_model_path = std::env::var("TRAINED_RERANKER_MODEL_PATH")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
-        let ml_sidecar_base_url = std::env::var("ML_SIDECAR_BASE_URL")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty())
+
+        let trained_reranker_model_path = optional_trimmed(&get_env, "TRAINED_RERANKER_MODEL_PATH");
+
+        let ml_sidecar_base_url = optional_trimmed(&get_env, "ML_SIDECAR_BASE_URL")
             .unwrap_or_else(|| "http://localhost:8000".to_string());
-        let ml_sidecar_timeout_seconds = parse_env_or_default("ML_SIDECAR_TIMEOUT_SECONDS", 90u64)?;
-        let ml_sidecar_internal_token = std::env::var("ML_INTERNAL_TOKEN")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
-        let ml_retrain_threshold = parse_env_or_default("ML_RETRAIN_THRESHOLD", 15usize)?;
+
+        let ml_sidecar_timeout_seconds =
+            parse_or_default(&get_env, "ML_SIDECAR_TIMEOUT_SECONDS", 90_u64)?;
+
+        let ml_sidecar_internal_token = optional_trimmed(&get_env, "ML_INTERNAL_TOKEN");
+
+        let ml_retrain_threshold = parse_or_default(&get_env, "ML_RETRAIN_THRESHOLD", 15_usize)?;
+
         let ml_retrain_poll_interval_seconds =
-            parse_env_or_default("ML_RETRAIN_POLL_INTERVAL_SECONDS", 21_600u64)?;
-        let jwt_secret = std::env::var("JWT_SECRET")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
-        let app_env = std::env::var("APP_ENV")
-            .ok()
-            .map(|value| value.trim().to_ascii_lowercase())
-            .filter(|value| !value.is_empty())
+            parse_or_default(&get_env, "ML_RETRAIN_POLL_INTERVAL_SECONDS", 21_600_u64)?;
+
+        let jwt_secret = optional_trimmed(&get_env, "JWT_SECRET");
+
+        let app_env = optional_trimmed(&get_env, "APP_ENV")
+            .map(|value| value.to_ascii_lowercase())
             .unwrap_or_else(|| "development".to_string());
+
         let is_production = app_env == "production";
-        let cors_allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS")
-            .ok()
-            .map(|value| {
-                value
-                    .split(',')
-                    .map(|origin| origin.trim().to_string())
-                    .filter(|origin| !origin.is_empty())
-                    .collect::<Vec<_>>()
-            })
-            .filter(|origins| !origins.is_empty())
-            .unwrap_or_else(|| {
-                if is_production {
-                    Vec::new()
-                } else {
-                    vec![
-                        "http://localhost:3000".to_string(),
-                        "http://127.0.0.1:3000".to_string(),
-                        "http://localhost:5173".to_string(),
-                        "http://127.0.0.1:5173".to_string(),
-                    ]
-                }
-            });
-        let metrics_port = parse_env_or_default("METRICS_PORT", 9090u16)?;
+
+        let cors_allowed_origins = parse_cors_allowed_origins(&get_env, is_production)?;
+
+        let metrics_port = parse_or_default(&get_env, "METRICS_PORT", 9090_u16)?;
 
         let config = Self {
             port,
@@ -153,55 +132,156 @@ impl Config {
         };
 
         config.validate()?;
+
         Ok(config)
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
-        if self.is_production() {
-            if self.cors_allowed_origins.is_empty() {
-                return Err(ConfigError::Production(
-                    "CORS_ALLOWED_ORIGINS must be set in production".to_string(),
-                ));
-            }
-            if !is_production_jwt_secret_acceptable(self.jwt_secret.as_deref()) {
-                return Err(ConfigError::Production(
-                    "JWT_SECRET must be set in production — refusing to start without authentication"
-                        .to_string(),
-                ));
-            }
-            if self.ml_sidecar_internal_token.is_none() {
-                return Err(ConfigError::Production(
-                    "ML_INTERNAL_TOKEN must be set in production — refusing to start without ML service authentication"
-                        .to_string(),
-                ));
-            }
+        validate_positive_u32("DATABASE_MAX_CONNECTIONS", self.database_max_connections)?;
+        validate_positive_u64(
+            "ML_SIDECAR_TIMEOUT_SECONDS",
+            self.ml_sidecar_timeout_seconds,
+        )?;
+        validate_positive_u64(
+            "ML_RETRAIN_POLL_INTERVAL_SECONDS",
+            self.ml_retrain_poll_interval_seconds,
+        )?;
+
+        validate_http_url("ML_SIDECAR_BASE_URL", &self.ml_sidecar_base_url)?;
+
+        if self.is_production() && !is_production_jwt_secret_acceptable(self.jwt_secret.as_deref())
+        {
+            return Err(ConfigError::Production(
+                "JWT_SECRET must be set in production — refusing to start without authentication"
+                    .to_string(),
+            ));
         }
+
+        if self.is_production() && self.ml_sidecar_internal_token.is_none() {
+            return Err(ConfigError::Production(
+                "ML_INTERNAL_TOKEN must be set in production — refusing to start without ML service authentication"
+                    .to_string(),
+            ));
+        }
+
         Ok(())
     }
 }
 
-fn parse_env_or_default<T>(name: &'static str, default: T) -> Result<T, ConfigError>
+fn optional_trimmed(
+    get_env: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+) -> Option<String> {
+    get_env(name)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn parse_or_default<T>(
+    get_env: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+    default: T,
+) -> Result<T, ConfigError>
 where
-    T: std::str::FromStr,
-    T::Err: std::fmt::Display,
+    T: FromStr,
+    T::Err: fmt::Display,
 {
-    match std::env::var(name) {
-        Err(_) => Ok(default),
-        Ok(value) => value
-            .trim()
-            .parse::<T>()
-            .map_err(|err| ConfigError::InvalidEnv {
-                name,
-                reason: err.to_string(),
-            }),
+    let Some(raw_value) = optional_trimmed(get_env, name) else {
+        return Ok(default);
+    };
+
+    raw_value
+        .parse::<T>()
+        .map_err(|error| ConfigError::InvalidEnv {
+            name,
+            reason: error.to_string(),
+        })
+}
+
+fn parse_bool_or_default(
+    get_env: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+    default: bool,
+) -> Result<bool, ConfigError> {
+    let Some(raw_value) = optional_trimmed(get_env, name) else {
+        return Ok(default);
+    };
+
+    parse_bool(&raw_value).ok_or_else(|| ConfigError::InvalidEnv {
+        name,
+        reason: "expected one of: true, false, 1, 0, yes, no, on, off".to_string(),
+    })
+}
+
+fn parse_bool(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
     }
 }
 
-fn parse_bool(value: &str) -> bool {
-    matches!(
-        value.trim().to_ascii_lowercase().as_str(),
-        "1" | "true" | "yes" | "on"
-    )
+fn parse_cors_allowed_origins(
+    get_env: &impl Fn(&str) -> Option<String>,
+    is_production: bool,
+) -> Result<Vec<String>, ConfigError> {
+    let origins = optional_trimmed(get_env, "CORS_ALLOWED_ORIGINS")
+        .map(|value| {
+            value
+                .split(',')
+                .map(|origin| origin.trim().to_string())
+                .filter(|origin| !origin.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .filter(|origins| !origins.is_empty());
+
+    match origins {
+        Some(origins) => Ok(origins),
+        None if is_production => Err(ConfigError::MissingEnv("CORS_ALLOWED_ORIGINS")),
+        None => Ok(vec![
+            "http://localhost:3000".to_string(),
+            "http://127.0.0.1:3000".to_string(),
+            "http://localhost:5173".to_string(),
+            "http://127.0.0.1:5173".to_string(),
+        ]),
+    }
+}
+
+fn validate_positive_u32(name: &'static str, value: u32) -> Result<(), ConfigError> {
+    if value == 0 {
+        return Err(ConfigError::InvalidEnv {
+            name,
+            reason: "must be greater than 0".to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+fn validate_positive_u64(name: &'static str, value: u64) -> Result<(), ConfigError> {
+    if value == 0 {
+        return Err(ConfigError::InvalidEnv {
+            name,
+            reason: "must be greater than 0".to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+fn validate_http_url(name: &'static str, value: &str) -> Result<(), ConfigError> {
+    let parsed = reqwest::Url::parse(value).map_err(|error| ConfigError::InvalidEnv {
+        name,
+        reason: error.to_string(),
+    })?;
+
+    match parsed.scheme() {
+        "http" | "https" => Ok(()),
+        scheme => Err(ConfigError::InvalidEnv {
+            name,
+            reason: format!("expected http or https URL, got scheme '{scheme}'"),
+        }),
+    }
 }
 
 fn is_production_jwt_secret_acceptable(secret: Option<&str>) -> bool {
@@ -214,64 +294,34 @@ fn is_production_jwt_secret_acceptable(secret: Option<&str>) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::services::search_ranking::runtime::RerankerRuntimeMode;
 
-    use super::{
-        Config, ConfigError, is_production_jwt_secret_acceptable, parse_bool, parse_env_or_default,
-    };
+    use super::{Config, ConfigError, is_production_jwt_secret_acceptable, parse_bool};
 
-    fn minimal_prod_config() -> Config {
-        Config {
-            port: 8080,
-            app_env: "production".to_string(),
-            database_url: None,
-            database_max_connections: 5,
-            run_db_migrations: true,
-            reranker_runtime_mode: RerankerRuntimeMode::Deterministic,
-            learned_reranker_enabled: true,
-            trained_reranker_enabled: false,
-            trained_reranker_model_path: None,
-            ml_sidecar_base_url: "http://localhost:8000".to_string(),
-            ml_sidecar_timeout_seconds: 90,
-            ml_sidecar_internal_token: Some("prod-token".to_string()),
-            ml_retrain_threshold: 15,
-            ml_retrain_poll_interval_seconds: 21_600,
-            jwt_secret: Some("strong-production-secret".to_string()),
-            cors_allowed_origins: vec!["https://example.com".to_string()],
-            metrics_port: 9090,
-        }
-    }
+    fn load_config(vars: &[(&str, &str)]) -> Result<Config, ConfigError> {
+        let env = vars
+            .iter()
+            .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+            .collect::<HashMap<_, _>>();
 
-    fn minimal_dev_config() -> Config {
-        Config {
-            port: 8080,
-            app_env: "development".to_string(),
-            database_url: None,
-            database_max_connections: 5,
-            run_db_migrations: true,
-            reranker_runtime_mode: RerankerRuntimeMode::Deterministic,
-            learned_reranker_enabled: true,
-            trained_reranker_enabled: false,
-            trained_reranker_model_path: None,
-            ml_sidecar_base_url: "http://localhost:8000".to_string(),
-            ml_sidecar_timeout_seconds: 90,
-            ml_sidecar_internal_token: None,
-            ml_retrain_threshold: 15,
-            ml_retrain_poll_interval_seconds: 21_600,
-            jwt_secret: None,
-            cors_allowed_origins: vec!["http://localhost:3000".to_string()],
-            metrics_port: 9090,
-        }
+        Config::from_env_vars(|name| env.get(name).cloned())
     }
 
     #[test]
-    fn parses_truthy_booleans() {
-        assert!(parse_bool("true"));
-        assert!(parse_bool("1"));
-        assert!(parse_bool("yes"));
-        assert!(parse_bool("on"));
-        assert!(!parse_bool("false"));
-        assert!(!parse_bool("0"));
+    fn parses_truthy_and_falsey_booleans() {
+        assert_eq!(parse_bool("true"), Some(true));
+        assert_eq!(parse_bool("1"), Some(true));
+        assert_eq!(parse_bool("yes"), Some(true));
+        assert_eq!(parse_bool("on"), Some(true));
+
+        assert_eq!(parse_bool("false"), Some(false));
+        assert_eq!(parse_bool("0"), Some(false));
+        assert_eq!(parse_bool("no"), Some(false));
+        assert_eq!(parse_bool("off"), Some(false));
+
+        assert_eq!(parse_bool("maybe"), None);
     }
 
     #[test]
@@ -304,102 +354,127 @@ mod tests {
     }
 
     #[test]
-    fn valid_dev_config_passes_validate() {
-        assert!(minimal_dev_config().validate().is_ok());
-    }
+    fn valid_development_config_uses_defaults() {
+        let config = load_config(&[]).expect("development config should load");
 
-    #[test]
-    fn valid_prod_config_passes_validate() {
-        assert!(minimal_prod_config().validate().is_ok());
-    }
-
-    #[test]
-    fn production_requires_strong_jwt_secret() {
-        let mut config = minimal_prod_config();
-
-        config.jwt_secret = None;
-        assert!(matches!(config.validate(), Err(ConfigError::Production(_))));
-
-        config.jwt_secret = Some("local-dev-secret-change-me".to_string());
-        assert!(matches!(config.validate(), Err(ConfigError::Production(_))));
-
-        config.jwt_secret = Some("strong-production-secret".to_string());
-        assert!(config.validate().is_ok());
-    }
-
-    #[test]
-    fn production_requires_ml_internal_token() {
-        let mut config = minimal_prod_config();
-
-        config.ml_sidecar_internal_token = None;
-        assert!(matches!(config.validate(), Err(ConfigError::Production(_))));
-
-        config.ml_sidecar_internal_token = Some("token".to_string());
-        assert!(config.validate().is_ok());
-    }
-
-    #[test]
-    fn production_requires_cors_origins() {
-        let mut config = minimal_prod_config();
-
-        config.cors_allowed_origins = Vec::new();
-        assert!(matches!(config.validate(), Err(ConfigError::Production(_))));
-
-        config.cors_allowed_origins = vec!["https://example.com".to_string()];
-        assert!(config.validate().is_ok());
+        assert_eq!(config.port, 8080);
+        assert_eq!(config.app_env, "development");
+        assert_eq!(config.database_max_connections, 5);
+        assert_eq!(config.ml_sidecar_base_url, "http://localhost:8000");
+        assert_eq!(config.ml_sidecar_timeout_seconds, 90);
+        assert_eq!(config.metrics_port, 9090);
+        assert_eq!(
+            config.cors_allowed_origins,
+            vec![
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+            ]
+        );
     }
 
     #[test]
     fn invalid_port_fails() {
-        let err = parse_env_or_default::<u16>("PORT_TEST_UNUSED", 8080).unwrap();
-        assert_eq!(err, 8080);
+        let error = load_config(&[("PORT", "not-a-port")]).expect_err("invalid port should fail");
 
-        let result = "not-a-port"
-            .trim()
-            .parse::<u16>()
-            .map_err(|e| ConfigError::InvalidEnv {
-                name: "PORT",
-                reason: e.to_string(),
-            });
         assert!(matches!(
-            result,
-            Err(ConfigError::InvalidEnv { name: "PORT", .. })
+            error,
+            ConfigError::InvalidEnv { name: "PORT", .. }
         ));
     }
 
     #[test]
-    fn invalid_timeout_fails() {
-        let result = "not-a-number"
-            .trim()
-            .parse::<u64>()
-            .map_err(|e| ConfigError::InvalidEnv {
+    fn zero_database_max_connections_fails() {
+        let error = load_config(&[("DATABASE_MAX_CONNECTIONS", "0")])
+            .expect_err("zero max connections should fail");
+
+        assert_eq!(
+            error,
+            ConfigError::InvalidEnv {
+                name: "DATABASE_MAX_CONNECTIONS",
+                reason: "must be greater than 0".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn zero_ml_sidecar_timeout_fails() {
+        let error = load_config(&[("ML_SIDECAR_TIMEOUT_SECONDS", "0")])
+            .expect_err("zero timeout should fail");
+
+        assert_eq!(
+            error,
+            ConfigError::InvalidEnv {
                 name: "ML_SIDECAR_TIMEOUT_SECONDS",
-                reason: e.to_string(),
-            });
+                reason: "must be greater than 0".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn invalid_ml_sidecar_url_fails() {
+        let error = load_config(&[("ML_SIDECAR_BASE_URL", "not-a-url")])
+            .expect_err("invalid url should fail");
+
         assert!(matches!(
-            result,
-            Err(ConfigError::InvalidEnv {
-                name: "ML_SIDECAR_TIMEOUT_SECONDS",
+            error,
+            ConfigError::InvalidEnv {
+                name: "ML_SIDECAR_BASE_URL",
                 ..
-            })
+            }
         ));
     }
 
     #[test]
-    fn invalid_database_max_connections_fails() {
-        let result = "not-a-number"
-            .trim()
-            .parse::<u32>()
-            .map_err(|e| ConfigError::InvalidEnv {
-                name: "DATABASE_MAX_CONNECTIONS",
-                reason: e.to_string(),
-            });
-        assert!(matches!(
-            result,
-            Err(ConfigError::InvalidEnv {
-                name: "DATABASE_MAX_CONNECTIONS",
-                ..
-            })
-        ));
+    fn production_requires_cors_allowed_origins() {
+        let error = load_config(&[
+            ("APP_ENV", "production"),
+            ("JWT_SECRET", "a-real-production-secret"),
+            ("ML_INTERNAL_TOKEN", "internal-token"),
+        ])
+        .expect_err("production without CORS_ALLOWED_ORIGINS should fail");
+
+        assert_eq!(error, ConfigError::MissingEnv("CORS_ALLOWED_ORIGINS"));
+    }
+
+    #[test]
+    fn production_requires_safe_jwt_secret() {
+        let error = load_config(&[
+            ("APP_ENV", "production"),
+            ("CORS_ALLOWED_ORIGINS", "https://example.com"),
+            ("ML_INTERNAL_TOKEN", "internal-token"),
+            ("JWT_SECRET", "local-dev-secret-change-me"),
+        ])
+        .expect_err("placeholder JWT secret should fail in production");
+
+        assert!(matches!(error, ConfigError::Production(_)));
+    }
+
+    #[test]
+    fn production_requires_ml_internal_token() {
+        let error = load_config(&[
+            ("APP_ENV", "production"),
+            ("CORS_ALLOWED_ORIGINS", "https://example.com"),
+            ("JWT_SECRET", "a-real-production-secret"),
+        ])
+        .expect_err("missing ML internal token should fail in production");
+
+        assert!(matches!(error, ConfigError::Production(_)));
+    }
+
+    #[test]
+    fn valid_production_config_passes() {
+        let config = load_config(&[
+            ("APP_ENV", "production"),
+            ("CORS_ALLOWED_ORIGINS", "https://example.com"),
+            ("JWT_SECRET", "a-real-production-secret"),
+            ("ML_INTERNAL_TOKEN", "internal-token"),
+            ("ML_SIDECAR_BASE_URL", "https://ml.example.com"),
+        ])
+        .expect("valid production config should pass");
+
+        assert!(config.is_production());
+        assert_eq!(config.cors_allowed_origins, vec!["https://example.com"]);
     }
 }

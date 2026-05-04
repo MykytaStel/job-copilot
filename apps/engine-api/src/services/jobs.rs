@@ -55,6 +55,14 @@ impl JobsService {
         }
     }
 
+    pub async fn get_views_by_ids(&self, ids: &[String]) -> Result<Vec<JobView>, RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => repository.get_views_by_ids(ids).await,
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.get_views_by_ids(ids),
+        }
+    }
+
     pub async fn list_filtered_views(
         &self,
         limit: i64,

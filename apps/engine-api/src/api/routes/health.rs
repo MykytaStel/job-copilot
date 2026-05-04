@@ -16,6 +16,7 @@ const INGESTION_READY_TIMEOUT: Duration = Duration::from_millis(300);
 const INGESTION_CACHE_TTL: Duration = Duration::from_secs(60);
 
 static INGESTION_CACHE: OnceLock<Mutex<Option<CachedIngestionStatus>>> = OnceLock::new();
+static ML_HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 #[derive(Serialize)]
 pub struct HealthResponse {
@@ -157,9 +158,12 @@ async fn check_database(state: &AppState) -> DatabaseComponent {
 }
 
 async fn check_ml_sidecar(state: &AppState) -> MlSidecarComponent {
-    let Ok(client) = reqwest::Client::builder().timeout(ML_READY_TIMEOUT).build() else {
-        return MlSidecarComponent { status: "error" };
-    };
+    let client = ML_HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(ML_READY_TIMEOUT)
+            .build()
+            .unwrap_or_default()
+    });
 
     let url = format!("{}/health", state.ml_sidecar_base_url);
     match timeout(ML_READY_TIMEOUT, client.get(url).send()).await {

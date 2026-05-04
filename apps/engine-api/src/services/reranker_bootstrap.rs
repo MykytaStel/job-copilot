@@ -155,19 +155,41 @@ impl RerankerBootstrapService {
             RerankerBootstrapBackend::Http { client, base_url } => {
                 let url = format!("{}/api/v1/reranker/bootstrap", base_url);
                 let started = Instant::now();
-                let response = client
-                    .post(&url)
-                    .json(payload)
-                    .send()
-                    .await
-                    .map_err(|error| {
-                        warn!(
-                            profile_id = %payload.profile_id,
-                            error = %error,
-                            "ml bootstrap HTTP call failed"
-                        );
-                        RerankerBootstrapError::Http(error.to_string())
-                    })?;
+
+                const MAX_ATTEMPTS: u32 = 3;
+                const BACKOFF_SECS: [u64; 3] = [1, 2, 4];
+
+                let mut attempt = 0u32;
+                let response = loop {
+                    match client.post(&url).json(payload).send().await {
+                        Ok(response) => break response,
+                        Err(error) => {
+                            attempt += 1;
+                            let error_str = error.to_string();
+                            if attempt < MAX_ATTEMPTS {
+                                warn!(
+                                    profile_id = %payload.profile_id,
+                                    attempt,
+                                    delay_secs = BACKOFF_SECS[(attempt - 1) as usize],
+                                    error = %error_str,
+                                    "ml bootstrap HTTP call failed, retrying"
+                                );
+                                tokio::time::sleep(Duration::from_secs(
+                                    BACKOFF_SECS[(attempt - 1) as usize],
+                                ))
+                                .await;
+                            } else {
+                                warn!(
+                                    profile_id = %payload.profile_id,
+                                    attempt,
+                                    error = %error_str,
+                                    "ml bootstrap HTTP call failed after all retries"
+                                );
+                                return Err(RerankerBootstrapError::Http(error_str));
+                            }
+                        }
+                    }
+                };
 
                 let status = response.status();
                 let latency_ms = started.elapsed().as_millis();

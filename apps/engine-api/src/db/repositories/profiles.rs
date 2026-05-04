@@ -46,6 +46,35 @@ struct ProfileRow {
     linkedin_url: Option<String>,
 }
 
+const PROFILE_SELECT_COLUMNS: &str = r#"
+    id,
+    name,
+    email,
+    location,
+    raw_text,
+    years_of_experience,
+    summary,
+    primary_role,
+    seniority,
+    skills::text AS skills_json,
+    keywords::text AS keywords_json,
+    salary_min,
+    salary_max,
+    COALESCE(salary_currency, 'USD') AS salary_currency,
+    COALESCE(languages, '[]'::jsonb)::text AS languages_json,
+    COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
+    COALESCE(experience, '[]'::jsonb)::text AS experience_json,
+    COALESCE(work_mode_preference, 'any') AS work_mode_preference,
+    preferred_language,
+    search_preferences,
+    created_at::text AS created_at,
+    updated_at::text AS updated_at,
+    skills_updated_at::text AS skills_updated_at,
+    portfolio_url,
+    github_url,
+    linkedin_url
+"#;
+
 impl ProfilesRepository {
     pub fn new(database: Database) -> Self {
         Self { database }
@@ -142,39 +171,9 @@ impl ProfilesRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        let row = sqlx::query_as::<_, ProfileRow>(
-            r#"
-            SELECT
-                id,
-                name,
-                email,
-                location,
-                raw_text,
-                years_of_experience,
-                summary,
-                primary_role,
-                seniority,
-                skills::text AS skills_json,
-                keywords::text AS keywords_json,
-                salary_min,
-                salary_max,
-                COALESCE(salary_currency, 'USD') AS salary_currency,
-                COALESCE(languages, '[]'::jsonb)::text AS languages_json,
-                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
-                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
-                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
-                preferred_language,
-                search_preferences,
-                created_at::text AS created_at,
-                updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at,
-                portfolio_url,
-                github_url,
-                linkedin_url
-            FROM profiles
-            WHERE id = $1
-            "#,
-        )
+        let row = sqlx::query_as::<_, ProfileRow>(&format!(
+            r#"SELECT {PROFILE_SELECT_COLUMNS} FROM profiles WHERE id = $1"#,
+        ))
         .bind(id)
         .fetch_optional(pool)
         .await?;
@@ -187,40 +186,9 @@ impl ProfilesRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        let row = sqlx::query_as::<_, ProfileRow>(
-            r#"
-            SELECT
-                id,
-                name,
-                email,
-                location,
-                raw_text,
-                years_of_experience,
-                summary,
-                primary_role,
-                seniority,
-                skills::text AS skills_json,
-                keywords::text AS keywords_json,
-                salary_min,
-                salary_max,
-                COALESCE(salary_currency, 'USD') AS salary_currency,
-                COALESCE(languages, '[]'::jsonb)::text AS languages_json,
-                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
-                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
-                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
-                preferred_language,
-                search_preferences,
-                created_at::text AS created_at,
-                updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at,
-                portfolio_url,
-                github_url,
-                linkedin_url
-            FROM profiles
-            ORDER BY updated_at DESC
-            LIMIT 1
-            "#,
-        )
+        let row = sqlx::query_as::<_, ProfileRow>(&format!(
+            r#"SELECT {PROFILE_SELECT_COLUMNS} FROM profiles ORDER BY updated_at DESC LIMIT 1"#,
+        ))
         .fetch_optional(pool)
         .await?;
 
@@ -236,7 +204,7 @@ impl ProfilesRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        let row = sqlx::query_as::<_, ProfileRow>(
+        let row = sqlx::query_as::<_, ProfileRow>(&format!(
             r#"
             UPDATE profiles
             SET
@@ -321,35 +289,9 @@ impl ProfilesRepository {
                 END,
                 updated_at = NOW()
             WHERE id = $1
-            RETURNING
-                id,
-                name,
-                email,
-                location,
-                raw_text,
-                years_of_experience,
-                summary,
-                primary_role,
-                seniority,
-                skills::text AS skills_json,
-                keywords::text AS keywords_json,
-                salary_min,
-                salary_max,
-                COALESCE(salary_currency, 'USD') AS salary_currency,
-                COALESCE(languages, '[]'::jsonb)::text AS languages_json,
-                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
-                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
-                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
-                preferred_language,
-                search_preferences,
-                created_at::text AS created_at,
-                updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at,
-                portfolio_url,
-                github_url,
-                linkedin_url
+            RETURNING {PROFILE_SELECT_COLUMNS}
             "#,
-        )
+        ))
         .bind(id)
         .bind(&input.name)
         .bind(&input.email)
@@ -412,7 +354,7 @@ impl ProfilesRepository {
             return Err(RepositoryError::DatabaseDisabled);
         };
 
-        let row = sqlx::query_as::<_, ProfileRow>(
+        let row = sqlx::query_as::<_, ProfileRow>(&format!(
             r#"
             UPDATE profiles
             SET
@@ -424,35 +366,9 @@ impl ProfilesRepository {
                 skills_updated_at = NOW(),
                 updated_at = NOW()
             WHERE id = $1
-            RETURNING
-                id,
-                name,
-                email,
-                location,
-                raw_text,
-                years_of_experience,
-                summary,
-                primary_role,
-                seniority,
-                skills::text AS skills_json,
-                keywords::text AS keywords_json,
-                salary_min,
-                salary_max,
-                COALESCE(salary_currency, 'USD') AS salary_currency,
-                COALESCE(languages, '[]'::jsonb)::text AS languages_json,
-                COALESCE(preferred_locations, '[]'::jsonb)::text AS preferred_locations_json,
-                COALESCE(experience, '[]'::jsonb)::text AS experience_json,
-                COALESCE(work_mode_preference, 'any') AS work_mode_preference,
-                preferred_language,
-                search_preferences,
-                created_at::text AS created_at,
-                updated_at::text AS updated_at,
-                skills_updated_at::text AS skills_updated_at,
-                portfolio_url,
-                github_url,
-                linkedin_url
+            RETURNING {PROFILE_SELECT_COLUMNS}
             "#,
-        )
+        ))
         .bind(id)
         .bind(&analysis.summary)
         .bind(analysis.primary_role.to_string())

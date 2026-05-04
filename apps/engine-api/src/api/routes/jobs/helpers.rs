@@ -22,30 +22,27 @@ pub(super) async fn load_profile_ranked_jobs(
     job_ids: &[String],
     entrypoint: &'static str,
 ) -> Result<ProfileRankedJobsResult, ApiError> {
-    ensure_profile_exists(state, None, profile_id).await?;
-
     let profile = state
         .profile_records
         .get_by_id(profile_id)
         .await
         .map_err(|error| ApiError::from_repository(error, "profiles_query_failed"))?
-        .expect("profile existence already verified above");
+        .ok_or_else(|| {
+            ApiError::not_found(
+                "profile_not_found",
+                format!("profile {profile_id} not found"),
+            )
+        })?;
     let analyzed_profile = state.profile_analysis.analyze(&profile.raw_text);
     let search_profile = state
         .search_profile_builder
         .build(&analyzed_profile, &SearchPreferences::default());
 
-    let mut jobs = Vec::new();
-    for job_id in job_ids {
-        if let Some(job) = state
-            .jobs_service
-            .get_view_by_id(job_id)
-            .await
-            .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?
-        {
-            jobs.push(job);
-        }
-    }
+    let jobs = state
+        .jobs_service
+        .get_views_by_ids(job_ids)
+        .await
+        .map_err(|error| ApiError::from_repository(error, "jobs_query_failed"))?;
 
     let feedback_states = load_feedback_state(state, Some(profile_id), &jobs).await?;
     let mut feedback_by_job_id = HashMap::new();
