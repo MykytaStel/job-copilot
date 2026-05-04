@@ -137,10 +137,10 @@ impl Config {
                             for s in val.split(',') {
                                 let s = s.trim();
                                 if s == "all" {
-                                    sources.push(ScrapeSource(SourceId::Djinni));
-                                    sources.push(ScrapeSource(SourceId::DouUa));
-                                    sources.push(ScrapeSource(SourceId::WorkUa));
-                                    sources.push(ScrapeSource(SourceId::RobotaUa));
+                                    sources.push(ScrapeSource::DJINNI);
+                                    sources.push(ScrapeSource::DOU_UA);
+                                    sources.push(ScrapeSource::WORK_UA);
+                                    sources.push(ScrapeSource::ROBOTA_UA);
                                 } else {
                                     sources.push(ScrapeSource::from_cli(s)?);
                                 }
@@ -174,10 +174,10 @@ impl Config {
                 }
 
                 if sources.is_empty() {
-                    sources.push(ScrapeSource(SourceId::Djinni));
-                    sources.push(ScrapeSource(SourceId::DouUa));
-                    sources.push(ScrapeSource(SourceId::WorkUa));
-                    sources.push(ScrapeSource(SourceId::RobotaUa));
+                    sources.push(ScrapeSource::DJINNI);
+                    sources.push(ScrapeSource::DOU_UA);
+                    sources.push(ScrapeSource::WORK_UA);
+                    sources.push(ScrapeSource::ROBOTA_UA);
                 }
                 sources.dedup();
 
@@ -222,19 +222,21 @@ impl InputFormat {
 }
 
 impl ScrapeSource {
+    pub(crate) const DJINNI: Self = Self(SourceId::Djinni);
+    pub(crate) const DOU_UA: Self = Self(SourceId::DouUa);
+    pub(crate) const WORK_UA: Self = Self(SourceId::WorkUa);
+    pub(crate) const ROBOTA_UA: Self = Self(SourceId::RobotaUa);
+
     fn from_cli(value: &str) -> Result<Self, String> {
-        let source_id = match value.trim().to_lowercase().as_str() {
-            "djinni" => SourceId::Djinni,
-            "dou" | "douua" | "dou_ua" | "dou.ua" => SourceId::DouUa,
-            "workua" | "work_ua" | "work.ua" => SourceId::WorkUa,
-            "robotaua" | "robota_ua" | "robota.ua" => SourceId::RobotaUa,
-            other => {
-                return Err(format!(
-                    "unsupported source '{other}', expected 'djinni', 'douua', 'workua', or 'robotaua'"
-                ));
-            }
-        };
-        Ok(Self(source_id))
+        match value.trim().to_lowercase().as_str() {
+            "djinni" => Ok(Self::DJINNI),
+            "dou" | "douua" | "dou_ua" | "dou.ua" => Ok(Self::DOU_UA),
+            "workua" | "work_ua" | "work.ua" => Ok(Self::WORK_UA),
+            "robotaua" | "robota_ua" | "robota.ua" => Ok(Self::ROBOTA_UA),
+            other => Err(format!(
+                "unsupported source '{other}', expected 'djinni', 'douua', 'workua', or 'robotaua'"
+            )),
+        }
     }
 
     pub(crate) fn source_id(self) -> SourceId {
@@ -367,9 +369,11 @@ pub(crate) async fn run_scraper(mode: &ScrapeMode) -> Result<ScrapeOutput, Strin
 mod tests {
     use std::fs;
 
+    use job_copilot_domain::source::SourceId;
+
     use crate::models::{InputDocument, canonical_job_id, compute_dedupe_key};
 
-    use super::{FileMode, InputFormat, load_batch};
+    use super::{FileMode, InputFormat, ScrapeSource, load_batch};
 
     #[test]
     fn parses_wrapped_job_input() {
@@ -453,5 +457,66 @@ mod tests {
         assert_eq!(batch.job_variants[0].job_id, batch.jobs[0].id);
         assert_eq!(batch.job_variants[0].dedupe_key, expected_dedupe_key);
         assert_eq!(batch.job_variants[0].source, "mock_source");
+    }
+
+    #[test]
+    fn scrape_source_from_cli_maps_all_known_aliases() {
+        assert_eq!(
+            ScrapeSource::from_cli("djinni").unwrap().source_id(),
+            SourceId::Djinni
+        );
+        assert_eq!(
+            ScrapeSource::from_cli("dou").unwrap().source_id(),
+            SourceId::DouUa
+        );
+        assert_eq!(
+            ScrapeSource::from_cli("douua").unwrap().source_id(),
+            SourceId::DouUa
+        );
+        assert_eq!(
+            ScrapeSource::from_cli("dou_ua").unwrap().source_id(),
+            SourceId::DouUa
+        );
+        assert_eq!(
+            ScrapeSource::from_cli("dou.ua").unwrap().source_id(),
+            SourceId::DouUa
+        );
+        assert_eq!(
+            ScrapeSource::from_cli("workua").unwrap().source_id(),
+            SourceId::WorkUa
+        );
+        assert_eq!(
+            ScrapeSource::from_cli("work_ua").unwrap().source_id(),
+            SourceId::WorkUa
+        );
+        assert_eq!(
+            ScrapeSource::from_cli("work.ua").unwrap().source_id(),
+            SourceId::WorkUa
+        );
+        assert_eq!(
+            ScrapeSource::from_cli("robotaua").unwrap().source_id(),
+            SourceId::RobotaUa
+        );
+        assert_eq!(
+            ScrapeSource::from_cli("robota_ua").unwrap().source_id(),
+            SourceId::RobotaUa
+        );
+        assert_eq!(
+            ScrapeSource::from_cli("robota.ua").unwrap().source_id(),
+            SourceId::RobotaUa
+        );
+    }
+
+    #[test]
+    fn scrape_source_from_cli_rejects_unknown_source() {
+        assert!(ScrapeSource::from_cli("linkedin").is_err());
+    }
+
+    #[test]
+    fn scrape_source_name_returns_shared_canonical_key() {
+        assert_eq!(ScrapeSource::DJINNI.name(), "djinni");
+        assert_eq!(ScrapeSource::DOU_UA.name(), "dou_ua");
+        assert_eq!(ScrapeSource::WORK_UA.name(), "work_ua");
+        assert_eq!(ScrapeSource::ROBOTA_UA.name(), "robota_ua");
     }
 }
