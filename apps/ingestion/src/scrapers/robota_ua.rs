@@ -14,6 +14,7 @@ use serde::Deserialize;
 use serde_json::json;
 use tracing::{info, warn};
 
+use crate::error::{IngestionError, Result};
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
     DetailSnapshot, ScraperConfig, ScraperRun, cleanup_description_text, detail_error_summaries,
@@ -33,7 +34,7 @@ pub struct RobotaUaScraper {
 }
 
 impl RobotaUaScraper {
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> Result<Self> {
         let headers = build_default_headers(
             "application/json, text/plain, */*",
             "uk-UA,uk;q=0.9,en;q=0.8",
@@ -46,12 +47,11 @@ impl RobotaUaScraper {
             .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
             .timeout(Duration::from_secs(20))
             .default_headers(headers)
-            .build()
-            .map_err(|e| format!("failed to build HTTP client: {e}"))?;
+            .build()?;
         Ok(Self { client })
     }
 
-    pub async fn scrape(&self, config: &ScraperConfig) -> Result<ScraperRun, String> {
+    pub async fn scrape(&self, config: &ScraperConfig) -> Result<ScraperRun> {
         let fetched_at = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         let mut results: Vec<NormalizationResult> = Vec::new();
         let mut jobs_attempted = 0u32;
@@ -113,17 +113,17 @@ impl RobotaUaScraper {
         })
     }
 
-    async fn fetch_json(&self, url: &str) -> Result<ApiResponse, String> {
+    async fn fetch_json(&self, url: &str) -> Result<ApiResponse> {
         let text = fetch_with_backoff(&self.client, url).await?;
         serde_json::from_str::<ApiResponse>(&text).map_err(|e| {
-            format!(
+            IngestionError::Scraper(format!(
                 "JSON parse failed: {e} — body: {}",
                 &text[..text.len().min(300)]
-            )
+            ))
         })
     }
 
-    async fn fetch_html(&self, url: &str) -> Result<String, String> {
+    async fn fetch_html(&self, url: &str) -> Result<String> {
         fetch_with_backoff(&self.client, url).await
     }
 

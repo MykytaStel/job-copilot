@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use crate::adapters::SourceAdapter;
+use crate::error::{IngestionError, Result};
 use crate::models::{
     MockSourceInput, MockSourceJob, NormalizationResult, NormalizedJob, RawSnapshot,
 };
@@ -16,7 +17,7 @@ impl SourceAdapter for MockSourceAdapter {
         "mock_source"
     }
 
-    fn normalize(&self, input: Self::Input) -> Result<Vec<NormalizationResult>, String> {
+    fn normalize(&self, input: Self::Input) -> Result<Vec<NormalizationResult>> {
         let fetched_at = trim_required("fetched_at", input.fetched_at)?;
         input
             .jobs
@@ -25,11 +26,11 @@ impl SourceAdapter for MockSourceAdapter {
             .map(|(index, job)| {
                 let source_job_id = job.source_job_id.clone();
                 self.normalize_job(&fetched_at, job).map_err(|error| {
-                    format!(
+                    IngestionError::Normalization(format!(
                         "mock_source job #{} ('{}') failed normalization: {error}",
                         index + 1,
                         source_job_id.trim()
-                    )
+                    ))
                 })
             })
             .collect()
@@ -37,11 +38,7 @@ impl SourceAdapter for MockSourceAdapter {
 }
 
 impl MockSourceAdapter {
-    fn normalize_job(
-        &self,
-        fetched_at: &str,
-        job: MockSourceJob,
-    ) -> Result<NormalizationResult, String> {
+    fn normalize_job(&self, fetched_at: &str, job: MockSourceJob) -> Result<NormalizationResult> {
         let title = trim_required("position", job.position)?;
         let company_name = trim_required("employer", job.employer)?;
         let source_job_id = trim_required("source_job_id", job.source_job_id)?;
@@ -113,10 +110,12 @@ impl MockSourceAdapter {
     }
 }
 
-fn trim_required(field: &str, value: String) -> Result<String, String> {
+fn trim_required(field: &str, value: String) -> Result<String> {
     let trimmed = value.trim().to_string();
     if trimmed.is_empty() {
-        return Err(format!("field '{field}' must not be empty"));
+        return Err(IngestionError::Input(format!(
+            "field '{field}' must not be empty"
+        )));
     }
     Ok(trimmed)
 }

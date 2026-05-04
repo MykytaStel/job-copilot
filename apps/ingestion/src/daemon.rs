@@ -7,10 +7,11 @@ const SCRAPE_BACKOFF_SECS: [u64; 2] = [5, 15];
 
 use crate::cli::{DaemonMode, ScrapeMode, run_scraper};
 use crate::db;
+use crate::error::Result;
 
 /// Runs all configured sources on repeat, sleeping `interval_minutes` between rounds.
 /// Never returns unless a fatal error occurs.
-pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result<(), String> {
+pub(crate) async fn run_daemon(mode: &DaemonMode, pool: &sqlx::PgPool) -> Result<()> {
     let interval = Duration::from_secs(mode.interval_minutes * 60);
     info!(
         sources = ?mode.sources.iter().map(|s| s.name()).collect::<Vec<_>>(),

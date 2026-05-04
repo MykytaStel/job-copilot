@@ -4,6 +4,8 @@ use chrono::Duration;
 use sqlx::types::Json;
 use tracing::warn;
 
+use crate::error::{IngestionError, Result};
+
 use crate::models::{IngestionBatch, JobVariant, NormalizedJob};
 use crate::scrapers::{compute_job_quality_score, extract_skills};
 
@@ -40,7 +42,7 @@ pub(super) enum VariantWriteResult {
 pub(super) async fn resolve_batch(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     batch: &IngestionBatch,
-) -> Result<IngestionBatch, String> {
+) -> Result<IngestionBatch> {
     batch.validate()?;
 
     if batch.job_variants.is_empty() {
@@ -126,7 +128,7 @@ pub(super) async fn upsert_job(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     job: &NormalizedJob,
     preserve_lifecycle: bool,
-) -> Result<(), String> {
+) -> Result<()> {
     let query = if preserve_lifecycle {
         r#"
         INSERT INTO jobs (
@@ -324,7 +326,7 @@ pub(super) async fn upsert_job(
         .bind(&job.duplicate_of)
         .execute(&mut **tx)
         .await
-        .map_err(|error| format!("failed to upsert job '{}': {error}", job.id))?;
+        .map_err(IngestionError::Database)?;
 
     Ok(())
 }
@@ -332,7 +334,7 @@ pub(super) async fn upsert_job(
 pub(super) async fn upsert_job_variant(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     variant: &JobVariant,
-) -> Result<VariantWriteResult, String> {
+) -> Result<VariantWriteResult> {
     let outcome = sqlx::query_scalar::<_, String>(
         r#"
         WITH incoming AS (
@@ -464,21 +466,16 @@ pub(super) async fn upsert_job_variant(
     .bind(variant.is_active)
     .fetch_one(&mut **tx)
     .await
-    .map_err(|error| {
-        format!(
-            "failed to upsert job variant '{}:{}': {error}",
-            variant.source, variant.source_job_id
-        )
-    })?;
+    .map_err(IngestionError::Database)?;
 
     match outcome.as_str() {
         "created" => Ok(VariantWriteResult::Created),
         "updated" => Ok(VariantWriteResult::Updated),
         "unchanged" => Ok(VariantWriteResult::Unchanged),
-        other => Err(format!(
+        other => Err(IngestionError::Validation(format!(
             "unexpected variant upsert outcome for '{}:{}': {other}",
             variant.source, variant.source_job_id
-        )),
+        ))),
     }
 }
 
@@ -486,7 +483,7 @@ async fn find_cross_source_duplicate(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     job: &NormalizedJob,
     variant: &JobVariant,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>> {
     let candidates = sqlx::query_as::<_, DuplicateCandidate>(
         r#"
         SELECT
@@ -523,12 +520,7 @@ async fn find_cross_source_duplicate(
     .bind(&job.last_seen_at)
     .fetch_all(&mut **tx)
     .await
-    .map_err(|error| {
-        format!(
-            "failed to resolve cross-source duplicate candidate for job '{}': {error}",
-            job.id
-        )
-    })?;
+    .map_err(IngestionError::Database)?;
 
     Ok(candidates
         .into_iter()
@@ -680,7 +672,7 @@ async fn existing_variant_state(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     source: &str,
     source_job_id: &str,
-) -> Result<Option<ExistingVariantState>, String> {
+) -> Result<Option<ExistingVariantState>> {
     sqlx::query_as::<_, ExistingVariantState>(
         r#"
         SELECT
@@ -699,9 +691,7 @@ async fn existing_variant_state(
     .bind(source_job_id)
     .fetch_optional(&mut **tx)
     .await
-    .map_err(|error| {
-        format!("failed to resolve existing variant '{source}:{source_job_id}': {error}")
-    })
+    .map_err(IngestionError::Database)
 }
 
 fn should_skip_stale_variant(
@@ -747,7 +737,7 @@ async fn validate_dedupe_transition(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     existing_variant: &ExistingVariantState,
     incoming_variant: &JobVariant,
-) -> Result<(), String> {
+) -> Result<()> {
     if existing_variant.dedupe_key == incoming_variant.dedupe_key {
         return Ok(());
     }
@@ -756,7 +746,7 @@ async fn validate_dedupe_transition(
         existing_job_id_for_dedupe_key(tx, &incoming_variant.dedupe_key).await?
         && conflict_job_id != existing_variant.job_id
     {
-        return Err(format!(
+        return Err(IngestionError::Validation(format!(
             "source variant '{}:{}' changed dedupe fingerprint from '{}' to '{}' but the new fingerprint already belongs to canonical job '{}' instead of '{}'",
             incoming_variant.source,
             incoming_variant.source_job_id,
@@ -764,7 +754,7 @@ async fn validate_dedupe_transition(
             incoming_variant.dedupe_key,
             conflict_job_id,
             existing_variant.job_id
-        ));
+        )));
     }
 
     warn!(
@@ -782,7 +772,7 @@ async fn validate_dedupe_transition(
 async fn existing_job_id_for_dedupe_key(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     dedupe_key: &str,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>> {
     sqlx::query_scalar::<_, String>(
         r#"
         SELECT job_id
@@ -795,7 +785,7 @@ async fn existing_job_id_for_dedupe_key(
     .bind(dedupe_key)
     .fetch_optional(&mut **tx)
     .await
-    .map_err(|error| format!("failed to resolve dedupe key '{dedupe_key}': {error}"))
+    .map_err(IngestionError::Database)
 }
 
 pub(super) fn merge_job(current: &mut NormalizedJob, incoming: &NormalizedJob) {
