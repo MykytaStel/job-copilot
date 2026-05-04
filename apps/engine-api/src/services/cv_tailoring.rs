@@ -143,22 +143,53 @@ impl CvTailoringService {
                 let url = format!("{base_url}/api/v1/cv-tailoring");
                 let started = Instant::now();
 
-                let mut request = client.post(&url).json(payload);
+                const MAX_ATTEMPTS: u32 = 3;
+                const BACKOFF_SECS: [u64; 3] = [1, 2, 4];
 
-                if let Some(token) = internal_token.as_deref().filter(|token| !token.is_empty()) {
-                    request = request.header(INTERNAL_TOKEN_HEADER, token);
-                }
+                let mut last_http_error: Option<String> = None;
+                let mut attempt = 0u32;
 
-                let response = request.send().await.map_err(|error| {
-                    warn!(
-                        profile_id = %payload.profile_id,
-                        job_id = %payload.job_id,
-                        error = %error,
-                        "cv tailoring HTTP call failed"
-                    );
+                let response = loop {
+                    let mut request = client.post(&url).json(payload);
+                    if let Some(token) =
+                        internal_token.as_deref().filter(|token| !token.is_empty())
+                    {
+                        request = request.header(INTERNAL_TOKEN_HEADER, token);
+                    }
 
-                    CvTailoringError::Http(error.to_string())
-                })?;
+                    match request.send().await {
+                        Ok(response) => break response,
+                        Err(error) => {
+                            attempt += 1;
+                            let error_str = error.to_string();
+                            if attempt < MAX_ATTEMPTS {
+                                warn!(
+                                    profile_id = %payload.profile_id,
+                                    job_id = %payload.job_id,
+                                    attempt,
+                                    delay_secs = BACKOFF_SECS[(attempt - 1) as usize],
+                                    error = %error_str,
+                                    "cv tailoring HTTP call failed, retrying"
+                                );
+                                tokio::time::sleep(Duration::from_secs(
+                                    BACKOFF_SECS[(attempt - 1) as usize],
+                                ))
+                                .await;
+                                last_http_error = Some(error_str);
+                            } else {
+                                warn!(
+                                    profile_id = %payload.profile_id,
+                                    job_id = %payload.job_id,
+                                    attempt,
+                                    error = %error_str,
+                                    "cv tailoring HTTP call failed after all retries"
+                                );
+                                return Err(CvTailoringError::Http(error_str));
+                            }
+                        }
+                    }
+                };
+                let _ = last_http_error;
 
                 let status = response.status();
                 let latency_ms = started.elapsed().as_millis();

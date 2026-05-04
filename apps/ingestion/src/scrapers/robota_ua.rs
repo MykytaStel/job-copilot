@@ -18,13 +18,14 @@ use crate::error::{IngestionError, Result};
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
     DetailSnapshot, ScraperConfig, ScraperRun, cleanup_description_text, detail_error_summaries,
-    extract_skills, fetch_with_backoff, headers::build_default_headers, infer_company_meta,
-    infer_remote_type, infer_seniority_from_title_and_description, merge_detail_into_result,
-    normalize_company_name, normalize_salary_to_usd_monthly, normalized_non_empty,
-    parse_salary_range_with_usd_monthly, polite_delay,
+    extract_skills, headers::build_default_headers, infer_company_meta, infer_remote_type,
+    infer_seniority_from_title_and_description, normalize_company_name,
+    normalize_salary_to_usd_monthly, normalized_non_empty, parse_salary_range_with_usd_monthly,
+    polite_delay,
 };
+use crate::scrapers::runner::JobSource;
 
-const SOURCE: &str = "robota_ua";
+const SOURCE: &str = <RobotaUaScraper as JobSource>::SOURCE;
 const API_BASE: &str = "https://api.robota.ua";
 const WEB_BASE: &str = "https://robota.ua";
 const PAGE_SIZE: u32 = 20;
@@ -86,7 +87,7 @@ impl RobotaUaScraper {
             }
 
             let attempted = page_results.len() as u32;
-            let enriched = self.enrich_page_results(page_results, &fetched_at).await;
+            let enriched = self.enrich_results(page_results, &fetched_at).await;
             jobs_attempted += attempted;
             jobs_failed += attempted.saturating_sub(enriched.len() as u32);
             results.extend(enriched);
@@ -114,6 +115,7 @@ impl RobotaUaScraper {
     }
 
     async fn fetch_json(&self, url: &str) -> Result<ApiResponse> {
+        use crate::scrapers::http::fetch_with_backoff;
         let text = fetch_with_backoff(&self.client, url).await?;
         serde_json::from_str::<ApiResponse>(&text).map_err(|e| {
             IngestionError::Scraper(format!(
@@ -122,50 +124,22 @@ impl RobotaUaScraper {
             ))
         })
     }
+}
 
-    async fn fetch_html(&self, url: &str) -> Result<String> {
-        fetch_with_backoff(&self.client, url).await
+impl JobSource for RobotaUaScraper {
+    const SOURCE: &'static str = "robota_ua";
+
+    fn client(&self) -> &Client {
+        &self.client
     }
 
-    async fn enrich_page_results(
+    fn parse_detail(
         &self,
-        results: Vec<NormalizationResult>,
+        html: &str,
+        context: &NormalizationResult,
         fetched_at: &str,
-    ) -> Vec<NormalizationResult> {
-        let total = results.len();
-        let mut enriched = Vec::with_capacity(total);
-
-        for (index, result) in results.into_iter().enumerate() {
-            match self.enrich_result(result, fetched_at).await {
-                Some(result) => enriched.push(result),
-                None => warn!(source = SOURCE, "skipped job after detail fetch"),
-            }
-
-            if index + 1 < total {
-                polite_delay(150).await;
-            }
-        }
-
-        enriched
-    }
-
-    async fn enrich_result(
-        &self,
-        result: NormalizationResult,
-        fetched_at: &str,
-    ) -> Option<NormalizationResult> {
-        let source_url = result.snapshot.source_url.clone();
-
-        let Some(detail_html) = self.fetch_html(&source_url).await.ok() else {
-            if normalize_company_name(&result.job.company_name).is_none() {
-                warn!(source = SOURCE, %source_url, "detail fetch failed and company is still missing");
-                return None;
-            }
-            return Some(result);
-        };
-
-        let detail = parse_detail_page(&detail_html, &result, fetched_at);
-        merge_detail_into_result(result, detail)
+    ) -> DetailSnapshot {
+        parse_detail_page(html, context, fetched_at)
     }
 }
 

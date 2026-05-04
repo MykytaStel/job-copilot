@@ -40,6 +40,7 @@ pub fn build_routers(state: AppState) -> BuiltRouters {
     }
 
     let public = routes::public_router();
+    let auth = routes::auth_router();
 
     let protected = routes::protected_router().route_layer(axum::middleware::from_fn_with_state(
         state.clone(),
@@ -48,6 +49,7 @@ pub fn build_routers(state: AppState) -> BuiltRouters {
 
     let app = Router::new()
         .merge(public)
+        .merge(auth)
         .merge(protected)
         .layer(build_cors_layer(&state))
         .layer(prometheus_layer)

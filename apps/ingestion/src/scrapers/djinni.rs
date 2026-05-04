@@ -10,13 +10,13 @@ use crate::error::Result;
 use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
 use crate::scrapers::{
     DetailSnapshot, ScraperConfig, ScraperRun, cleanup_description_text, collect_text,
-    detail_error_summaries, extract_skills, fetch_with_backoff, headers::build_default_headers,
-    infer_company_meta, infer_remote_type, infer_seniority,
-    infer_seniority_from_title_and_description, merge_detail_into_result, normalize_company_name,
-    normalized_non_empty, parse_salary_range_with_usd_monthly, polite_delay,
+    detail_error_summaries, extract_skills, headers::build_default_headers, infer_company_meta,
+    infer_remote_type, infer_seniority, infer_seniority_from_title_and_description,
+    normalize_company_name, normalized_non_empty, parse_salary_range_with_usd_monthly, polite_delay,
 };
+use crate::scrapers::runner::JobSource;
 
-const SOURCE: &str = "djinni";
+const SOURCE: &str = <DjinniScraper as JobSource>::SOURCE;
 const BASE_URL: &str = "https://djinni.co";
 
 pub struct DjinniScraper {
@@ -48,7 +48,7 @@ impl DjinniScraper {
             let url = build_url(config.keyword.as_deref(), page);
             info!(%url, page, source = SOURCE, "fetching page");
 
-            let html = match self.fetch(&url).await {
+            let html = match self.fetch_url(&url).await {
                 Ok(html) => html,
                 Err(e) => {
                     warn!(error = %e, %url, "fetch failed, stopping pagination");
@@ -58,7 +58,7 @@ impl DjinniScraper {
 
             let page_results = parse_page(&html, &fetched_at);
             let attempted = page_results.len() as u32;
-            let page_results = self.enrich_page_results(page_results, &fetched_at).await;
+            let page_results = self.enrich_results(page_results, &fetched_at).await;
             let count = page_results.len();
             jobs_attempted += attempted;
             jobs_failed += attempted.saturating_sub(count as u32);
@@ -98,50 +98,22 @@ impl DjinniScraper {
             errors: detail_error_summaries(SOURCE, jobs_failed),
         })
     }
+}
 
-    async fn fetch(&self, url: &str) -> Result<String> {
-        fetch_with_backoff(&self.client, url).await
+impl JobSource for DjinniScraper {
+    const SOURCE: &'static str = "djinni";
+
+    fn client(&self) -> &Client {
+        &self.client
     }
 
-    async fn enrich_page_results(
+    fn parse_detail(
         &self,
-        results: Vec<NormalizationResult>,
+        html: &str,
+        context: &NormalizationResult,
         fetched_at: &str,
-    ) -> Vec<NormalizationResult> {
-        let total = results.len();
-        let mut enriched = Vec::with_capacity(total);
-
-        for (index, result) in results.into_iter().enumerate() {
-            match self.enrich_result(result, fetched_at).await {
-                Some(result) => enriched.push(result),
-                None => warn!(source = SOURCE, "skipped job after detail fetch"),
-            }
-
-            if index + 1 < total {
-                polite_delay(150).await;
-            }
-        }
-
-        enriched
-    }
-
-    async fn enrich_result(
-        &self,
-        result: NormalizationResult,
-        fetched_at: &str,
-    ) -> Option<NormalizationResult> {
-        let source_url = result.snapshot.source_url.clone();
-
-        let Some(detail_html) = self.fetch(&source_url).await.ok() else {
-            if normalize_company_name(&result.job.company_name).is_none() {
-                warn!(source = SOURCE, %source_url, "detail fetch failed and company is still missing");
-                return None;
-            }
-            return Some(result);
-        };
-
-        let detail = parse_detail_page(&detail_html, &result, fetched_at);
-        merge_detail_into_result(result, detail)
+    ) -> DetailSnapshot {
+        parse_detail_page(html, context, fetched_at)
     }
 }
 
