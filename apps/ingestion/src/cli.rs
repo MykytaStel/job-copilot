@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
+use job_copilot_domain::source::SourceId;
 use tracing::info;
 
 #[cfg(any(feature = "mock", test))]
@@ -62,12 +63,7 @@ pub(crate) enum InputFormat {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ScrapeSource {
-    Djinni,
-    DouUa,
-    WorkUa,
-    RobotaUa,
-}
+pub(crate) struct ScrapeSource(SourceId);
 
 impl Config {
     pub(crate) fn from_env() -> Result<Self, String> {
@@ -141,10 +137,10 @@ impl Config {
                             for s in val.split(',') {
                                 let s = s.trim();
                                 if s == "all" {
-                                    sources.push(ScrapeSource::Djinni);
-                                    sources.push(ScrapeSource::DouUa);
-                                    sources.push(ScrapeSource::WorkUa);
-                                    sources.push(ScrapeSource::RobotaUa);
+                                    sources.push(ScrapeSource(SourceId::Djinni));
+                                    sources.push(ScrapeSource(SourceId::DouUa));
+                                    sources.push(ScrapeSource(SourceId::WorkUa));
+                                    sources.push(ScrapeSource(SourceId::RobotaUa));
                                 } else {
                                     sources.push(ScrapeSource::from_cli(s)?);
                                 }
@@ -178,10 +174,10 @@ impl Config {
                 }
 
                 if sources.is_empty() {
-                    sources.push(ScrapeSource::Djinni);
-                    sources.push(ScrapeSource::DouUa);
-                    sources.push(ScrapeSource::WorkUa);
-                    sources.push(ScrapeSource::RobotaUa);
+                    sources.push(ScrapeSource(SourceId::Djinni));
+                    sources.push(ScrapeSource(SourceId::DouUa));
+                    sources.push(ScrapeSource(SourceId::WorkUa));
+                    sources.push(ScrapeSource(SourceId::RobotaUa));
                 }
                 sources.dedup();
 
@@ -227,24 +223,26 @@ impl InputFormat {
 
 impl ScrapeSource {
     fn from_cli(value: &str) -> Result<Self, String> {
-        match value.trim().to_lowercase().as_str() {
-            "djinni" => Ok(Self::Djinni),
-            "dou" | "douua" | "dou_ua" | "dou.ua" => Ok(Self::DouUa),
-            "workua" | "work_ua" | "work.ua" => Ok(Self::WorkUa),
-            "robotaua" | "robota_ua" | "robota.ua" => Ok(Self::RobotaUa),
-            other => Err(format!(
-                "unsupported source '{other}', expected 'djinni', 'douua', 'workua', or 'robotaua'"
-            )),
-        }
+        let source_id = match value.trim().to_lowercase().as_str() {
+            "djinni" => SourceId::Djinni,
+            "dou" | "douua" | "dou_ua" | "dou.ua" => SourceId::DouUa,
+            "workua" | "work_ua" | "work.ua" => SourceId::WorkUa,
+            "robotaua" | "robota_ua" | "robota.ua" => SourceId::RobotaUa,
+            other => {
+                return Err(format!(
+                    "unsupported source '{other}', expected 'djinni', 'douua', 'workua', or 'robotaua'"
+                ));
+            }
+        };
+        Ok(Self(source_id))
+    }
+
+    pub(crate) fn source_id(self) -> SourceId {
+        self.0
     }
 
     pub(crate) fn name(self) -> &'static str {
-        match self {
-            Self::Djinni => "djinni",
-            Self::DouUa => "dou_ua",
-            Self::WorkUa => "work_ua",
-            Self::RobotaUa => "robota_ua",
-        }
+        self.0.canonical_key()
     }
 }
 
@@ -317,20 +315,20 @@ pub(crate) async fn run_scraper(mode: &ScrapeMode) -> Result<ScrapeOutput, Strin
         page_delay_ms: 600,
     };
 
-    let scrape_run = match mode.source {
-        ScrapeSource::Djinni => {
+    let scrape_run = match mode.source.source_id() {
+        SourceId::Djinni => {
             let scraper = DjinniScraper::new()?;
             scraper.scrape(&config).await?
         }
-        ScrapeSource::DouUa => {
+        SourceId::DouUa => {
             let scraper = DouUaScraper::new()?;
             scraper.scrape(&config).await?
         }
-        ScrapeSource::WorkUa => {
+        SourceId::WorkUa => {
             let scraper = WorkUaScraper::new()?;
             scraper.scrape(&config).await?
         }
-        ScrapeSource::RobotaUa => {
+        SourceId::RobotaUa => {
             let scraper = RobotaUaScraper::new()?;
             scraper.scrape(&config).await?
         }

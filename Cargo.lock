@@ -1283,6 +1283,7 @@ name = "ingestion"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "job-copilot-domain",
  "regex",
  "reqwest",
  "scraper",
