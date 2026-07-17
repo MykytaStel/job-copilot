@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 use chrono::Utc;
 use reqwest::Client;
@@ -42,6 +42,7 @@ impl DjinniScraper {
     pub async fn scrape(&self, config: &ScraperConfig) -> Result<ScraperRun> {
         let fetched_at = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         let mut results: Vec<NormalizationResult> = Vec::new();
+        let mut seen_source_job_ids = HashSet::new();
         let mut jobs_attempted = 0u32;
         let mut jobs_failed = 0u32;
 
@@ -57,7 +58,16 @@ impl DjinniScraper {
                 }
             };
 
-            let page_results = parse_page(&html, &fetched_at);
+            let mut page_results = parse_page(&html, &fetched_at);
+            let duplicates = retain_unseen_source_jobs(&mut page_results, &mut seen_source_job_ids);
+            if duplicates > 0 {
+                info!(
+                    page,
+                    duplicates,
+                    source = SOURCE,
+                    "ignored repeated jobs across pages"
+                );
+            }
             let attempted = page_results.len() as u32;
             let page_results = self.enrich_results(page_results, &fetched_at).await;
             let count = page_results.len();
@@ -99,6 +109,15 @@ impl DjinniScraper {
             errors: detail_error_summaries(SOURCE, jobs_failed),
         })
     }
+}
+
+fn retain_unseen_source_jobs(
+    results: &mut Vec<NormalizationResult>,
+    seen_source_job_ids: &mut HashSet<String>,
+) -> usize {
+    let before = results.len();
+    results.retain(|result| seen_source_job_ids.insert(result.snapshot.source_job_id.clone()));
+    before - results.len()
 }
 
 impl JobSource for DjinniScraper {
@@ -821,7 +840,9 @@ fn extract_job_id(href: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_url, extract_job_id, parse_detail_page};
+    use std::collections::HashSet;
+
+    use super::{build_url, extract_job_id, parse_detail_page, retain_unseen_source_jobs};
     use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
     use serde_json::json;
 
@@ -849,6 +870,27 @@ mod tests {
     #[test]
     fn rejects_non_numeric_slug() {
         assert_eq!(extract_job_id("/jobs/senior-engineer/"), None);
+    }
+
+    #[test]
+    fn removes_jobs_repeated_on_later_pages() {
+        use crate::scrapers::djinni::parse_page;
+
+        let html = r#"
+        <script type="application/ld+json">
+        {"@type":"JobPosting","title":"Rust Engineer","description":"Rust backend role",
+         "url":"https://djinni.co/jobs/835380-rust-engineer/",
+         "hiringOrganization":{"name":"Acme"}}
+        </script>
+        "#;
+        let mut first_page = parse_page(html, "2026-07-17T10:00:00Z");
+        let mut second_page = parse_page(html, "2026-07-17T10:00:00Z");
+        let mut seen = HashSet::new();
+
+        assert_eq!(retain_unseen_source_jobs(&mut first_page, &mut seen), 0);
+        assert_eq!(first_page.len(), 1);
+        assert_eq!(retain_unseen_source_jobs(&mut second_page, &mut seen), 1);
+        assert!(second_page.is_empty());
     }
 
     #[test]

@@ -33,7 +33,7 @@ export function SectionCard({
             </AccentIconFrame>
             <div className="min-w-0">
               {eyebrow ? (
-                <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <p className="m-0 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   {eyebrow}
                 </p>
               ) : null}

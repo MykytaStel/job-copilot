@@ -87,14 +87,33 @@ fn detect_job_regions(prepared_text: &PreparedText, job: &super::JobView) -> Vec
 
     if matches_any(
         prepared_text,
-        &["ukraine", "ukrainian", "kyiv", "kyiv oblast"],
+        &[
+            "ukraine",
+            "ukrainian",
+            "kyiv",
+            "kyiv oblast",
+            "україна",
+            "україні",
+            "український",
+            "київ",
+            "києві",
+            "київська область",
+        ],
     ) {
         push_unique_region(&mut regions, TargetRegion::Ua);
     }
 
     if matches_any(
         prepared_text,
-        &["europe", "european union", "eu timezone", "eu only"],
+        &[
+            "europe",
+            "european union",
+            "eu timezone",
+            "eu only",
+            "європа",
+            "європі",
+            "європейський союз",
+        ],
     ) {
         push_unique_region(&mut regions, TargetRegion::Eu);
     }
@@ -108,17 +127,44 @@ fn detect_job_regions(prepared_text: &PreparedText, job: &super::JobView) -> Vec
                 "eu remote",
                 "eu timezone",
                 "eu only",
+                "європа",
+                "європі",
+                "європейський союз",
             ],
         )
     {
         push_unique_region(&mut regions, TargetRegion::EuRemote);
     }
 
-    if matches_any(prepared_text, &["poland", "warsaw", "krakow", "wroclaw"]) {
+    if matches_any(
+        prepared_text,
+        &[
+            "poland",
+            "warsaw",
+            "krakow",
+            "wroclaw",
+            "польща",
+            "варшава",
+            "краків",
+            "вроцлав",
+        ],
+    ) {
         push_unique_region(&mut regions, TargetRegion::Poland);
     }
 
-    if matches_any(prepared_text, &["germany", "berlin", "munich", "hamburg"]) {
+    if matches_any(
+        prepared_text,
+        &[
+            "germany",
+            "berlin",
+            "munich",
+            "hamburg",
+            "німеччина",
+            "берлін",
+            "мюнхен",
+            "гамбург",
+        ],
+    ) {
         push_unique_region(&mut regions, TargetRegion::Germany);
     }
 

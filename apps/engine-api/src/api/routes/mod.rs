@@ -11,6 +11,7 @@ pub mod feedback;
 pub mod health;
 pub mod jobs;
 pub mod market;
+pub mod ml_enrichment;
 pub mod notifications;
 pub mod onboarding;
 pub mod profile;
@@ -106,6 +107,20 @@ pub fn protected_router() -> Router<AppState> {
             post(applications::create_application),
         )
         .route("/api/v1/cv/tailor", post(cv_tailoring::tailor_cv))
+        .route("/api/v1/enrichment/{kind}", post(ml_enrichment::enrich))
+        .route("/api/v1/ml/health", get(ml_enrichment::health))
+        .route(
+            "/api/v1/reranker/bootstrap",
+            post(ml_enrichment::bootstrap_reranker),
+        )
+        .route(
+            "/api/v1/reranker/bootstrap/{task_id}",
+            get(ml_enrichment::reranker_bootstrap_status),
+        )
+        .route(
+            "/api/v1/rerank/invalidate",
+            post(ml_enrichment::invalidate_rerank),
+        )
         .route(
             "/api/v1/data/reset",
             post(data_management::reset_profile_data),
@@ -312,6 +327,10 @@ pub fn protected_router() -> Router<AppState> {
         .route(
             "/api/v1/market/region-breakdown",
             get(market::get_market_region_breakdown),
+        )
+        .route(
+            "/api/v1/market/remote-adoption",
+            get(market::get_market_remote_adoption),
         )
         .route(
             "/api/v1/market/tech-demand",

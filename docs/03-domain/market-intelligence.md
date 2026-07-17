@@ -106,10 +106,21 @@ LIMIT 50;
 
 ### 6. Remote Work Adoption
 ```sql
-SELECT remote_type, source, COUNT(*) AS count
-FROM jobs WHERE is_active = TRUE AND last_seen_at > NOW() - INTERVAL '30 days'
-GROUP BY remote_type, source;
+-- Поточний контракт: унікальна active vacancy на source, згрупована за тижнем first_seen_at.
+-- source походить з job_variants; work mode — з канонічного jobs.remote_type.
+SELECT DATE_TRUNC('week', jobs.first_seen_at), variants.source, jobs.remote_type,
+       COUNT(DISTINCT jobs.id) AS count
+FROM jobs
+JOIN job_variants variants ON variants.job_id = jobs.id
+WHERE jobs.is_active = TRUE
+  AND jobs.first_seen_at >= DATE_TRUNC('week', NOW()) - INTERVAL '7 weeks'
+GROUP BY DATE_TRUNC('week', jobs.first_seen_at), variants.source, jobs.remote_type;
 ```
+
+Реалізований snapshot `remote_adoption` нормалізує значення до `remote`, `hybrid`, `onsite`
+або `unknown`, зберігає count, total і percentage. `unknown` не перетворюється на on-site:
+це окремий видимий сигнал якості даних. Engine-api віддає snapshot не старший за 24 години,
+а за його відсутності або невалідного payload виконує той самий bounded live aggregate.
 
 ## Нова таблиця: `market_snapshots`
 
@@ -136,6 +147,7 @@ GET /api/v1/market/roles?period=30d                   → role demand trends
 GET /api/v1/market/freeze-signals                     → companies with sudden drop
 GET /api/v1/market/skills?limit=30                    → top skills demand
 GET /api/v1/market/overview                           → summary for dashboard widget
+GET /api/v1/market/remote-adoption                    → weekly work-mode mix by source
 ```
 
 ## Web: Market Intelligence сторінка

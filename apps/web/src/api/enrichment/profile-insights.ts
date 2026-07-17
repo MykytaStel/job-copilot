@@ -1,5 +1,5 @@
 import type { LlmContext } from '../analytics';
-import { mlRequest } from '../client';
+import { json, request } from '../client';
 
 import { buildLlmContextPayload } from './shared';
 import type { MlProfileInsightsResponse, ProfileInsights } from './types';
@@ -22,10 +22,10 @@ export function mapProfileInsightsResponse(response: MlProfileInsightsResponse):
 }
 
 export async function getProfileInsights(context: LlmContext): Promise<ProfileInsights> {
-  const response = await mlRequest<MlProfileInsightsResponse>('/v1/enrichment/profile-insights', {
-    method: 'POST',
-    body: JSON.stringify(buildProfileInsightsPayload(context)),
-  });
+  const response = await request<MlProfileInsightsResponse>(
+    '/api/v1/enrichment/profile-insights',
+    json('POST', buildProfileInsightsPayload(context)),
+  );
 
   return mapProfileInsightsResponse(response);
 }

@@ -1,9 +1,25 @@
-apps/engine-api/target/
-apps/ingestion/target/
-apps/web/node_modules/
+# Local build output must never enter a monorepo Docker context. Rust uses the
+# workspace-level target/ directory, which can grow to several gigabytes.
+target/
+**/target/
 node_modules/
-apps/ml/__pycache__/
-apps/ml/.venv/
+**/node_modules/
+**/dist/
+**/.vite/
+**/.turbo/
+**/.cache/
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+.git/
+.github/
+.claude/
+.codex/
+.agents/
+.DS_Store
+.env
+.env.*
+!.env.example
 infra/
 *.md
 docs/

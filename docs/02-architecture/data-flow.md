@@ -75,9 +75,9 @@ engine-api  ──►  Browser (Web UI)
 
 ### Partial / known gaps
 
-- **Market read-side** — `market_snapshots` are refreshed on ingest, but current market
-  route handlers still query the live `jobs` table directly. The snapshot write path
-  exists; read-side decoupling is not complete.
+- **Market read-side** — overview, companies, salary trends, and role demand are
+  snapshot-first with a bounded live fallback. Newer freeze, region, and technology
+  readers still query live jobs.
 
 ---
 
@@ -103,13 +103,12 @@ engine-api  ──►  Browser (Web UI)
 5. **Presentation layer** — `JobPresentationResponse` adds UI-ready labels, lifecycle
    primary/secondary labels, and fit reasons before returning to the browser.
 
-6. **Market data** — overview, company stats, salary trends, role demand endpoints
-   currently served from live `jobs` queries.
+6. **Market data** — overview, company stats, salary trends, and role demand prefer
+   typed snapshots created within 24 hours, with live-query fallback for availability.
 
 ### Partial / known gaps
 
-- Market readers bypass `market_snapshots` as noted above.
-- Analytics freshness widget is not yet exposed in the web UI.
+- Freeze, region, and technology market readers bypass snapshots as noted above.
 
 ---
 
@@ -195,8 +194,7 @@ ML training script  (apps/ml/app/trained_reranker/)
   not yet reached.
 - Promotion of a trained artifact to production use is a manual step and requires
   explicit operator decision.
-- The analytics freshness widget (showing ingestion recency in the UI) is not yet
-  implemented in the web dashboard.
+- Remote adoption history is not yet implemented as a market snapshot/API/UI flow.
 
 ---
 
@@ -204,7 +202,7 @@ ML training script  (apps/ml/app/trained_reranker/)
 
 - Message queue or event bus between services (no Kafka or RabbitMQ).
 - Ingestion writing through engine-api instead of directly to PostgreSQL.
-- Read-side market data exclusively from `market_snapshots` (decoupling planned).
+- Snapshot-backed reads for freeze, region, technology, and remote adoption trends.
 - Semantic embeddings (deferred until sufficient labeled data exists).
 - Paid LLM API as the default enrichment path.
 - Production deployment target beyond Docker Compose for local/dev use.

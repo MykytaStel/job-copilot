@@ -37,6 +37,7 @@ It is not an architecture ADR and does not change domain contracts.
 - current progress:
   - shared `SurfaceSection`, `SurfaceHero`, `SurfaceInset`, and `SurfaceMetric` primitives now back the main profile and application surfaces
   - shared `AccentIconFrame` now normalizes repeated accent-icon shells in shared section headers and core dashboard/market/settings surfaces
+  - app/page gutters now have one owner, cards use distinct solid elevated surfaces, and shared card/hero radii and shadows come from reference tokens
 - acceptance:
   - main sections use `--radius-card` / `--radius-hero`
   - repeated card-like sections stop introducing local radius values
@@ -56,6 +57,9 @@ It is not an architecture ADR and does not change domain contracts.
 ### 4. Typography System
 
 - scope: heading/body/eyebrow scales, sidebar/header density, empty states
+- current progress:
+  - repo-managed Inter remains the deterministic default
+  - shared page/section headings and shell micro-labels now use a readable hierarchy and stronger muted-text contrast
 - acceptance:
   - font delivery is repo-managed
   - heading sizes are intentional and consistent by surface level

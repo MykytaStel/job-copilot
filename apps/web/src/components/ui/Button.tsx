@@ -18,7 +18,7 @@ const buttonVariants = cva(
       },
       size: {
         md: 'h-10 px-4',
-        sm: 'h-9 px-3.5 text-xs',
+        sm: 'h-9 px-3.5 text-[13px]',
         icon: 'h-9 w-9 shrink-0 rounded-[var(--radius-md)] p-0',
       },
       active: {

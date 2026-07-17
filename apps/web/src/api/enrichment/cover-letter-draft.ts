@@ -1,4 +1,4 @@
-import { mlRequest } from '../client';
+import { json, request } from '../client';
 import { fireEvent } from '../events';
 
 import {
@@ -56,12 +56,9 @@ export async function getCoverLetterDraft(
     },
   });
 
-  const response = await mlRequest<MlCoverLetterDraftResponse>(
-    '/v1/enrichment/cover-letter-draft',
-    {
-      method: 'POST',
-      body: JSON.stringify(buildCoverLetterDraftPayload(payload)),
-    },
+  const response = await request<MlCoverLetterDraftResponse>(
+    '/api/v1/enrichment/cover-letter-draft',
+    json('POST', buildCoverLetterDraftPayload(payload)),
   );
 
   return mapCoverLetterDraftResponse(response);

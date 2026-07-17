@@ -12,9 +12,8 @@ Browser
   │
   └─► nginx (port 3000)
         ├─ /api/*  ─────────────────► engine-api (port 8080)
-        │                                   │
-        ├─ /ml/*   ─────────────────► ml sidecar (port 8000)
-        │                                   │
+        │                                   └─ internal HTTP ─► ml sidecar (port 8000)
+        │
         └─ /*      ──────────────── web SPA (nginx serves built assets)
                                             │
 PostgreSQL ◄────────────────────── engine-api
@@ -32,20 +31,21 @@ The browser sends all API calls to `/api/*`. Nginx strips the `/api` prefix and
 proxies to `engine-api:8080`. The full stack is exposed on a single origin
 (`localhost:3000` in Docker Compose), so no CORS applies for the bundled web app.
 
-### Browser to ML sidecar
+### Browser to ML features
 
-The browser can reach the ML sidecar directly via `/ml/*` through nginx. Nginx
-strips the `/ml` prefix and proxies to `ml:8000`. Long-running enrichment calls
-have a proxy read timeout of 120 seconds.
+The browser does not connect to the ML sidecar directly. Enrichment, resume match,
+reranker bootstrap/invalidation, and ML health requests go through authenticated
+engine-api routes. Engine-api allowlists the upstream operation, checks profile
+scope where a `profile_id` is present, and owns the internal-token boundary.
 
-In practice, most ML calls originate from engine-api on the server side, not
-directly from the browser.
+The ML container exposes port 8000 only to the Compose network; nginx has no `/ml/*`
+route and the host does not publish that port.
 
 ### Engine-api to ML sidecar
 
 Engine-api calls the ML sidecar over HTTP (configured via `ML_SIDECAR_BASE_URL`).
 These are server-to-server calls that bypass nginx. Engine-api sends an internal
-token (`ML_INTERNAL_TOKEN`) in these requests.
+token (`ML_INTERNAL_TOKEN`) in these requests. The browser never receives this token.
 
 ### Ingestion to PostgreSQL
 

@@ -45,7 +45,7 @@ export function SectionHeader({
           </AccentIconFrame>
         )}
         <div>
-          <h2 className="m-0 text-lg font-semibold text-foreground">{title}</h2>
+          <h2 className="m-0 text-xl font-semibold tracking-tight text-foreground">{title}</h2>
           {description && (
             <p className="m-0 mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
           )}
@@ -115,7 +115,7 @@ export function PageHeader({
       )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="m-0 text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+          <h1 className="m-0 text-3xl font-bold tracking-tight text-foreground lg:text-[2rem]">{title}</h1>
           {description && (
             <p className="mt-2 mb-0 max-w-3xl text-sm leading-6 text-muted-foreground">
               {description}

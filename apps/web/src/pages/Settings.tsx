@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Settings as SettingsIcon, ShieldCheck, SlidersHorizontal, Target, UserRound } from 'lucide-react';
+import {
+  Bell,
+  Settings as SettingsIcon,
+  ShieldCheck,
+  SlidersHorizontal,
+  Target,
+  UserRound,
+} from 'lucide-react';
 
 import { getProfile } from '../api/profiles';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -62,7 +69,27 @@ export default function Settings() {
       />
 
       <div className="flex flex-col gap-6 sm:flex-row sm:gap-0">
-        <nav className="flex shrink-0 flex-row gap-1 overflow-x-auto pb-1 sm:w-52 sm:flex-col sm:overflow-x-visible sm:border-r sm:border-border sm:pb-0 sm:pr-4">
+        <label className="sm:hidden">
+          <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Settings section
+          </span>
+          <select
+            value={activeSection}
+            onChange={(event) => setActiveSection(event.target.value as SectionId)}
+            className="h-11 w-full rounded-[var(--radius-md)] border border-border bg-surface px-3 text-sm font-medium text-foreground"
+          >
+            {SECTIONS.map(({ id, label }) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <nav
+          aria-label="Settings sections"
+          className="hidden shrink-0 gap-1 sm:flex sm:w-52 sm:flex-col sm:border-r sm:border-border sm:pr-4"
+        >
           {SECTIONS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}

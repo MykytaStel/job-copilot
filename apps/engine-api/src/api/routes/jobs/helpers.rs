@@ -5,13 +5,15 @@ use tracing::info;
 use crate::api::error::ApiError;
 use crate::api::routes::feedback::ensure_profile_exists;
 use crate::api::routes::search::{
-    apply_behavior_scoring, apply_feedback_scoring, apply_learned_reranking,
-    apply_trained_reranking, load_learning_aggregates, score_by_job_id,
+    apply_application_outcome_scoring, apply_behavior_scoring, apply_feedback_scoring,
+    apply_learned_reranking, apply_salary_scoring, apply_trained_reranking,
+    load_learning_aggregates, score_by_job_id,
 };
 use crate::domain::feedback::model::{CompanyFeedbackRecord, JobFeedbackRecord, JobFeedbackState};
 use crate::domain::matching::RerankerMode;
-use crate::domain::search::profile::SearchPreferences;
+use crate::domain::search::profile::{SearchPreferences, SearchSalaryExpectation};
 use crate::services::feedback::FeedbackService;
+use crate::services::outcome_dataset::event_signals_by_job_id;
 use crate::state::AppState;
 
 use super::ProfileRankedJobsResult;
@@ -34,9 +36,18 @@ pub(super) async fn load_profile_ranked_jobs(
             )
         })?;
     let analyzed_profile = state.profile_analysis.analyze(&profile.raw_text);
+    let search_preferences = profile
+        .search_preferences
+        .clone()
+        .unwrap_or_else(SearchPreferences::default);
     let search_profile = state
         .search_profile_builder
-        .build(&analyzed_profile, &SearchPreferences::default());
+        .build(&analyzed_profile, &search_preferences);
+    let salary_expectation = SearchSalaryExpectation {
+        min: profile.salary_min,
+        max: profile.salary_max,
+        currency: profile.salary_currency.clone(),
+    };
 
     let jobs = state
         .jobs_service
@@ -62,11 +73,21 @@ pub(super) async fn load_profile_ranked_jobs(
         .map(|ranked| (ranked.job.job.id.clone(), ranked.fit.score))
         .collect::<HashMap<_, _>>();
 
-    let mut adjusted_jobs = apply_feedback_scoring(result.ranked_jobs, &feedback_by_job_id);
+    let mut adjusted_jobs = apply_salary_scoring(
+        result.ranked_jobs,
+        Some(&salary_expectation),
+        search_profile.scoring_weights.salary_fit_importance,
+    );
+    adjusted_jobs = apply_feedback_scoring(adjusted_jobs, &feedback_by_job_id);
     let learning_aggregates = load_learning_aggregates(state, Some(profile_id)).await;
 
     if let Some(aggregates) = learning_aggregates.as_ref() {
         adjusted_jobs = apply_behavior_scoring(state, adjusted_jobs, &aggregates.behavior);
+        adjusted_jobs = apply_application_outcome_scoring(
+            state,
+            adjusted_jobs,
+            &aggregates.outcome_role_boosts,
+        );
     }
 
     let behavior_score_by_job_id = score_by_job_id(&adjusted_jobs);
@@ -92,16 +113,26 @@ pub(super) async fn load_profile_ranked_jobs(
     }
 
     if reranker_runtime.apply_trained {
-        let empty_event_signals = HashMap::new();
-        let empty_applications = HashMap::new();
+        let event_signals_by_job_id = learning_aggregates
+            .as_ref()
+            .map(|aggregates| {
+                event_signals_by_job_id(&aggregates.events)
+                    .into_iter()
+                    .collect::<HashMap<_, _>>()
+            })
+            .unwrap_or_default();
+        let applications_by_job_id = learning_aggregates
+            .as_ref()
+            .map(|aggregates| aggregates.applications_by_job_id.clone())
+            .unwrap_or_default();
         let (reranked_jobs, _adjusted_count) = apply_trained_reranking(
             state,
             adjusted_jobs,
             &deterministic_score_by_job_id,
             &behavior_score_by_job_id,
             &feedback_by_job_id,
-            &empty_event_signals,
-            &empty_applications,
+            &event_signals_by_job_id,
+            &applications_by_job_id,
         );
         adjusted_jobs = reranked_jobs;
     }

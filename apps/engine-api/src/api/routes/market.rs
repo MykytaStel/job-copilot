@@ -7,8 +7,9 @@ use serde::Deserialize;
 use crate::api::dto::market::{
     MarketCompaniesResponse, MarketCompanyDetailResponse, MarketCompanyEntryResponse,
     MarketCompanyVelocityEntryResponse, MarketFreezeSignalEntryResponse, MarketOverviewResponse,
-    MarketRegionDemandEntryResponse, MarketRoleDemandEntryResponse,
-    MarketSalaryBySeniorityEntryResponse, MarketSalaryTrendResponse, MarketTechDemandEntryResponse,
+    MarketRegionDemandEntryResponse, MarketRemoteAdoptionEntryResponse,
+    MarketRoleDemandEntryResponse, MarketSalaryBySeniorityEntryResponse, MarketSalaryTrendResponse,
+    MarketTechDemandEntryResponse,
 };
 use crate::api::error::ApiError;
 use crate::api::routes::jobs::load_feedback_state;
@@ -362,6 +363,32 @@ pub async fn get_market_region_breakdown(
     ))
 }
 
+pub async fn get_market_remote_adoption(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, ApiError> {
+    let (entries, source) = state
+        .jobs_service
+        .market_remote_adoption()
+        .await
+        .map_err(|error| ApiError::from_repository(error, "market_query_failed"))?;
+
+    let headers = if source == MarketSource::Live {
+        live_fallback_headers()
+    } else {
+        HeaderMap::new()
+    };
+
+    Ok((
+        headers,
+        Json(
+            entries
+                .into_iter()
+                .map(MarketRemoteAdoptionEntryResponse::from)
+                .collect::<Vec<_>>(),
+        ),
+    ))
+}
+
 pub async fn get_market_tech_demand(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -399,16 +426,16 @@ mod tests {
         MarketCompaniesQuery, MarketCompanyDetailQuery, MarketRolesQuery, MarketSalaryQuery,
         get_market_companies, get_market_company_detail, get_market_company_velocity,
         get_market_freeze_signals, get_market_overview, get_market_region_breakdown,
-        get_market_role_demand, get_market_salary_by_seniority, get_market_salary_trend,
-        get_market_salary_trends, get_market_tech_demand,
+        get_market_remote_adoption, get_market_role_demand, get_market_salary_by_seniority,
+        get_market_salary_trend, get_market_salary_trends, get_market_tech_demand,
     };
     use crate::domain::job::model::{Job, JobLifecycleStage, JobView};
     use crate::domain::market::model::{
         MarketCompanyDetail, MarketCompanyEntry, MarketCompanyVelocityEntry,
         MarketCompanyVelocityPoint, MarketCompanyVelocityTrend, MarketFreezeSignalEntry,
-        MarketOverview, MarketRegionDemandEntry, MarketRoleDemandEntry,
-        MarketSalaryBySeniorityEntry, MarketSalaryTrend, MarketTechDemandEntry,
-        MarketTrendDirection,
+        MarketOverview, MarketRegionDemandEntry, MarketRemoteAdoptionEntry, MarketRemoteWorkMode,
+        MarketRoleDemandEntry, MarketSalaryBySeniorityEntry, MarketSalaryTrend,
+        MarketTechDemandEntry, MarketTrendDirection,
     };
     use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
     use crate::services::jobs::{JobsService, JobsServiceStub};
@@ -1007,6 +1034,59 @@ mod tests {
                     "region": "Lviv",
                     "job_count": 3,
                     "top_roles": []
+                }
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn market_remote_adoption_returns_explainable_weekly_source_breakdown() {
+        let state = test_state(JobsService::for_tests(
+            JobsServiceStub::default().with_market_remote_adoption(vec![
+                MarketRemoteAdoptionEntry {
+                    week_start: "2026-07-13".to_string(),
+                    source: "djinni".to_string(),
+                    work_mode: MarketRemoteWorkMode::Remote,
+                    job_count: 8,
+                    source_total: 10,
+                    percentage: 80.0,
+                },
+                MarketRemoteAdoptionEntry {
+                    week_start: "2026-07-13".to_string(),
+                    source: "djinni".to_string(),
+                    work_mode: MarketRemoteWorkMode::Unknown,
+                    job_count: 2,
+                    source_total: 10,
+                    percentage: 20.0,
+                },
+            ]),
+        ));
+
+        let payload = parse_json_response(
+            get_market_remote_adoption(State(state))
+                .await
+                .expect("market remote adoption should succeed"),
+        )
+        .await;
+
+        assert_eq!(
+            payload,
+            json!([
+                {
+                    "week_start": "2026-07-13",
+                    "source": "djinni",
+                    "work_mode": "remote",
+                    "job_count": 8,
+                    "source_total": 10,
+                    "percentage": 80.0
+                },
+                {
+                    "week_start": "2026-07-13",
+                    "source": "djinni",
+                    "work_mode": "unknown",
+                    "job_count": 2,
+                    "source_total": 10,
+                    "percentage": 20.0
                 }
             ])
         );

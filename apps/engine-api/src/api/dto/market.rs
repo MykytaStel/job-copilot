@@ -5,7 +5,8 @@ use crate::domain::feedback::model::JobFeedbackState;
 use crate::domain::market::model::{
     MarketCompanyDetail, MarketCompanyEntry, MarketCompanyVelocityEntry,
     MarketCompanyVelocityPoint, MarketFreezeSignalEntry, MarketOverview, MarketRegionDemandEntry,
-    MarketRoleDemandEntry, MarketSalaryBySeniorityEntry, MarketSalaryTrend, MarketTechDemandEntry,
+    MarketRemoteAdoptionEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
+    MarketSalaryTrend, MarketTechDemandEntry,
 };
 
 #[derive(Debug, Serialize)]
@@ -228,6 +229,29 @@ impl From<MarketRegionDemandEntry> for MarketRegionDemandEntryResponse {
             region: value.region,
             job_count: value.job_count,
             top_roles: value.top_roles,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct MarketRemoteAdoptionEntryResponse {
+    pub week_start: String,
+    pub source: String,
+    pub work_mode: String,
+    pub job_count: u32,
+    pub source_total: u32,
+    pub percentage: f32,
+}
+
+impl From<MarketRemoteAdoptionEntry> for MarketRemoteAdoptionEntryResponse {
+    fn from(value: MarketRemoteAdoptionEntry) -> Self {
+        Self {
+            week_start: value.week_start,
+            source: value.source,
+            work_mode: value.work_mode.as_str().to_string(),
+            job_count: value.job_count,
+            source_total: value.source_total,
+            percentage: value.percentage,
         }
     }
 }

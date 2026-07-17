@@ -107,10 +107,11 @@ impl JobSource for WorkUaScraper {
 struct WorkUaSelectors {
     item: Selector,
     title: Selector,
-    company: Selector,
-    meta: Selector,
     description: Selector,
-    salary: Selector,
+    meta_block: Selector,
+    company_marker: Selector,
+    salary_marker: Selector,
+    strong_value: Selector,
 }
 
 impl WorkUaSelectors {
@@ -120,14 +121,15 @@ impl WorkUaSelectors {
             item: Selector::parse("div.card.card-hover").expect("valid selector"),
             // Title + job URL
             title: Selector::parse("h2 a").expect("valid selector"),
-            // Employer link — work.ua uses /employer/ paths
-            company: Selector::parse("a[href*='/employer/']").expect("valid selector"),
-            // Location/meta line that follows the company name
-            meta: Selector::parse(".add-top-xs").expect("valid selector"),
             // Short description excerpt
-            description: Selector::parse("p.cut-words, .text-default-7").expect("valid selector"),
-            // Salary label
-            salary: Selector::parse("span.label").expect("valid selector"),
+            description: Selector::parse("p.cut-words, p.ellipsis-line, .text-default-7")
+                .expect("valid selector"),
+            // Work.ua uses the same text-indent wrapper for company/location and salary.
+            // Marker icons distinguish the blocks while strong-600 contains the value.
+            meta_block: Selector::parse("div.text-indent").expect("valid selector"),
+            company_marker: Selector::parse(".glyphicon-company").expect("valid selector"),
+            salary_marker: Selector::parse(".glyphicon-hryvnia-fill").expect("valid selector"),
+            strong_value: Selector::parse(".strong-600").expect("valid selector"),
         }
     }
 }
@@ -186,17 +188,18 @@ fn parse_item(
     let source_job_id = extract_job_id(href)?;
     let source_url = format!("{BASE_URL}{href}");
 
-    let company_name = item
-        .select(&sel.company)
-        .next()
+    let company_block = item
+        .select(&sel.meta_block)
+        .find(|block| block.select(&sel.company_marker).next().is_some());
+    let company_name = company_block
+        .as_ref()
+        .and_then(|block| block.select(&sel.strong_value).next())
         .map(|el| collect_text(&el))
         .and_then(|value| normalize_company_name(&value));
 
     // Location is often in the same `.add-top-xs` line as the company: "CompanyName · Kyiv"
     // Strip the company name from it to get just the location part.
-    let location = item
-        .select(&sel.meta)
-        .next()
+    let location = company_block
         .map(|el| {
             let full = collect_text(&el);
             // Remove the company portion and clean separators
@@ -213,7 +216,11 @@ fn parse_item(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| title.clone());
 
-    let salary_text = item.select(&sel.salary).next().map(|el| collect_text(&el));
+    let salary_text = item
+        .select(&sel.meta_block)
+        .find(|block| block.select(&sel.salary_marker).next().is_some())
+        .and_then(|block| block.select(&sel.strong_value).next())
+        .map(|el| collect_text(&el));
     let (salary_min, salary_max, salary_currency, salary_usd_min, salary_usd_max) = salary_text
         .as_deref()
         .map(parse_salary_range_with_usd_monthly)
@@ -504,7 +511,7 @@ fn extract_job_id(href: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_url, extract_job_id, parse_detail_page};
+    use super::{WorkUaSelectors, build_url, extract_job_id, parse_detail_page, parse_page};
     use crate::models::{NormalizationResult, NormalizedJob, RawSnapshot};
     use serde_json::json;
 
@@ -537,6 +544,39 @@ mod tests {
     #[test]
     fn rejects_non_numeric_job_id() {
         assert_eq!(extract_job_id("/job/some-slug/"), None);
+    }
+
+    #[test]
+    fn parses_current_work_ua_listing_card() {
+        let html = r#"
+        <div class="card card-hover card-visited wordwrap job-link">
+          <h2><a href="/jobs/8132169/">Customer Support Specialist</a></h2>
+          <div class="text-indent">
+            <span class="glyphicon glyphicon-hryvnia-fill"></span>
+            <span class="strong-600">39 800 – 48 700 грн</span>
+          </div>
+          <div class="text-indent">
+            <span class="glyphicon glyphicon-company"></span>
+            <span><span class="strong-600">Vista Trans Holding</span></span>
+            <ul><li><span class="label"></span></li></ul>
+            <span>Дистанційно</span>
+          </div>
+          <p class="ellipsis ellipsis-line ellipsis-line-3 text-default-7">
+            Повна зайнятість. Досвід роботи від 1 року. Customer support and logistics.
+          </p>
+        </div>
+        "#;
+
+        let results = parse_page(html, "2026-07-17T10:00:00Z", &WorkUaSelectors::new());
+
+        assert_eq!(results.len(), 1);
+        let result = &results[0];
+        assert_eq!(result.snapshot.source_job_id, "8132169");
+        assert_eq!(result.job.company_name, "Vista Trans Holding");
+        assert_eq!(result.job.location.as_deref(), Some("Дистанційно"));
+        assert_eq!(result.job.salary_min, Some(39_800));
+        assert_eq!(result.job.salary_max, Some(48_700));
+        assert_eq!(result.job.salary_currency.as_deref(), Some("UAH"));
     }
 
     #[test]

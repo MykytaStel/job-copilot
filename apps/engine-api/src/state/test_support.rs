@@ -10,6 +10,7 @@ use crate::services::feedback::FeedbackService;
 use crate::services::fit_scoring::FitScoringService;
 use crate::services::followup::FollowUpService;
 use crate::services::jobs::JobsService;
+use crate::services::ml_gateway::MlGatewayService;
 use crate::services::notifications::NotificationsService;
 use crate::services::profile_analysis::ProfileAnalysisService;
 use crate::services::profile_ml_metrics::ProfileMlMetricsService;
@@ -92,6 +93,8 @@ impl AppState {
             .expect("test ML sidecar client should build"),
             cv_tailoring: CvTailoringService::new("http://localhost:8000".to_string(), 15, None)
                 .expect("test cv tailoring client should build"),
+            ml_gateway: MlGatewayService::new("http://localhost:8000".to_string(), 15, None)
+                .expect("test ML gateway client should build"),
             jwt_secret: None,
             cors_allowed_origins: Vec::new(),
         }

@@ -42,9 +42,11 @@ export default function AppShell() {
           state.sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64',
         )}
       >
-        <div className="p-4 lg:p-8 xl:p-10">
+        <div className="min-w-0">
           {state.mlDegraded && (
-            <MlDegradedBanner onDismiss={state.dismissMlBanner} />
+            <div className="mx-auto w-full max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+              <MlDegradedBanner onDismiss={state.dismissMlBanner} />
+            </div>
           )}
           <Suspense fallback={<RouteSkeleton />}>
             <Outlet />

@@ -1,5 +1,5 @@
 import type { BehaviorSignalCount } from '../analytics';
-import { mlRequest } from '../client';
+import { json, request } from '../client';
 
 import {
   buildFeedbackSummaryPayload,
@@ -42,15 +42,24 @@ export function buildWeeklyGuidancePayload(payload: WeeklyGuidanceRequest) {
     },
     behavior_summary: {
       search_run_count: payload.behaviorSummary.searchRunCount,
-      top_positive_sources: payload.behaviorSummary.topPositiveSources.map(buildBehaviorSignalPayload),
-      top_negative_sources: payload.behaviorSummary.topNegativeSources.map(buildBehaviorSignalPayload),
-      top_positive_role_families:
-        payload.behaviorSummary.topPositiveRoleFamilies.map(buildBehaviorSignalPayload),
-      top_negative_role_families:
-        payload.behaviorSummary.topNegativeRoleFamilies.map(buildBehaviorSignalPayload),
-      source_signal_counts: payload.behaviorSummary.sourceSignalCounts.map(buildBehaviorSignalPayload),
-      role_family_signal_counts:
-        payload.behaviorSummary.roleFamilySignalCounts.map(buildBehaviorSignalPayload),
+      top_positive_sources: payload.behaviorSummary.topPositiveSources.map(
+        buildBehaviorSignalPayload,
+      ),
+      top_negative_sources: payload.behaviorSummary.topNegativeSources.map(
+        buildBehaviorSignalPayload,
+      ),
+      top_positive_role_families: payload.behaviorSummary.topPositiveRoleFamilies.map(
+        buildBehaviorSignalPayload,
+      ),
+      top_negative_role_families: payload.behaviorSummary.topNegativeRoleFamilies.map(
+        buildBehaviorSignalPayload,
+      ),
+      source_signal_counts: payload.behaviorSummary.sourceSignalCounts.map(
+        buildBehaviorSignalPayload,
+      ),
+      role_family_signal_counts: payload.behaviorSummary.roleFamilySignalCounts.map(
+        buildBehaviorSignalPayload,
+      ),
     },
     funnel_summary: {
       impression_count: payload.funnelSummary.impressionCount,
@@ -104,13 +113,11 @@ export function mapWeeklyGuidanceResponse(response: MlWeeklyGuidanceResponse): W
   };
 }
 
-export async function getWeeklyGuidance(
-  payload: WeeklyGuidanceRequest,
-): Promise<WeeklyGuidance> {
-  const response = await mlRequest<MlWeeklyGuidanceResponse>('/v1/enrichment/weekly-guidance', {
-    method: 'POST',
-    body: JSON.stringify(buildWeeklyGuidancePayload(payload)),
-  });
+export async function getWeeklyGuidance(payload: WeeklyGuidanceRequest): Promise<WeeklyGuidance> {
+  const response = await request<MlWeeklyGuidanceResponse>(
+    '/api/v1/enrichment/weekly-guidance',
+    json('POST', buildWeeklyGuidancePayload(payload)),
+  );
 
   return mapWeeklyGuidanceResponse(response);
 }

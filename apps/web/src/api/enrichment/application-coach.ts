@@ -1,4 +1,4 @@
-import { mlRequest } from '../client';
+import { json, request } from '../client';
 import { fireEvent } from '../events';
 
 import {
@@ -53,10 +53,10 @@ export async function getApplicationCoach(
     },
   });
 
-  const response = await mlRequest<MlApplicationCoachResponse>('/v1/enrichment/application-coach', {
-    method: 'POST',
-    body: JSON.stringify(buildApplicationCoachPayload(payload)),
-  });
+  const response = await request<MlApplicationCoachResponse>(
+    '/api/v1/enrichment/application-coach',
+    json('POST', buildApplicationCoachPayload(payload)),
+  );
 
   return mapApplicationCoachResponse(response);
 }

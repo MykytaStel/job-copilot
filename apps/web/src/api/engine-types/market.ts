@@ -84,6 +84,17 @@ export type EngineMarketRegionDemandEntry = {
   top_roles: string[];
 };
 
+export type EngineMarketRemoteWorkMode = 'remote' | 'hybrid' | 'onsite' | 'unknown';
+
+export type EngineMarketRemoteAdoptionEntry = {
+  week_start: string;
+  source: string;
+  work_mode: EngineMarketRemoteWorkMode;
+  job_count: number;
+  source_total: number;
+  percentage: number;
+};
+
 export type EngineMarketTechDemandEntry = {
   skill: string;
   job_count: number;

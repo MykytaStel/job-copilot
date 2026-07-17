@@ -49,6 +49,9 @@ export function DashboardContent({ state }: { state: DashboardPageState }) {
           search={state.search}
           setSearch={state.setSearch}
           jobs={state.jobs}
+          filteredJobCount={state.filteredJobCount}
+          hasMoreJobs={state.hasMoreJobs}
+          loadMoreJobs={state.loadMoreJobs}
           allJobs={state.allJobs}
           rerankCoverage={state.rerankCoverage}
           rerankerUnavailable={state.rerankerUnavailable}

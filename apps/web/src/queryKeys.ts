@@ -42,6 +42,7 @@ export const queryKeys = {
     salaries: () => ['market', 'salaries'] as const,
     roles: () => ['market', 'roles'] as const,
     regionBreakdown: () => ['market', 'regionBreakdown'] as const,
+    remoteAdoption: () => ['market', 'remoteAdoption'] as const,
     techDemand: () => ['market', 'techDemand'] as const,
   },
   notifications: {

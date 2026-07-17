@@ -7,6 +7,7 @@ import { MarketCompaniesSection } from './MarketCompaniesSection';
 import { MarketFreezeSignalsSection } from './MarketFreezeSignalsSection';
 import { MarketHero } from './MarketHero';
 import { MarketRegionBreakdownSection } from './MarketRegionBreakdownSection';
+import { MarketRemoteAdoptionSection } from './MarketRemoteAdoptionSection';
 import { MarketRoleDemandSection } from './MarketRoleDemandSection';
 import { MarketSalarySection } from './MarketSalarySection';
 import { MarketTechDemandSection } from './MarketTechDemandSection';
@@ -16,7 +17,7 @@ export function MarketContent({ state }: { state: MarketPageState }) {
     <Page>
       <PageHeader
         title="Market Intelligence"
-        description="Currently live from the active jobs feed: market overview, hiring companies, freeze signals, salary ranges, role-demand buckets, and technology demand."
+        description="Snapshot-backed market signals from the active jobs feed: hiring activity, salary ranges, role and region demand, work-mode adoption, and technology demand."
         breadcrumb={[{ label: 'Dashboard', href: '/' }, { label: 'Market' }]}
       />
 
@@ -25,11 +26,12 @@ export function MarketContent({ state }: { state: MarketPageState }) {
       <MarketFreezeSignalsSection state={state} />
       <MarketCompaniesSection state={state} />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
         <MarketSalarySection state={state} />
         <MarketRoleDemandSection state={state} />
       </div>
       <MarketRegionBreakdownSection state={state} />
+      <MarketRemoteAdoptionSection state={state} />
       <MarketTechDemandSection state={state} />
     </Page>
   );

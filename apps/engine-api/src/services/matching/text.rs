@@ -214,6 +214,10 @@ pub(super) fn build_searchable_text_parts(job: &super::Job, source: Option<&str>
         job.description_text.as_str(),
     ];
 
+    if let Some(location) = job.location.as_deref() {
+        parts.push(location);
+    }
+
     if let Some(remote_type) = job.remote_type.as_deref() {
         parts.push(remote_type);
     }

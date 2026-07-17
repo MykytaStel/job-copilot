@@ -1230,12 +1230,12 @@ mod tests {
             .await
             .expect("market snapshots should refresh idempotently");
 
-        assert_eq!(first_summary.snapshots_written, 9);
+        assert_eq!(first_summary.snapshots_written, 10);
         assert_eq!(first_summary.snapshot_date, second_summary.snapshot_date);
-        assert_eq!(second_summary.snapshots_written, 9);
+        assert_eq!(second_summary.snapshots_written, 10);
 
         let snapshots = fetch_market_snapshots(&test_db.pool).await;
-        assert_eq!(snapshots.len(), 9);
+        assert_eq!(snapshots.len(), 10);
 
         let by_type = snapshots
             .into_iter()
@@ -1269,6 +1269,13 @@ mod tests {
                 .and_then(|payload| payload.as_array())
                 .map(|items| items.len()),
             Some(8)
+        );
+        assert!(
+            by_type
+                .get("remote_adoption")
+                .and_then(|payload| payload.as_array())
+                .is_some(),
+            "remote adoption snapshot should contain a JSON array"
         );
 
         test_db.cleanup().await;

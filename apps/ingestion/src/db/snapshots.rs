@@ -19,6 +19,7 @@ pub(super) async fn run_refresh(pool: &PgPool) -> Result<MarketSnapshotSummary> 
     let freeze_signals_payload = build_freeze_signals(pool).await?;
     let salary_by_seniority_payload = build_salary_by_seniority(pool).await?;
     let region_breakdown_payload = build_region_breakdown(pool).await?;
+    let remote_adoption_payload = build_remote_adoption(pool).await?;
     let tech_demand_payload = build_tech_demand(pool).await?;
 
     upsert(pool, snapshot_date, "overview", overview_payload).await?;
@@ -53,11 +54,18 @@ pub(super) async fn run_refresh(pool: &PgPool) -> Result<MarketSnapshotSummary> 
         region_breakdown_payload,
     )
     .await?;
+    upsert(
+        pool,
+        snapshot_date,
+        "remote_adoption",
+        remote_adoption_payload,
+    )
+    .await?;
     upsert(pool, snapshot_date, "tech_demand", tech_demand_payload).await?;
 
     Ok(MarketSnapshotSummary {
         snapshot_date: snapshot_date.format("%Y-%m-%d").to_string(),
-        snapshots_written: 9,
+        snapshots_written: 10,
     })
 }
 
@@ -575,6 +583,86 @@ async fn build_region_breakdown(pool: &PgPool) -> Result<serde_json::Value> {
         .fetch_one(pool)
         .await
         .map_err(crate::error::IngestionError::Database)
+}
+
+async fn build_remote_adoption(pool: &PgPool) -> Result<serde_json::Value> {
+    sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        WITH job_sources AS (
+            SELECT DISTINCT job_id, source
+            FROM job_variants
+            WHERE BTRIM(source) <> ''
+        ),
+        classified_jobs AS (
+            SELECT
+                DATE_TRUNC('week', jobs.first_seen_at)::date AS week_start,
+                job_sources.source,
+                CASE
+                    WHEN LOWER(BTRIM(COALESCE(jobs.remote_type, ''))) IN ('remote', 'fully remote')
+                      OR COALESCE(jobs.remote_type, '') ILIKE '%дистан%'
+                    THEN 'remote'
+                    WHEN LOWER(BTRIM(COALESCE(jobs.remote_type, ''))) = 'hybrid'
+                      OR COALESCE(jobs.remote_type, '') ILIKE '%гібрид%'
+                    THEN 'hybrid'
+                    WHEN LOWER(BTRIM(COALESCE(jobs.remote_type, ''))) IN ('onsite', 'on-site', 'office')
+                      OR COALESCE(jobs.remote_type, '') ILIKE '%офіс%'
+                    THEN 'onsite'
+                    ELSE 'unknown'
+                END AS work_mode
+            FROM jobs
+            INNER JOIN job_sources ON job_sources.job_id = jobs.id
+            WHERE jobs.is_active
+              AND jobs.first_seen_at >= DATE_TRUNC('week', NOW()) - INTERVAL '7 weeks'
+        ),
+        mode_counts AS (
+            SELECT
+                week_start,
+                source,
+                work_mode,
+                COUNT(*)::bigint AS job_count
+            FROM classified_jobs
+            GROUP BY week_start, source, work_mode
+        ),
+        source_counts AS (
+            SELECT
+                week_start,
+                source,
+                SUM(job_count)::bigint AS source_total
+            FROM mode_counts
+            GROUP BY week_start, source
+        )
+        SELECT COALESCE(
+            jsonb_agg(
+                jsonb_build_object(
+                    'week_start', TO_CHAR(mode_counts.week_start, 'YYYY-MM-DD'),
+                    'source', mode_counts.source,
+                    'work_mode', mode_counts.work_mode,
+                    'job_count', mode_counts.job_count,
+                    'source_total', source_counts.source_total,
+                    'percentage', ROUND(
+                        mode_counts.job_count::numeric / source_counts.source_total::numeric * 100,
+                        1
+                    )
+                )
+                ORDER BY
+                    mode_counts.week_start ASC,
+                    mode_counts.source ASC,
+                    CASE mode_counts.work_mode
+                        WHEN 'remote' THEN 1
+                        WHEN 'hybrid' THEN 2
+                        WHEN 'onsite' THEN 3
+                        ELSE 4
+                    END
+            ),
+            '[]'::jsonb
+        )
+        FROM mode_counts
+        INNER JOIN source_counts USING (week_start, source)
+        "#,
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(crate::error::IngestionError::Database)
 }
 
 async fn build_tech_demand(pool: &PgPool) -> Result<serde_json::Value> {
