@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
 import { login, register } from '../api/auth';
@@ -18,6 +19,7 @@ type Mode = 'register' | 'login';
 
 export default function Auth() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [mode, setMode] = useState<Mode>('register');
   const [name, setName] = useState('');
@@ -36,7 +38,8 @@ export default function Auth() {
           : await login({ email, password });
       writeToken(res.token);
       writeProfileId(res.profile_id);
-      navigate('/');
+      queryClient.clear();
+      navigate(mode === 'register' ? '/setup' : '/');
     } catch (err) {
       showToast({ type: 'error', message: err instanceof Error ? err.message : 'Something went wrong' });
     } finally {
@@ -69,8 +72,9 @@ export default function Auth() {
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               {mode === 'register' && (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">Full name</label>
+                  <label htmlFor="auth-name" className="text-xs font-medium text-muted-foreground">Full name</label>
                   <input
+                    id="auth-name"
                     className={inputClass}
                     type="text"
                     value={name}
@@ -83,8 +87,9 @@ export default function Auth() {
               )}
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Email</label>
+                <label htmlFor="auth-email" className="text-xs font-medium text-muted-foreground">Email</label>
                 <input
+                  id="auth-email"
                   className={inputClass}
                   type="email"
                   value={email}
@@ -96,8 +101,9 @@ export default function Auth() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Password</label>
+                <label htmlFor="auth-password" className="text-xs font-medium text-muted-foreground">Password</label>
                 <input
+                  id="auth-password"
                   className={inputClass}
                   type="password"
                   value={password}
@@ -110,10 +116,11 @@ export default function Auth() {
 
               {mode === 'register' && (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
+                  <label htmlFor="auth-profile-summary" className="text-xs font-medium text-muted-foreground">
                     CV / profile summary
                   </label>
                   <textarea
+                    id="auth-profile-summary"
                     className={`${inputClass} min-h-[140px] resize-y`}
                     value={rawText}
                     onChange={(e) => setRawText(e.target.value)}

@@ -14,6 +14,7 @@ use crate::services::notifications::NotificationsService;
 use crate::services::profile_analysis::ProfileAnalysisService;
 use crate::services::profile_ml_metrics::ProfileMlMetricsService;
 use crate::services::profile_ml_state::ProfileMlStateService;
+use crate::services::profile_onboarding::{ProfileOnboardingService, ProfileOnboardingServiceStub};
 use crate::services::profile_records::ProfileRecordsService;
 use crate::services::reranker_bootstrap::RerankerBootstrapService;
 use crate::services::resumes::ResumesService;
@@ -53,6 +54,9 @@ impl AppState {
             ),
             profile_ml_metrics: ProfileMlMetricsService::for_tests(
                 crate::services::profile_ml_metrics::ProfileMlMetricsServiceStub::default(),
+            ),
+            profile_onboarding: ProfileOnboardingService::for_tests(
+                ProfileOnboardingServiceStub::default(),
             ),
             jobs_service,
             search_ranking: SearchRankingService::new(),

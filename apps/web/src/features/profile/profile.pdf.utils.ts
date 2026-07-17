@@ -1,4 +1,4 @@
-import PdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs?worker&inline';
+import PdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs?worker';
 
 type PdfTextItemLike = {
   str: string;
@@ -47,12 +47,17 @@ export async function extractPdfText(file: File): Promise<string> {
 
 export async function extractPdfTextFromData(data: Uint8Array): Promise<string> {
   const pdfjsLib = await pdfjsLibPromise;
+  const useLocalFonts = typeof window === 'undefined' || import.meta.env.MODE === 'test';
   const pdf = await pdfjsLib.getDocument({
     data,
-    ...(typeof window === 'undefined'
+    ...(useLocalFonts
       ? {
           disableFontFace: true,
           useSystemFonts: true,
+          standardFontDataUrl: new URL(
+            /* @vite-ignore */ '../../../node_modules/pdfjs-dist/standard_fonts/',
+            import.meta.url,
+          ).toString().replace(/\/?$/, '/'),
         }
       : {}),
   }).promise;

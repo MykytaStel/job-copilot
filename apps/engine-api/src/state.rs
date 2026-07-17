@@ -3,8 +3,8 @@ use crate::db::Database;
 use crate::db::repositories::{
     ActivitiesRepository, ApplicationsRepository, AuthCredentialsRepository, FeedbackRepository,
     FitScoresRepository, JobsRepository, NotificationsRepository, ProfileMlMetricsRepository,
-    ProfileMlStateRepository, ProfilesRepository, ResumesRepository, TasksRepository,
-    UserEventsRepository,
+    ProfileMlStateRepository, ProfileOnboardingRepository, ProfilesRepository, ResumesRepository,
+    TasksRepository, UserEventsRepository,
 };
 use crate::services::activities::ActivitiesService;
 use crate::services::applications::ApplicationsService;
@@ -18,6 +18,7 @@ use crate::services::notifications::NotificationsService;
 use crate::services::profile_analysis::ProfileAnalysisService;
 use crate::services::profile_ml_metrics::ProfileMlMetricsService;
 use crate::services::profile_ml_state::ProfileMlStateService;
+use crate::services::profile_onboarding::ProfileOnboardingService;
 use crate::services::profile_records::ProfileRecordsService;
 use crate::services::reranker_bootstrap::RerankerBootstrapService;
 use crate::services::resumes::ResumesService;
@@ -43,6 +44,7 @@ pub struct AppState {
     pub profile_records: ProfileRecordsService,
     pub profile_ml_state: ProfileMlStateService,
     pub profile_ml_metrics: ProfileMlMetricsService,
+    pub profile_onboarding: ProfileOnboardingService,
     pub jobs_service: JobsService,
     pub search_ranking: SearchRankingService,
     pub applications_service: ApplicationsService,
@@ -113,6 +115,7 @@ impl AppState {
         let auth_credentials_repository = AuthCredentialsRepository::new(database.clone());
         let profile_ml_state_repository = ProfileMlStateRepository::new(database.clone());
         let profile_ml_metrics_repository = ProfileMlMetricsRepository::new(database.clone());
+        let profile_onboarding_repository = ProfileOnboardingRepository::new(database.clone());
         let jobs_repository = JobsRepository::new(database.clone());
         let applications_repository = ApplicationsRepository::new(database.clone());
         let feedback_repository = FeedbackRepository::new(database.clone());
@@ -137,6 +140,7 @@ impl AppState {
             profile_records,
             profile_ml_state: ProfileMlStateService::new(profile_ml_state_repository),
             profile_ml_metrics: ProfileMlMetricsService::new(profile_ml_metrics_repository),
+            profile_onboarding: ProfileOnboardingService::new(profile_onboarding_repository),
             jobs_service: JobsService::new(jobs_repository.clone()),
             search_ranking,
             applications_service: ApplicationsService::new(applications_repository),

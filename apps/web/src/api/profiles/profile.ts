@@ -107,6 +107,35 @@ export async function analyzeStoredProfile(): Promise<EngineAnalyzeProfile> {
   return request<EngineAnalyzeProfile>(`/api/v1/profiles/${profileId}/analyze`, json('POST', {}));
 }
 
+export async function saveOnboardingResume(
+  profileId: string,
+  rawText: string,
+  filename = 'onboarding.md',
+): Promise<PersistedCandidateProfile> {
+  const normalizedText = rawText.replace(/\r\n/g, '\n').trim();
+  if (!normalizedText) {
+    throw new Error('Add CV text or a short profile summary first');
+  }
+
+  const profile = await request<EngineProfile>(
+    `/api/v1/profiles/${profileId}`,
+    json('PATCH', { raw_text: normalizedText }),
+  );
+  const [analysis] = await Promise.all([
+    request<EngineAnalyzeProfile>(`/api/v1/profiles/${profileId}/analyze`, json('POST', {})),
+    request<EngineResume>(
+      '/api/v1/resume/upload',
+      json('POST', { filename, raw_text: normalizedText }),
+    ),
+  ]);
+
+  return {
+    ...mapPersistedProfile(profile),
+    summary: analysis.summary,
+    skills: analysis.skills ?? [],
+  };
+}
+
 export async function getProfile(): Promise<PersistedCandidateProfile | undefined> {
   const profileId = readStoredProfileId();
   if (!profileId) return undefined;

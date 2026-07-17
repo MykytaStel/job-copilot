@@ -16,6 +16,7 @@ export {
   getProfile,
   getStoredProfileRawText,
   saveProfile,
+  saveOnboardingResume,
   saveProfileSearchPreferences,
   updateProfileSkills,
   updateScoringWeights,
