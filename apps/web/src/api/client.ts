@@ -8,22 +8,8 @@ import {
 import { buildAuthHeaders } from '../lib/authSession';
 
 const API_URL = import.meta.env.VITE_ENGINE_API_URL?.trim() || 'http://localhost:8080';
-const ML_URL = import.meta.env.VITE_ML_URL?.trim() || 'http://localhost:8000';
 
 export const RECENT_JOBS_LIMIT_MAX = 200;
-
-export async function mlRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${ML_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(body.detail ?? `ML HTTP ${res.status}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json();
-}
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {

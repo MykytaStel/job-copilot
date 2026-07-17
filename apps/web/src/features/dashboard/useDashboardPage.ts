@@ -71,6 +71,8 @@ const LIFECYCLE_TABS: { value: LifecycleFilter; label: string }[] = [
 
 const DEFAULT_LIFECYCLE_FILTER: LifecycleFilter = 'all';
 const DASHBOARD_RERANK_WINDOW = 60;
+const DASHBOARD_INITIAL_VISIBLE_JOBS = 20;
+const DASHBOARD_LOAD_MORE_STEP = 20;
 const UNDO_TOAST_DURATION_MS = 30_000;
 
 function normalizeCompanyName(companyName: string) {
@@ -101,7 +103,14 @@ function readSourceFilter(searchParams: URLSearchParams): string | null {
 function readJobIdFilter(searchParams: URLSearchParams): string[] {
   const raw = searchParams.get('job_ids')?.trim();
   if (!raw) return [];
-  return Array.from(new Set(raw.split(',').map((value) => value.trim()).filter(Boolean)));
+  return Array.from(
+    new Set(
+      raw
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 function readCompanyFilter(searchParams: URLSearchParams): string | null {
@@ -114,6 +123,10 @@ export function useDashboardPage() {
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
+  const [jobPagination, setJobPagination] = useState({
+    key: '',
+    visibleCount: DASHBOARD_INITIAL_VISIBLE_JOBS,
+  });
   const rerankerCacheDegraded = useSyncExternalStore(
     (onStoreChange) => {
       window.addEventListener(RERANKER_CACHE_INVALIDATION_EVENT, onStoreChange);
@@ -125,9 +138,12 @@ export function useDashboardPage() {
     () => false,
   );
   const { sortMode, setSortMode: setDisplaySortMode } = useDisplayPrefs();
-  const setSortMode = useCallback((next: SortMode) => {
-    setDisplaySortMode(next);
-  }, [setDisplaySortMode]);
+  const setSortMode = useCallback(
+    (next: SortMode) => {
+      setDisplaySortMode(next);
+    },
+    [setDisplaySortMode],
+  );
   const lifecycleFilter = readLifecycleFilter(searchParams);
   const sourceFilter = readSourceFilter(searchParams);
   const notificationJobIds = readJobIdFilter(searchParams);
@@ -197,10 +213,7 @@ export function useDashboardPage() {
 
   const allJobs = useMemo(() => jobsFeed?.jobs ?? [], [jobsFeed?.jobs]);
   const jobSummary = jobsFeed?.summary;
-  const rerankCandidates = useMemo(
-    () => allJobs.slice(0, DASHBOARD_RERANK_WINDOW),
-    [allJobs],
-  );
+  const rerankCandidates = useMemo(() => allJobs.slice(0, DASHBOARD_RERANK_WINDOW), [allJobs]);
   const rerankJobIds = rerankCandidates.map((job) => job.id);
   const rerankJobsKey = rerankJobIds.join('|');
 
@@ -248,6 +261,21 @@ export function useDashboardPage() {
 
     return filtered;
   }, [allJobs, companyFilter, notificationJobIds, scoreById, search, sortMode]);
+  const notificationJobIdsKey = notificationJobIds.join('|');
+  const paginationKey = [
+    companyFilter ?? '',
+    lifecycleFilter,
+    notificationJobIdsKey,
+    search,
+    sortMode,
+    sourceFilter ?? '',
+  ].join('::');
+  const visibleJobCount =
+    jobPagination.key === paginationKey
+      ? jobPagination.visibleCount
+      : DASHBOARD_INITIAL_VISIBLE_JOBS;
+
+  const visibleJobs = useMemo(() => jobs.slice(0, visibleJobCount), [jobs, visibleJobCount]);
 
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: queryKeys.applications.all(),
@@ -277,7 +305,10 @@ export function useDashboardPage() {
       showToast({ type: 'success', message: 'Job saved' });
     },
     onError: (value: unknown) => {
-      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
+      showToast({
+        type: 'error',
+        message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed',
+      });
     },
   });
 
@@ -294,7 +325,10 @@ export function useDashboardPage() {
       showToast({ type: 'success', message: 'Hide undone' });
     },
     onError: (value: unknown) => {
-      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
+      showToast({
+        type: 'error',
+        message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed',
+      });
     },
   });
 
@@ -311,7 +345,10 @@ export function useDashboardPage() {
       showToast({ type: 'success', message: 'Bad-fit mark undone' });
     },
     onError: (value: unknown) => {
-      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
+      showToast({
+        type: 'error',
+        message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed',
+      });
     },
   });
 
@@ -336,7 +373,10 @@ export function useDashboardPage() {
       });
     },
     onError: (value: unknown) => {
-      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
+      showToast({
+        type: 'error',
+        message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed',
+      });
     },
   });
 
@@ -369,7 +409,10 @@ export function useDashboardPage() {
       });
     },
     onError: (value: unknown) => {
-      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
+      showToast({
+        type: 'error',
+        message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed',
+      });
     },
   });
 
@@ -394,7 +437,10 @@ export function useDashboardPage() {
       });
     },
     onError: (value: unknown) => {
-      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
+      showToast({
+        type: 'error',
+        message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed',
+      });
     },
   });
 
@@ -411,7 +457,10 @@ export function useDashboardPage() {
       showToast({ type: 'success', message: 'Bad-fit mark removed' });
     },
     onError: (value: unknown) => {
-      showToast({ type: 'error', message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed' });
+      showToast({
+        type: 'error',
+        message: value instanceof Error ? `Error: ${value.message}` : 'Error: action failed',
+      });
     },
   });
 
@@ -424,10 +473,10 @@ export function useDashboardPage() {
   useEffect(() => {
     void logJobImpressionsOnce({
       profileId,
-      jobs,
+      jobs: visibleJobs,
       surface: 'dashboard_recent_jobs',
     });
-  }, [jobs, profileId]);
+  }, [profileId, visibleJobs]);
 
   const lifecycleOptions = LIFECYCLE_TABS.map((tab) => ({
     id: tab.value,
@@ -449,7 +498,9 @@ export function useDashboardPage() {
     isTruncated: allJobs.length > rerankJobIds.length,
   };
   const rerankerUnavailable =
-    sortMode === 'relevance' && Boolean(profileId) && (rerankerCacheDegraded || Boolean(rerankError));
+    sortMode === 'relevance' &&
+    Boolean(profileId) &&
+    (rerankerCacheDegraded || Boolean(rerankError));
 
   const insights = [
     {
@@ -494,7 +545,14 @@ export function useDashboardPage() {
     clearContextFilters,
     updateFilters,
     jobsLoading,
-    jobs,
+    jobs: visibleJobs,
+    filteredJobCount: jobs.length,
+    hasMoreJobs: visibleJobs.length < jobs.length,
+    loadMoreJobs: () =>
+      setJobPagination({
+        key: paginationKey,
+        visibleCount: Math.min(visibleJobCount + DASHBOARD_LOAD_MORE_STEP, jobs.length),
+      }),
     allJobs,
     jobSummary,
     sourcesError,

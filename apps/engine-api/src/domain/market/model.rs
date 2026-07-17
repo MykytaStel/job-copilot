@@ -138,6 +138,36 @@ pub struct MarketRegionDemandEntry {
     pub top_roles: Vec<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarketRemoteWorkMode {
+    Remote,
+    Hybrid,
+    Onsite,
+    Unknown,
+}
+
+impl MarketRemoteWorkMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Remote => "remote",
+            Self::Hybrid => "hybrid",
+            Self::Onsite => "onsite",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MarketRemoteAdoptionEntry {
+    pub week_start: String,
+    pub source: String,
+    pub work_mode: MarketRemoteWorkMode,
+    pub job_count: u32,
+    pub source_total: u32,
+    pub percentage: f32,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MarketTechDemandEntry {
     pub skill: String,

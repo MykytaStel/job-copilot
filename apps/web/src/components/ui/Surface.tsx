@@ -16,7 +16,7 @@ export function SurfaceSection<E extends ElementType = 'section'>({
   return (
     <Component
       className={cn(
-        'space-y-5 rounded-[var(--radius-card)] border border-border bg-card/85 p-7',
+        'space-y-5 rounded-[var(--radius-card)] border border-border/80 bg-card p-5 shadow-[var(--shadow-card)] sm:p-6',
         className,
       )}
       {...props}
@@ -33,7 +33,7 @@ export function SurfaceHero<E extends ElementType = 'div'>({
   return (
     <Component
       className={cn(
-        'overflow-hidden rounded-[var(--radius-hero)] border border-border bg-card/85 shadow-[var(--shadow-hero)]',
+        'overflow-hidden rounded-[var(--radius-hero)] border border-border/80 bg-card shadow-[var(--shadow-hero)]',
         className,
       )}
       {...props}
@@ -49,7 +49,7 @@ export function SurfaceInset<E extends ElementType = 'div'>({
   const Component = (as ?? 'div') as ElementType;
   return (
     <Component
-      className={cn('rounded-2xl border border-border/70 bg-surface-muted p-4', className)}
+      className={cn('rounded-[var(--radius-xl)] border border-border/60 bg-surface-muted p-4', className)}
       {...props}
     />
   );
@@ -63,7 +63,7 @@ export function SurfaceMetric<E extends ElementType = 'div'>({
   const Component = (as ?? 'div') as ElementType;
   return (
     <Component
-      className={cn('rounded-2xl border border-border/70 bg-white-a04 px-4 py-3', className)}
+      className={cn('rounded-[var(--radius-xl)] border border-border/60 bg-white-a04 px-4 py-3', className)}
       {...props}
     />
   );

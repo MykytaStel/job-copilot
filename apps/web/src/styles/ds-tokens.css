@@ -61,7 +61,7 @@
   --color-card-foreground: var(--color-text-primary);
 
   /* Primary — blue-purple (#636bff ≈ oklch(0.65 0.15 250)) */
-  --color-primary: #636bff;
+  --color-primary: var(--ref-color-indigo-500);
   --color-primary-foreground: #ffffff;
 
   /* Secondary */
@@ -83,12 +83,12 @@
   /* Border / input / ring */
   --color-border: var(--color-border-soft);
   --color-input: var(--color-bg-input);
-  --color-ring: #636bff;
+  --color-ring: var(--ref-color-indigo-500);
 
   /* Sidebar */
-  --color-sidebar: #0b0f1c;
+  --color-sidebar: var(--ref-color-sidebar-bg);
   --color-sidebar-foreground: var(--color-text-primary);
-  --color-sidebar-primary: #636bff;
+  --color-sidebar-primary: var(--ref-color-indigo-500);
   --color-sidebar-primary-foreground: #ffffff;
   --color-sidebar-accent: rgba(80, 92, 255, 0.12);
   --color-sidebar-accent-foreground: var(--color-text-accent);

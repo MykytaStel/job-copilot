@@ -83,14 +83,14 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         VITE_ENGINE_API_URL: /api
-        VITE_ML_URL: /ml
     container_name: job-copilot-web
     depends_on:
       engine-api:
         condition: service_healthy
 
   # ── nginx API gateway ────────────────────────────────────────────────────────
-  # Single origin for the browser: /api/* → engine-api, /ml/* → ml, / → web.
+  # Single origin for the browser: /api/* → engine-api, / → web. The ML
+  # sidecar remains private and is reached only through engine-api.
   # Access the full stack at http://localhost:3000
   nginx:
     image: nginx:alpine
@@ -105,9 +105,11 @@ services:
       - ml
 
   # ── Scraper daemon ──────────────────────────────────────────────────────────
-  # Scrapes Djinni + Work.ua every 60 minutes and upserts results into Postgres.
+  # Scrapes the configured sources every 60 minutes and upserts results into Postgres.
   # Set SCRAPE_INTERVAL_MINUTES to override the default.
   # Set SCRAPE_PAGES to control how many pages per source (default 3).
+  # Robota.ua is opt-in because its public HTTP endpoints currently require a
+  # Cloudflare browser challenge. Add `robotaua` only with authorized API access.
   scraper:
     build:
       context: ..
@@ -118,7 +120,7 @@ services:
     command:
       - "--daemon"
       - "--sources"
-      - "all"
+      - "${SCRAPE_SOURCES:-djinni,douua,workua}"
       - "--pages"
       - "${SCRAPE_PAGES:-3}"
       - "--interval-minutes"
@@ -157,8 +159,8 @@ services:
     volumes:
       - ../apps/ml/models:/app/models
       - ml-runtime:/app/.runtime
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/ready" ]
       interval: 5s

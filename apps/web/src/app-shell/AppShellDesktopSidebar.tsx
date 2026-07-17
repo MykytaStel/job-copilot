@@ -49,7 +49,7 @@ export function AppShellDesktopSidebar({
 
       <div className="px-4 pt-4">
         {!sidebarCollapsed && (
-          <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/40">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">
             Workspace
           </p>
         )}

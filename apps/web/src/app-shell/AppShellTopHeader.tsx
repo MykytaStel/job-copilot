@@ -39,7 +39,7 @@ export function AppShellTopHeader({
         </Button>
 
         <div className="text-center">
-          <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Job Copilot
           </p>
           <p className="m-0 text-sm font-semibold text-sidebar-foreground">
@@ -61,7 +61,7 @@ export function AppShellTopHeader({
       >
         <div className="flex min-w-0 flex-1 items-center gap-4">
           <div className="min-w-0">
-            <p className="m-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Current view
             </p>
             <div className="mt-1 flex items-center gap-2">
@@ -69,7 +69,7 @@ export function AppShellTopHeader({
                 {activeNavItem?.name ?? 'Detail View'}
               </p>
               {activeNavItem && (
-                <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+                <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
                   Active
                 </span>
               )}

@@ -14,6 +14,7 @@ use crate::services::feedback::FeedbackService;
 use crate::services::fit_scoring::FitScoringService;
 use crate::services::followup::FollowUpService;
 use crate::services::jobs::JobsService;
+use crate::services::ml_gateway::MlGatewayService;
 use crate::services::notifications::NotificationsService;
 use crate::services::profile_analysis::ProfileAnalysisService;
 use crate::services::profile_ml_metrics::ProfileMlMetricsService;
@@ -66,6 +67,7 @@ pub struct AppState {
     pub trained_reranker_model: Option<TrainedRerankerModel>,
     pub reranker_bootstrap: RerankerBootstrapService,
     pub cv_tailoring: CvTailoringService,
+    pub ml_gateway: MlGatewayService,
     pub jwt_secret: Option<String>,
     pub cors_allowed_origins: Vec<String>,
 }
@@ -92,6 +94,12 @@ impl AppState {
             config.ml_sidecar_internal_token.clone(),
         )
         .expect("valid ML sidecar client configuration");
+        let ml_gateway = MlGatewayService::new(
+            config.ml_sidecar_base_url.clone(),
+            config.ml_sidecar_timeout_seconds,
+            config.ml_sidecar_internal_token.clone(),
+        )
+        .expect("valid ML sidecar client configuration");
 
         let mut state = Self::new_with_rerankers(StateRerankerConfig {
             database,
@@ -102,6 +110,7 @@ impl AppState {
             trained_model: trained_reranker_model,
             reranker_bootstrap,
             cv_tailoring,
+            ml_gateway,
             ml_sidecar_base_url: config.ml_sidecar_base_url.clone(),
         });
         state.jwt_secret = config.jwt_secret.clone();
@@ -162,6 +171,7 @@ impl AppState {
             trained_reranker_model: config.trained_model,
             reranker_bootstrap: config.reranker_bootstrap,
             cv_tailoring: config.cv_tailoring,
+            ml_gateway: config.ml_gateway,
             jwt_secret: None,
             cors_allowed_origins: Vec::new(),
         }
@@ -177,6 +187,7 @@ struct StateRerankerConfig {
     trained_model: Option<TrainedRerankerModel>,
     reranker_bootstrap: RerankerBootstrapService,
     cv_tailoring: CvTailoringService,
+    ml_gateway: MlGatewayService,
     ml_sidecar_base_url: String,
 }
 

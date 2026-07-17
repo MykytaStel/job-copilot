@@ -1,4 +1,4 @@
-import { mlRequest } from '../client';
+import { json, request } from '../client';
 import { fireEvent } from '../events';
 
 import {
@@ -29,9 +29,7 @@ export function buildInterviewPrepPayload(payload: InterviewPrepRequest) {
   };
 }
 
-export function mapInterviewPrepResponse(
-  response: MlInterviewPrepResponse,
-): InterviewPrep {
+export function mapInterviewPrepResponse(response: MlInterviewPrepResponse): InterviewPrep {
   return {
     prepSummary: response.prep_summary,
     likelyTopics: response.likely_topics,
@@ -44,9 +42,7 @@ export function mapInterviewPrepResponse(
   };
 }
 
-export async function getInterviewPrep(
-  payload: InterviewPrepRequest,
-): Promise<InterviewPrep> {
+export async function getInterviewPrep(payload: InterviewPrepRequest): Promise<InterviewPrep> {
   fireEvent(payload.profileId, {
     eventType: 'interview_prep_requested',
     jobId: payload.rankedJob.id,
@@ -60,10 +56,10 @@ export async function getInterviewPrep(
     },
   });
 
-  const response = await mlRequest<MlInterviewPrepResponse>('/api/v1/enrichment/interview-prep', {
-    method: 'POST',
-    body: JSON.stringify(buildInterviewPrepPayload(payload)),
-  });
+  const response = await request<MlInterviewPrepResponse>(
+    '/api/v1/enrichment/interview-prep',
+    json('POST', buildInterviewPrepPayload(payload)),
+  );
 
   return mapInterviewPrepResponse(response);
 }

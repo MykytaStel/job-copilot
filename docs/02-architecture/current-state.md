@@ -3,7 +3,9 @@
 ## Що побудовано і працює
 
 ### Ingestion
-- ✅ 4 scrapers: Djinni (HTML), Work.ua (HTML), Dou.ua (RSS), Robota.ua (JSON API)
+- ✅ 3 active daemon scrapers: Djinni (HTML), Work.ua (HTML), Dou.ua (RSS)
+- ⏸️ Robota.ua adapter remains available for explicit use, but is excluded from the
+  default daemon while its machine endpoints require a Cloudflare browser challenge
 - ✅ Detail page enrichment (Djinni, Work.ua, Robota.ua)
 - ✅ Dedupe: `(source, source_job_id)` → dedupe_key → merge
 - ✅ Lifecycle: first_seen_at, inactivated_at, reactivated_at
@@ -28,8 +30,9 @@
 - ✅ Notifications endpoints + profile-scoped unread count
 - ✅ Market endpoints: overview, companies, salary trends, role demand
 - ✅ `market_snapshots` refresh after successful ingestion upserts
+- ✅ Snapshot-first market reads for overview, companies, salary trends, and role demand
 - ✅ Search profile preferences persist on profiles and hydrate back into the web builder
-- ⚠️ Current market readers still query live `jobs` directly
+- ⚠️ Newer freeze, region, and technology readers still use live `jobs` queries
 
 ### ML Sidecar (Python)
 - ✅ `/api/v1/fit/analyze` — deterministic fit scoring
@@ -57,7 +60,9 @@
 - ✅ Global search overlay
 - ✅ Query invalidation for profile/feedback-driven rerank refresh
 - ✅ Market Intelligence page
-- ✅ Minimal settings route/page
+- ✅ Settings sections with persisted notification preferences
+- ✅ Analytics ingestion freshness widget
+- ✅ CV tailoring entrypoint on job details
 - ✅ Profile completion indicator
 
 ### Infrastructure
@@ -70,9 +75,9 @@
 
 | Проблема | Файл | Вплив |
 |----------|------|-------|
-| Market readers still bypass snapshots | `market` routes query `jobs` directly | Snapshot refresh exists, but read-side decoupling is still incomplete |
-| Settings preferences are still partial | `apps/web/src/pages/Settings.tsx` | Dedicated notification controls and richer profile preferences are not implemented yet |
-| Analytics freshness widget відсутній | `apps/web/src/pages/Analytics.tsx` | Ingestion recency is not visible in the analytics flow |
+| Newer market readers bypass snapshots | freeze, region, and technology repository queries | Core readers are snapshot-first; newer sections still add live aggregate load |
+| Remote adoption history is absent | market snapshot/API/web surfaces | Overview shows only the current remote percentage, not a trend |
+| Robota.ua machine access is blocked | `api.robota.ua` / `dracula.robota.ua` | Default daemon excludes the source; existing data is preserved until authorized access is available |
 
 ## Known Security Gaps
 

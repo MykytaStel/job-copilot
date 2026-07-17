@@ -65,7 +65,7 @@ export function JobDetailsAiTab({
         {fitExplanationLoading ? (
           <div className="flex items-center gap-3 py-4">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <p className="m-0 text-sm text-muted-foreground">Ollama аналізує вакансію…</p>
+            <p className="m-0 text-sm text-muted-foreground">LLM аналізує вакансію…</p>
           </div>
         ) : fitExplanation ? (
           <div className="space-y-5">
@@ -189,7 +189,7 @@ export function JobDetailsAiTab({
         ) : coverLetterLoading ? (
           <div className="flex items-center gap-3 py-4">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <p className="m-0 text-sm text-muted-foreground">Ollama генерує cover letter…</p>
+            <p className="m-0 text-sm text-muted-foreground">LLM генерує cover letter…</p>
           </div>
         ) : (
           <Button
@@ -288,7 +288,7 @@ export function JobDetailsAiTab({
         ) : interviewPrepLoading ? (
           <div className="flex items-center gap-3 py-4">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <p className="m-0 text-sm text-muted-foreground">Ollama готує interview prep…</p>
+            <p className="m-0 text-sm text-muted-foreground">LLM готує interview prep…</p>
           </div>
         ) : (
           <Button

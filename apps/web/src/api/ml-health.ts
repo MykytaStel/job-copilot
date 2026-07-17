@@ -1,4 +1,4 @@
-import { mlRequest } from './client';
+import { request } from './client';
 
 export interface MlReadyCheck {
   name: string;
@@ -28,7 +28,7 @@ export interface MlReadyResponse {
 }
 
 export function getMlReady(): Promise<MlReadyResponse> {
-  return mlRequest<MlReadyResponse>('/ready');
+  return request<MlReadyResponse>('/ready');
 }
 
 export function isMlDegraded(ready: MlReadyResponse): boolean {

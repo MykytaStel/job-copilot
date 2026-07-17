@@ -35,7 +35,7 @@ export function DashboardHero({
       <CardContent className="p-0">
         <div className="relative">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-primary/8 via-accent/6 to-transparent" />
-          <div className="relative p-7 lg:p-8">
+          <div className="relative p-5 sm:p-7 lg:p-8">
             <div className="flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
               <div className="max-w-3xl space-y-4">
                 <div className="flex flex-wrap items-center gap-2">
@@ -64,8 +64,8 @@ export function DashboardHero({
                   </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-border/70 bg-white-a04 px-4 py-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <div className="rounded-[var(--radius-xl)] border border-border/60 bg-white-a04 px-4 py-3">
                     <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                       Active jobs
                     </p>
@@ -73,7 +73,7 @@ export function DashboardHero({
                       {viewModel.activeJobs}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-border/70 bg-white-a04 px-4 py-3">
+                  <div className="rounded-[var(--radius-xl)] border border-border/60 bg-white-a04 px-4 py-3">
                     <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                       Tracked pipeline
                     </p>
@@ -81,7 +81,7 @@ export function DashboardHero({
                       {viewModel.trackedPipeline}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-border/70 bg-white-a04 px-4 py-3">
+                  <div className="col-span-2 rounded-[var(--radius-xl)] border border-border/60 bg-white-a04 px-4 py-3 sm:col-span-1">
                     <p className="m-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                       Source focus
                     </p>

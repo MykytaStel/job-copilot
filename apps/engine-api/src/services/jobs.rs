@@ -13,8 +13,8 @@ use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 use crate::domain::market::model::{
     MarketCompanyDetail, MarketCompanyEntry, MarketCompanyVelocityEntry, MarketFreezeSignalEntry,
-    MarketOverview, MarketRegionDemandEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
-    MarketSalaryTrend, MarketSource, MarketTechDemandEntry,
+    MarketOverview, MarketRegionDemandEntry, MarketRemoteAdoptionEntry, MarketRoleDemandEntry,
+    MarketSalaryBySeniorityEntry, MarketSalaryTrend, MarketSource, MarketTechDemandEntry,
 };
 
 #[cfg(test)]
@@ -224,6 +224,16 @@ impl JobsService {
             }
             #[cfg(test)]
             JobsServiceBackend::Stub(stub) => stub.market_region_breakdown(),
+        }
+    }
+
+    pub async fn market_remote_adoption(
+        &self,
+    ) -> Result<(Vec<MarketRemoteAdoptionEntry>, MarketSource), RepositoryError> {
+        match &self.backend {
+            JobsServiceBackend::Repository(repository) => repository.market_remote_adoption().await,
+            #[cfg(test)]
+            JobsServiceBackend::Stub(stub) => stub.market_remote_adoption(),
         }
     }
 

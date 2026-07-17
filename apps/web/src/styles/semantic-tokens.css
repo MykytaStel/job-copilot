@@ -15,8 +15,8 @@
 
   --color-bg-app: var(--ref-color-app-bg);
   --color-bg-elevated: var(--ref-color-app-surface);
-  --color-bg-card-soft: var(--ref-color-white-040a);
-  --color-bg-card-muted: var(--ref-color-white-035a);
+  --color-bg-card-soft: var(--ref-color-white-050a);
+  --color-bg-card-muted: var(--ref-color-white-040a);
   --color-bg-input: var(--ref-color-input-bg);
   --color-bg-hover: var(--ref-color-white-060a);
   --color-bg-accent: var(--ref-color-indigo-900a);
@@ -26,8 +26,8 @@
   --color-bg-danger: var(--ref-color-red-900a);
   --color-bg-positive: var(--ref-color-green-900a);
 
-  --color-border-subtle: var(--ref-color-white-070a);
-  --color-border-soft: var(--ref-color-white-080a);
+  --color-border-subtle: var(--ref-color-white-080a);
+  --color-border-soft: var(--ref-color-white-100a);
   --color-border-input: var(--ref-color-white-120a);
   --color-border-accent: rgba(99, 102, 241, 0.6);
 

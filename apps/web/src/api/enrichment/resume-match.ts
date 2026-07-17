@@ -1,4 +1,4 @@
-import { json, mlRequest } from '../client';
+import { json, request } from '../client';
 
 export type MlResumeMatchResponse = {
   keyword_coverage_percent: number;
@@ -18,7 +18,7 @@ export async function getResumeMatch(payload: {
   resumeText: string;
   jdText: string;
 }): Promise<ResumeMatch> {
-  const response = await mlRequest<MlResumeMatchResponse>(
+  const response = await request<MlResumeMatchResponse>(
     '/api/v1/enrichment/resume-match',
     json('POST', {
       resume_text: payload.resumeText,

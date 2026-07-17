@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially Implemented
+Implemented with bounded fallback
 
 ## Context
 
@@ -64,14 +64,17 @@ queries against the live `jobs` table.
 **Implemented:**
 - `market_snapshots` table exists and is refreshed by ingestion after successful upserts.
 - Market endpoints exist in engine-api: overview, companies, salary trends, role demand.
+- Overview, companies, salary trends, role demand, and remote adoption read a snapshot created within the
+  last 24 hours when its typed JSON payload is usable.
+- Those readers fall back to their existing live query if the snapshot is absent, stale,
+  empty where data is required, or incompatible with the current contract.
+- Analytics exposes ingestion recency and per-source run health.
 
 **Partial / gaps:**
-- Current market route handlers still query the live `jobs` table directly.
-  The snapshot write path exists; the read-side decoupling is not yet complete.
-- The analytics freshness widget that would surface snapshot recency in the web UI
-  is not yet implemented.
-
-The read-side migration is a planned slice, not a completed one.
+- Newer freeze, region, and technology market readers do not yet consume their available
+  snapshot payloads.
+- Remote adoption uses an eight-week `remote_adoption` payload split by source and normalized
+  work mode, with unknown values retained explicitly.
 See [current-state.md](../current-state.md) for the current known issues table.
 
 ## Related Docs

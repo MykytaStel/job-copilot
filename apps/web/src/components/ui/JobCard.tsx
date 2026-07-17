@@ -70,7 +70,7 @@ function JobFitBadge({ score }: { score: number }) {
       )}
     >
       <span className="text-lg font-bold leading-none">{score}</span>
-      <span className="text-[10px] font-medium uppercase tracking-wide mt-0.5">
+      <span className="mt-0.5 text-[11px] font-medium uppercase tracking-wide">
         {FIT_BAND_LABELS[band]}
       </span>
     </div>
@@ -287,7 +287,7 @@ export function JobCard({
                 {source && (
                   <span
                     className={cn(
-                      'text-[10px] font-medium px-2 py-0.5 rounded border border-current/20',
+                      'rounded border border-current/20 px-2 py-0.5 text-[11px] font-medium',
                       getSourceClass(source),
                     )}
                   >

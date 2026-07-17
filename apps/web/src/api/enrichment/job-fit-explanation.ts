@@ -1,4 +1,4 @@
-import { mlRequest } from '../client';
+import { json, request } from '../client';
 import { fireEvent } from '../events';
 
 import {
@@ -49,12 +49,9 @@ export async function getJobFitExplanation(
     },
   });
 
-  const response = await mlRequest<MlJobFitExplanationResponse>(
-    '/v1/enrichment/job-fit-explanation',
-    {
-      method: 'POST',
-      body: JSON.stringify(buildJobFitExplanationPayload(payload)),
-    },
+  const response = await request<MlJobFitExplanationResponse>(
+    '/api/v1/enrichment/job-fit-explanation',
+    json('POST', buildJobFitExplanationPayload(payload)),
   );
 
   return mapJobFitExplanationResponse(response);

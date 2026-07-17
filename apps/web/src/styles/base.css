@@ -12,7 +12,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   font-family: var(--font-sans);
-  line-height: 1.5;
+  line-height: 1.55;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -43,6 +43,15 @@ select {
   border: 1px solid var(--color-border-input);
   background: var(--color-bg-input);
   color: var(--color-text-strong);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--color-border-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ref-color-indigo-800a);
 }
 
 button {

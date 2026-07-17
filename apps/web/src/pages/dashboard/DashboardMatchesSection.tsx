@@ -18,7 +18,11 @@ import { FilterChips } from '../../components/ui/FilterChips';
 import { JobCard, JobCardSkeleton } from '../../components/ui/JobCard';
 import { SectionHeader } from '../../components/ui/SectionHeader';
 
-const SORT_TABS: { id: SortMode; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const SORT_TABS: {
+  id: SortMode;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
   { id: 'relevance', label: 'Relevance', icon: TrendingUp },
   { id: 'date', label: 'Date', icon: CalendarDays },
   { id: 'salary', label: 'Salary', icon: DollarSign },
@@ -32,6 +36,9 @@ export function DashboardMatchesSection({
   search,
   setSearch,
   jobs,
+  filteredJobCount,
+  hasMoreJobs,
+  loadMoreJobs,
   allJobs,
   rerankCoverage,
   rerankerUnavailable,
@@ -63,6 +70,9 @@ export function DashboardMatchesSection({
   | 'search'
   | 'setSearch'
   | 'jobs'
+  | 'filteredJobCount'
+  | 'hasMoreJobs'
+  | 'loadMoreJobs'
   | 'allJobs'
   | 'rerankCoverage'
   | 'rerankerUnavailable'
@@ -112,121 +122,121 @@ export function DashboardMatchesSection({
       />
 
       <div className="mb-5 space-y-4 border-b border-border/70 pb-5">
-          {hasContextFilter ? (
-            <div className="rounded-2xl border border-primary/25 bg-primary/8 px-4 py-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="m-0 text-sm font-semibold text-card-foreground">
-                    Reviewing a focused match set
-                  </p>
-                  <p className="m-0 mt-1 text-xs leading-5 text-muted-foreground">
-                    {notificationJobIds.length > 0
-                      ? `${notificationJobIds.length} notification jobs are visible.`
-                      : `Showing jobs from ${companyFilter}.`}
-                  </p>
-                </div>
-                <Button type="button" size="sm" variant="outline" onClick={clearContextFilters}>
-                  Clear context
+        {hasContextFilter ? (
+          <div className="rounded-2xl border border-primary/25 bg-primary/8 px-4 py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="m-0 text-sm font-semibold text-card-foreground">
+                  Reviewing a focused match set
+                </p>
+                <p className="m-0 mt-1 text-xs leading-5 text-muted-foreground">
+                  {notificationJobIds.length > 0
+                    ? `${notificationJobIds.length} notification jobs are visible.`
+                    : `Showing jobs from ${companyFilter}.`}
+                </p>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={clearContextFilters}>
+                Clear context
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Sort
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {SORT_TABS.map((tab) => (
+                <Button
+                  key={tab.id}
+                  type="button"
+                  variant="outline"
+                  active={sortMode === tab.id}
+                  size="sm"
+                  onClick={() => setSortMode(tab.id)}
+                  disabled={tab.id === 'relevance' && !profileId}
+                  className="rounded-full px-3.5"
+                >
+                  <tab.icon className="h-3.5 w-3.5" />
+                  {tab.label}
                 </Button>
-              </div>
+              ))}
             </div>
-          ) : null}
-
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-2">
-              <p className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Sort
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {SORT_TABS.map((tab) => (
-                  <Button
-                    key={tab.id}
-                    type="button"
-                    variant="outline"
-                    active={sortMode === tab.id}
-                    size="sm"
-                    onClick={() => setSortMode(tab.id)}
-                    disabled={tab.id === 'relevance' && !profileId}
-                    className="rounded-full px-3.5"
-                  >
-                    <tab.icon className="h-3.5 w-3.5" />
-                    {tab.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {search && (
-              <span className="shrink-0 rounded-full border border-border bg-surface-muted px-3 py-1.5 text-xs text-muted-foreground">
-                {jobs.length}/{allJobs.length} visible
-              </span>
-            )}
           </div>
 
-          <div className="space-y-2.5">
-            <FilterChips
-              options={lifecycleOptions}
-              selected={selectedLifecycle}
-              onChange={([v]) => updateFilters({ lifecycle: (v ?? 'all') as LifecycleFilter })}
-            />
-            <FilterChips
-              options={sourceOptions}
-              selected={selectedSource}
-              onChange={([v]) => updateFilters({ source: v === '__all__' || !v ? null : v })}
-            />
-          </div>
-
-          <div className="relative">
-            <Search
-              size={14}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-content-muted"
-            />
-            <input
-              type="search"
-              placeholder="Фільтр за назвою, компанією…"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="h-11 w-full rounded-xl border border-border bg-background/70"
-              style={{ paddingLeft: 32 }}
-            />
-          </div>
-
-          {sortMode === 'relevance' && rerankCoverage.isTruncated ? (
-            <p className="m-0 text-xs leading-6 text-muted-foreground">
-              Score sorting reranks the first {rerankCoverage.rankedJobs} feed items out of{' '}
-              {rerankCoverage.totalJobs} to keep the dashboard responsive.
-            </p>
-          ) : null}
-
-          {rerankerUnavailable ? (
-            <div className="flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/8 px-3 py-2 text-sm text-amber-300">
-              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-              <p className="m-0 leading-5">
-                Ranking service unavailable — showing deterministic order.
-              </p>
-            </div>
-          ) : null}
-
-          {sourcesError && (
-            <p className="m-0 text-xs leading-6 text-muted-foreground">
-              Каталог джерел недоступний — фільтр за джерелом тимчасово не працює.
-            </p>
+          {search && (
+            <span className="shrink-0 rounded-full border border-border bg-surface-muted px-3 py-1.5 text-xs text-muted-foreground">
+              {filteredJobCount}/{allJobs.length} match filters
+            </span>
           )}
+        </div>
 
-          {!profileId && (
-            <div className="rounded-2xl border border-border/70 bg-surface-muted px-4 py-4">
-              <p className="m-0 text-sm font-medium text-card-foreground">
-                Create a profile to unlock fit ranking and feedback actions
-              </p>
-              <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
-                You can still browse the recent feed here, but save, hide, bad-fit feedback, and
-                profile-based reranking stay disabled until the active profile exists.
-              </p>
-              <Link to="/profile" className="mt-3 inline-flex no-underline">
-                <Button size="sm">Open Profile &amp; Search</Button>
-              </Link>
-            </div>
-          )}
+        <div className="space-y-2.5">
+          <FilterChips
+            options={lifecycleOptions}
+            selected={selectedLifecycle}
+            onChange={([v]) => updateFilters({ lifecycle: (v ?? 'all') as LifecycleFilter })}
+          />
+          <FilterChips
+            options={sourceOptions}
+            selected={selectedSource}
+            onChange={([v]) => updateFilters({ source: v === '__all__' || !v ? null : v })}
+          />
+        </div>
+
+        <div className="relative">
+          <Search
+            size={14}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-content-muted"
+          />
+          <input
+            type="search"
+            placeholder="Фільтр за назвою, компанією…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="h-11 w-full rounded-xl border border-border bg-background/70"
+            style={{ paddingLeft: 32 }}
+          />
+        </div>
+
+        {sortMode === 'relevance' && rerankCoverage.isTruncated ? (
+          <p className="m-0 text-xs leading-6 text-muted-foreground">
+            Score sorting reranks the first {rerankCoverage.rankedJobs} feed items out of{' '}
+            {rerankCoverage.totalJobs} to keep the dashboard responsive.
+          </p>
+        ) : null}
+
+        {rerankerUnavailable ? (
+          <div className="flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/8 px-3 py-2 text-sm text-amber-300">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+            <p className="m-0 leading-5">
+              Ranking service unavailable — showing deterministic order.
+            </p>
+          </div>
+        ) : null}
+
+        {sourcesError && (
+          <p className="m-0 text-xs leading-6 text-muted-foreground">
+            Каталог джерел недоступний — фільтр за джерелом тимчасово не працює.
+          </p>
+        )}
+
+        {!profileId && (
+          <div className="rounded-2xl border border-border/70 bg-surface-muted px-4 py-4">
+            <p className="m-0 text-sm font-medium text-card-foreground">
+              Create a profile to unlock fit ranking and feedback actions
+            </p>
+            <p className="m-0 mt-2 text-sm leading-6 text-muted-foreground">
+              You can still browse the recent feed here, but save, hide, bad-fit feedback, and
+              profile-based reranking stay disabled until the active profile exists.
+            </p>
+            <Link to="/profile" className="mt-3 inline-flex no-underline">
+              <Button size="sm">Open Profile &amp; Search</Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       <div className={DENSITY_GAP[density]}>
@@ -238,7 +248,11 @@ export function DashboardMatchesSection({
           </div>
         ) : jobs.length === 0 ? (
           <EmptyState
-            message={hasActiveFilters ? 'No jobs found. Try adjusting your filters.' : 'No jobs available yet.'}
+            message={
+              hasActiveFilters
+                ? 'No jobs found. Try adjusting your filters.'
+                : 'No jobs available yet.'
+            }
             description={
               hasActiveFilters
                 ? 'Clear the search query or choose broader lifecycle/source filters.'
@@ -306,6 +320,19 @@ export function DashboardMatchesSection({
           })
         )}
       </div>
+
+      {!jobsLoading && jobs.length > 0 ? (
+        <div className="mt-5 flex flex-col items-center gap-3 border-t border-border/70 pt-5 sm:flex-row sm:justify-between">
+          <p className="m-0 text-sm text-muted-foreground">
+            Showing {jobs.length} of {filteredJobCount} matching jobs
+          </p>
+          {hasMoreJobs ? (
+            <Button type="button" variant="outline" onClick={loadMoreJobs}>
+              Load {Math.min(20, filteredJobCount - jobs.length)} more
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 import { getIngestionStats, getRerankerMetrics, type IngestionSourceEntry } from '../api/analytics';
-import { mlRequest, request } from '../api/client';
+import { request } from '../api/client';
 import { getMlReady, type MlReadyResponse } from '../api/ml-health';
 import { getSourceHealth } from '../api/source-health';
 import { Badge } from '../components/ui/Badge';
@@ -55,7 +55,7 @@ type DebugIssue = {
 };
 
 async function getMlHealth(): Promise<MlHealthResponse> {
-  return mlRequest<MlHealthResponse>('/health');
+  return request<MlHealthResponse>('/api/v1/ml/health');
 }
 
 async function getEngineReady(): Promise<EngineReadyResponse> {

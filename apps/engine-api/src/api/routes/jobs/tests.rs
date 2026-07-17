@@ -11,6 +11,7 @@ use crate::domain::job::model::{
 };
 use crate::domain::profile::model::{Profile, ProfileAnalysis};
 use crate::domain::role::RoleId;
+use crate::domain::search::profile::{SearchPreferences, TargetRegion, WorkMode};
 use crate::domain::source::SourceId;
 use crate::services::applications::{ApplicationsService, ApplicationsServiceStub};
 use crate::services::jobs::{JobsService, JobsServiceStub};
@@ -111,6 +112,19 @@ fn sample_profile() -> Profile {
         portfolio_url: None,
         github_url: None,
         linkedin_url: None,
+    }
+}
+
+fn sample_profile_with_preferences() -> Profile {
+    Profile {
+        salary_min: Some(4_000),
+        salary_max: Some(7_000),
+        search_preferences: Some(SearchPreferences {
+            target_regions: vec![TargetRegion::Eu],
+            work_modes: vec![WorkMode::Remote],
+            ..SearchPreferences::default()
+        }),
+        ..sample_profile()
     }
 }
 
@@ -262,6 +276,81 @@ async fn profile_job_match_returns_canonical_fit_diagnostics() {
             .any(|reason| reason.contains("Matched"))
     );
     assert_eq!(response.description_quality, "strong");
+}
+
+#[tokio::test]
+async fn profile_job_match_uses_persisted_search_and_salary_preferences() {
+    let state = AppState::for_services(
+        ProfilesService::for_tests(
+            ProfilesServiceStub::default().with_profile(sample_profile_with_preferences()),
+        ),
+        JobsService::for_tests(
+            JobsServiceStub::default().with_job_view(sample_job_view("job-preferences")),
+        ),
+        ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+        ResumesService::for_tests(ResumesServiceStub::default()),
+    );
+
+    let Json(response) = get_profile_job_match(
+        State(state),
+        None,
+        Path(("profile-1".to_string(), "job-preferences".to_string())),
+    )
+    .await
+    .expect("profile match should use persisted preferences");
+
+    assert_eq!(response.work_mode_match, Some(true));
+    assert_eq!(response.region_match, Some(true));
+    assert_eq!(response.score_breakdown.salary_score, 5);
+    assert!(
+        response
+            .positive_reasons
+            .iter()
+            .any(|reason| reason.contains("Salary"))
+    );
+}
+
+#[tokio::test]
+async fn profile_job_match_recognizes_ukrainian_job_location() {
+    let profile = Profile {
+        search_preferences: Some(SearchPreferences {
+            target_regions: vec![TargetRegion::Ua],
+            work_modes: vec![WorkMode::Remote],
+            ..SearchPreferences::default()
+        }),
+        ..sample_profile()
+    };
+    let job = JobView {
+        job: Job {
+            location: Some("Київ".to_string()),
+            remote_type: Some("onsite".to_string()),
+            ..sample_job_view("job-kyiv-onsite").job
+        },
+        ..sample_job_view("job-kyiv-onsite")
+    };
+    let state = AppState::for_services(
+        ProfilesService::for_tests(ProfilesServiceStub::default().with_profile(profile)),
+        JobsService::for_tests(JobsServiceStub::default().with_job_view(job)),
+        ApplicationsService::for_tests(ApplicationsServiceStub::default()),
+        ResumesService::for_tests(ResumesServiceStub::default()),
+    );
+
+    let Json(response) = get_profile_job_match(
+        State(state),
+        None,
+        Path(("profile-1".to_string(), "job-kyiv-onsite".to_string())),
+    )
+    .await
+    .expect("profile match should recognize Ukrainian location text");
+
+    assert_eq!(response.region_match, Some(true));
+    assert_eq!(response.work_mode_match, Some(false));
+    assert!(
+        response
+            .negative_reasons
+            .iter()
+            .any(|reason| reason.contains("Work mode mismatch"))
+    );
 }
 
 #[tokio::test]

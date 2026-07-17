@@ -3,8 +3,9 @@ use crate::domain::job::model::JobView;
 use crate::domain::market::model::{
     MarketCompanyDetail, MarketCompanyEntry, MarketCompanyVelocityEntry,
     MarketCompanyVelocityPoint, MarketCompanyVelocityTrend, MarketFreezeSignalEntry,
-    MarketOverview, MarketRegionDemandEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
-    MarketSalaryTrend, MarketSource, MarketTechDemandEntry, MarketTrendDirection,
+    MarketOverview, MarketRegionDemandEntry, MarketRemoteAdoptionEntry, MarketRemoteWorkMode,
+    MarketRoleDemandEntry, MarketSalaryBySeniorityEntry, MarketSalaryTrend, MarketSource,
+    MarketTechDemandEntry, MarketTrendDirection,
 };
 use sqlx::FromRow;
 
@@ -909,6 +910,122 @@ impl JobsRepository {
                     region: row.region,
                     job_count: row.job_count.max(0) as u32,
                     top_roles: row.top_roles,
+                })
+                .collect(),
+            MarketSource::Live,
+        ))
+    }
+
+    pub async fn market_remote_adoption(
+        &self,
+    ) -> Result<(Vec<MarketRemoteAdoptionEntry>, MarketSource), RepositoryError> {
+        let Some(pool) = self.database.pool() else {
+            return Err(RepositoryError::DatabaseDisabled);
+        };
+
+        if let Some(payload) = Self::fetch_fresh_snapshot(pool, "remote_adoption").await?
+            && let Ok(entries) = serde_json::from_value::<Vec<MarketRemoteAdoptionEntry>>(payload)
+        {
+            return Ok((entries, MarketSource::Snapshot));
+        }
+
+        tracing::warn!(
+            "market_remote_adoption: no fresh snapshot, falling back to live jobs query"
+        );
+
+        #[derive(FromRow)]
+        struct MarketRemoteAdoptionRow {
+            week_start: String,
+            source: String,
+            work_mode: String,
+            job_count: i64,
+            source_total: i64,
+            percentage: f64,
+        }
+
+        let rows = sqlx::query_as::<_, MarketRemoteAdoptionRow>(
+            r#"
+            WITH job_sources AS (
+                SELECT DISTINCT job_id, source
+                FROM job_variants
+                WHERE BTRIM(source) <> ''
+            ),
+            classified_jobs AS (
+                SELECT
+                    DATE_TRUNC('week', jobs.first_seen_at)::date AS week_start,
+                    job_sources.source,
+                    CASE
+                        WHEN LOWER(BTRIM(COALESCE(jobs.remote_type, ''))) IN ('remote', 'fully remote')
+                          OR COALESCE(jobs.remote_type, '') ILIKE '%дистан%'
+                        THEN 'remote'
+                        WHEN LOWER(BTRIM(COALESCE(jobs.remote_type, ''))) = 'hybrid'
+                          OR COALESCE(jobs.remote_type, '') ILIKE '%гібрид%'
+                        THEN 'hybrid'
+                        WHEN LOWER(BTRIM(COALESCE(jobs.remote_type, ''))) IN ('onsite', 'on-site', 'office')
+                          OR COALESCE(jobs.remote_type, '') ILIKE '%офіс%'
+                        THEN 'onsite'
+                        ELSE 'unknown'
+                    END AS work_mode
+                FROM jobs
+                INNER JOIN job_sources ON job_sources.job_id = jobs.id
+                WHERE jobs.is_active
+                  AND jobs.first_seen_at >= DATE_TRUNC('week', NOW()) - INTERVAL '7 weeks'
+            ),
+            mode_counts AS (
+                SELECT
+                    week_start,
+                    source,
+                    work_mode,
+                    COUNT(*)::bigint AS job_count
+                FROM classified_jobs
+                GROUP BY week_start, source, work_mode
+            ),
+            source_counts AS (
+                SELECT
+                    week_start,
+                    source,
+                    SUM(job_count)::bigint AS source_total
+                FROM mode_counts
+                GROUP BY week_start, source
+            )
+            SELECT
+                TO_CHAR(mode_counts.week_start, 'YYYY-MM-DD') AS week_start,
+                mode_counts.source,
+                mode_counts.work_mode,
+                mode_counts.job_count,
+                source_counts.source_total,
+                mode_counts.job_count::double precision
+                    / source_counts.source_total::double precision * 100.0 AS percentage
+            FROM mode_counts
+            INNER JOIN source_counts USING (week_start, source)
+            ORDER BY
+                mode_counts.week_start ASC,
+                mode_counts.source ASC,
+                CASE mode_counts.work_mode
+                    WHEN 'remote' THEN 1
+                    WHEN 'hybrid' THEN 2
+                    WHEN 'onsite' THEN 3
+                    ELSE 4
+                END
+            "#,
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok((
+            rows.into_iter()
+                .map(|row| MarketRemoteAdoptionEntry {
+                    week_start: row.week_start,
+                    source: row.source,
+                    work_mode: match row.work_mode.as_str() {
+                        "remote" => MarketRemoteWorkMode::Remote,
+                        "hybrid" => MarketRemoteWorkMode::Hybrid,
+                        "onsite" => MarketRemoteWorkMode::Onsite,
+                        _ => MarketRemoteWorkMode::Unknown,
+                    },
+                    job_count: row.job_count.max(0) as u32,
+                    source_total: row.source_total.max(0) as u32,
+                    percentage: row.percentage as f32,
                 })
                 .collect(),
             MarketSource::Live,

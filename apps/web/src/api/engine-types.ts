@@ -33,6 +33,8 @@ export type {
   EngineMarketSalaryTrend,
   EngineMarketRoleDemandEntry,
   EngineMarketRegionDemandEntry,
+  EngineMarketRemoteAdoptionEntry,
+  EngineMarketRemoteWorkMode,
   EngineMarketTechDemandEntry,
 } from './engine-types/market';
 

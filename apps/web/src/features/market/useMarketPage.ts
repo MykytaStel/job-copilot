@@ -7,6 +7,7 @@ import {
   getMarketFreezeSignals,
   getMarketOverview,
   getMarketRegionBreakdown,
+  getMarketRemoteAdoption,
   getMarketRoles,
   getMarketSalaryBySeniority,
   getMarketTechDemand,
@@ -100,6 +101,11 @@ export function useMarketPage() {
     queryFn: getMarketRegionBreakdown,
     staleTime: MARKET_STALE_TIME_MS,
   });
+  const remoteAdoptionQuery = useQuery({
+    queryKey: queryKeys.market.remoteAdoption(),
+    queryFn: getMarketRemoteAdoption,
+    staleTime: MARKET_STALE_TIME_MS,
+  });
   const techDemandQuery = useQuery({
     queryKey: queryKeys.market.techDemand(),
     queryFn: getMarketTechDemand,
@@ -129,6 +135,7 @@ export function useMarketPage() {
     salariesQuery,
     rolesQuery,
     regionBreakdownQuery,
+    remoteAdoptionQuery,
     techDemandQuery,
     salaryBySeniority,
     roleDemand,

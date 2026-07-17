@@ -5,7 +5,7 @@ export function Card({ className, children, ...props }: HTMLAttributes<HTMLDivEl
   return (
     <div
       className={cn(
-        'flex flex-col gap-6 rounded-[var(--radius-card)] border border-border bg-card/90 py-6 text-card-foreground shadow-[var(--shadow-card)] backdrop-blur-sm',
+        'flex flex-col gap-5 rounded-[var(--radius-card)] border border-border/80 bg-card py-5 text-card-foreground shadow-[var(--shadow-card)] transition-[border-color,background-color,box-shadow] sm:gap-6 sm:py-6',
         className,
       )}
       {...props}
@@ -18,7 +18,7 @@ export function Card({ className, children, ...props }: HTMLAttributes<HTMLDivEl
 export function CardHeader({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6', className)}
+      className={cn('grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-5 sm:px-6', className)}
       {...props}
     >
       {children}
@@ -28,7 +28,7 @@ export function CardHeader({ className, children, ...props }: HTMLAttributes<HTM
 
 export function CardContent({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('px-6', className)} {...props}>
+    <div className={cn('px-5 sm:px-6', className)} {...props}>
       {children}
     </div>
   );
@@ -63,7 +63,7 @@ export function CardAction({ className, children, ...props }: HTMLAttributes<HTM
 
 export function CardFooter({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('flex items-center px-6', className)} {...props}>
+    <div className={cn('flex items-center px-5 sm:px-6', className)} {...props}>
       {children}
     </div>
   );

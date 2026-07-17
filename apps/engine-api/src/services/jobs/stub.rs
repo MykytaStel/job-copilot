@@ -5,8 +5,8 @@ use crate::domain::analytics::model::JobSourceCount;
 use crate::domain::job::model::{Job, JobFeedSummary, JobView};
 use crate::domain::market::model::{
     MarketCompanyDetail, MarketCompanyEntry, MarketCompanyVelocityEntry, MarketFreezeSignalEntry,
-    MarketOverview, MarketRegionDemandEntry, MarketRoleDemandEntry, MarketSalaryBySeniorityEntry,
-    MarketSalaryTrend, MarketSource, MarketTechDemandEntry,
+    MarketOverview, MarketRegionDemandEntry, MarketRemoteAdoptionEntry, MarketRoleDemandEntry,
+    MarketSalaryBySeniorityEntry, MarketSalaryTrend, MarketSource, MarketTechDemandEntry,
 };
 
 pub struct JobsServiceStub {
@@ -25,6 +25,7 @@ pub struct JobsServiceStub {
     market_salary_by_seniority: Vec<MarketSalaryBySeniorityEntry>,
     market_role_demand: Vec<MarketRoleDemandEntry>,
     market_region_breakdown: Vec<MarketRegionDemandEntry>,
+    market_remote_adoption: Vec<MarketRemoteAdoptionEntry>,
     market_tech_demand: Vec<MarketTechDemandEntry>,
     database_disabled: bool,
 }
@@ -102,6 +103,11 @@ impl JobsServiceStub {
 
     pub fn with_market_region_breakdown(mut self, entries: Vec<MarketRegionDemandEntry>) -> Self {
         self.market_region_breakdown = entries;
+        self
+    }
+
+    pub fn with_market_remote_adoption(mut self, entries: Vec<MarketRemoteAdoptionEntry>) -> Self {
+        self.market_remote_adoption = entries;
         self
     }
 
@@ -343,6 +349,16 @@ impl JobsServiceStub {
         Ok((self.market_region_breakdown.clone(), MarketSource::Snapshot))
     }
 
+    pub(crate) fn market_remote_adoption(
+        &self,
+    ) -> Result<(Vec<MarketRemoteAdoptionEntry>, MarketSource), RepositoryError> {
+        if self.database_disabled {
+            return Err(RepositoryError::DatabaseDisabled);
+        }
+
+        Ok((self.market_remote_adoption.clone(), MarketSource::Snapshot))
+    }
+
     pub(crate) fn market_tech_demand(
         &self,
     ) -> Result<(Vec<MarketTechDemandEntry>, MarketSource), RepositoryError> {
@@ -383,6 +399,7 @@ impl Default for JobsServiceStub {
             market_salary_by_seniority: Vec::new(),
             market_role_demand: Vec::new(),
             market_region_breakdown: Vec::new(),
+            market_remote_adoption: Vec::new(),
             market_tech_demand: Vec::new(),
             database_disabled: false,
         }

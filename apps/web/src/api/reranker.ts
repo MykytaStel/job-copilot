@@ -1,4 +1,4 @@
-import { mlRequest } from './client';
+import { request } from './client';
 
 export type BootstrapStatus = 'accepted' | 'running' | 'completed' | 'failed';
 
@@ -35,14 +35,14 @@ export function bootstrapReranker(
   profileId: string,
   minExamples = 30,
 ): Promise<BootstrapTaskAccepted> {
-  return mlRequest<BootstrapTaskAccepted>('/api/v1/reranker/bootstrap', {
+  return request<BootstrapTaskAccepted>('/api/v1/reranker/bootstrap', {
     method: 'POST',
     body: JSON.stringify({ profile_id: profileId, min_examples: minExamples }),
   });
 }
 
 export function getBootstrapStatus(taskId: string): Promise<BootstrapTaskStatus> {
-  return mlRequest<BootstrapTaskStatus>(`/api/v1/reranker/bootstrap/${taskId}`);
+  return request<BootstrapTaskStatus>(`/api/v1/reranker/bootstrap/${taskId}`);
 }
 
 export function getRerankerCacheInvalidationStatus(
@@ -54,7 +54,7 @@ export function getRerankerCacheInvalidationStatus(
 
 export async function invalidateRerankCache(profileId: string): Promise<boolean> {
   try {
-    await mlRequest<void>('/api/v1/rerank/invalidate', {
+    await request<void>('/api/v1/rerank/invalidate', {
       method: 'POST',
       body: JSON.stringify({ profile_id: profileId }),
     });

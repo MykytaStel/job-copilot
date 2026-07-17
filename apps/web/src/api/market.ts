@@ -9,6 +9,8 @@ import type {
   EngineMarketFreezeSignalEntry,
   EngineMarketOverview,
   EngineMarketRegionDemandEntry,
+  EngineMarketRemoteAdoptionEntry,
+  EngineMarketRemoteWorkMode,
   EngineMarketRoleDemandEntry,
   EngineMarketSalaryBySeniorityEntry,
   EngineMarketSalaryTrend,
@@ -109,6 +111,15 @@ export type MarketRegionDemand = {
   region: string;
   jobCount: number;
   topRoles: string[];
+};
+
+export type MarketRemoteAdoption = {
+  weekStart: string;
+  source: string;
+  workMode: EngineMarketRemoteWorkMode;
+  jobCount: number;
+  sourceTotal: number;
+  percentage: number;
 };
 
 export type MarketTechDemand = {
@@ -264,6 +275,21 @@ export async function getMarketRegionBreakdown(): Promise<MarketRegionDemand[]> 
     region: entry.region,
     jobCount: entry.job_count,
     topRoles: entry.top_roles ?? [],
+  }));
+}
+
+export async function getMarketRemoteAdoption(): Promise<MarketRemoteAdoption[]> {
+  const response = await request<EngineMarketRemoteAdoptionEntry[]>(
+    '/api/v1/market/remote-adoption',
+  );
+
+  return response.map((entry) => ({
+    weekStart: entry.week_start,
+    source: entry.source,
+    workMode: entry.work_mode,
+    jobCount: entry.job_count,
+    sourceTotal: entry.source_total,
+    percentage: entry.percentage,
   }));
 }
 
