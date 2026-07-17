@@ -139,7 +139,7 @@ async fn persist_bootstrap_response(
             .artifact_version
             .clone()
             .map(Some)
-            .or(Some(None).filter(|_| response.retrained)),
+            .or(response.retrained.then_some(None)),
         last_training_status: Some(Some(status.clone())),
     };
 
