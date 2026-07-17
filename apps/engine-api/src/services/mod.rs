@@ -16,6 +16,7 @@ pub mod profile;
 pub mod profile_analysis;
 pub mod profile_ml_metrics;
 pub mod profile_ml_state;
+pub mod profile_onboarding;
 pub mod profile_records;
 pub mod profiles;
 pub mod ranking;

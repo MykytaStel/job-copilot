@@ -4,21 +4,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { getMlReady, isMlDegraded } from '../api/ml-health';
 import { getUnreadCount } from '../api/notifications';
+import { getProfileOnboarding } from '../api/onboarding';
 import { getProfile } from '../api/profiles';
 import { getSourceHealth } from '../api/source-health';
 import { hasToken } from '../lib/authSession';
+import { readProfileId } from '../lib/profileSession';
 import { queryKeys } from '../queryKeys';
 import { navigation } from './navigation';
-
-const ONBOARDING_KEY = (profileId: string) => `jc_onboarding_seen_${profileId}`;
-
-function hasSeenOnboarding(profileId: string) {
-  return !!window.localStorage.getItem(ONBOARDING_KEY(profileId));
-}
-
-export function markOnboardingSeen(profileId: string) {
-  window.localStorage.setItem(ONBOARDING_KEY(profileId), '1');
-}
 
 export function useAppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -26,27 +18,34 @@ export function useAppShell() {
   const [mlBannerDismissed, setMlBannerDismissed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const hasSession = hasToken() && !!readProfileId();
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: queryKeys.profile.root(),
     queryFn: getProfile,
+    enabled: hasSession,
+  });
+
+  const { data: onboarding, isLoading: onboardingLoading } = useQuery({
+    queryKey: queryKeys.onboarding.profile(profile?.id ?? 'none'),
+    queryFn: () => getProfileOnboarding(profile!.id),
+    enabled: !!profile?.id,
   });
 
   useEffect(() => {
-    if (!profileLoading && !profile && !hasToken()) {
+    if (!profileLoading && !profile && !hasSession) {
       navigate('/auth', { replace: true });
       return;
     }
     if (
       profile &&
-      !profile.summary &&
-      profile.skills.length === 0 &&
-      !hasSeenOnboarding(profile.id) &&
+      !onboardingLoading &&
+      onboarding?.current_step !== 'complete' &&
       location.pathname !== '/setup'
     ) {
       navigate('/setup', { replace: true });
     }
-  }, [profile, profileLoading, navigate, location.pathname]);
+  }, [profile, profileLoading, onboarding, onboardingLoading, hasSession, navigate, location.pathname]);
 
   const { data: mlReady } = useQuery({
     queryKey: queryKeys.ml.ready(),
@@ -61,6 +60,7 @@ export function useAppShell() {
   const { data: sourceHealth = [] } = useQuery({
     queryKey: queryKeys.sources.health(),
     queryFn: getSourceHealth,
+    enabled: !!profile?.id,
     refetchInterval: 60_000,
     retry: false,
     staleTime: 30_000,

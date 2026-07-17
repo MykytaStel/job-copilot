@@ -17,6 +17,9 @@ export const queryKeys = {
     rawText: () => ['profile', 'rawText'] as const,
     suggestedSkills: () => ['profile', 'suggestedSkills'] as const,
   },
+  onboarding: {
+    profile: (profileId: string) => ['onboarding', profileId] as const,
+  },
   resumes: {
     all: () => ['resumes'] as const,
     active: () => ['resumes', 'active'] as const,

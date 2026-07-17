@@ -12,6 +12,7 @@ pub mod health;
 pub mod jobs;
 pub mod market;
 pub mod notifications;
+pub mod onboarding;
 pub mod profile;
 pub mod reranker_dataset;
 pub mod reranker_metrics;
@@ -137,6 +138,10 @@ pub fn protected_router() -> Router<AppState> {
         .route(
             "/api/v1/profiles/{id}/behavior-summary",
             get(behavior::get_behavior_summary),
+        )
+        .route(
+            "/api/v1/profiles/{id}/onboarding",
+            get(onboarding::get_profile_onboarding).patch(onboarding::advance_profile_onboarding),
         )
         .route(
             "/api/v1/profiles/{id}/feedback",
